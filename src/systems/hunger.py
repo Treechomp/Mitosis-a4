@@ -1,7 +1,7 @@
 """Hunger system for entity metabolism."""
 import esper
 
-from ..components import Hunger, Energy
+from components import Hunger, Energy
 
 
 class HungerProcessor(esper.Processor):

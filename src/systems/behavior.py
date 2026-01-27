@@ -4,7 +4,7 @@ import math
 
 import esper
 
-from ..components import Velocity, Wander
+from components import Velocity, Wander
 
 
 class WanderProcessor(esper.Processor):

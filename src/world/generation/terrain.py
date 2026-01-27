@@ -2,7 +2,7 @@
 import numpy as np
 from opensimplex import OpenSimplex
 
-from ..chunk import Chunk, TileType
+from world.chunk import Chunk, TileType
 
 
 class TerrainGenerator:

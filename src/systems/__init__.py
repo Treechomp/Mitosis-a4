@@ -1,7 +1,7 @@
 """ECS Systems - logic processors."""
-from .movement import MovementProcessor
-from .hunger import HungerProcessor
-from .behavior import WanderProcessor
+from systems.movement import MovementProcessor
+from systems.hunger import HungerProcessor
+from systems.behavior import WanderProcessor
 
 __all__ = [
     "MovementProcessor",

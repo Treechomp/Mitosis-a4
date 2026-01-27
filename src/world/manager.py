@@ -1,9 +1,9 @@
 """World manager for chunk loading and management."""
 from dataclasses import dataclass, field
 
-from .chunk import Chunk
-from .generation.terrain import TerrainGenerator
-from .spatial import SpatialHash
+from world.chunk import Chunk
+from world.generation.terrain import TerrainGenerator
+from world.spatial import SpatialHash
 
 
 @dataclass
@@ -57,7 +57,7 @@ class WorldManager:
 
         chunk = self.get_chunk(chunk_x, chunk_y)
         if chunk is None:
-            from .chunk import TileType
+            from world.chunk import TileType
             return TileType.DEEP_WATER
 
         local_x = int(world_x) % self.chunk_size

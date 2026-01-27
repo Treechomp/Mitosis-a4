@@ -1,8 +1,8 @@
 """Movement system for updating entity positions."""
 import esper
 
-from ..components import Position, Velocity, ChunkPosition
-from ..world.manager import WorldManager
+from components import Position, Velocity, ChunkPosition
+from world.manager import WorldManager
 
 
 class MovementProcessor(esper.Processor):

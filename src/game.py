@@ -3,10 +3,10 @@ import random
 import arcade
 import esper
 
-from .config import CONFIG
-from .world import WorldManager
-from .rendering import Renderer, Camera
-from .components import (
+from config import CONFIG
+from world import WorldManager
+from rendering import Renderer, Camera
+from components import (
     Position,
     Velocity,
     ChunkPosition,
@@ -17,7 +17,7 @@ from .components import (
     Wander,
     Renderable,
 )
-from .systems import MovementProcessor, HungerProcessor, WanderProcessor
+from systems import MovementProcessor, HungerProcessor, WanderProcessor
 
 
 class Game(arcade.Window):
