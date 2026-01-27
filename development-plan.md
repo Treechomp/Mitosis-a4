@@ -1,399 +1,231 @@
-# Mitosis Development Plan: Engine & World Generation Strategy
+# Mitosis Development Plan: Ecosystem Simulation Architecture
 
 ## Executive Summary
 
-This document outlines a strategic development plan for Mitosis, evaluating alternative game engines beyond Pygame and exploring advanced world generation techniques. The goal is to establish a scalable foundation that can support 1000+ entities, procedurally generated worlds with rich terrain features, and eventual multiplayer/modding capabilities.
+This document outlines a **complete restart strategy** for Mitosis, optimized for:
+- **Large procedurally-generated worlds** (1000x1000+ tiles)
+- **Ecosystem simulation** with thousands of entities
+- **Off-screen simulation** with simplified behavior models
+- **Scalable architecture** using Entity-Component-System (ECS)
+
+Given these requirements, we prioritize **simulation fidelity over graphical complexity**.
 
 ---
 
-## Part 1: Engine Evaluation
+## Part 1: Architecture Philosophy
 
-### Current State: Pygame
+### Core Insight: Simulation-First Design
 
-**Strengths:**
-- Simple, well-documented API
-- Large community and learning resources
-- Direct hardware access via SDL
-- Good for prototyping
-
-**Limitations:**
-- Software rendering (CPU-bound graphics)
-- No built-in sprite batching or GPU acceleration
-- Performance degrades with many entities/tiles
-- Limited to 2D (acceptable for this project)
-- Manual implementation of features other engines provide (spatial partitioning, animation systems, etc.)
-
-### Alternative Engine Analysis
-
-#### 1. Arcade Library (Recommended for 2D)
-
-**Overview:** Modern Python game library built on Pyglet/OpenGL
-
-| Aspect | Details |
-|--------|---------|
-| **Performance** | GPU-accelerated via OpenGL, handles thousands of sprites efficiently |
-| **Features** | Built-in sprite batching, physics (Pymunk), tilemaps, particle systems |
-| **Learning Curve** | Low - similar API to Pygame but more Pythonic |
-| **Migration Effort** | Medium - requires restructuring render pipeline |
-
-**Key Advantages:**
-- `arcade.SpriteList` with automatic GPU batching (critical for 1000+ entities)
-- Built-in tilemap support with TMX file loading
-- Native particle system for effects
-- Type hints throughout (better IDE support)
-- Active development (2025 releases)
-
-**Sample Performance Comparison:**
-```
-Pygame:  ~500 sprites @ 60fps (software rendering)
-Arcade: ~5000 sprites @ 60fps (GPU batching)
-```
-
-#### 2. Ursina Engine
-
-**Overview:** High-level Panda3D wrapper focused on rapid development
-
-| Aspect | Details |
-|--------|---------|
-| **Performance** | Excellent - Panda3D backend with modern rendering |
-| **Features** | Entity-component system, 3D capable, built-in editor |
-| **Learning Curve** | Low - extremely beginner-friendly |
-| **Migration Effort** | High - different paradigm, primarily 3D-oriented |
-
-**Best For:** If considering 3D or isometric perspective in future
-
-#### 3. Pyglet (Direct OpenGL)
-
-**Overview:** Low-level multimedia library with OpenGL bindings
-
-| Aspect | Details |
-|--------|---------|
-| **Performance** | Excellent - direct OpenGL control |
-| **Features** | Minimal - you build what you need |
-| **Learning Curve** | High - requires OpenGL knowledge |
-| **Migration Effort** | High - significant restructuring needed |
-
-**Best For:** Maximum control over rendering pipeline
-
-#### 4. Godot with Python Bindings (gdpython)
-
-**Overview:** Full game engine with Python scripting option
-
-| Aspect | Details |
-|--------|---------|
-| **Performance** | Excellent - mature optimized engine |
-| **Features** | Complete engine: physics, animation, networking, etc. |
-| **Learning Curve** | Medium - different architecture |
-| **Migration Effort** | Very High - complete rewrite |
-
-**Best For:** Long-term projects needing full engine capabilities
-
-### Engine Recommendation
-
-**Primary Recommendation: Arcade Library**
-
-Reasons:
-1. **Minimal Migration Cost** - Similar patterns to Pygame, can migrate incrementally
-2. **Significant Performance Gain** - GPU-accelerated rendering solves immediate bottleneck
-3. **Built-in Features** - Tilemaps, particles, physics integration
-4. **Python Native** - No context switching to other languages/tools
-5. **Active Community** - Regular updates, good documentation
-
-**Alternative: Pyglet** (if maximum control needed for custom optimization)
-
----
-
-## Part 2: World Generation Approaches
-
-### Current Approach: Perlin Noise
-
-**Implementation:**
-- Single-layer Perlin noise for elevation
-- Moisture layer for biome determination
-- Direct noise-to-tile mapping
-- Basic river generation (currently broken)
-
-**Limitations:**
-- Uniform, repetitive terrain patterns
-- No large-scale structure (continents, mountain ranges)
-- Biome transitions are abrupt
-- Rivers don't follow realistic hydrology
-- No geological realism
-
-### Advanced World Generation Techniques
-
-#### 1. Multi-Scale Noise Composition
-
-**Technique:** Layer multiple noise functions at different scales
+Games like Dwarf Fortress, RimWorld, and Caves of Qud succeed because they prioritize **simulation depth** over rendering. The key architectural principle:
 
 ```
-Final Height =
-  Continent Noise (scale: 0.001) × 0.5 +   // Large landmasses
-  Mountain Noise (scale: 0.01)  × 0.3 +    // Regional terrain
-  Detail Noise   (scale: 0.1)   × 0.2      // Local variation
+┌─────────────────────────────────────────────────────────────┐
+│                    SIMULATION LAYER                         │
+│  (Runs independently of rendering - the "true" game state)  │
+│  • Entity behaviors, AI decisions, ecosystem dynamics       │
+│  • Processes ALL entities (on-screen and off-screen)        │
+│  • Uses simplified models for distant/off-screen entities   │
+└─────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────┐
+│                    RENDERING LAYER                          │
+│  (Visualizes a subset of the simulation state)              │
+│  • Only renders visible area + small buffer                 │
+│  • Can run at different tick rate than simulation           │
+│  • Decoupled - simulation continues if rendering lags       │
+└─────────────────────────────────────────────────────────────┘
 ```
 
-**Benefits:**
-- Creates natural-looking continents and oceans
-- Mountain ranges emerge from noise interactions
-- Local detail without losing large structure
+### Off-Screen Simulation Strategy
 
-**Implementation:**
-- Use `simplex_noise_3d` with different seeds for each layer
-- Apply domain warping for organic shapes
+**Level of Detail (LOD) for Simulation:**
 
-#### 2. Voronoi-Based Biome Distribution
+| Distance from Player | Update Frequency | Behavior Complexity |
+|---------------------|------------------|---------------------|
+| On-screen (visible) | Every frame | Full AI, pathfinding, animations |
+| Near off-screen (1-2 chunks) | Every 5 ticks | Simplified AI, no pathfinding |
+| Far off-screen (3-5 chunks) | Every 30 ticks | Statistical updates only |
+| Very distant (5+ chunks) | Every 60 ticks | Aggregate population changes |
 
-**Technique:** Use Voronoi diagrams to create distinct biome regions
-
-```
-1. Scatter seed points across world
-2. Generate Voronoi cells from seeds
-3. Assign biome type to each cell based on:
-   - Distance from center
-   - Noise-based climate zones
-   - Proximity to water/mountains
-4. Blend edges using noise
-```
-
-**Benefits:**
-- Creates coherent, visually distinct regions
-- Natural-looking biome boundaries
-- Easy to implement biome-specific features
-- Better for gameplay (clear territories)
-
-**Libraries:** `scipy.spatial.Voronoi` or custom implementation
-
-#### 3. Wave Function Collapse (WFC) for Structures
-
-**Technique:** Constraint-based tile placement
-
-**Best Use Cases:**
-- Dungeon/cave generation
-- Settlement layouts
-- Road/path networks
-- Consistent terrain patterns (coastlines, forest edges)
-
-**Hybrid Approach:**
-```
-1. Generate base terrain with noise
-2. Use WFC to place structures that fit terrain
-3. WFC ensures adjacent tiles are compatible
-```
-
-**Libraries:** `wfc` Python package or custom implementation
-
-#### 4. Hydraulic Erosion Simulation
-
-**Technique:** Simulate water flow to carve realistic terrain
-
+**Statistical Simulation for Distant Entities:**
 ```python
-for iteration in range(num_iterations):
-    # Drop water particle at random location
-    droplet = WaterDroplet(random_position)
-
-    while droplet.has_water:
-        # Calculate flow direction (downhill)
-        gradient = calculate_gradient(heightmap, droplet.position)
-
-        # Move droplet
-        droplet.move(gradient)
-
-        # Erode terrain (pick up sediment)
-        sediment = erode(heightmap, droplet.position, droplet.velocity)
-        droplet.sediment += sediment
-
-        # Deposit sediment (when slowing down)
-        if droplet.velocity < threshold:
-            deposit(heightmap, droplet.position, droplet.sediment * factor)
-
-        # Evaporate
-        droplet.water -= evaporation_rate
-```
-
-**Benefits:**
-- Realistic river valleys and canyons
-- Natural-looking coastlines
-- Mountain erosion patterns
-- Creates visual interest without manual design
-
-#### 5. Cellular Automata for Local Features
-
-**Technique:** Iterative rules for organic patterns
-
-**Applications:**
-- Cave systems
-- Forest growth patterns
-- Swamp/marsh distribution
-- City sprawl simulation
-
-**Example - Cave Generation:**
-```python
-def cellular_automata_step(grid):
-    new_grid = grid.copy()
-    for x, y in grid:
-        neighbors = count_neighbors(grid, x, y, type=WALL)
-        if neighbors > 4:
-            new_grid[x, y] = WALL
-        elif neighbors < 4:
-            new_grid[x, y] = FLOOR
-    return new_grid
-```
-
-#### 6. Graph-Based River Networks
-
-**Technique:** Use graph algorithms for realistic hydrology
-
-```
-1. Generate heightmap
-2. Identify water sources (peaks, rain catchment)
-3. Build flow graph: each cell points to lowest neighbor
-4. Calculate water accumulation (sum upstream cells)
-5. Carve rivers where accumulation > threshold
-6. Rivers merge naturally at confluence points
-```
-
-**Benefits:**
-- Physically accurate river systems
-- Natural tributaries and deltas
-- Rivers follow terrain realistically
-- Easy to determine watersheds
-
-### Recommended World Generation Stack
-
-**Layered Approach:**
-
-```
-Layer 1: Continental Structure
-├── Multi-scale noise for base elevation
-├── Voronoi cells for tectonic plates (optional)
-└── Output: Rough continent shapes
-
-Layer 2: Terrain Features
-├── Hydraulic erosion simulation
-├── Mountain range generation (noise ridges)
-└── Output: Detailed heightmap
-
-Layer 3: Climate & Biomes
-├── Temperature gradient (latitude-based + elevation)
-├── Moisture simulation (wind patterns, rain shadows)
-├── Voronoi-based biome assignment
-└── Output: Biome map with natural transitions
-
-Layer 4: Hydrology
-├── Graph-based river generation
-├── Lake detection (closed basins)
-├── Coastal erosion
-└── Output: Water features
-
-Layer 5: Local Detail
-├── Cellular automata for caves/forests
-├── WFC for structure placement
-├── Resource distribution
-└── Output: Final world
+# Instead of simulating each rabbit individually far away:
+# "This forest chunk has 47 rabbits and 3 foxes"
+# Statistical model: foxes eat ~2 rabbits per day, rabbits reproduce at 5%/day
+# Update population numbers without tracking individuals
 ```
 
 ---
 
-## Part 3: Implementation Roadmap
+## Part 2: Engine Evaluation (Revised for Simulation Focus)
 
-### Phase 0: Engine Migration (2-3 weeks)
+### Evaluation Criteria (Weighted for Ecosystem Sim)
 
-**Goal:** Migrate from Pygame to Arcade while maintaining functionality
+| Criterion | Weight | Description |
+|-----------|--------|-------------|
+| Entity Performance | 30% | Handle 10,000+ simulated entities |
+| Separation of Concerns | 25% | Clean simulation/rendering split |
+| Python Ecosystem | 20% | NumPy, SciPy, ML libraries accessible |
+| Rendering Efficiency | 15% | GPU batching for visible tiles |
+| Development Speed | 10% | Time to working prototype |
 
-| Task | Priority | Effort |
-|------|----------|--------|
-| Set up Arcade project structure | High | 1 day |
-| Port basic game loop | High | 1 day |
-| Migrate tile rendering to SpriteList | High | 2 days |
-| Port player movement and input | High | 1 day |
-| Migrate entity rendering | Medium | 2 days |
-| Add camera/viewport system | Medium | 1 day |
-| Implement debug overlay | Low | 1 day |
-| Performance benchmarking | Medium | 1 day |
+### Option A: Arcade + Esper ECS (Recommended)
 
-**Key Arcade Patterns:**
-```python
-class MitosisGame(arcade.Window):
-    def __init__(self):
-        super().__init__(800, 600, "Mitosis")
-        self.tile_sprites = arcade.SpriteList()  # GPU batched
-        self.entity_sprites = arcade.SpriteList()
-
-    def on_draw(self):
-        self.clear()
-        self.tile_sprites.draw()  # Single draw call for all tiles
-        self.entity_sprites.draw()
+**Architecture:**
+```
+┌──────────────────┐     ┌──────────────────┐
+│   Esper ECS      │────▶│   Arcade         │
+│   (Simulation)   │     │   (Rendering)    │
+│                  │     │                  │
+│ • Components     │     │ • SpriteList     │
+│ • Systems        │     │ • Camera         │
+│ • World state    │     │ • Input          │
+└──────────────────┘     └──────────────────┘
+        │
+        ▼
+┌──────────────────┐
+│   NumPy Arrays   │
+│   (Fast math)    │
+└──────────────────┘
 ```
 
-### Phase 1: World Generation Overhaul (3-4 weeks)
+**Pros:**
+- Clean separation: Esper handles simulation, Arcade handles rendering
+- Arcade benchmarks: 10,000+ sprites @ 60fps
+- Esper is pure Python, lightweight, designed for games
+- Full Python ecosystem (NumPy, SciPy, Numba for optimization)
+- Can swap rendering layer without touching simulation
 
-| Week | Focus | Tasks |
-|------|-------|-------|
-| 1 | Multi-scale terrain | Implement noise layering, continent generation |
-| 2 | Erosion & rivers | Add hydraulic erosion, graph-based rivers |
-| 3 | Biomes | Voronoi biome distribution, climate simulation |
-| 4 | Polish | Transitions, local detail, optimization |
+**Cons:**
+- Two libraries to learn/maintain
+- Manual integration work required
 
-**New World Generator Structure:**
-```
-world_generation/
-├── __init__.py
-├── noise.py          # Multi-scale noise utilities
-├── heightmap.py      # Elevation generation
-├── erosion.py        # Hydraulic erosion simulation
-├── hydrology.py      # Rivers, lakes, watersheds
-├── climate.py        # Temperature, moisture, wind
-├── biomes.py         # Biome classification & distribution
-├── features.py       # Caves, forests, landmarks
-└── generator.py      # Main world generator orchestrator
-```
+**Performance Profile:**
+- Esper: ~100,000 component queries/second (pure Python)
+- Arcade: ~10,000 sprites @ 60fps (GPU batched)
+- Combined: 5,000+ visible entities, 50,000+ simulated entities
 
-### Phase 2: Performance & Entity System (2-3 weeks)
+### Option B: Godot 4 with GDScript
 
-| Task | Priority |
-|------|----------|
-| Implement spatial hash grid | High |
-| Entity pooling with SpriteList | High |
-| Chunk loading/unloading | Medium |
-| LOD system for distant entities | Medium |
-| Optimize update loops | Medium |
+**Architecture:** Native scene tree with custom simulation layer
 
-### Phase 3: Gameplay Foundation (4-6 weeks)
+**Pros:**
+- Full game engine with editor
+- Built-in tilemap, animation, physics
+- GDScript is Python-like
+- Large community, tutorials
 
-Following existing roadmap for entity behaviors, player systems, and UI.
+**Cons:**
+- **Tilemap performance issues** with large maps (documented bugs with 500x500+ tiles)
+- **Y-sort performance** drops to 1-2 fps on large isometric maps
+- Harder to integrate Python scientific libraries
+- Simulation/rendering more tightly coupled
+- Overkill for 2D top-down pixel art
 
-### Phase 4: Visual Polish (Ongoing)
+**Verdict:** Not recommended for large-world simulation games
 
-- Sprite assets (consider procedural generation or asset packs)
-- Particle effects using Arcade's built-in system
-- Lighting effects
-- Weather systems
+### Option C: Raylib + Custom ECS
+
+**Architecture:** Low-level C library with Python bindings
+
+**Pros:**
+- Extremely fast (C-based, OpenGL)
+- Minimal overhead
+- Cross-platform including web (WASM)
+
+**Cons:**
+- Very low-level, build everything yourself
+- Less Pythonic API
+- Smaller Python community
+
+**Verdict:** Good if maximum performance needed, but higher development cost
+
+### Option D: Pure Python Simulation + Minimal Rendering
+
+**Architecture:** Focus entirely on simulation, use simple rendering
+
+**Pros:**
+- Maximum focus on simulation quality
+- Can use curses/terminal for prototype
+- Easiest to iterate on game logic
+
+**Cons:**
+- Limited visual appeal
+- Harder to attract playtesters
+
+**Verdict:** Good for prototyping core mechanics before committing to engine
+
+### Final Recommendation: Arcade + Esper ECS
+
+**Rationale:**
+1. **Best simulation/rendering separation** - Esper World is independent
+2. **Proven performance** - Both libraries benchmarked for game use
+3. **Python-native** - Full access to NumPy, SciPy, ML libraries
+4. **Flexible** - Can optimize hot paths with Numba/Cython later
+5. **Active maintenance** - Both projects updated in 2025
 
 ---
 
-## Part 4: Technical Decisions
+## Part 3: ECS Architecture for Ecosystem Simulation
 
-### Recommended Technology Stack
+### Why ECS is Essential
 
-| Component | Current | Recommended | Reason |
-|-----------|---------|-------------|--------|
-| **Engine** | Pygame | Arcade | GPU acceleration, built-in features |
-| **Noise** | `noise` lib | `opensimplex` or `fastnoiselite` | Better performance, more options |
-| **Math** | NumPy | NumPy + Numba | JIT compilation for erosion sim |
-| **Spatial** | None | `scipy.spatial` | KD-trees, Voronoi |
-| **Data** | Basic | `dataclasses` | Clean entity/tile definitions |
-
-### Architecture Considerations
-
-**Entity-Component System (ECS):**
-Consider adopting ECS pattern for scalability:
+Traditional OOP (what Mitosis currently uses):
 ```python
-# Components
+class Rabbit(Entity):
+    def update(self):
+        self.find_food()      # Each rabbit has its own logic
+        self.avoid_predators()
+        self.reproduce()
+```
+
+**Problems:**
+- Cache-unfriendly (objects scattered in memory)
+- Hard to query ("find all hungry entities near water")
+- Behaviors tightly coupled to entity types
+- Difficult to implement LOD simulation
+
+ECS Approach:
+```python
+# Components (pure data)
+@dataclass
+class Position: x: float; y: float
+@dataclass
+class Hunger: value: float; max_value: float
+@dataclass
+class Prey: fear_radius: float
+@dataclass
+class Predator: hunt_radius: float
+
+# Systems (pure logic, operate on component sets)
+def hunger_system(world):
+    for entity, (hunger,) in world.get_component(Hunger):
+        hunger.value -= 0.1  # All hungry things get hungrier
+
+def predator_hunt_system(world):
+    for pred, (pos, predator) in world.get_components(Position, Predator):
+        nearby_prey = spatial_query(pos, predator.hunt_radius)
+        # Hunt logic...
+```
+
+**Benefits:**
+- **Cache-friendly**: Components stored contiguously
+- **Flexible queries**: "Get all entities with Position AND Hunger"
+- **Composable behaviors**: Rabbit = Position + Velocity + Hunger + Prey
+- **LOD-friendly**: Skip expensive systems for distant entities
+
+### Proposed Component Design
+
+```python
+# === CORE COMPONENTS ===
+
 @dataclass
 class Position:
     x: float
     y: float
+    chunk_x: int  # Pre-computed for spatial queries
+    chunk_y: int
 
 @dataclass
 class Velocity:
@@ -401,81 +233,431 @@ class Velocity:
     dy: float
 
 @dataclass
-class Renderable:
-    sprite: arcade.Sprite
+class SimulationLOD:
+    """Determines update frequency based on distance from player"""
+    level: int  # 0=full, 1=reduced, 2=statistical, 3=aggregate
+    ticks_until_update: int
 
-# Systems process entities with specific components
-def movement_system(entities_with_position_and_velocity):
-    for entity in entities:
-        entity.position.x += entity.velocity.dx
-        entity.position.y += entity.velocity.dy
+# === ECOSYSTEM COMPONENTS ===
+
+@dataclass
+class Species:
+    type: SpeciesType  # enum: SHROOMER, SECTID, FAELING, etc.
+    base_reproduction_rate: float
+    base_metabolism: float
+
+@dataclass
+class Hunger:
+    current: float
+    max: float
+    starvation_threshold: float
+
+@dataclass
+class Energy:
+    current: float
+    max: float
+
+@dataclass
+class Age:
+    current: int  # in ticks
+    max_lifespan: int
+    maturity_age: int
+
+@dataclass
+class Predator:
+    prey_species: list[SpeciesType]
+    hunt_range: float
+    attack_power: float
+
+@dataclass
+class Prey:
+    predator_species: list[SpeciesType]
+    flee_range: float
+    flee_speed_multiplier: float
+
+@dataclass
+class Territorial:
+    home_position: tuple[float, float]
+    territory_radius: float
+    aggression: float
+
+@dataclass
+class Social:
+    group_id: int | None
+    preferred_group_size: int
+    cohesion_strength: float
+
+# === REPRODUCTION COMPONENTS ===
+
+@dataclass
+class SexualReproduction:
+    gender: Gender
+    fertility: float
+    gestation_ticks: int
+    offspring_count_range: tuple[int, int]
+
+@dataclass
+class AsexualReproduction:
+    """For Shroomers - spore-based"""
+    spore_range: float
+    spore_cooldown: int
+    spore_success_rate: float
+
+@dataclass
+class Budding:
+    """For Faelings - crystal growth"""
+    crystal_energy_required: float
+    bud_cooldown: int
+
+# === RENDERING COMPONENTS (only for visible entities) ===
+
+@dataclass
+class Renderable:
+    sprite_key: str
+    layer: int
+    animation_state: str
+
+@dataclass
+class VisibleToPlayer:
+    """Tag component - entity is currently visible"""
+    pass
 ```
 
-**Benefits:**
-- Cache-friendly data layout
-- Easy to add new behaviors
-- Natural parallelization
-- Decoupled, testable systems
+### System Architecture
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    SIMULATION SYSTEMS                        │
+│              (Run every tick, LOD-aware)                     │
+├─────────────────────────────────────────────────────────────┤
+│                                                              │
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐         │
+│  │ LODSystem   │  │ HungerSystem│  │ AgeSystem   │         │
+│  │ (updates    │  │ (metabolism)│  │ (aging,     │         │
+│  │  LOD levels)│  │             │  │  death)     │         │
+│  └─────────────┘  └─────────────┘  └─────────────┘         │
+│                                                              │
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐         │
+│  │ MovementSys │  │ HuntingSystem│  │ FleeSystem  │         │
+│  │ (pathfinding│  │ (predator   │  │ (prey       │         │
+│  │  for LOD 0) │  │  behavior)  │  │  behavior)  │         │
+│  └─────────────┘  └─────────────┘  └─────────────┘         │
+│                                                              │
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐         │
+│  │ReproduceSys │  │ TerritorySystem│ │ SocialSystem│        │
+│  │ (spawning   │  │ (territory  │  │ (flocking,  │         │
+│  │  offspring) │  │  defense)   │  │  herding)   │         │
+│  └─────────────┘  └─────────────┘  └─────────────┘         │
+│                                                              │
+│  ┌─────────────────────────────────────────────────┐       │
+│  │ StatisticalSimSystem (for LOD 2-3 entities)     │       │
+│  │ • Population dynamics without individual tracking│       │
+│  │ • Chunk-level ecosystem balance                  │       │
+│  └─────────────────────────────────────────────────┘       │
+│                                                              │
+└─────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────┐
+│                    RENDERING SYSTEMS                         │
+│              (Run every frame, visible only)                 │
+├─────────────────────────────────────────────────────────────┤
+│                                                              │
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐         │
+│  │VisibilitySys│  │ SpriteSync  │  │ AnimationSys│         │
+│  │ (culling)   │  │ (ECS→Arcade)│  │             │         │
+│  └─────────────┘  └─────────────┘  └─────────────┘         │
+│                                                              │
+└─────────────────────────────────────────────────────────────┘
+```
 
 ---
 
-## Part 5: Risk Assessment
+## Part 4: World Generation (Revised)
 
-| Risk | Impact | Mitigation |
-|------|--------|------------|
-| Arcade migration breaks features | High | Incremental migration, keep Pygame version |
-| World gen too slow | Medium | Use Numba, parallel processing |
-| Scope creep | High | Strict phase gates, MVP focus |
-| Art assets unavailable | Medium | Use procedural graphics initially |
+### Design Goals for Large Worlds
+
+1. **Chunk-based generation** - Generate on-demand, not all at once
+2. **Deterministic** - Same seed = same world (for debugging, saving)
+3. **Biome coherence** - Large-scale patterns, not just noise
+4. **Ecosystem support** - Biomes define entity spawn rules
+
+### Recommended Approach: Hierarchical Generation
+
+```
+┌────────────────────────────────────────────────────────────┐
+│ LAYER 1: Continental Template (generated once at start)    │
+│ • Voronoi-based tectonic plates                            │
+│ • Defines land/ocean distribution                          │
+│ • Resolution: 1 cell = 64x64 tiles                         │
+└────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌────────────────────────────────────────────────────────────┐
+│ LAYER 2: Climate Zones (generated once at start)           │
+│ • Temperature gradient (latitude + elevation)              │
+│ • Moisture patterns (wind simulation or noise)             │
+│ • Defines biome types                                      │
+└────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌────────────────────────────────────────────────────────────┐
+│ LAYER 3: Chunk Detail (generated on-demand)                │
+│ • Multi-octave noise for elevation                         │
+│ • Biome-specific features (forests, rocks, etc.)           │
+│ • River/water placement                                    │
+│ • Entity spawn points                                      │
+└────────────────────────────────────────────────────────────┘
+```
+
+### Key Technique: Domain Warping
+
+Instead of plain Perlin noise (which creates uniform blobs), use domain warping:
+
+```python
+def warped_noise(x, y, seed):
+    # First layer of noise warps the input coordinates
+    warp_x = noise2d(x * 0.01, y * 0.01, seed=seed) * 50
+    warp_y = noise2d(x * 0.01 + 100, y * 0.01, seed=seed) * 50
+
+    # Second layer uses warped coordinates
+    return noise2d((x + warp_x) * 0.02, (y + warp_y) * 0.02, seed=seed+1)
+```
+
+This creates organic, swirling patterns instead of uniform noise blobs.
+
+### Ecosystem-Aware Biomes
+
+Each biome defines:
+```python
+@dataclass
+class BiomeDefinition:
+    type: BiomeType
+
+    # Terrain
+    base_elevation_range: tuple[float, float]
+    tile_distribution: dict[TileType, float]  # e.g., {GRASS: 0.7, FLOWER: 0.2, ROCK: 0.1}
+
+    # Ecosystem
+    carrying_capacity: dict[SpeciesType, int]  # max entities per chunk
+    spawn_rates: dict[SpeciesType, float]
+    food_abundance: float  # affects hunger drain
+
+    # Environment
+    movement_modifier: float  # 1.0 = normal, 0.5 = slow (swamp)
+    visibility_modifier: float  # affects predator detection range
+```
 
 ---
 
-## Conclusion & Next Steps
+## Part 5: Implementation Roadmap (Complete Restart)
 
-### Immediate Actions (This Week)
+### Phase 0: Foundation (Week 1-2)
 
-1. **Set up Arcade development branch**
-2. **Create minimal Arcade prototype** with tile rendering
-3. **Benchmark performance** comparison vs Pygame
-4. **Design world generation module structure**
+**Goal:** Minimal working prototype with new architecture
 
-### Decision Points
+| Task | Description |
+|------|-------------|
+| Project setup | New repo structure, dependencies (arcade, esper, numpy) |
+| Basic ECS | Core components (Position, Velocity, Species) |
+| Simple world | Chunk-based tile storage, basic noise generation |
+| Minimal render | Arcade window, tile rendering, camera |
+| Test entity | One entity type moving around |
 
-- [ ] Confirm Arcade as target engine (after prototype)
-- [ ] Select specific world gen techniques to implement
-- [ ] Decide on ECS adoption timeline
-- [ ] Establish art direction (sprites vs procedural)
+**Deliverable:** Entity moves through procedurally generated world
 
-### Success Metrics
+### Phase 1: Ecosystem Core (Week 3-5)
 
-| Metric | Target |
-|--------|--------|
-| Tile render performance | 10,000+ tiles @ 60fps |
-| Entity performance | 1,000+ active entities @ 60fps |
-| World gen time (1024x1024) | < 5 seconds |
-| World variety | Visually distinct regions |
+| Task | Description |
+|------|-------------|
+| Hunger/Energy systems | Basic metabolism simulation |
+| Predator/Prey | Simple hunting and fleeing |
+| Reproduction | Spawn offspring with inherited traits |
+| Death | Starvation, age, predation |
+| Population tracking | Per-chunk entity counts |
+
+**Deliverable:** Self-sustaining ecosystem (populations rise and fall)
+
+### Phase 2: LOD Simulation (Week 6-7)
+
+| Task | Description |
+|------|-------------|
+| LOD component | Track distance from player |
+| Tiered updates | Different tick rates by LOD |
+| Statistical sim | Population-level simulation for distant chunks |
+| Chunk activation | Load/unload entity detail by distance |
+
+**Deliverable:** 10,000+ simulated entities, ~500 visible
+
+### Phase 3: World Generation v2 (Week 8-9)
+
+| Task | Description |
+|------|-------------|
+| Voronoi biomes | Large-scale biome distribution |
+| Domain warping | Organic terrain patterns |
+| River generation | Graph-based hydrology |
+| Biome ecosystems | Species distribution by biome |
+
+**Deliverable:** Varied, interesting world with distinct regions
+
+### Phase 4: Player & Gameplay (Week 10-12)
+
+| Task | Description |
+|------|-------------|
+| Player entity | Movement, collision |
+| Interaction | Select/observe entities |
+| Time controls | Pause, speed up simulation |
+| Debug UI | Entity inspector, population graphs |
+
+**Deliverable:** Playable prototype with ecosystem observation
+
+### Phase 5: Polish & Expand (Ongoing)
+
+- Faction behaviors (Shroomer/Sectid/Faeling)
+- Combat and territory
+- Visual improvements
+- Sound
+- Save/Load
 
 ---
 
-## Resources
+## Part 6: Project Structure
+
+```
+mitosis/
+├── src/
+│   ├── __init__.py
+│   ├── main.py                 # Entry point
+│   │
+│   ├── core/
+│   │   ├── __init__.py
+│   │   ├── game.py            # Main game loop
+│   │   ├── config.py          # Constants, settings
+│   │   └── events.py          # Event types
+│   │
+│   ├── ecs/
+│   │   ├── __init__.py
+│   │   ├── components/
+│   │   │   ├── __init__.py
+│   │   │   ├── core.py        # Position, Velocity, etc.
+│   │   │   ├── ecosystem.py   # Hunger, Species, etc.
+│   │   │   ├── behavior.py    # Predator, Prey, Social
+│   │   │   └── render.py      # Renderable, Animation
+│   │   │
+│   │   ├── systems/
+│   │   │   ├── __init__.py
+│   │   │   ├── simulation/
+│   │   │   │   ├── __init__.py
+│   │   │   │   ├── lod.py
+│   │   │   │   ├── hunger.py
+│   │   │   │   ├── movement.py
+│   │   │   │   ├── hunting.py
+│   │   │   │   ├── reproduction.py
+│   │   │   │   └── statistics.py
+│   │   │   │
+│   │   │   └── rendering/
+│   │   │       ├── __init__.py
+│   │   │       ├── visibility.py
+│   │   │       ├── sprite_sync.py
+│   │   │       └── animation.py
+│   │   │
+│   │   └── archetypes.py      # Entity templates (Rabbit, Fox, etc.)
+│   │
+│   ├── world/
+│   │   ├── __init__.py
+│   │   ├── chunk.py           # Chunk data structure
+│   │   ├── world_manager.py   # Chunk loading/unloading
+│   │   ├── generation/
+│   │   │   ├── __init__.py
+│   │   │   ├── noise.py
+│   │   │   ├── biomes.py
+│   │   │   ├── terrain.py
+│   │   │   └── rivers.py
+│   │   └── spatial.py         # Spatial hash grid
+│   │
+│   ├── rendering/
+│   │   ├── __init__.py
+│   │   ├── renderer.py        # Arcade integration
+│   │   ├── camera.py
+│   │   ├── tilemap.py
+│   │   └── sprites.py
+│   │
+│   └── ui/
+│       ├── __init__.py
+│       ├── hud.py
+│       └── debug.py
+│
+├── assets/
+│   ├── sprites/
+│   └── fonts/
+│
+├── tests/
+│   ├── test_ecs.py
+│   ├── test_world_gen.py
+│   └── test_simulation.py
+│
+├── requirements.txt
+├── pyproject.toml
+└── README.md
+```
+
+---
+
+## Part 7: Technology Stack (Final)
+
+| Component | Library | Version | Purpose |
+|-----------|---------|---------|---------|
+| **ECS** | esper | 3.2+ | Entity-Component-System |
+| **Rendering** | arcade | 2.6+ | GPU-accelerated sprites |
+| **Noise** | opensimplex | 0.4+ | Terrain generation |
+| **Math** | numpy | 1.24+ | Fast array operations |
+| **Spatial** | scipy | 1.10+ | KD-trees, Voronoi |
+| **JIT** | numba | 0.57+ | Performance-critical loops |
+| **Data** | dataclasses | stdlib | Component definitions |
+
+### requirements.txt
+```
+arcade>=2.6.17
+esper>=3.2
+numpy>=1.24.0
+scipy>=1.10.0
+opensimplex>=0.4
+numba>=0.57.0
+```
+
+---
+
+## Part 8: Success Metrics (Revised)
+
+| Metric | Target | Measurement |
+|--------|--------|-------------|
+| **Simulated entities** | 50,000+ | Count all entities in world |
+| **Visible entities** | 500+ @ 60fps | On-screen entity count |
+| **Simulation tick rate** | 20+ ticks/sec | Even with full world |
+| **World size** | 2048x2048 tiles | Chunk-based, stream |
+| **Ecosystem stability** | Self-sustaining | Populations don't collapse or explode |
+| **Memory usage** | <1GB | For full world state |
+
+---
+
+## Appendix A: References
+
+### Game Architecture
+- [Dwarf Fortress Simulation (Python)](https://github.com/kevshakes/dwarf-fortress-simulation)
+- [ECS Architecture in Games](https://www.daydreamsoft.com/blog/mastering-entity-component-system-ecs-in-game-development)
+- [Data-Oriented Design for Games](https://www.dataorienteddesign.com/dodbook/)
 
 ### Engine Documentation
 - [Arcade Library](https://api.arcade.academy/)
-- [Pyglet](https://pyglet.readthedocs.io/)
-- [Ursina Engine](https://www.ursinaengine.org/)
+- [Esper ECS](https://github.com/benmoran56/esper)
+- [OpenSimplex Noise](https://github.com/lmas/opensimplex)
 
-### World Generation References
-- [Wave Function Collapse](https://github.com/mxgmn/WaveFunctionCollapse)
-- [Hydraulic Erosion](https://www.firespark.de/resources/downloads/implementation%20of%20a%20methode%20for%20hydraulic%20erosion.pdf)
-- [Red Blob Games - Map Generation](https://www.redblobgames.com/maps/terrain-from-noise/)
-
-### Python Libraries
-- `arcade` - Game engine
-- `opensimplex` - Noise generation
-- `scipy.spatial` - Voronoi, spatial trees
-- `numba` - JIT compilation for performance
+### World Generation
+- [Red Blob Games - Terrain](https://www.redblobgames.com/maps/terrain-from-noise/)
+- [Procedural World Generation](https://www.procjam.com/)
 
 ---
 
-*Document Version: 1.0*
+*Document Version: 2.0*
 *Created: January 2026*
+*Focus: Large-world ecosystem simulation*
