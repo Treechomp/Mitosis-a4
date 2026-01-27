@@ -11,7 +11,7 @@ class HungerProcessor(esper.Processor):
         """Update hunger for all entities."""
         entities_to_kill = []
 
-        for entity, (hunger,) in esper.get_component(Hunger):
+        for entity, hunger in esper.get_component(Hunger):
             hunger.current -= hunger.decay_rate
 
             if hunger.current < 0:
