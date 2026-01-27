@@ -12,7 +12,7 @@ class WanderProcessor(esper.Processor):
 
     def process(self) -> None:
         """Update wandering entities."""
-        for entity, (wander, vel) in self.world.get_components(Wander, Velocity):
+        for entity, (wander, vel) in esper.get_components(Wander, Velocity):
             if random.random() < wander.change_direction_chance:
                 angle = random.uniform(0, 2 * math.pi)
                 wander.current_direction = (math.cos(angle), math.sin(angle))

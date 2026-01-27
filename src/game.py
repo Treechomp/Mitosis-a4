@@ -31,9 +31,6 @@ class Game(arcade.Window):
         )
         arcade.set_background_color((20, 20, 30))
 
-        # ECS World
-        self.ecs_world = esper.World()
-
         # Game World
         self.world_manager = WorldManager(
             chunk_size=CONFIG.CHUNK_SIZE,
@@ -72,12 +69,10 @@ class Game(arcade.Window):
 
     def setup(self) -> None:
         """Set up the game."""
-        # Register ECS processors
-        self.ecs_world.add_processor(
-            MovementProcessor(self.world_manager, CONFIG.CHUNK_SIZE)
-        )
-        self.ecs_world.add_processor(HungerProcessor())
-        self.ecs_world.add_processor(WanderProcessor())
+        # Register ECS processors (esper 3.0 module-level API)
+        esper.add_processor(MovementProcessor(self.world_manager, CONFIG.CHUNK_SIZE))
+        esper.add_processor(HungerProcessor())
+        esper.add_processor(WanderProcessor())
 
         # Create player entity
         spawn_x = CONFIG.WORLD_SIZE_CHUNKS * CONFIG.CHUNK_SIZE / 2
@@ -90,7 +85,7 @@ class Game(arcade.Window):
             spawn_x += random.randint(-10, 10)
             spawn_y += random.randint(-10, 10)
 
-        self.player_entity = self.ecs_world.create_entity(
+        self.player_entity = esper.create_entity(
             Position(x=spawn_x, y=spawn_y),
             Velocity(),
             ChunkPosition(),
@@ -112,7 +107,7 @@ class Game(arcade.Window):
         self._spawn_test_entities(spawn_x, spawn_y, count=50)
 
         # Update entity count
-        self.entity_count = len(list(self.ecs_world._entities.keys()))
+        self.entity_count = esper.get_entity_count()
 
     def _spawn_test_entities(self, center_x: float, center_y: float, count: int) -> None:
         """Spawn test entities around a position."""
@@ -125,7 +120,7 @@ class Game(arcade.Window):
 
             if random.random() < 0.8:
                 # Herbivore
-                self.ecs_world.create_entity(
+                esper.create_entity(
                     Position(x=x, y=y),
                     Velocity(),
                     ChunkPosition(),
@@ -137,7 +132,7 @@ class Game(arcade.Window):
                 )
             else:
                 # Carnivore
-                self.ecs_world.create_entity(
+                esper.create_entity(
                     Position(x=x, y=y),
                     Velocity(),
                     ChunkPosition(),
@@ -158,12 +153,12 @@ class Game(arcade.Window):
         # Fixed timestep simulation
         self.simulation_accumulator += delta_time
         while self.simulation_accumulator >= self.simulation_dt:
-            self.ecs_world.process()
+            esper.process()
             self.simulation_accumulator -= self.simulation_dt
 
         # Update camera to follow player
         if self.player_entity is not None:
-            pos = self.ecs_world.component_for_entity(self.player_entity, Position)
+            pos = esper.component_for_entity(self.player_entity, Position)
             self.camera.follow(
                 pos.x * CONFIG.TILE_SIZE,
                 pos.y * CONFIG.TILE_SIZE,
@@ -171,14 +166,14 @@ class Game(arcade.Window):
             )
             self.renderer.clear_cache()
 
-        self.entity_count = len(list(self.ecs_world._entities.keys()))
+        self.entity_count = esper.get_entity_count()
 
     def _handle_player_input(self) -> None:
         """Handle player movement input."""
         if self.player_entity is None:
             return
 
-        vel = self.ecs_world.component_for_entity(self.player_entity, Velocity)
+        vel = esper.component_for_entity(self.player_entity, Velocity)
         speed = 0.2
 
         vel.dx = 0
@@ -206,7 +201,7 @@ class Game(arcade.Window):
         positions = []
         renderables = []
 
-        for entity, (pos, rend) in self.ecs_world.get_components(Position, Renderable):
+        for entity, (pos, rend) in esper.get_components(Position, Renderable):
             positions.append((pos.x, pos.y))
             renderables.append((rend.color, rend.size, rend.shape))
 
@@ -214,7 +209,7 @@ class Game(arcade.Window):
 
         player_pos = (0.0, 0.0)
         if self.player_entity is not None:
-            pos = self.ecs_world.component_for_entity(self.player_entity, Position)
+            pos = esper.component_for_entity(self.player_entity, Position)
             player_pos = (pos.x, pos.y)
 
         self.renderer.render_debug_info(

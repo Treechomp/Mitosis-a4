@@ -14,7 +14,7 @@ class MovementProcessor(esper.Processor):
 
     def process(self) -> None:
         """Update all entity positions based on velocity."""
-        for entity, (pos, vel) in self.world.get_components(Position, Velocity):
+        for entity, (pos, vel) in esper.get_components(Position, Velocity):
             new_x = pos.x + vel.dx
             new_y = pos.y + vel.dy
 
@@ -22,8 +22,8 @@ class MovementProcessor(esper.Processor):
                 pos.x = new_x
                 pos.y = new_y
 
-                if self.world.has_component(entity, ChunkPosition):
-                    chunk_pos = self.world.component_for_entity(entity, ChunkPosition)
+                if esper.has_component(entity, ChunkPosition):
+                    chunk_pos = esper.component_for_entity(entity, ChunkPosition)
                     if chunk_pos.update(pos, self.chunk_size):
                         self.world_manager.spatial_hash.update(entity, pos.x, pos.y)
             else:
