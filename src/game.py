@@ -106,8 +106,8 @@ class Game(arcade.Window):
         # Spawn some test entities
         self._spawn_test_entities(spawn_x, spawn_y, count=50)
 
-        # Update entity count
-        self.entity_count = esper.get_entity_count()
+        # Update entity count (count entities with Position component)
+        self.entity_count = sum(1 for _ in esper.get_component(Position))
 
     def _spawn_test_entities(self, center_x: float, center_y: float, count: int) -> None:
         """Spawn test entities around a position."""
@@ -166,7 +166,7 @@ class Game(arcade.Window):
             )
             self.renderer.clear_cache()
 
-        self.entity_count = esper.get_entity_count()
+        self.entity_count = sum(1 for _ in esper.get_component(Position))
 
     def _handle_player_input(self) -> None:
         """Handle player movement input."""
