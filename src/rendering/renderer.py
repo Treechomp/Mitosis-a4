@@ -2,8 +2,8 @@
 import arcade
 from arcade import color as colors
 
-from ..world.chunk import Chunk, TileType, TILE_COLORS
-from ..world.world_manager import WorldManager
+from ..world.chunk import TileType, TILE_COLORS
+from ..world.manager import WorldManager
 from .camera import Camera
 
 

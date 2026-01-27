@@ -1,22 +1,25 @@
+"""ECS Components - pure data containers."""
 from .core import Position, Velocity, ChunkPosition
-from .ecosystem import Species, SpeciesType, Hunger, Energy, Age
+from .creature import Species, SpeciesType, Hunger, Energy, Age
 from .behavior import Predator, Prey, Wander
-from .simulation import SimulationLOD
 from .render import Renderable, Visible
 
 __all__ = [
+    # Core
     "Position",
     "Velocity",
     "ChunkPosition",
+    # Creature
     "Species",
     "SpeciesType",
     "Hunger",
     "Energy",
     "Age",
+    # Behavior
     "Predator",
     "Prey",
     "Wander",
-    "SimulationLOD",
+    # Render
     "Renderable",
     "Visible",
 ]

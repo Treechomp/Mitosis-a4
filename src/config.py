@@ -22,16 +22,15 @@ class Config:
     LOD_LEVELS: int = 4  # 0=full, 1=reduced, 2=statistical, 3=aggregate
 
     # LOD distances (in chunks from player)
-    LOD_FULL_RANGE: int = 2  # full simulation
-    LOD_REDUCED_RANGE: int = 5  # reduced updates
-    LOD_STATISTICAL_RANGE: int = 10  # statistical only
-    # Beyond statistical range = aggregate
+    LOD_FULL_RANGE: int = 2
+    LOD_REDUCED_RANGE: int = 5
+    LOD_STATISTICAL_RANGE: int = 10
 
     # LOD tick intervals
-    LOD_FULL_INTERVAL: int = 1  # every tick
-    LOD_REDUCED_INTERVAL: int = 5  # every 5 ticks
-    LOD_STATISTICAL_INTERVAL: int = 30  # every 30 ticks
-    LOD_AGGREGATE_INTERVAL: int = 60  # every 60 ticks
+    LOD_FULL_INTERVAL: int = 1
+    LOD_REDUCED_INTERVAL: int = 5
+    LOD_STATISTICAL_INTERVAL: int = 30
+    LOD_AGGREGATE_INTERVAL: int = 60
 
     # Entity limits
     MAX_ENTITIES_PER_CHUNK: int = 100

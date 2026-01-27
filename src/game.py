@@ -4,10 +4,9 @@ import arcade
 import esper
 
 from .config import CONFIG
-from ..world.world_manager import WorldManager
-from ..rendering.renderer import Renderer
-from ..rendering.camera import Camera
-from ..ecs.components import (
+from .world import WorldManager
+from .rendering import Renderer, Camera
+from .components import (
     Position,
     Velocity,
     ChunkPosition,
@@ -18,7 +17,7 @@ from ..ecs.components import (
     Wander,
     Renderable,
 )
-from ..ecs.systems.simulation import MovementProcessor, HungerProcessor, WanderProcessor
+from .systems import MovementProcessor, HungerProcessor, WanderProcessor
 
 
 class Game(arcade.Window):
@@ -57,7 +56,7 @@ class Game(arcade.Window):
             world_height=world_size_pixels,
         )
 
-        # Player entity (special - controlled by input)
+        # Player entity
         self.player_entity: int | None = None
 
         # Input state
@@ -121,13 +120,11 @@ class Game(arcade.Window):
             x = center_x + random.uniform(-30, 30)
             y = center_y + random.uniform(-30, 30)
 
-            # Only spawn on walkable tiles
             if not self.world_manager.is_walkable(x, y):
                 continue
 
-            # Randomly choose herbivore or carnivore
             if random.random() < 0.8:
-                # Herbivore (green)
+                # Herbivore
                 self.ecs_world.create_entity(
                     Position(x=x, y=y),
                     Velocity(),
@@ -139,7 +136,7 @@ class Game(arcade.Window):
                     Renderable(color=(100, 255, 100), size=8.0, shape="circle"),
                 )
             else:
-                # Carnivore (red)
+                # Carnivore
                 self.ecs_world.create_entity(
                     Position(x=x, y=y),
                     Velocity(),
@@ -153,11 +150,9 @@ class Game(arcade.Window):
 
     def on_update(self, delta_time: float) -> None:
         """Update game state."""
-        # Update FPS counter
         if delta_time > 0:
             self.fps = 1.0 / delta_time
 
-        # Handle player input
         self._handle_player_input()
 
         # Fixed timestep simulation
@@ -176,7 +171,6 @@ class Game(arcade.Window):
             )
             self.renderer.clear_cache()
 
-        # Update entity count periodically
         self.entity_count = len(list(self.ecs_world._entities.keys()))
 
     def _handle_player_input(self) -> None:
@@ -187,11 +181,9 @@ class Game(arcade.Window):
         vel = self.ecs_world.component_for_entity(self.player_entity, Velocity)
         speed = 0.2
 
-        # Reset velocity
         vel.dx = 0
         vel.dy = 0
 
-        # Apply input
         if arcade.key.W in self.keys_pressed or arcade.key.UP in self.keys_pressed:
             vel.dy = speed
         if arcade.key.S in self.keys_pressed or arcade.key.DOWN in self.keys_pressed:
@@ -201,7 +193,6 @@ class Game(arcade.Window):
         if arcade.key.D in self.keys_pressed or arcade.key.RIGHT in self.keys_pressed:
             vel.dx = speed
 
-        # Normalize diagonal movement
         if vel.dx != 0 and vel.dy != 0:
             vel.dx *= 0.707
             vel.dy *= 0.707
@@ -210,10 +201,8 @@ class Game(arcade.Window):
         """Render the game."""
         self.clear()
 
-        # Render world tiles
         self.renderer.render_world(self.world_manager, self.camera)
 
-        # Collect visible entities for rendering
         positions = []
         renderables = []
 
@@ -221,10 +210,8 @@ class Game(arcade.Window):
             positions.append((pos.x, pos.y))
             renderables.append((rend.color, rend.size, rend.shape))
 
-        # Render entities
         self.renderer.render_entities(positions, renderables, self.camera)
 
-        # Render debug info
         player_pos = (0.0, 0.0)
         if self.player_entity is not None:
             pos = self.ecs_world.component_for_entity(self.player_entity, Position)
@@ -241,7 +228,6 @@ class Game(arcade.Window):
         """Handle key press."""
         self.keys_pressed.add(key)
 
-        # Zoom controls
         if key == arcade.key.EQUAL or key == arcade.key.PLUS:
             self.camera.zoom = min(4.0, self.camera.zoom * 1.2)
             self.renderer.clear_cache()
