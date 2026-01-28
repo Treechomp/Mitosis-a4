@@ -96,7 +96,11 @@ class Game(arcade.Window):
             spawn_y * CONFIG.TILE_SIZE,
         )
 
-        # Load initial chunks around player (uses world_manager's load_radius)
+        # Load immediate spawn area (blocking - needed for entities to spawn)
+        player_chunk = self.world_manager.world_to_chunk(spawn_x, spawn_y)
+        self.world_manager.load_immediate_area(player_chunk[0], player_chunk[1], radius=2)
+
+        # Queue remaining chunks for gradual loading
         self.world_manager.update_streaming(spawn_x, spawn_y)
 
         # Spawn some test entities
@@ -168,6 +172,9 @@ class Game(arcade.Window):
             # Update chunk streaming based on player position
             self.world_manager.update_streaming(pos.x, pos.y)
 
+        # Process chunk loading queue (generates 1-2 chunks per frame)
+        self.world_manager.process_chunk_queue()
+
         self.entity_count = sum(1 for _ in esper.get_component(Position))
 
     def _handle_player_input(self) -> None:
@@ -227,6 +234,7 @@ class Game(arcade.Window):
             entity_count=self.entity_count,
             chunk_count=len(self.world_manager.chunks),
             player_pos=player_pos,
+            pending_chunks=self.world_manager.get_pending_count(),
         )
 
     def on_key_press(self, key: int, modifiers: int) -> None:

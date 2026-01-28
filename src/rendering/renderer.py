@@ -144,6 +144,7 @@ class Renderer:
         entity_count: int,
         chunk_count: int,
         player_pos: tuple[float, float],
+        pending_chunks: int = 0,
     ) -> None:
         """Render debug information overlay."""
         y = 700
@@ -152,8 +153,7 @@ class Renderer:
         texts = [
             f"FPS: {fps:.1f}",
             f"Entities: {entity_count}",
-            f"Chunks loaded: {chunk_count}",
-            f"Chunks cached: {len(self._chunk_shapes)}",
+            f"Chunks: {chunk_count} loaded, {pending_chunks} pending",
             f"Player: ({player_pos[0]:.1f}, {player_pos[1]:.1f})",
         ]
 
