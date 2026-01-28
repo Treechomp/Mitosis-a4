@@ -5,7 +5,7 @@ import esper
 
 from config import CONFIG
 from world import WorldManager
-from rendering import Renderer, Camera
+from rendering import Renderer
 from components import (
     Position,
     Velocity,
@@ -44,14 +44,9 @@ class Game(arcade.Window):
             chunk_size=CONFIG.CHUNK_SIZE,
         )
 
-        # Camera
-        world_size_pixels = CONFIG.WORLD_SIZE_CHUNKS * CONFIG.CHUNK_SIZE * CONFIG.TILE_SIZE
-        self.camera = Camera(
-            viewport_width=CONFIG.SCREEN_WIDTH,
-            viewport_height=CONFIG.SCREEN_HEIGHT,
-            world_width=world_size_pixels,
-            world_height=world_size_pixels,
-        )
+        # Camera - Arcade's built-in Camera2D
+        self.game_camera = arcade.Camera2D()
+        self.gui_camera = arcade.Camera2D()  # For UI elements (fixed)
 
         # Player entity
         self.player_entity: int | None = None
@@ -92,8 +87,8 @@ class Game(arcade.Window):
             Renderable(color=(255, 100, 100), size=12.0, shape="circle"),
         )
 
-        # Set camera to player position
-        self.camera.set_position(
+        # Set camera to player position (in world pixels)
+        self.game_camera.position = (
             spawn_x * CONFIG.TILE_SIZE,
             spawn_y * CONFIG.TILE_SIZE,
         )
@@ -156,15 +151,18 @@ class Game(arcade.Window):
             esper.process()
             self.simulation_accumulator -= self.simulation_dt
 
-        # Update camera to follow player
+        # Update camera to follow player (smooth lerp)
         if self.player_entity is not None:
             pos = esper.component_for_entity(self.player_entity, Position)
-            self.camera.follow(
-                pos.x * CONFIG.TILE_SIZE,
-                pos.y * CONFIG.TILE_SIZE,
-                lerp=0.1,
-            )
-            self.renderer.clear_cache()
+            target_x = pos.x * CONFIG.TILE_SIZE
+            target_y = pos.y * CONFIG.TILE_SIZE
+
+            # Smooth camera follow
+            lerp = 0.1
+            cam_x, cam_y = self.game_camera.position
+            new_x = cam_x + (target_x - cam_x) * lerp
+            new_y = cam_y + (target_y - cam_y) * lerp
+            self.game_camera.position = (new_x, new_y)
 
         self.entity_count = sum(1 for _ in esper.get_component(Position))
 
@@ -196,8 +194,13 @@ class Game(arcade.Window):
         """Render the game."""
         self.clear()
 
-        self.renderer.render_world(self.world_manager, self.camera)
+        # Use game camera for world rendering
+        self.game_camera.use()
 
+        # Render world tiles (batched)
+        self.renderer.render_world(self.world_manager, self.game_camera)
+
+        # Render entities (in world coordinates, camera handles transform)
         positions = []
         renderables = []
 
@@ -205,7 +208,10 @@ class Game(arcade.Window):
             positions.append((pos.x, pos.y))
             renderables.append((rend.color, rend.size, rend.shape))
 
-        self.renderer.render_entities(positions, renderables, self.camera)
+        self.renderer.render_entities(positions, renderables)
+
+        # Switch to GUI camera for UI (no transformation)
+        self.gui_camera.use()
 
         player_pos = (0.0, 0.0)
         if self.player_entity is not None:
@@ -224,11 +230,9 @@ class Game(arcade.Window):
         self.keys_pressed.add(key)
 
         if key == arcade.key.EQUAL or key == arcade.key.PLUS:
-            self.camera.zoom = min(4.0, self.camera.zoom * 1.2)
-            self.renderer.clear_cache()
+            self.game_camera.zoom = min(4.0, self.game_camera.zoom * 1.2)
         elif key == arcade.key.MINUS:
-            self.camera.zoom = max(0.25, self.camera.zoom / 1.2)
-            self.renderer.clear_cache()
+            self.game_camera.zoom = max(0.25, self.game_camera.zoom / 1.2)
 
     def on_key_release(self, key: int, modifiers: int) -> None:
         """Handle key release."""
