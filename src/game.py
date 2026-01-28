@@ -100,6 +100,13 @@ class Game(arcade.Window):
         player_chunk = self.world_manager.world_to_chunk(spawn_x, spawn_y)
         self.world_manager.load_immediate_area(player_chunk[0], player_chunk[1], radius=2)
 
+        # Pre-build shapes for visible area (blocking - needed for initial render)
+        for chunk in self.world_manager.get_loaded_chunks():
+            self.renderer.queue_chunk_shapes(chunk)
+        # Process all queued shapes immediately for initial view
+        while self.renderer.get_pending_shapes_count() > 0:
+            self.renderer.process_shape_queue()
+
         # Queue remaining chunks for gradual loading
         self.world_manager.update_streaming(spawn_x, spawn_y)
 
@@ -172,8 +179,11 @@ class Game(arcade.Window):
             # Update chunk streaming based on player position
             self.world_manager.update_streaming(pos.x, pos.y)
 
-        # Process chunk loading queue (generates 1-2 chunks per frame)
+        # Process chunk loading queue (generates 1 chunk per frame)
         self.world_manager.process_chunk_queue()
+
+        # Process shape building queue (builds 1 shape per frame)
+        self.renderer.process_shape_queue()
 
         self.entity_count = sum(1 for _ in esper.get_component(Position))
 

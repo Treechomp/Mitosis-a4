@@ -17,9 +17,9 @@ class WorldManager:
     seed: int = 42
 
     # Chunk loading settings
-    load_radius: int = 4  # Chunks to load around player
-    unload_radius: int = 6  # Chunks beyond this are unloaded
-    chunks_per_frame: int = 2  # Max chunks to generate per frame
+    load_radius: int = 5  # Chunks to load around player (increased for pre-loading)
+    unload_radius: int = 8  # Chunks beyond this are unloaded
+    chunks_per_frame: int = 1  # Max chunks to generate per frame (reduced for smoothness)
 
     # Chunk storage
     chunks: dict[tuple[int, int], Chunk] = field(default_factory=dict)

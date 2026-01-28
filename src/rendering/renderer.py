@@ -1,4 +1,5 @@
 """Optimized renderer using Arcade with batched drawing."""
+from collections import deque
 import arcade
 from arcade import color as colors
 from arcade.shape_list import ShapeElementList, create_rectangles_filled_with_colors
@@ -8,19 +9,27 @@ from world.manager import WorldManager
 
 
 class Renderer:
-    """Handles all rendering using batched Arcade shapes."""
+    """Handles all rendering using batched Arcade shapes with queued building."""
 
     def __init__(
         self,
         tile_size: int,
         chunk_size: int,
+        shapes_per_frame: int = 1,  # Max shapes to build per frame
     ):
         self.tile_size = tile_size
         self.chunk_size = chunk_size
+        self.shapes_per_frame = shapes_per_frame
+
         # Cache of ShapeElementLists per chunk: (chunk_x, chunk_y) -> ShapeElementList
         self._chunk_shapes: dict[tuple[int, int], ShapeElementList] = {}
-        # Track which chunks need rebuilding
-        self._dirty_chunks: set[tuple[int, int]] = set()
+
+        # Queue for chunks that need shape building
+        self._shape_queue: deque[Chunk] = deque()
+        self._queued_keys: set[tuple[int, int]] = set()
+
+        # Track camera position for prioritization
+        self._camera_chunk: tuple[int, int] = (0, 0)
 
     def _build_chunk_shapes(self, chunk: Chunk) -> ShapeElementList:
         """Build a ShapeElementList for a chunk's tiles."""
@@ -64,25 +73,51 @@ class Renderer:
 
         return shape_list
 
-    def get_chunk_shapes(self, chunk: Chunk) -> ShapeElementList:
-        """Get or create the ShapeElementList for a chunk."""
+    def queue_chunk_shapes(self, chunk: Chunk) -> None:
+        """Add a chunk to the shape building queue."""
         key = (chunk.chunk_x, chunk.chunk_y)
+        if key not in self._chunk_shapes and key not in self._queued_keys:
+            self._shape_queue.append(chunk)
+            self._queued_keys.add(key)
 
-        if key not in self._chunk_shapes or key in self._dirty_chunks:
+    def process_shape_queue(self) -> int:
+        """
+        Process up to shapes_per_frame chunks from the queue.
+        Returns number of shapes built.
+        """
+        built = 0
+
+        # Sort queue by distance to camera (prioritize nearby chunks)
+        if len(self._shape_queue) > 1:
+            self._shape_queue = deque(sorted(
+                self._shape_queue,
+                key=lambda c: max(abs(c.chunk_x - self._camera_chunk[0]),
+                                  abs(c.chunk_y - self._camera_chunk[1]))
+            ))
+
+        while self._shape_queue and built < self.shapes_per_frame:
+            chunk = self._shape_queue.popleft()
+            key = (chunk.chunk_x, chunk.chunk_y)
+            self._queued_keys.discard(key)
+
+            # Skip if already built (shouldn't happen but safety check)
+            if key in self._chunk_shapes:
+                continue
+
             self._chunk_shapes[key] = self._build_chunk_shapes(chunk)
-            self._dirty_chunks.discard(key)
+            built += 1
 
-        return self._chunk_shapes[key]
+        return built
 
-    def mark_chunk_dirty(self, chunk_x: int, chunk_y: int) -> None:
-        """Mark a chunk as needing rebuild."""
-        self._dirty_chunks.add((chunk_x, chunk_y))
+    def get_pending_shapes_count(self) -> int:
+        """Get number of chunks waiting for shape building."""
+        return len(self._shape_queue)
 
     def remove_chunk(self, chunk_x: int, chunk_y: int) -> None:
         """Remove a chunk's cached shapes."""
         key = (chunk_x, chunk_y)
         self._chunk_shapes.pop(key, None)
-        self._dirty_chunks.discard(key)
+        self._queued_keys.discard(key)
 
     def render_world(
         self,
@@ -90,6 +125,13 @@ class Renderer:
         camera: "arcade.Camera2D",
     ) -> None:
         """Render visible world tiles using batched drawing."""
+        # Update camera chunk for prioritization
+        chunk_pixel_size = self.chunk_size * self.tile_size
+        self._camera_chunk = (
+            int(camera.position[0] // chunk_pixel_size),
+            int(camera.position[1] // chunk_pixel_size),
+        )
+
         # Get visible area in world coordinates
         view_left = camera.position[0] - camera.viewport_width / 2 / camera.zoom
         view_bottom = camera.position[1] - camera.viewport_height / 2 / camera.zoom
@@ -97,7 +139,6 @@ class Renderer:
         view_top = camera.position[1] + camera.viewport_height / 2 / camera.zoom
 
         # Convert to chunk coordinates
-        chunk_pixel_size = self.chunk_size * self.tile_size
         min_cx = int(view_left // chunk_pixel_size) - 1
         max_cx = int(view_right // chunk_pixel_size) + 1
         min_cy = int(view_bottom // chunk_pixel_size) - 1
@@ -110,8 +151,14 @@ class Renderer:
                 if chunk is None:
                     continue
 
-                shape_list = self.get_chunk_shapes(chunk)
-                shape_list.draw()
+                key = (cx, cy)
+
+                # If shapes not ready, queue for building (will appear next frame)
+                if key not in self._chunk_shapes:
+                    self.queue_chunk_shapes(chunk)
+                    continue
+
+                self._chunk_shapes[key].draw()
 
     def render_entities(
         self,
@@ -150,10 +197,12 @@ class Renderer:
         y = 700
         line_height = 20
 
+        pending_shapes = self.get_pending_shapes_count()
         texts = [
             f"FPS: {fps:.1f}",
             f"Entities: {entity_count}",
-            f"Chunks: {chunk_count} loaded, {pending_chunks} pending",
+            f"Chunks: {chunk_count} loaded, {pending_chunks} generating",
+            f"Shapes: {len(self._chunk_shapes)} cached, {pending_shapes} building",
             f"Player: ({player_pos[0]:.1f}, {player_pos[1]:.1f})",
         ]
 
@@ -170,4 +219,5 @@ class Renderer:
     def clear_cache(self) -> None:
         """Clear the rendering cache."""
         self._chunk_shapes.clear()
-        self._dirty_chunks.clear()
+        self._shape_queue.clear()
+        self._queued_keys.clear()
