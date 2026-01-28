@@ -37,13 +37,11 @@ class Game(arcade.Window):
             chunk_size=CONFIG.CHUNK_SIZE,
         )
 
-        # Game World
+        # Game World (with threaded chunk generation)
         self.world_manager = WorldManager(
             chunk_size=CONFIG.CHUNK_SIZE,
             world_size_chunks=CONFIG.WORLD_SIZE_CHUNKS,
             seed=CONFIG.WORLD_SEED,
-            load_radius=CONFIG.LOD_FULL_RANGE + 2,  # Load a bit more than visible
-            unload_radius=CONFIG.LOD_FULL_RANGE + 4,  # Keep buffer before unloading
             on_chunk_unload=self.renderer.remove_chunk,  # Clean renderer cache
         )
 
@@ -179,10 +177,10 @@ class Game(arcade.Window):
             # Update chunk streaming based on player position
             self.world_manager.update_streaming(pos.x, pos.y)
 
-        # Process chunk loading queue (generates 1 chunk per frame)
-        self.world_manager.process_chunk_queue()
+        # Process completed chunk generations (from background threads)
+        self.world_manager.process_completed_chunks()
 
-        # Process shape building queue (builds 1 shape per frame)
+        # Process shape building queue (builds shapes for newly loaded chunks)
         self.renderer.process_shape_queue()
 
         self.entity_count = sum(1 for _ in esper.get_component(Position))
@@ -259,6 +257,11 @@ class Game(arcade.Window):
     def on_key_release(self, key: int, modifiers: int) -> None:
         """Handle key release."""
         self.keys_pressed.discard(key)
+
+    def on_close(self) -> None:
+        """Clean up when window closes."""
+        self.world_manager.shutdown()
+        super().on_close()
 
 
 def main() -> None:

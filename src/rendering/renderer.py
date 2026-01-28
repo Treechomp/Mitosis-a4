@@ -15,7 +15,7 @@ class Renderer:
         self,
         tile_size: int,
         chunk_size: int,
-        shapes_per_frame: int = 1,  # Max shapes to build per frame
+        shapes_per_frame: int = 2,  # Max shapes to build per frame
     ):
         self.tile_size = tile_size
         self.chunk_size = chunk_size
