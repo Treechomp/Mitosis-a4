@@ -1,5 +1,6 @@
 """World manager for chunk loading and management."""
 from dataclasses import dataclass, field
+from typing import Callable
 
 from world.chunk import Chunk
 from world.generation.terrain import TerrainGenerator
@@ -14,6 +15,10 @@ class WorldManager:
     world_size_chunks: int
     seed: int = 42
 
+    # Chunk loading settings
+    load_radius: int = 4  # Chunks to load around player
+    unload_radius: int = 6  # Chunks beyond this are unloaded
+
     # Chunk storage
     chunks: dict[tuple[int, int], Chunk] = field(default_factory=dict)
 
@@ -27,6 +32,12 @@ class WorldManager:
     loaded_range: tuple[int, int, int, int] = field(
         default=(0, 0, 0, 0)
     )  # min_x, min_y, max_x, max_y
+
+    # Track player's last chunk for change detection
+    _last_player_chunk: tuple[int, int] = field(default=(0, 0))
+
+    # Callback for when chunks are unloaded (for renderer cleanup)
+    on_chunk_unload: Callable[[int, int], None] | None = field(default=None)
 
     def __post_init__(self) -> None:
         """Initialize generator and spatial hash."""
@@ -89,6 +100,49 @@ class WorldManager:
                 self.get_chunk(cx, cy)
 
         self.loaded_range = (min_x, min_y, max_x, max_y)
+
+    def update_streaming(self, player_x: float, player_y: float) -> bool:
+        """
+        Update chunk streaming based on player position.
+
+        Returns True if chunks were loaded/unloaded (player moved to new chunk).
+        """
+        # Get player's current chunk
+        player_chunk = self.world_to_chunk(player_x, player_y)
+
+        # Only update if player moved to a different chunk
+        if player_chunk == self._last_player_chunk:
+            return False
+
+        self._last_player_chunk = player_chunk
+        center_x, center_y = player_chunk
+
+        # Load new chunks around player
+        self.load_chunks_around(center_x, center_y, self.load_radius)
+
+        # Unload distant chunks
+        self._unload_distant_chunks(center_x, center_y)
+
+        return True
+
+    def _unload_distant_chunks(self, center_x: int, center_y: int) -> None:
+        """Unload chunks that are too far from the center."""
+        chunks_to_unload = []
+
+        for (cx, cy) in self.chunks.keys():
+            # Calculate Chebyshev distance (max of x and y distance)
+            distance = max(abs(cx - center_x), abs(cy - center_y))
+
+            if distance > self.unload_radius:
+                chunks_to_unload.append((cx, cy))
+
+        # Unload chunks and notify callback
+        for cx, cy in chunks_to_unload:
+            del self.chunks[(cx, cy)]
+
+            # Notify renderer to clean up cached shapes
+            if self.on_chunk_unload is not None:
+                self.on_chunk_unload(cx, cy)
 
     def get_loaded_chunks(self) -> list[Chunk]:
         """Get list of all currently loaded chunks."""

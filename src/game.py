@@ -31,17 +31,20 @@ class Game(arcade.Window):
         )
         arcade.set_background_color((20, 20, 30))
 
+        # Rendering (create first so we can use it as callback)
+        self.renderer = Renderer(
+            tile_size=CONFIG.TILE_SIZE,
+            chunk_size=CONFIG.CHUNK_SIZE,
+        )
+
         # Game World
         self.world_manager = WorldManager(
             chunk_size=CONFIG.CHUNK_SIZE,
             world_size_chunks=CONFIG.WORLD_SIZE_CHUNKS,
             seed=CONFIG.WORLD_SEED,
-        )
-
-        # Rendering
-        self.renderer = Renderer(
-            tile_size=CONFIG.TILE_SIZE,
-            chunk_size=CONFIG.CHUNK_SIZE,
+            load_radius=CONFIG.LOD_FULL_RANGE + 2,  # Load a bit more than visible
+            unload_radius=CONFIG.LOD_FULL_RANGE + 4,  # Keep buffer before unloading
+            on_chunk_unload=self.renderer.remove_chunk,  # Clean renderer cache
         )
 
         # Camera - Arcade's built-in Camera2D
@@ -93,10 +96,8 @@ class Game(arcade.Window):
             spawn_y * CONFIG.TILE_SIZE,
         )
 
-        # Load initial chunks around player
-        player_chunk_x = int(spawn_x // CONFIG.CHUNK_SIZE)
-        player_chunk_y = int(spawn_y // CONFIG.CHUNK_SIZE)
-        self.world_manager.load_chunks_around(player_chunk_x, player_chunk_y, 3)
+        # Load initial chunks around player (uses world_manager's load_radius)
+        self.world_manager.update_streaming(spawn_x, spawn_y)
 
         # Spawn some test entities
         self._spawn_test_entities(spawn_x, spawn_y, count=50)
@@ -151,7 +152,7 @@ class Game(arcade.Window):
             esper.process()
             self.simulation_accumulator -= self.simulation_dt
 
-        # Update camera to follow player (smooth lerp)
+        # Update camera to follow player (smooth lerp) and stream chunks
         if self.player_entity is not None:
             pos = esper.component_for_entity(self.player_entity, Position)
             target_x = pos.x * CONFIG.TILE_SIZE
@@ -163,6 +164,9 @@ class Game(arcade.Window):
             new_x = cam_x + (target_x - cam_x) * lerp
             new_y = cam_y + (target_y - cam_y) * lerp
             self.game_camera.position = (new_x, new_y)
+
+            # Update chunk streaming based on player position
+            self.world_manager.update_streaming(pos.x, pos.y)
 
         self.entity_count = sum(1 for _ in esper.get_component(Position))
 
