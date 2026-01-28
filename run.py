@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/env python
 """Run the Mitosis game."""
 import sys
 from pathlib import Path
