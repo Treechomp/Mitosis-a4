@@ -54,7 +54,8 @@ class Renderer:
                 bottom_left = (world_x - half_tile, world_y - half_tile)
 
                 point_list.extend([top_left, top_right, bottom_right, bottom_left])
-                color_list.append(color_rgba)
+                # Need 4 colors per rectangle (one per corner vertex)
+                color_list.extend([color_rgba, color_rgba, color_rgba, color_rgba])
 
         # Create batched shape
         if point_list:
