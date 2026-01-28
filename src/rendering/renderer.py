@@ -55,12 +55,9 @@ class Renderer:
                             world_py + self.tile_size / 2,
                         )
 
-                        # Draw rectangle directly
-                        arcade.draw_rectangle_filled(
-                            screen_x,
-                            screen_y,
-                            tile_render_size,
-                            tile_render_size,
+                        # Draw rectangle directly (Arcade 3.x API)
+                        arcade.draw_rect_filled(
+                            arcade.XYWH(screen_x, screen_y, tile_render_size, tile_render_size),
                             color,
                         )
 
@@ -82,8 +79,8 @@ class Renderer:
             if shape == "circle":
                 arcade.draw_circle_filled(screen_x, screen_y, scaled_size / 2, color)
             elif shape == "square":
-                arcade.draw_rectangle_filled(
-                    screen_x, screen_y, scaled_size, scaled_size, color
+                arcade.draw_rect_filled(
+                    arcade.XYWH(screen_x, screen_y, scaled_size, scaled_size), color
                 )
             elif shape == "triangle":
                 arcade.draw_triangle_filled(
