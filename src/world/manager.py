@@ -305,3 +305,84 @@ class WorldManager:
     def world_to_chunk(self, world_x: float, world_y: float) -> tuple[int, int]:
         """Convert world to chunk coordinates."""
         return (int(world_x // self.chunk_size), int(world_y // self.chunk_size))
+
+    def pregenerate_world(self, progress_callback=None) -> None:
+        """
+        Pre-generate all chunks in the world using parallel processing.
+        This is blocking but uses all CPU cores for speed.
+
+        Args:
+            progress_callback: Optional callable(completed, total) for progress updates
+        """
+        import numpy as np
+
+        total_chunks = self.world_size_chunks * self.world_size_chunks
+        completed = 0
+
+        # Queue all chunks
+        all_args = []
+        for cx in range(self.world_size_chunks):
+            for cy in range(self.world_size_chunks):
+                if (cx, cy) not in self.chunks:
+                    args = (cx, cy, self.chunk_size, self.tile_size, self.seed)
+                    all_args.append(args)
+
+        if not all_args:
+            return  # All chunks already generated
+
+        # Process in parallel batches
+        executor = self._get_executor()
+        futures = {executor.submit(_generate_chunk_process, args): args for args in all_args}
+
+        for future in futures:
+            try:
+                data = future.result()
+
+                # Reconstruct chunk
+                chunk = Chunk(
+                    chunk_x=data['chunk_x'],
+                    chunk_y=data['chunk_y'],
+                    size=data['size']
+                )
+                chunk.tiles = np.frombuffer(
+                    data['tiles'], dtype=np.uint8
+                ).reshape(data['size'], data['size']).copy()
+                chunk.render_points = data['render_points']
+                chunk.render_colors = data['render_colors']
+                chunk.is_generated = True
+
+                key = (data['chunk_x'], data['chunk_y'])
+                self.chunks[key] = chunk
+                completed += 1
+
+                if progress_callback:
+                    progress_callback(completed, len(all_args))
+
+            except Exception as e:
+                print(f"Chunk generation failed: {e}")
+
+    def count_tiles_in_chunk(self, chunk: Chunk) -> dict[TileType, int]:
+        """Count occurrences of each tile type in a chunk."""
+        counts = {}
+        for tile_value in chunk.tiles.flat:
+            tile_type = TileType(tile_value)
+            counts[tile_type] = counts.get(tile_type, 0) + 1
+        return counts
+
+    def get_walkable_positions_in_chunk(self, chunk: Chunk, count: int) -> list[tuple[float, float]]:
+        """Get random walkable world positions within a chunk."""
+        import random
+        from world.chunk import WALKABLE_TILES
+
+        walkable = []
+        for local_y in range(chunk.size):
+            for local_x in range(chunk.size):
+                if chunk.is_walkable(local_x, local_y):
+                    world_x = chunk.chunk_x * chunk.size + local_x + 0.5
+                    world_y = chunk.chunk_y * chunk.size + local_y + 0.5
+                    walkable.append((world_x, world_y))
+
+        if not walkable:
+            return []
+
+        return random.sample(walkable, min(count, len(walkable)))

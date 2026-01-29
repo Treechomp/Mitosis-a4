@@ -1,6 +1,6 @@
 """ECS Components - pure data containers."""
 from components.core import Position, Velocity, ChunkPosition
-from components.creature import Species, SpeciesType, Hunger, Energy, Age
+from components.creature import Species, SpeciesType, Hunger, Energy, Age, Reproduction
 from components.behavior import Predator, Prey, Wander
 from components.render import Renderable, Visible
 
@@ -15,6 +15,7 @@ __all__ = [
     "Hunger",
     "Energy",
     "Age",
+    "Reproduction",
     # Behavior
     "Predator",
     "Prey",

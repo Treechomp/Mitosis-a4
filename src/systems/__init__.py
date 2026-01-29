@@ -7,6 +7,7 @@ from systems.behavior import (
     HuntingProcessor,
     FleeingProcessor,
 )
+from systems.lifecycle import AgingProcessor, ReproductionProcessor
 
 __all__ = [
     "MovementProcessor",
@@ -15,4 +16,6 @@ __all__ = [
     "GrazingProcessor",
     "HuntingProcessor",
     "FleeingProcessor",
+    "AgingProcessor",
+    "ReproductionProcessor",
 ]

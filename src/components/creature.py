@@ -73,3 +73,24 @@ class Age:
     @property
     def is_elderly(self) -> bool:
         return self.current >= self.max_lifespan * 0.8
+
+
+@dataclass
+class Reproduction:
+    """Reproduction capability for an entity."""
+
+    # Thresholds for reproduction
+    hunger_threshold: float = 70.0  # Must have this much hunger to reproduce
+    energy_threshold: float = 80.0  # Must have this much energy to reproduce
+
+    # Costs of reproduction
+    hunger_cost: float = 40.0  # Hunger lost when reproducing
+    energy_cost: float = 30.0  # Energy lost when reproducing
+
+    # Timing
+    cooldown: int = 500  # Ticks between reproductions
+    current_cooldown: int = 0
+
+    # Offspring settings
+    offspring_count: int = 1  # Number of offspring per reproduction
+    spawn_radius: float = 3.0  # How far offspring spawn from parent

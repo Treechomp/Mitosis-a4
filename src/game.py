@@ -4,7 +4,7 @@ import arcade
 import esper
 
 from config import CONFIG
-from world import WorldManager
+from world import WorldManager, populate_world
 from rendering import Renderer
 from components import (
     Position,
@@ -14,6 +14,8 @@ from components import (
     SpeciesType,
     Hunger,
     Energy,
+    Age,
+    Reproduction,
     Wander,
     Renderable,
     Predator,
@@ -26,6 +28,8 @@ from systems import (
     GrazingProcessor,
     HuntingProcessor,
     FleeingProcessor,
+    AgingProcessor,
+    ReproductionProcessor,
 )
 
 
@@ -73,8 +77,14 @@ class Game(arcade.Window):
         self.fps: float = 60.0
         self.entity_count: int = 0
 
-    def setup(self) -> None:
-        """Set up the game."""
+    def setup(self, pregenerate: bool = True, pregenerate_radius: int = 16) -> None:
+        """
+        Set up the game.
+
+        Args:
+            pregenerate: Whether to pre-generate world chunks before starting
+            pregenerate_radius: Radius of chunks to pre-generate around center
+        """
         # Register ECS processors (esper 3.0 module-level API)
         esper.add_processor(MovementProcessor(self.world_manager, CONFIG.CHUNK_SIZE))
         esper.add_processor(HungerProcessor())
@@ -82,10 +92,28 @@ class Game(arcade.Window):
         esper.add_processor(GrazingProcessor(self.world_manager))
         esper.add_processor(HuntingProcessor())
         esper.add_processor(FleeingProcessor())
+        esper.add_processor(AgingProcessor())
+        esper.add_processor(ReproductionProcessor(self.world_manager, max_population=1000))
 
-        # Create player entity
+        # Player spawn position (center of world)
         spawn_x = CONFIG.WORLD_SIZE_CHUNKS * CONFIG.CHUNK_SIZE / 2
         spawn_y = CONFIG.WORLD_SIZE_CHUNKS * CONFIG.CHUNK_SIZE / 2
+        player_chunk = self.world_manager.world_to_chunk(spawn_x, spawn_y)
+
+        if pregenerate:
+            print(f"Pre-generating world (radius {pregenerate_radius} chunks)...")
+            self._pregenerate_area(player_chunk[0], player_chunk[1], pregenerate_radius)
+            print(f"Populating world with creatures...")
+            creature_count = populate_world(
+                self.world_manager,
+                creatures_per_chunk=3.0,
+                herbivore_ratio=0.85,
+            )
+            print(f"Spawned {creature_count} creatures")
+        else:
+            # Load immediate spawn area only
+            self.world_manager.load_immediate_area(player_chunk[0], player_chunk[1], radius=2)
+            self._spawn_test_entities(spawn_x, spawn_y, count=50)
 
         # Find walkable spawn point
         for _ in range(100):
@@ -98,7 +126,7 @@ class Game(arcade.Window):
             Position(x=spawn_x, y=spawn_y),
             Velocity(),
             ChunkPosition(),
-            Renderable(color=(255, 100, 100), size=12.0, shape="circle"),
+            Renderable(color=(255, 255, 0), size=12.0, shape="circle"),  # Yellow player
         )
 
         # Set camera to player position (in world pixels)
@@ -107,25 +135,35 @@ class Game(arcade.Window):
             spawn_y * CONFIG.TILE_SIZE,
         )
 
-        # Load immediate spawn area (blocking - needed for entities to spawn)
-        player_chunk = self.world_manager.world_to_chunk(spawn_x, spawn_y)
-        self.world_manager.load_immediate_area(player_chunk[0], player_chunk[1], radius=2)
-
         # Pre-build shapes for visible area (blocking - needed for initial render)
         for chunk in self.world_manager.get_loaded_chunks():
             self.renderer.queue_chunk_shapes(chunk)
-        # Process all queued shapes immediately for initial view
         while self.renderer.get_pending_shapes_count() > 0:
             self.renderer.process_shape_queue()
 
         # Queue remaining chunks for gradual loading
         self.world_manager.update_streaming(spawn_x, spawn_y)
 
-        # Spawn some test entities
-        self._spawn_test_entities(spawn_x, spawn_y, count=50)
-
-        # Update entity count (count entities with Position component)
+        # Update entity count
         self.entity_count = sum(1 for _ in esper.get_component(Position))
+        print(f"Setup complete. {self.entity_count} entities, {len(self.world_manager.chunks)} chunks loaded")
+
+    def _pregenerate_area(self, center_x: int, center_y: int, radius: int) -> None:
+        """Pre-generate chunks in an area."""
+        min_x = max(0, center_x - radius)
+        max_x = min(CONFIG.WORLD_SIZE_CHUNKS - 1, center_x + radius)
+        min_y = max(0, center_y - radius)
+        max_y = min(CONFIG.WORLD_SIZE_CHUNKS - 1, center_y + radius)
+
+        total = (max_x - min_x + 1) * (max_y - min_y + 1)
+        generated = 0
+
+        for cx in range(min_x, max_x + 1):
+            for cy in range(min_y, max_y + 1):
+                self.world_manager.get_or_generate_chunk(cx, cy)
+                generated += 1
+                if generated % 100 == 0:
+                    print(f"  Generated {generated}/{total} chunks...")
 
     def _spawn_test_entities(self, center_x: float, center_y: float, count: int) -> None:
         """Spawn test entities around a position."""
@@ -145,6 +183,12 @@ class Game(arcade.Window):
                     Species(type=SpeciesType.HERBIVORE),
                     Hunger(current=80.0),
                     Energy(current=100.0),
+                    Age(current=500, max_lifespan=8000, maturity_age=800),
+                    Reproduction(
+                        hunger_threshold=75.0,
+                        energy_threshold=85.0,
+                        cooldown=400,
+                    ),
                     Wander(speed=0.05, change_direction_chance=0.01),
                     Prey(flee_range=6.0, flee_speed_multiplier=1.8),
                     Renderable(color=(100, 255, 100), size=8.0, shape="circle"),
@@ -158,6 +202,12 @@ class Game(arcade.Window):
                     Species(type=SpeciesType.CARNIVORE),
                     Hunger(current=60.0, decay_rate=0.15),
                     Energy(current=100.0),
+                    Age(current=400, max_lifespan=6000, maturity_age=600),
+                    Reproduction(
+                        hunger_threshold=80.0,
+                        energy_threshold=90.0,
+                        cooldown=600,
+                    ),
                     Wander(speed=0.08, change_direction_chance=0.015),
                     Predator(hunt_range=8.0, attack_power=35.0),
                     Renderable(color=(255, 100, 100), size=10.0, shape="triangle"),
