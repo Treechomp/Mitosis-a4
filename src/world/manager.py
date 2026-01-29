@@ -1,80 +1,121 @@
-"""World manager for chunk loading and management with threaded generation."""
-from collections import deque
-from concurrent.futures import ThreadPoolExecutor, Future
+"""World manager for chunk loading with true parallel generation using multiprocessing."""
+from concurrent.futures import ProcessPoolExecutor, Future
 from dataclasses import dataclass, field
-from threading import Lock
 from typing import Callable
+import multiprocessing
 
-from world.chunk import Chunk
+from world.chunk import Chunk, TILE_COLORS, TileType
 from world.generation.terrain import TerrainGenerator
 from world.spatial import SpatialHash
 
 
+def _generate_chunk_process(args: tuple) -> dict:
+    """
+    Generate a chunk in a separate process.
+    Returns a dict with chunk data (can't return Chunk directly due to pickling).
+    """
+    chunk_x, chunk_y, chunk_size, tile_size, seed = args
+
+    # Create generator in this process
+    generator = TerrainGenerator(seed=seed)
+
+    # Create and generate chunk
+    chunk = Chunk(chunk_x=chunk_x, chunk_y=chunk_y, size=chunk_size)
+    generator.generate_chunk(chunk)
+
+    # Pre-compute render data
+    chunk_world_x = chunk_x * chunk_size * tile_size
+    chunk_world_y = chunk_y * chunk_size * tile_size
+    half_tile = tile_size / 2
+
+    points = []
+    colors = []
+
+    for local_y in range(chunk_size):
+        for local_x in range(chunk_size):
+            tile_type = TileType(chunk.tiles[local_y, local_x])
+            color = TILE_COLORS.get(tile_type, (255, 0, 255))
+            color_rgba = (color[0], color[1], color[2], 255)
+
+            world_x = chunk_world_x + local_x * tile_size + half_tile
+            world_y = chunk_world_y + local_y * tile_size + half_tile
+
+            points.append((world_x - half_tile, world_y + half_tile))
+            points.append((world_x + half_tile, world_y + half_tile))
+            points.append((world_x + half_tile, world_y - half_tile))
+            points.append((world_x - half_tile, world_y - half_tile))
+            colors.extend([color_rgba, color_rgba, color_rgba, color_rgba])
+
+    # Return serializable data
+    return {
+        'chunk_x': chunk_x,
+        'chunk_y': chunk_y,
+        'size': chunk_size,
+        'tiles': chunk.tiles.tobytes(),  # Serialize numpy array
+        'render_points': points,
+        'render_colors': colors,
+    }
+
+
 @dataclass
 class WorldManager:
-    """Manages world chunks with threaded terrain generation."""
+    """Manages world chunks with multiprocessing for true parallel generation."""
 
     chunk_size: int
     world_size_chunks: int
     seed: int = 42
-    tile_size: int = 16  # Needed for pre-computing render data
+    tile_size: int = 16
 
     # Chunk loading settings
-    load_radius: int = 6  # Chunks to load around player
-    unload_radius: int = 10  # Chunks beyond this are unloaded
-    max_concurrent_generations: int = 4  # Thread pool size
+    load_radius: int = 8  # Larger buffer for smoother loading
+    unload_radius: int = 12
+    max_workers: int = field(default_factory=lambda: max(1, multiprocessing.cpu_count() - 1))
 
     # Chunk storage
     chunks: dict[tuple[int, int], Chunk] = field(default_factory=dict)
 
-    # Terrain generator (one per thread for thread safety)
+    # Local generator for blocking calls
     generator: TerrainGenerator = field(init=False)
 
     # Spatial hash for entities
     spatial_hash: SpatialHash = field(init=False)
 
-    # Threading for chunk generation
-    _executor: ThreadPoolExecutor = field(init=False)
+    # Process pool for parallel generation
+    _executor: ProcessPoolExecutor | None = field(default=None, init=False)
     _pending_futures: dict[tuple[int, int], Future] = field(default_factory=dict)
-    _chunks_lock: Lock = field(default_factory=Lock)
 
-    # Player movement tracking for predictive loading
+    # Player tracking for predictive loading
     _player_chunk: tuple[int, int] = field(default=(0, 0))
     _player_velocity: tuple[float, float] = field(default=(0.0, 0.0))
     _last_player_pos: tuple[float, float] = field(default=(0.0, 0.0))
 
-    # Callback for when chunks are unloaded (for renderer cleanup)
+    # Callback for chunk unload
     on_chunk_unload: Callable[[int, int], None] | None = field(default=None)
 
     def __post_init__(self) -> None:
-        """Initialize generator, spatial hash, and thread pool."""
+        """Initialize generator, spatial hash, and process pool."""
         self.generator = TerrainGenerator(seed=self.seed)
         self.spatial_hash = SpatialHash(cell_size=float(self.chunk_size))
-        self._executor = ThreadPoolExecutor(
-            max_workers=self.max_concurrent_generations,
-            thread_name_prefix="chunk_gen"
-        )
+        # Lazy init of process pool (can't create in __post_init__ for dataclass)
+
+    def _get_executor(self) -> ProcessPoolExecutor:
+        """Get or create the process pool executor."""
+        if self._executor is None:
+            self._executor = ProcessPoolExecutor(max_workers=self.max_workers)
+        return self._executor
 
     def shutdown(self) -> None:
-        """Shutdown the thread pool. Call when closing the game."""
-        self._executor.shutdown(wait=False)
-
-    def _generate_chunk_threaded(self, chunk_x: int, chunk_y: int) -> Chunk:
-        """Generate a chunk (runs in worker thread)."""
-        chunk = Chunk(chunk_x=chunk_x, chunk_y=chunk_y, size=self.chunk_size)
-        self.generator.generate_chunk(chunk)
-        # Pre-compute render data in worker thread (expensive operation)
-        chunk.compute_render_data(self.tile_size)
-        return chunk
+        """Shutdown the process pool."""
+        if self._executor is not None:
+            self._executor.shutdown(wait=False)
+            self._executor = None
 
     def get_chunk(self, chunk_x: int, chunk_y: int) -> Chunk | None:
-        """Get a chunk if loaded, None otherwise. Does NOT generate."""
+        """Get a chunk if loaded, None otherwise."""
         if not (0 <= chunk_x < self.world_size_chunks and
                 0 <= chunk_y < self.world_size_chunks):
             return None
-
-        with self._chunks_lock:
-            return self.chunks.get((chunk_x, chunk_y))
+        return self.chunks.get((chunk_x, chunk_y))
 
     def get_or_generate_chunk(self, chunk_x: int, chunk_y: int) -> Chunk | None:
         """Get a chunk, generating immediately if needed (blocking)."""
@@ -83,48 +124,36 @@ class WorldManager:
             return None
 
         key = (chunk_x, chunk_y)
+        if key in self.chunks:
+            return self.chunks[key]
 
-        with self._chunks_lock:
-            if key in self.chunks:
-                return self.chunks[key]
-
-        # Generate synchronously (blocking)
+        # Generate synchronously
         chunk = Chunk(chunk_x=chunk_x, chunk_y=chunk_y, size=self.chunk_size)
         self.generator.generate_chunk(chunk)
         chunk.compute_render_data(self.tile_size)
-
-        with self._chunks_lock:
-            # Check again in case another thread generated it
-            if key not in self.chunks:
-                self.chunks[key] = chunk
-            return self.chunks[key]
+        self.chunks[key] = chunk
+        return chunk
 
     def queue_chunk_async(self, chunk_x: int, chunk_y: int) -> bool:
-        """Queue a chunk for async generation. Returns True if queued."""
+        """Queue a chunk for parallel generation."""
         if not (0 <= chunk_x < self.world_size_chunks and
                 0 <= chunk_y < self.world_size_chunks):
             return False
 
         key = (chunk_x, chunk_y)
-
-        # Skip if already loaded or being generated
-        with self._chunks_lock:
-            if key in self.chunks:
-                return False
-
-        if key in self._pending_futures:
+        if key in self.chunks or key in self._pending_futures:
             return False
 
-        # Submit to thread pool
-        future = self._executor.submit(self._generate_chunk_threaded, chunk_x, chunk_y)
+        # Submit to process pool
+        args = (chunk_x, chunk_y, self.chunk_size, self.tile_size, self.seed)
+        future = self._get_executor().submit(_generate_chunk_process, args)
         self._pending_futures[key] = future
         return True
 
     def process_completed_chunks(self) -> int:
-        """
-        Check for completed chunk generations and add them to the world.
-        Returns number of chunks completed this frame.
-        """
+        """Check for completed chunk generations and add them to the world."""
+        import numpy as np
+
         completed = 0
         completed_keys = []
 
@@ -132,29 +161,40 @@ class WorldManager:
             if future.done():
                 completed_keys.append(key)
                 try:
-                    chunk = future.result()
-                    with self._chunks_lock:
-                        if key not in self.chunks:
-                            self.chunks[key] = chunk
-                            completed += 1
+                    data = future.result()
+
+                    # Reconstruct chunk from serialized data
+                    chunk = Chunk(
+                        chunk_x=data['chunk_x'],
+                        chunk_y=data['chunk_y'],
+                        size=data['size']
+                    )
+                    chunk.tiles = np.frombuffer(
+                        data['tiles'], dtype=np.uint8
+                    ).reshape(data['size'], data['size']).copy()
+                    chunk.render_points = data['render_points']
+                    chunk.render_colors = data['render_colors']
+                    chunk.is_generated = True
+
+                    if key not in self.chunks:
+                        self.chunks[key] = chunk
+                        completed += 1
+
                 except Exception as e:
                     print(f"Chunk generation failed for {key}: {e}")
 
-        # Remove completed futures
         for key in completed_keys:
             del self._pending_futures[key]
 
         return completed
 
     def get_tile(self, world_x: float, world_y: float):
-        """Get tile type at world coordinates. Returns DEEP_WATER if chunk not loaded."""
+        """Get tile type at world coordinates."""
         chunk_x = int(world_x // self.chunk_size)
         chunk_y = int(world_y // self.chunk_size)
 
-        # Non-blocking: return default if chunk not loaded
         chunk = self.get_chunk(chunk_x, chunk_y)
         if chunk is None:
-            from world.chunk import TileType
             return TileType.DEEP_WATER
 
         local_x = int(world_x) % self.chunk_size
@@ -162,11 +202,10 @@ class WorldManager:
         return chunk.get_tile(local_x, local_y)
 
     def is_walkable(self, world_x: float, world_y: float) -> bool:
-        """Check if world position is walkable. Returns False if chunk not loaded."""
+        """Check if world position is walkable."""
         chunk_x = int(world_x // self.chunk_size)
         chunk_y = int(world_y // self.chunk_size)
 
-        # Non-blocking: return False if chunk not loaded
         chunk = self.get_chunk(chunk_x, chunk_y)
         if chunk is None:
             return False
@@ -176,7 +215,7 @@ class WorldManager:
         return chunk.is_walkable(local_x, local_y)
 
     def load_immediate_area(self, center_x: int, center_y: int, radius: int = 1) -> None:
-        """Load chunks immediately (blocking). Use sparingly, e.g., at spawn."""
+        """Load chunks immediately (blocking)."""
         min_x = max(0, center_x - radius)
         max_x = min(self.world_size_chunks - 1, center_x + radius)
         min_y = max(0, center_y - radius)
@@ -187,14 +226,10 @@ class WorldManager:
                 self.get_or_generate_chunk(cx, cy)
 
     def update_streaming(self, player_x: float, player_y: float) -> None:
-        """
-        Update chunk streaming based on player position.
-        Uses predictive loading based on movement direction.
-        """
-        # Update player velocity estimate
+        """Update chunk streaming with predictive loading."""
+        # Update velocity estimate
         dx = player_x - self._last_player_pos[0]
         dy = player_y - self._last_player_pos[1]
-        # Smooth velocity with exponential moving average
         alpha = 0.3
         self._player_velocity = (
             self._player_velocity[0] * (1 - alpha) + dx * alpha,
@@ -202,14 +237,12 @@ class WorldManager:
         )
         self._last_player_pos = (player_x, player_y)
 
-        # Get player's current chunk
         player_chunk = self.world_to_chunk(player_x, player_y)
         self._player_chunk = player_chunk
         center_x, center_y = player_chunk
 
-        # Calculate chunks to load with priority based on distance and movement direction
+        # Collect chunks to load with priority
         chunks_to_load = []
-
         min_x = max(0, center_x - self.load_radius)
         max_x = min(self.world_size_chunks - 1, center_x + self.load_radius)
         min_y = max(0, center_y - self.load_radius)
@@ -218,85 +251,57 @@ class WorldManager:
         for cx in range(min_x, max_x + 1):
             for cy in range(min_y, max_y + 1):
                 key = (cx, cy)
-                with self._chunks_lock:
-                    if key in self.chunks:
-                        continue
-                if key in self._pending_futures:
+                if key in self.chunks or key in self._pending_futures:
                     continue
-
-                # Calculate priority (lower = higher priority)
-                priority = self._calculate_chunk_priority(cx, cy, center_x, center_y)
+                priority = self._calculate_priority(cx, cy, center_x, center_y)
                 chunks_to_load.append((priority, cx, cy))
 
-        # Sort by priority and queue
+        # Sort and queue
         chunks_to_load.sort(key=lambda x: x[0])
-
         for _, cx, cy in chunks_to_load:
             self.queue_chunk_async(cx, cy)
 
         # Unload distant chunks
         self._unload_distant_chunks(center_x, center_y)
 
-    def _calculate_chunk_priority(
-        self, chunk_x: int, chunk_y: int, center_x: int, center_y: int
-    ) -> float:
-        """
-        Calculate loading priority for a chunk.
-        Lower values = higher priority.
-        Considers distance and movement direction.
-        """
-        # Base priority is distance from player
-        dist_x = chunk_x - center_x
-        dist_y = chunk_y - center_y
-        distance = max(abs(dist_x), abs(dist_y))  # Chebyshev distance
+    def _calculate_priority(self, cx: int, cy: int, center_x: int, center_y: int) -> float:
+        """Calculate loading priority (lower = higher priority)."""
+        dist_x = cx - center_x
+        dist_y = cy - center_y
+        distance = max(abs(dist_x), abs(dist_y))
 
-        # Direction bonus: chunks in movement direction get priority
-        # Normalize velocity
         vel_mag = (self._player_velocity[0]**2 + self._player_velocity[1]**2) ** 0.5
         if vel_mag > 0.01:
-            # Direction from player to chunk
             dir_x = dist_x / max(1, abs(dist_x) + abs(dist_y))
             dir_y = dist_y / max(1, abs(dist_x) + abs(dist_y))
-
-            # Normalized velocity direction
             vel_dir_x = self._player_velocity[0] / vel_mag
             vel_dir_y = self._player_velocity[1] / vel_mag
-
-            # Dot product: 1 if same direction, -1 if opposite
             alignment = dir_x * vel_dir_x + dir_y * vel_dir_y
-
-            # Reduce priority (lower number) for chunks in movement direction
-            direction_bonus = -alignment * 2  # -2 to +2 range
+            direction_bonus = -alignment * 2
         else:
             direction_bonus = 0
 
         return distance + direction_bonus
 
     def _unload_distant_chunks(self, center_x: int, center_y: int) -> None:
-        """Unload chunks that are too far from the center."""
-        chunks_to_unload = []
-
-        with self._chunks_lock:
-            for (cx, cy) in self.chunks.keys():
-                distance = max(abs(cx - center_x), abs(cy - center_y))
-                if distance > self.unload_radius:
-                    chunks_to_unload.append((cx, cy))
-
-        for cx, cy in chunks_to_unload:
-            with self._chunks_lock:
-                self.chunks.pop((cx, cy), None)
-            if self.on_chunk_unload is not None:
+        """Unload chunks too far from center."""
+        to_unload = [
+            key for key in self.chunks
+            if max(abs(key[0] - center_x), abs(key[1] - center_y)) > self.unload_radius
+        ]
+        for cx, cy in to_unload:
+            del self.chunks[(cx, cy)]
+            if self.on_chunk_unload:
                 self.on_chunk_unload(cx, cy)
 
     def get_loaded_chunks(self) -> list[Chunk]:
-        """Get list of all currently loaded chunks."""
-        with self._chunks_lock:
-            return list(self.chunks.values())
+        """Get all loaded chunks."""
+        return list(self.chunks.values())
 
     def get_pending_count(self) -> int:
         """Get number of chunks being generated."""
         return len(self._pending_futures)
 
     def world_to_chunk(self, world_x: float, world_y: float) -> tuple[int, int]:
-        """Convert world coordinates to chunk coordinates."""
+        """Convert world to chunk coordinates."""
         return (int(world_x // self.chunk_size), int(world_y // self.chunk_size))
