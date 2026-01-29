@@ -1,7 +1,8 @@
-"""Behavior systems for entity AI."""
+"""Behavior systems for entity AI with spatial optimization."""
 import random
 import math
 
+import numpy as np
 import esper
 
 from components import (
@@ -16,6 +17,12 @@ from components import (
     Prey,
 )
 from world.chunk import TileType
+from utils.math_utils import (
+    distance_squared,
+    normalize_vector,
+    find_nearest_in_range_squared,
+    calculate_flee_vector,
+)
 
 
 class WanderProcessor(esper.Processor):
@@ -70,17 +77,22 @@ class GrazingProcessor(esper.Processor):
 
 
 class HuntingProcessor(esper.Processor):
-    """Predators hunt and eat prey entities."""
+    """Predators hunt and eat prey entities using spatial hashing for efficiency."""
 
-    def __init__(self, hunt_nutrition: float = 50.0):
-        self.hunt_nutrition = hunt_nutrition  # Hunger restored from eating prey
+    def __init__(self, spatial_hash, hunt_nutrition: float = 50.0):
+        self.spatial_hash = spatial_hash
+        self.hunt_nutrition = hunt_nutrition
 
     def process(self) -> None:
         """Update hunting behavior for predators."""
-        # Build a quick lookup of prey positions
-        prey_data = {}  # entity_id -> (position, prey_component)
+        # Build prey lookup: entity_id -> (position, prey_component)
+        prey_data = {}
+        prey_positions = {}  # entity_id -> (x, y) for quick access
         for entity, (pos, prey) in esper.get_components(Position, Prey):
             prey_data[entity] = (pos, prey)
+            prey_positions[entity] = (pos.x, pos.y)
+            # Update spatial hash for prey
+            self.spatial_hash.update(entity, pos.x, pos.y)
 
         entities_to_kill = []
 
@@ -96,18 +108,24 @@ class HuntingProcessor(esper.Processor):
                 if predator.target_entity not in prey_data:
                     predator.target_entity = None
 
-            # Find nearest prey if no target
+            # Find nearest prey using spatial hash (O(1) cell lookup vs O(n) scan)
             if predator.target_entity is None:
-                nearest_dist = float("inf")
+                hunt_range_sq = predator.hunt_range * predator.hunt_range
+                nearby_entities = self.spatial_hash.query_radius(
+                    pos.x, pos.y, predator.hunt_range
+                )
+
+                nearest_dist_sq = float("inf")
                 nearest_prey = None
 
-                for prey_entity, (prey_pos, _) in prey_data.items():
-                    dx = prey_pos.x - pos.x
-                    dy = prey_pos.y - pos.y
-                    dist = math.sqrt(dx * dx + dy * dy)
+                for prey_entity in nearby_entities:
+                    if prey_entity not in prey_positions:
+                        continue
+                    prey_x, prey_y = prey_positions[prey_entity]
+                    dist_sq = distance_squared(pos.x, pos.y, prey_x, prey_y)
 
-                    if dist < predator.hunt_range and dist < nearest_dist:
-                        nearest_dist = dist
+                    if dist_sq < hunt_range_sq and dist_sq < nearest_dist_sq:
+                        nearest_dist_sq = dist_sq
                         nearest_prey = prey_entity
 
                 if nearest_prey is not None:
@@ -119,10 +137,10 @@ class HuntingProcessor(esper.Processor):
 
                 dx = prey_pos.x - pos.x
                 dy = prey_pos.y - pos.y
-                dist = math.sqrt(dx * dx + dy * dy)
+                dist_sq = dx * dx + dy * dy
 
-                # Close enough to attack?
-                if dist < 1.0 and predator.current_cooldown == 0:
+                # Close enough to attack? (use squared distance: 1.0^2 = 1.0)
+                if dist_sq < 1.0 and predator.current_cooldown == 0:
                     # Attack!
                     if esper.has_component(predator.target_entity, Energy):
                         prey_energy = esper.component_for_entity(
@@ -141,17 +159,19 @@ class HuntingProcessor(esper.Processor):
                     predator.current_cooldown = predator.attack_cooldown
                 else:
                     # Move towards prey
-                    if dist > 0:
+                    if dist_sq > 1e-10:
                         if esper.has_component(entity, Velocity):
                             vel = esper.component_for_entity(entity, Velocity)
                             speed = 0.12  # Hunt speed (faster than wander)
-                            vel.dx = (dx / dist) * speed
-                            vel.dy = (dy / dist) * speed
+                            norm_dx, norm_dy = normalize_vector(dx, dy)
+                            vel.dx = norm_dx * speed
+                            vel.dy = norm_dy * speed
 
         # Kill dead prey
         for prey_entity in entities_to_kill:
             if prey_entity in prey_data:
                 del prey_data[prey_entity]
+            self.spatial_hash.remove(prey_entity)
             try:
                 esper.delete_entity(prey_entity)
             except KeyError:
@@ -159,41 +179,52 @@ class HuntingProcessor(esper.Processor):
 
 
 class FleeingProcessor(esper.Processor):
-    """Prey flees from nearby predators."""
+    """Prey flees from nearby predators using spatial hashing and Numba optimization."""
+
+    def __init__(self, spatial_hash):
+        self.spatial_hash = spatial_hash
+        # Pre-allocated arrays for Numba (will resize as needed)
+        self._pred_xs = np.empty(100, dtype=np.float64)
+        self._pred_ys = np.empty(100, dtype=np.float64)
 
     def process(self) -> None:
         """Update fleeing behavior for prey."""
-        # Build lookup of predator positions
-        predator_positions = []
+        # Build predator position arrays for Numba
+        predator_list = []
         for entity, (pos, _) in esper.get_components(Position, Predator):
-            predator_positions.append((pos.x, pos.y))
+            predator_list.append((pos.x, pos.y))
+            self.spatial_hash.update(entity, pos.x, pos.y)
+
+        # Resize arrays if needed
+        n_predators = len(predator_list)
+        if n_predators > len(self._pred_xs):
+            new_size = max(n_predators * 2, 100)
+            self._pred_xs = np.empty(new_size, dtype=np.float64)
+            self._pred_ys = np.empty(new_size, dtype=np.float64)
+
+        # Fill arrays
+        for i, (px, py) in enumerate(predator_list):
+            self._pred_xs[i] = px
+            self._pred_ys[i] = py
+
+        # Views into filled portion
+        pred_xs = self._pred_xs[:n_predators]
+        pred_ys = self._pred_ys[:n_predators]
 
         for entity, (pos, prey, vel, wander) in esper.get_components(
             Position, Prey, Velocity, Wander
         ):
-            # Check for nearby predators
-            flee_dx = 0.0
-            flee_dy = 0.0
-            threat_found = False
+            flee_range_sq = prey.flee_range * prey.flee_range
 
-            for pred_x, pred_y in predator_positions:
-                dx = pos.x - pred_x
-                dy = pos.y - pred_y
-                dist = math.sqrt(dx * dx + dy * dy)
-
-                if dist < prey.flee_range and dist > 0:
-                    # Add flee vector (away from predator)
-                    flee_dx += dx / dist
-                    flee_dy += dy / dist
-                    threat_found = True
+            # Use Numba-optimized flee vector calculation
+            flee_dx, flee_dy, threat_found = calculate_flee_vector(
+                pos.x, pos.y, pred_xs, pred_ys, flee_range_sq
+            )
 
             if threat_found:
                 prey.is_fleeing = True
-                # Normalize and apply flee speed
-                flee_dist = math.sqrt(flee_dx * flee_dx + flee_dy * flee_dy)
-                if flee_dist > 0:
-                    flee_speed = wander.speed * prey.flee_speed_multiplier
-                    vel.dx = (flee_dx / flee_dist) * flee_speed
-                    vel.dy = (flee_dy / flee_dist) * flee_speed
+                flee_speed = wander.speed * prey.flee_speed_multiplier
+                vel.dx = flee_dx * flee_speed
+                vel.dy = flee_dy * flee_speed
             else:
                 prey.is_fleeing = False

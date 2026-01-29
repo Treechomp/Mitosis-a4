@@ -86,12 +86,14 @@ class Game(arcade.Window):
             pregenerate_radius: Radius of chunks to pre-generate around center (default 8)
         """
         # Register ECS processors (esper 3.0 module-level API)
+        # Pass spatial_hash to behavior systems for O(1) neighbor queries
+        spatial_hash = self.world_manager.spatial_hash
         esper.add_processor(MovementProcessor(self.world_manager, CONFIG.CHUNK_SIZE))
         esper.add_processor(HungerProcessor())
         esper.add_processor(WanderProcessor())
         esper.add_processor(GrazingProcessor(self.world_manager))
-        esper.add_processor(HuntingProcessor())
-        esper.add_processor(FleeingProcessor())
+        esper.add_processor(HuntingProcessor(spatial_hash))
+        esper.add_processor(FleeingProcessor(spatial_hash))
         esper.add_processor(AgingProcessor())
         esper.add_processor(ReproductionProcessor(self.world_manager, max_population=500))
 
