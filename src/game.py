@@ -42,6 +42,7 @@ class Game(arcade.Window):
             chunk_size=CONFIG.CHUNK_SIZE,
             world_size_chunks=CONFIG.WORLD_SIZE_CHUNKS,
             seed=CONFIG.WORLD_SEED,
+            tile_size=CONFIG.TILE_SIZE,  # For pre-computing render data
             on_chunk_unload=self.renderer.remove_chunk,  # Clean renderer cache
         )
 

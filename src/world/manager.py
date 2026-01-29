@@ -17,6 +17,7 @@ class WorldManager:
     chunk_size: int
     world_size_chunks: int
     seed: int = 42
+    tile_size: int = 16  # Needed for pre-computing render data
 
     # Chunk loading settings
     load_radius: int = 6  # Chunks to load around player
@@ -60,10 +61,10 @@ class WorldManager:
 
     def _generate_chunk_threaded(self, chunk_x: int, chunk_y: int) -> Chunk:
         """Generate a chunk (runs in worker thread)."""
-        # Each thread needs its own generator for thread safety
-        # But since OpenSimplex is deterministic with seed, we can share
         chunk = Chunk(chunk_x=chunk_x, chunk_y=chunk_y, size=self.chunk_size)
         self.generator.generate_chunk(chunk)
+        # Pre-compute render data in worker thread (expensive operation)
+        chunk.compute_render_data(self.tile_size)
         return chunk
 
     def get_chunk(self, chunk_x: int, chunk_y: int) -> Chunk | None:
@@ -90,6 +91,7 @@ class WorldManager:
         # Generate synchronously (blocking)
         chunk = Chunk(chunk_x=chunk_x, chunk_y=chunk_y, size=self.chunk_size)
         self.generator.generate_chunk(chunk)
+        chunk.compute_render_data(self.tile_size)
 
         with self._chunks_lock:
             # Check again in case another thread generated it
@@ -145,11 +147,12 @@ class WorldManager:
         return completed
 
     def get_tile(self, world_x: float, world_y: float):
-        """Get tile type at world coordinates."""
+        """Get tile type at world coordinates. Returns DEEP_WATER if chunk not loaded."""
         chunk_x = int(world_x // self.chunk_size)
         chunk_y = int(world_y // self.chunk_size)
 
-        chunk = self.get_or_generate_chunk(chunk_x, chunk_y)
+        # Non-blocking: return default if chunk not loaded
+        chunk = self.get_chunk(chunk_x, chunk_y)
         if chunk is None:
             from world.chunk import TileType
             return TileType.DEEP_WATER
@@ -159,11 +162,12 @@ class WorldManager:
         return chunk.get_tile(local_x, local_y)
 
     def is_walkable(self, world_x: float, world_y: float) -> bool:
-        """Check if world position is walkable."""
+        """Check if world position is walkable. Returns False if chunk not loaded."""
         chunk_x = int(world_x // self.chunk_size)
         chunk_y = int(world_y // self.chunk_size)
 
-        chunk = self.get_or_generate_chunk(chunk_x, chunk_y)
+        # Non-blocking: return False if chunk not loaded
+        chunk = self.get_chunk(chunk_x, chunk_y)
         if chunk is None:
             return False
 

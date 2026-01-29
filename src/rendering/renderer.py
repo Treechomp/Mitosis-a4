@@ -15,7 +15,7 @@ class Renderer:
         self,
         tile_size: int,
         chunk_size: int,
-        shapes_per_frame: int = 2,  # Max shapes to build per frame
+        shapes_per_frame: int = 4,  # Max shapes to build per frame (fast with pre-computed data)
     ):
         self.tile_size = tile_size
         self.chunk_size = chunk_size
@@ -32,41 +32,38 @@ class Renderer:
         self._camera_chunk: tuple[int, int] = (0, 0)
 
     def _build_chunk_shapes(self, chunk: Chunk) -> ShapeElementList:
-        """Build a ShapeElementList for a chunk's tiles."""
+        """Build a ShapeElementList for a chunk's tiles using pre-computed data."""
         shape_list = ShapeElementList()
 
-        # Calculate world position for this chunk
-        chunk_world_x = chunk.chunk_x * self.chunk_size * self.tile_size
-        chunk_world_y = chunk.chunk_y * self.chunk_size * self.tile_size
+        # Use pre-computed render data if available (computed in worker thread)
+        if chunk.render_points is not None and chunk.render_colors is not None:
+            point_list = chunk.render_points
+            color_list = chunk.render_colors
+        else:
+            # Fallback: compute on main thread (shouldn't happen normally)
+            chunk_world_x = chunk.chunk_x * self.chunk_size * self.tile_size
+            chunk_world_y = chunk.chunk_y * self.chunk_size * self.tile_size
+            half_tile = self.tile_size / 2
 
-        half_tile = self.tile_size / 2
+            point_list = []
+            color_list = []
 
-        # Build lists of points and colors for batch creation
-        point_list = []
-        color_list = []
+            for local_y in range(chunk.size):
+                for local_x in range(chunk.size):
+                    tile_type = chunk.get_tile(local_x, local_y)
+                    color = TILE_COLORS.get(tile_type, (255, 0, 255))
+                    color_rgba = (color[0], color[1], color[2], 255)
 
-        for local_y in range(chunk.size):
-            for local_x in range(chunk.size):
-                tile_type = chunk.get_tile(local_x, local_y)
-                color = TILE_COLORS.get(tile_type, (255, 0, 255))
-                # Add alpha channel
-                color_rgba = (color[0], color[1], color[2], 255)
+                    world_x = chunk_world_x + local_x * self.tile_size + half_tile
+                    world_y = chunk_world_y + local_y * self.tile_size + half_tile
 
-                # World position of tile center
-                world_x = chunk_world_x + local_x * self.tile_size + half_tile
-                world_y = chunk_world_y + local_y * self.tile_size + half_tile
+                    point_list.append((world_x - half_tile, world_y + half_tile))
+                    point_list.append((world_x + half_tile, world_y + half_tile))
+                    point_list.append((world_x + half_tile, world_y - half_tile))
+                    point_list.append((world_x - half_tile, world_y - half_tile))
+                    color_list.extend([color_rgba, color_rgba, color_rgba, color_rgba])
 
-                # Four corners of rectangle (must go around, not diagonal!)
-                top_left = (world_x - half_tile, world_y + half_tile)
-                top_right = (world_x + half_tile, world_y + half_tile)
-                bottom_right = (world_x + half_tile, world_y - half_tile)
-                bottom_left = (world_x - half_tile, world_y - half_tile)
-
-                point_list.extend([top_left, top_right, bottom_right, bottom_left])
-                # Need 4 colors per rectangle (one per corner vertex)
-                color_list.extend([color_rgba, color_rgba, color_rgba, color_rgba])
-
-        # Create batched shape
+        # Create batched shape (this is the only OpenGL operation - must be main thread)
         if point_list:
             shape = create_rectangles_filled_with_colors(point_list, color_list)
             shape_list.append(shape)

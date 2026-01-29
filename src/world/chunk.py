@@ -42,6 +42,10 @@ class Chunk:
     # Tile data stored as numpy array for performance
     tiles: np.ndarray = field(init=False)
 
+    # Pre-computed render data (computed in worker thread)
+    render_points: list | None = field(default=None)
+    render_colors: list | None = field(default=None)
+
     # Entity tracking for this chunk
     entity_ids: set[int] = field(default_factory=set)
 
@@ -84,3 +88,37 @@ class Chunk:
     def remove_entity(self, entity_id: int) -> None:
         """Remove an entity from this chunk's tracking."""
         self.entity_ids.discard(entity_id)
+
+    def compute_render_data(self, tile_size: int) -> None:
+        """
+        Pre-compute point and color lists for rendering.
+        Call this in a worker thread after terrain generation.
+        """
+        chunk_world_x = self.chunk_x * self.size * tile_size
+        chunk_world_y = self.chunk_y * self.size * tile_size
+        half_tile = tile_size / 2
+
+        points = []
+        colors = []
+
+        for local_y in range(self.size):
+            for local_x in range(self.size):
+                tile_type = TileType(self.tiles[local_y, local_x])
+                color = TILE_COLORS.get(tile_type, (255, 0, 255))
+                color_rgba = (color[0], color[1], color[2], 255)
+
+                # World position of tile center
+                world_x = chunk_world_x + local_x * tile_size + half_tile
+                world_y = chunk_world_y + local_y * tile_size + half_tile
+
+                # Four corners (must go around, not diagonal!)
+                points.append((world_x - half_tile, world_y + half_tile))  # top_left
+                points.append((world_x + half_tile, world_y + half_tile))  # top_right
+                points.append((world_x + half_tile, world_y - half_tile))  # bottom_right
+                points.append((world_x - half_tile, world_y - half_tile))  # bottom_left
+
+                # 4 colors per rectangle (one per vertex)
+                colors.extend([color_rgba, color_rgba, color_rgba, color_rgba])
+
+        self.render_points = points
+        self.render_colors = colors
