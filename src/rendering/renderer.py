@@ -31,6 +31,12 @@ class Renderer:
         # Track camera position for prioritization
         self._camera_chunk: tuple[int, int] = (0, 0)
 
+        # Pre-allocated Text objects for debug HUD (much faster than draw_text)
+        self._debug_texts: list[arcade.Text] = [
+            arcade.Text("", 10, 700 - i * 20, colors.WHITE, 14)
+            for i in range(5)
+        ]
+
     def _build_chunk_shapes(self, chunk: Chunk) -> ShapeElementList:
         """Build a ShapeElementList for a chunk's tiles using pre-computed data."""
         shape_list = ShapeElementList()
@@ -190,10 +196,7 @@ class Renderer:
         player_pos: tuple[float, float],
         pending_chunks: int = 0,
     ) -> None:
-        """Render debug information overlay."""
-        y = 700
-        line_height = 20
-
+        """Render debug information overlay using pre-allocated Text objects."""
         pending_shapes = self.get_pending_shapes_count()
         texts = [
             f"FPS: {fps:.1f}",
@@ -203,15 +206,9 @@ class Renderer:
             f"Player: ({player_pos[0]:.1f}, {player_pos[1]:.1f})",
         ]
 
-        for text in texts:
-            arcade.draw_text(
-                text,
-                10,
-                y,
-                colors.WHITE,
-                14,
-            )
-            y -= line_height
+        for i, text in enumerate(texts):
+            self._debug_texts[i].text = text
+            self._debug_texts[i].draw()
 
     def clear_cache(self) -> None:
         """Clear the rendering cache."""

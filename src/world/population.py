@@ -43,8 +43,8 @@ def populate_world(world_manager, creatures_per_chunk: float = 2.0, herbivore_ra
         if spawn_count == 0:
             continue
 
-        # Get walkable positions
-        positions = world_manager.get_walkable_positions_in_chunk(chunk, spawn_count)
+        # Get positions on GRASS/FOREST only (not sand) for herbivores to graze
+        positions = world_manager.get_grazeable_positions_in_chunk(chunk, spawn_count)
 
         for x, y in positions:
             if random.random() < herbivore_ratio:
@@ -59,46 +59,46 @@ def populate_world(world_manager, creatures_per_chunk: float = 2.0, herbivore_ra
 def spawn_herbivore(x: float, y: float, generation: int = 0) -> int:
     """Spawn a herbivore at the given position."""
     # Random starting age (some mature, some young)
-    starting_age = random.randint(0, 1500)
+    starting_age = random.randint(0, 5000)
 
     return esper.create_entity(
         Position(x=x, y=y),
         Velocity(),
         ChunkPosition(),
         Species(type=SpeciesType.HERBIVORE, generation=generation),
-        Hunger(current=random.uniform(60.0, 100.0)),
-        Energy(current=random.uniform(70.0, 100.0)),
-        Age(current=starting_age, max_lifespan=8000, maturity_age=800),
+        Hunger(current=random.uniform(70.0, 100.0), decay_rate=0.05),  # Slower hunger
+        Energy(current=random.uniform(80.0, 100.0)),
+        Age(current=starting_age, max_lifespan=30000, maturity_age=2000),  # ~25 min lifespan
         Reproduction(
-            hunger_threshold=75.0,
-            energy_threshold=85.0,
-            cooldown=400,
+            hunger_threshold=70.0,
+            energy_threshold=80.0,
+            cooldown=600,
         ),
-        Wander(speed=0.05, change_direction_chance=0.01),
-        Prey(flee_range=6.0, flee_speed_multiplier=1.8),
+        Wander(speed=0.03, change_direction_chance=0.005),  # Slower, stay on grass longer
+        Prey(flee_range=6.0, flee_speed_multiplier=2.0),
         Renderable(color=(100, 255, 100), size=8.0, shape="circle"),
     )
 
 
 def spawn_carnivore(x: float, y: float, generation: int = 0) -> int:
     """Spawn a carnivore at the given position."""
-    starting_age = random.randint(0, 1200)
+    starting_age = random.randint(0, 4000)
 
     return esper.create_entity(
         Position(x=x, y=y),
         Velocity(),
         ChunkPosition(),
         Species(type=SpeciesType.CARNIVORE, generation=generation),
-        Hunger(current=random.uniform(40.0, 80.0), decay_rate=0.15),
-        Energy(current=random.uniform(70.0, 100.0)),
-        Age(current=starting_age, max_lifespan=6000, maturity_age=600),
+        Hunger(current=random.uniform(50.0, 90.0), decay_rate=0.08),  # Slower hunger
+        Energy(current=random.uniform(80.0, 100.0)),
+        Age(current=starting_age, max_lifespan=24000, maturity_age=1500),  # ~20 min lifespan
         Reproduction(
-            hunger_threshold=80.0,
-            energy_threshold=90.0,
-            cooldown=600,
+            hunger_threshold=75.0,
+            energy_threshold=85.0,
+            cooldown=800,
         ),
-        Wander(speed=0.08, change_direction_chance=0.015),
-        Predator(hunt_range=8.0, attack_power=35.0),
+        Wander(speed=0.06, change_direction_chance=0.01),
+        Predator(hunt_range=12.0, attack_power=30.0),  # Larger hunt range
         Renderable(color=(255, 100, 100), size=10.0, shape="triangle"),
     )
 

@@ -372,7 +372,6 @@ class WorldManager:
     def get_walkable_positions_in_chunk(self, chunk: Chunk, count: int) -> list[tuple[float, float]]:
         """Get random walkable world positions within a chunk."""
         import random
-        from world.chunk import WALKABLE_TILES
 
         walkable = []
         for local_y in range(chunk.size):
@@ -386,3 +385,23 @@ class WorldManager:
             return []
 
         return random.sample(walkable, min(count, len(walkable)))
+
+    def get_grazeable_positions_in_chunk(self, chunk: Chunk, count: int) -> list[tuple[float, float]]:
+        """Get random grazeable (grass/forest) world positions within a chunk."""
+        import random
+
+        grazeable_tiles = {TileType.GRASS, TileType.FOREST}
+        positions = []
+
+        for local_y in range(chunk.size):
+            for local_x in range(chunk.size):
+                tile = chunk.get_tile(local_x, local_y)
+                if tile in grazeable_tiles:
+                    world_x = chunk.chunk_x * chunk.size + local_x + 0.5
+                    world_y = chunk.chunk_y * chunk.size + local_y + 0.5
+                    positions.append((world_x, world_y))
+
+        if not positions:
+            return []
+
+        return random.sample(positions, min(count, len(positions)))
