@@ -16,8 +16,17 @@ from components import (
     Energy,
     Wander,
     Renderable,
+    Predator,
+    Prey,
 )
-from systems import MovementProcessor, HungerProcessor, WanderProcessor
+from systems import (
+    MovementProcessor,
+    HungerProcessor,
+    WanderProcessor,
+    GrazingProcessor,
+    HuntingProcessor,
+    FleeingProcessor,
+)
 
 
 class Game(arcade.Window):
@@ -70,6 +79,9 @@ class Game(arcade.Window):
         esper.add_processor(MovementProcessor(self.world_manager, CONFIG.CHUNK_SIZE))
         esper.add_processor(HungerProcessor())
         esper.add_processor(WanderProcessor())
+        esper.add_processor(GrazingProcessor(self.world_manager))
+        esper.add_processor(HuntingProcessor())
+        esper.add_processor(FleeingProcessor())
 
         # Create player entity
         spawn_x = CONFIG.WORLD_SIZE_CHUNKS * CONFIG.CHUNK_SIZE / 2
@@ -125,7 +137,7 @@ class Game(arcade.Window):
                 continue
 
             if random.random() < 0.8:
-                # Herbivore
+                # Herbivore - grazes on grass/forest, flees from predators
                 esper.create_entity(
                     Position(x=x, y=y),
                     Velocity(),
@@ -134,10 +146,11 @@ class Game(arcade.Window):
                     Hunger(current=80.0),
                     Energy(current=100.0),
                     Wander(speed=0.05, change_direction_chance=0.01),
+                    Prey(flee_range=6.0, flee_speed_multiplier=1.8),
                     Renderable(color=(100, 255, 100), size=8.0, shape="circle"),
                 )
             else:
-                # Carnivore
+                # Carnivore - hunts herbivores for food
                 esper.create_entity(
                     Position(x=x, y=y),
                     Velocity(),
@@ -146,6 +159,7 @@ class Game(arcade.Window):
                     Hunger(current=60.0, decay_rate=0.15),
                     Energy(current=100.0),
                     Wander(speed=0.08, change_direction_chance=0.015),
+                    Predator(hunt_range=8.0, attack_power=35.0),
                     Renderable(color=(255, 100, 100), size=10.0, shape="triangle"),
                 )
 
