@@ -18,19 +18,19 @@ public sealed class TerrainGenerator
 
         // Elevation noise (larger features)
         _elevationNoise = new FastNoiseLite();
-        _elevationNoise.SetNoiseType(FastNoiseLite.NoiseTypeEnum.OpenSimplex2);
-        _elevationNoise.SetSeed(seed);
-        _elevationNoise.SetFrequency(0.02f);
-        _elevationNoise.SetFractalType(FastNoiseLite.FractalTypeEnum.Fbm);
-        _elevationNoise.SetFractalOctaves(4);
+        _elevationNoise.NoiseType = FastNoiseLite.NoiseTypeEnum.SimplexSmooth;
+        _elevationNoise.Seed = seed;
+        _elevationNoise.Frequency = 0.02f;
+        _elevationNoise.FractalType = FastNoiseLite.FractalTypeEnum.Fbm;
+        _elevationNoise.FractalOctaves = 4;
 
         // Moisture noise (smaller features)
         _moistureNoise = new FastNoiseLite();
-        _moistureNoise.SetNoiseType(FastNoiseLite.NoiseTypeEnum.OpenSimplex2);
-        _moistureNoise.SetSeed(seed + 1000);
-        _moistureNoise.SetFrequency(0.03f);
-        _moistureNoise.SetFractalType(FastNoiseLite.FractalTypeEnum.Fbm);
-        _moistureNoise.SetFractalOctaves(3);
+        _moistureNoise.NoiseType = FastNoiseLite.NoiseTypeEnum.SimplexSmooth;
+        _moistureNoise.Seed = seed + 1000;
+        _moistureNoise.Frequency = 0.03f;
+        _moistureNoise.FractalType = FastNoiseLite.FractalTypeEnum.Fbm;
+        _moistureNoise.FractalOctaves = 3;
     }
 
     /// <summary>
