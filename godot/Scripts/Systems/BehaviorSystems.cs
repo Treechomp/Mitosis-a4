@@ -10,6 +10,7 @@ namespace Mitosis.Systems;
 
 /// <summary>
 /// Processes wandering behavior for entities.
+/// LOD-aware: only processes entities due for update.
 /// </summary>
 public sealed class WanderSystem : ISystem
 {
@@ -21,6 +22,14 @@ public sealed class WanderSystem : ISystem
 
         foreach (int entity in em.Query(required))
         {
+            // Check LOD - skip if not due for update
+            if (em.HasComponents(entity, ComponentFlags.SimulationLOD))
+            {
+                ref var lod = ref em.SimulationLODs[entity];
+                if (!LODSystem.ShouldUpdate(in lod))
+                    continue;
+            }
+
             ref var wander = ref em.Wanders[entity];
             ref var vel = ref em.Velocities[entity];
 
@@ -302,6 +311,204 @@ public sealed class AgingSystem : ISystem
         foreach (int entity in _toKill)
         {
             em.DestroyEntity(entity);
+        }
+    }
+}
+
+/// <summary>
+/// Herbivores graze on grass/forest tiles to restore hunger.
+/// </summary>
+public sealed class GrazingSystem : ISystem
+{
+    private readonly World.WorldManager _worldManager;
+    private readonly float _grazeRate;
+
+    public GrazingSystem(World.WorldManager worldManager, float grazeRate = 0.5f)
+    {
+        _worldManager = worldManager;
+        _grazeRate = grazeRate;
+    }
+
+    public void Process(EntityManager em)
+    {
+        const ComponentFlags required = ComponentFlags.Position | ComponentFlags.Species | ComponentFlags.Hunger;
+
+        foreach (int entity in em.Query(required))
+        {
+            ref var species = ref em.Species[entity];
+
+            // Only herbivores graze
+            if (species.Type != SpeciesType.Herbivore)
+                continue;
+
+            ref var pos = ref em.Positions[entity];
+            ref var hunger = ref em.Hungers[entity];
+
+            // Check tile type at entity position
+            var tile = _worldManager.GetTile(pos.X, pos.Y);
+            if (tile.IsGrazeable())
+            {
+                // Restore hunger (capped at max)
+                hunger.Current = MathF.Min(hunger.Max, hunger.Current + _grazeRate);
+            }
+        }
+    }
+}
+
+/// <summary>
+/// Handles reproduction for mature, well-fed entities.
+/// </summary>
+public sealed class ReproductionSystem : ISystem
+{
+    private readonly World.WorldManager _worldManager;
+    private readonly int _maxPopulation;
+    private readonly Random _rng = new();
+    private readonly List<(float x, float y, bool isHerbivore)> _toSpawn = new(32);
+
+    public ReproductionSystem(World.WorldManager worldManager, int maxPopulation = 500)
+    {
+        _worldManager = worldManager;
+        _maxPopulation = maxPopulation;
+    }
+
+    public void Process(EntityManager em)
+    {
+        _toSpawn.Clear();
+
+        // Don't reproduce if at population cap
+        if (em.EntityCount >= _maxPopulation)
+            return;
+
+        const ComponentFlags required = ComponentFlags.Position | ComponentFlags.Species |
+                                         ComponentFlags.Hunger | ComponentFlags.Energy |
+                                         ComponentFlags.Age | ComponentFlags.Reproduction;
+
+        foreach (int entity in em.Query(required))
+        {
+            ref var reproduction = ref em.Reproductions[entity];
+
+            // Reduce cooldown
+            if (reproduction.CurrentCooldown > 0)
+            {
+                reproduction.CurrentCooldown--;
+                continue;
+            }
+
+            ref var age = ref em.Ages[entity];
+            if (!age.IsMature)
+                continue;
+
+            ref var hunger = ref em.Hungers[entity];
+            ref var energy = ref em.Energies[entity];
+
+            // Check thresholds
+            if (hunger.Current < reproduction.HungerThreshold ||
+                energy.Current < reproduction.EnergyThreshold)
+                continue;
+
+            // Check population cap again
+            if (em.EntityCount + _toSpawn.Count >= _maxPopulation)
+                break;
+
+            ref var pos = ref em.Positions[entity];
+            ref var species = ref em.Species[entity];
+
+            // Find spawn position
+            float spawnX = pos.X + ((float)_rng.NextDouble() * 2 - 1) * reproduction.SpawnRadius;
+            float spawnY = pos.Y + ((float)_rng.NextDouble() * 2 - 1) * reproduction.SpawnRadius;
+
+            // Only spawn on walkable tiles
+            if (!_worldManager.IsWalkable(spawnX, spawnY))
+                continue;
+
+            // Pay reproduction cost
+            hunger.Current -= reproduction.HungerCost;
+            energy.Current -= reproduction.EnergyCost;
+            reproduction.CurrentCooldown = reproduction.Cooldown;
+
+            // Queue offspring for spawning
+            bool isHerbivore = species.Type == SpeciesType.Herbivore;
+            for (int i = 0; i < reproduction.OffspringCount; i++)
+            {
+                _toSpawn.Add((spawnX, spawnY, isHerbivore));
+            }
+        }
+
+        // Spawn offspring
+        foreach (var (x, y, isHerbivore) in _toSpawn)
+        {
+            SpawnCreature(em, x, y, isHerbivore);
+        }
+    }
+
+    private void SpawnCreature(EntityManager em, float x, float y, bool isHerbivore)
+    {
+        int entity = em.CreateEntity();
+
+        em.Positions[entity] = new Position(x, y);
+        em.AddComponent(entity, ComponentFlags.Position);
+
+        em.Velocities[entity] = new Velocity();
+        em.AddComponent(entity, ComponentFlags.Velocity);
+
+        em.ChunkPositions[entity] = new ChunkPosition();
+        em.AddComponent(entity, ComponentFlags.ChunkPosition);
+
+        em.Ages[entity] = new Age(
+            current: 0,
+            maxLifespan: isHerbivore ? 30000 : 24000,
+            maturityAge: isHerbivore ? 2000 : 1500
+        );
+        em.AddComponent(entity, ComponentFlags.Age);
+
+        em.Energies[entity] = new Energy(80f);
+        em.AddComponent(entity, ComponentFlags.Energy);
+
+        em.Reproductions[entity] = new Reproduction(
+            hungerThreshold: isHerbivore ? 70f : 75f,
+            energyThreshold: isHerbivore ? 80f : 85f,
+            cooldown: isHerbivore ? 600 : 800
+        );
+        em.AddComponent(entity, ComponentFlags.Reproduction);
+
+        em.SimulationLODs[entity] = new SimulationLOD();
+        em.AddComponent(entity, ComponentFlags.SimulationLOD);
+
+        if (isHerbivore)
+        {
+            em.Species[entity] = new Species(SpeciesType.Herbivore);
+            em.AddComponent(entity, ComponentFlags.Species);
+
+            em.Hungers[entity] = new Hunger(60f, decayRate: 0.05f);
+            em.AddComponent(entity, ComponentFlags.Hunger);
+
+            em.Wanders[entity] = new Wander(0.03f, 0.005f);
+            em.AddComponent(entity, ComponentFlags.Wander);
+
+            em.Preys[entity] = new Prey(6f, 2f);
+            em.AddComponent(entity, ComponentFlags.Prey);
+
+            em.Renderables[entity] = new Renderable(
+                new Color(0.4f, 1f, 0.4f), 8f, ShapeType.Circle);
+            em.AddComponent(entity, ComponentFlags.Renderable);
+        }
+        else
+        {
+            em.Species[entity] = new Species(SpeciesType.Carnivore);
+            em.AddComponent(entity, ComponentFlags.Species);
+
+            em.Hungers[entity] = new Hunger(50f, decayRate: 0.08f);
+            em.AddComponent(entity, ComponentFlags.Hunger);
+
+            em.Wanders[entity] = new Wander(0.06f, 0.01f);
+            em.AddComponent(entity, ComponentFlags.Wander);
+
+            em.Predators[entity] = new Predator(12f, 30f);
+            em.AddComponent(entity, ComponentFlags.Predator);
+
+            em.Renderables[entity] = new Renderable(
+                new Color(1f, 0.4f, 0.4f), 10f, ShapeType.Triangle);
+            em.AddComponent(entity, ComponentFlags.Renderable);
         }
     }
 }

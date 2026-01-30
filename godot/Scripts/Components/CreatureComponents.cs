@@ -134,3 +134,58 @@ public struct Reproduction
         SpawnRadius = spawnRadius;
     }
 }
+
+/// <summary>
+/// LOD level for simulation fidelity based on distance from player.
+/// </summary>
+public enum LODLevel : byte
+{
+    Full = 0,       // Every tick, full AI
+    Reduced = 1,    // Every 5 ticks, simplified AI
+    Statistical = 2, // Every 30 ticks, statistical updates
+    Aggregate = 3   // Every 60 ticks, population-level only
+}
+
+/// <summary>
+/// Simulation Level of Detail - determines update frequency based on distance.
+/// </summary>
+[StructLayout(LayoutKind.Sequential)]
+public struct SimulationLOD
+{
+    public LODLevel Level;
+    public int TicksUntilUpdate;
+    public float DistanceToPlayer;
+
+    public SimulationLOD(LODLevel level = LODLevel.Full)
+    {
+        Level = level;
+        TicksUntilUpdate = 0;
+        DistanceToPlayer = 0f;
+    }
+
+    /// <summary>
+    /// Get the tick interval for this LOD level.
+    /// </summary>
+    public static int GetTickInterval(LODLevel level)
+    {
+        return level switch
+        {
+            LODLevel.Full => 1,
+            LODLevel.Reduced => 5,
+            LODLevel.Statistical => 30,
+            LODLevel.Aggregate => 60,
+            _ => 1
+        };
+    }
+
+    /// <summary>
+    /// Determine LOD level based on distance (in tiles).
+    /// </summary>
+    public static LODLevel GetLevelForDistance(float distance)
+    {
+        if (distance < 50f) return LODLevel.Full;        // ~1.5 chunks
+        if (distance < 100f) return LODLevel.Reduced;    // ~3 chunks
+        if (distance < 200f) return LODLevel.Statistical; // ~6 chunks
+        return LODLevel.Aggregate;
+    }
+}

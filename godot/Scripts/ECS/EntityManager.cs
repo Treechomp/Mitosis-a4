@@ -37,6 +37,7 @@ public sealed class EntityManager
         Prey = 1 << 9,
         Wander = 1 << 10,
         Renderable = 1 << 11,
+        SimulationLOD = 1 << 12,
     }
 
     private readonly ComponentFlags[] _componentFlags;
@@ -54,6 +55,7 @@ public sealed class EntityManager
     public readonly Prey[] Preys;
     public readonly Wander[] Wanders;
     public readonly Renderable[] Renderables;
+    public readonly SimulationLOD[] SimulationLODs;
 
     public EntityManager()
     {
@@ -76,6 +78,7 @@ public sealed class EntityManager
         Preys = new Prey[MaxEntities];
         Wanders = new Wander[MaxEntities];
         Renderables = new Renderable[MaxEntities];
+        SimulationLODs = new SimulationLOD[MaxEntities];
     }
 
     public int EntityCount => _entityCount;

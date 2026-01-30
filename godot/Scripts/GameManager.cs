@@ -29,6 +29,7 @@ public partial class GameManager : Node2D
     private WorldManager _worldManager = null!;
     private readonly List<ISystem> _systems = new();
     private readonly Random _rng = new();
+    private LODSystem? _lodSystem;
 
     // Simulation timing
     private double _simulationAccumulator;
@@ -52,14 +53,18 @@ public partial class GameManager : Node2D
         _worldManager = new WorldManager(ChunkSize, WorldSizeChunks, WorldSeed);
         _simulationDt = 1.0 / TargetTPS;
 
-        // Initialize systems
+        // Initialize systems - LODSystem must be first to update LOD levels
         var spatialHash = _worldManager.SpatialHash;
+        _lodSystem = new LODSystem();
+        _systems.Add(_lodSystem);
         _systems.Add(new MovementSystem(ChunkSize, WorldSizeChunks));
         _systems.Add(new HungerSystem());
+        _systems.Add(new GrazingSystem(_worldManager));
         _systems.Add(new WanderSystem());
         _systems.Add(new HuntingSystem(spatialHash));
         _systems.Add(new FleeingSystem(spatialHash));
         _systems.Add(new AgingSystem());
+        _systems.Add(new ReproductionSystem(_worldManager, MaxPopulation));
 
         // Get camera reference
         _camera = GetNode<Camera2D>("Camera2D");
@@ -80,6 +85,9 @@ public partial class GameManager : Node2D
 
         // Spawn player
         SpawnPlayer();
+
+        // Set player entity for LOD system
+        _lodSystem?.SetPlayerEntity(_playerEntity);
 
         GD.Print($"Game ready! {_entityManager.EntityCount} entities");
     }
@@ -129,6 +137,16 @@ public partial class GameManager : Node2D
 
         _entityManager.Energies[entity] = new Energy(100f);
         _entityManager.AddComponent(entity, ComponentFlags.Energy);
+
+        _entityManager.Reproductions[entity] = new Reproduction(
+            hungerThreshold: isHerbivore ? 70f : 75f,
+            energyThreshold: isHerbivore ? 80f : 85f,
+            cooldown: isHerbivore ? 600 : 800
+        );
+        _entityManager.AddComponent(entity, ComponentFlags.Reproduction);
+
+        _entityManager.SimulationLODs[entity] = new SimulationLOD();
+        _entityManager.AddComponent(entity, ComponentFlags.SimulationLOD);
 
         if (isHerbivore)
         {
