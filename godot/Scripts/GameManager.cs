@@ -43,9 +43,13 @@ public partial class GameManager : Node2D
     private int _fps;
     private double _fpsTimer;
     private int _frameCount;
+    private int _herbivoreCount;
+    private int _predatorCount;
+    private double _statsTimer;
 
     // Rendering
     private Camera2D? _camera;
+    private Label? _debugLabel;
 
     public override void _Ready()
     {
@@ -61,6 +65,7 @@ public partial class GameManager : Node2D
         _systems.Add(new HungerSystem());
         _systems.Add(new GrazingSystem(_worldManager));
         _systems.Add(new WanderSystem());
+        _systems.Add(new SeparationSystem(spatialHash, separationRadius: 2.5f, separationStrength: 0.03f));
         _systems.Add(new HuntingSystem(spatialHash));
         _systems.Add(new FleeingSystem(spatialHash));
         _systems.Add(new AgingSystem());
@@ -89,7 +94,25 @@ public partial class GameManager : Node2D
         // Set player entity for LOD system
         _lodSystem?.SetPlayerEntity(_playerEntity);
 
+        // Setup debug UI
+        SetupDebugUI();
+
         GD.Print($"Game ready! {_entityManager.EntityCount} entities");
+    }
+
+    private void SetupDebugUI()
+    {
+        var canvasLayer = new CanvasLayer();
+        canvasLayer.Layer = 100; // Above everything
+        AddChild(canvasLayer);
+
+        _debugLabel = new Label();
+        _debugLabel.Position = new Vector2(10, 10);
+        _debugLabel.AddThemeColorOverride("font_color", Colors.White);
+        _debugLabel.AddThemeColorOverride("font_shadow_color", Colors.Black);
+        _debugLabel.AddThemeConstantOverride("shadow_offset_x", 1);
+        _debugLabel.AddThemeConstantOverride("shadow_offset_y", 1);
+        canvasLayer.AddChild(_debugLabel);
     }
 
     private int SpawnCreatures()
@@ -249,8 +272,42 @@ public partial class GameManager : Node2D
         // Update camera
         UpdateCamera(delta);
 
+        // Update stats periodically
+        UpdateStats(delta);
+
         // Request redraw
         QueueRedraw();
+    }
+
+    private void UpdateStats(double delta)
+    {
+        _statsTimer += delta;
+        if (_statsTimer < 0.5) return;
+        _statsTimer = 0;
+
+        // Count entities by type
+        _herbivoreCount = 0;
+        _predatorCount = 0;
+
+        const ComponentFlags speciesRequired = ComponentFlags.Species;
+        foreach (int entity in _entityManager.Query(speciesRequired))
+        {
+            ref var species = ref _entityManager.Species[entity];
+            if (species.Type == SpeciesType.Herbivore)
+                _herbivoreCount++;
+            else if (species.Type == SpeciesType.Carnivore)
+                _predatorCount++;
+        }
+
+        // Update debug label
+        if (_debugLabel != null)
+        {
+            _debugLabel.Text = $"FPS: {_fps}\n" +
+                              $"Entities: {_entityManager.EntityCount}\n" +
+                              $"Herbivores: {_herbivoreCount}\n" +
+                              $"Predators: {_predatorCount}\n" +
+                              $"TPS: {TargetTPS}";
+        }
     }
 
     private void HandleInput()
@@ -264,8 +321,8 @@ public partial class GameManager : Node2D
         vel.Dx = 0;
         vel.Dy = 0;
 
-        if (Input.IsActionPressed("move_up")) vel.Dy = speed;
-        if (Input.IsActionPressed("move_down")) vel.Dy = -speed;
+        if (Input.IsActionPressed("move_up")) vel.Dy = -speed;
+        if (Input.IsActionPressed("move_down")) vel.Dy = speed;
         if (Input.IsActionPressed("move_left")) vel.Dx = -speed;
         if (Input.IsActionPressed("move_right")) vel.Dx = speed;
 

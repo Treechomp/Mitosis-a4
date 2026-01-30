@@ -357,6 +357,97 @@ public sealed class GrazingSystem : ISystem
 }
 
 /// <summary>
+/// Applies separation forces to prevent entities from clustering.
+/// </summary>
+public sealed class SeparationSystem : ISystem
+{
+    private readonly SpatialHash _spatialHash;
+    private readonly List<int> _nearbyEntities = new(64);
+    private readonly float _separationRadius;
+    private readonly float _separationStrength;
+
+    public SeparationSystem(SpatialHash spatialHash, float separationRadius = 2f, float separationStrength = 0.02f)
+    {
+        _spatialHash = spatialHash;
+        _separationRadius = separationRadius;
+        _separationStrength = separationStrength;
+    }
+
+    public void Process(EntityManager em)
+    {
+        const ComponentFlags required = ComponentFlags.Position | ComponentFlags.Velocity | ComponentFlags.Species;
+
+        // First pass: update spatial hash positions for all creatures
+        foreach (int entity in em.Query(required))
+        {
+            ref var pos = ref em.Positions[entity];
+            _spatialHash.Update(entity, pos.X, pos.Y);
+        }
+
+        // Second pass: apply separation forces
+        foreach (int entity in em.Query(required))
+        {
+            // Check LOD - skip if not due for update
+            if (em.HasComponents(entity, ComponentFlags.SimulationLOD))
+            {
+                ref var lod = ref em.SimulationLODs[entity];
+                if (!LODSystem.ShouldUpdate(in lod))
+                    continue;
+            }
+
+            ref var pos = ref em.Positions[entity];
+            ref var vel = ref em.Velocities[entity];
+            ref var species = ref em.Species[entity];
+
+            // Query nearby entities
+            _spatialHash.QueryRadius(pos.X, pos.Y, _separationRadius, _nearbyEntities);
+
+            float separationX = 0f;
+            float separationY = 0f;
+            int neighborCount = 0;
+
+            foreach (int other in _nearbyEntities)
+            {
+                if (other == entity || !em.IsAlive(other))
+                    continue;
+
+                // Only separate from same species
+                if (!em.HasComponents(other, ComponentFlags.Species))
+                    continue;
+
+                ref var otherSpecies = ref em.Species[other];
+                if (otherSpecies.Type != species.Type)
+                    continue;
+
+                ref var otherPos = ref em.Positions[other];
+                float dx = pos.X - otherPos.X;
+                float dy = pos.Y - otherPos.Y;
+                float distSq = dx * dx + dy * dy;
+
+                if (distSq > 0.001f && distSq < _separationRadius * _separationRadius)
+                {
+                    float dist = MathF.Sqrt(distSq);
+                    float factor = 1f - (dist / _separationRadius); // Stronger when closer
+                    separationX += (dx / dist) * factor;
+                    separationY += (dy / dist) * factor;
+                    neighborCount++;
+                }
+            }
+
+            // Apply separation force
+            if (neighborCount > 0)
+            {
+                separationX /= neighborCount;
+                separationY /= neighborCount;
+
+                vel.Dx += separationX * _separationStrength;
+                vel.Dy += separationY * _separationStrength;
+            }
+        }
+    }
+}
+
+/// <summary>
 /// Handles reproduction for mature, well-fed entities.
 /// </summary>
 public sealed class ReproductionSystem : ISystem
