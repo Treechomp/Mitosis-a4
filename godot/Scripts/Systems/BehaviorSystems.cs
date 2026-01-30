@@ -4,6 +4,7 @@ using Godot;
 using Mitosis.Components;
 using Mitosis.ECS;
 using Mitosis.Utils;
+using Mitosis.World;
 using static Mitosis.ECS.EntityManager;
 
 namespace Mitosis.Systems;
