@@ -118,24 +118,118 @@ public partial class GameManager : Node2D
         canvasLayer.AddChild(_debugLabel);
     }
 
+    // Group ID counter for spawning groups together
+    private int _nextSpawnGroupId = 1;
+
     private int SpawnCreatures()
     {
         int spawned = 0;
         int targetPerChunk = (int)CreaturesPerChunk;
 
+        // Calculate how many herds/packs to spawn based on average group size
+        float avgHerdSize = 6f;
+        float avgPackSize = 3f;
+
         foreach (var chunk in _worldManager.GetLoadedChunks())
         {
-            var positions = _worldManager.GetWalkablePositions(chunk, targetPerChunk * 2, _rng);
+            var positions = _worldManager.GetWalkablePositions(chunk, targetPerChunk * 3, _rng);
+            if (positions.Count == 0) continue;
 
-            foreach (var (x, y) in positions)
+            int posIndex = 0;
+
+            while (posIndex < positions.Count && _entityManager.EntityCount < MaxPopulation)
             {
-                if (_entityManager.EntityCount >= MaxPopulation)
-                    return spawned;
-
+                var (x, y) = positions[posIndex];
                 bool isHerbivore = _rng.NextDouble() < HerbivoreRatio;
-                SpawnCreature(x, y, isHerbivore);
-                spawned++;
+
+                if (isHerbivore)
+                {
+                    // Spawn a herd together
+                    int herdSize = 3 + _rng.Next(0, 5);  // 3-7 members
+                    int groupId = _nextSpawnGroupId++;
+                    spawned += SpawnGroup(x, y, true, herdSize, groupId, positions, ref posIndex);
+                }
+                else
+                {
+                    // Check if this will be a pack or solitary
+                    bool isPack = _rng.NextDouble() < 0.6;
+                    if (isPack)
+                    {
+                        // Spawn a pack together
+                        int packSize = 2 + _rng.Next(0, 3);  // 2-4 members
+                        int groupId = _nextSpawnGroupId++;
+                        spawned += SpawnGroup(x, y, false, packSize, groupId, positions, ref posIndex);
+                    }
+                    else
+                    {
+                        // Spawn solitary predator
+                        SpawnCreature(x, y, false, -1, true);
+                        spawned++;
+                        posIndex++;
+                    }
+                }
             }
+        }
+
+        return spawned;
+    }
+
+    /// <summary>
+    /// Spawns a group of creatures around a central position.
+    /// </summary>
+    private int SpawnGroup(float centerX, float centerY, bool isHerbivore, int groupSize,
+                           int groupId, List<(float x, float y)> positions, ref int posIndex)
+    {
+        int spawned = 0;
+        float groupRadius = 3f;  // Spawn within this radius of center
+
+        for (int i = 0; i < groupSize && _entityManager.EntityCount < MaxPopulation; i++)
+        {
+            float x, y;
+
+            // First member (alpha) spawns at the given position
+            if (i == 0 && posIndex < positions.Count)
+            {
+                (x, y) = positions[posIndex];
+                posIndex++;
+            }
+            else
+            {
+                // Other members spawn nearby
+                // Try to find a walkable position near center
+                bool found = false;
+                for (int attempt = 0; attempt < 10; attempt++)
+                {
+                    float angle = (float)(_rng.NextDouble() * Math.PI * 2);
+                    float dist = (float)(_rng.NextDouble() * groupRadius);
+                    x = centerX + MathF.Cos(angle) * dist;
+                    y = centerY + MathF.Sin(angle) * dist;
+
+                    if (_worldManager.IsWalkable(x, y))
+                    {
+                        found = true;
+                        break;
+                    }
+                    x = centerX;
+                    y = centerY;
+                }
+
+                // If we couldn't find a good spot, use the next available position
+                if (!found && posIndex < positions.Count)
+                {
+                    (x, y) = positions[posIndex];
+                    posIndex++;
+                }
+                else if (!found)
+                {
+                    continue;  // Skip this member
+                }
+            }
+
+            // Spawn with group ID (alpha = first member, higher leadership)
+            bool isAlpha = (i == 0);
+            SpawnCreature(x, y, isHerbivore, groupId, false, isAlpha);
+            spawned++;
         }
 
         return spawned;
@@ -150,7 +244,14 @@ public partial class GameManager : Node2D
         return baseValue + (float)(_rng.NextDouble() * 2 - 1) * variation;
     }
 
-    private void SpawnCreature(float x, float y, bool isHerbivore)
+    /// <summary>
+    /// Spawns a creature at the given position.
+    /// </summary>
+    /// <param name="groupId">Pre-assigned group ID (-1 for no group)</param>
+    /// <param name="forceSolitary">Force solitary social type (for predators)</param>
+    /// <param name="isAlpha">Whether this is the group leader (higher leadership score)</param>
+    private void SpawnCreature(float x, float y, bool isHerbivore, int groupId = -1,
+                               bool forceSolitary = false, bool isAlpha = false)
     {
         int entity = _entityManager.CreateEntity();
 
@@ -205,13 +306,16 @@ public partial class GameManager : Node2D
             _entityManager.AddComponent(entity, ComponentFlags.Renderable);
 
             // Herbivores are herd animals with high group affinity
-            _entityManager.Socials[entity] = new Social(
+            var herbSocial = new Social(
                 type: SocialType.Herd,
                 groupAffinity: Vary(0.7f, 0.3f),        // 0.5-0.9 (most are social)
                 preferredGroupSize: Vary(6f, 0.4f),     // 3.6-8.4 members
                 cohesionStrength: Vary(0.025f, 0.2f),
                 alignmentStrength: Vary(0.015f, 0.2f)
             );
+            herbSocial.GroupId = groupId;
+            herbSocial.LeadershipScore = isAlpha ? 0.8f : Vary(0.3f, 0.5f);
+            _entityManager.Socials[entity] = herbSocial;
             _entityManager.AddComponent(entity, ComponentFlags.Social);
 
             // Terrain discomfort with grazing pressure (hungry herbivores feel pressure on non-grazeable terrain)
@@ -247,19 +351,20 @@ public partial class GameManager : Node2D
                 new Color(1f, 0.4f, 0.4f), Vary(10f, 0.15f), ShapeType.Triangle);
             _entityManager.AddComponent(entity, ComponentFlags.Renderable);
 
-            // Predators: mix of pack hunters and solitary hunters
-            // ~60% pack hunters, ~40% solitary
-            float socialRoll = (float)_rng.NextDouble();
-            if (socialRoll < 0.6f)
+            // Predators: pack hunters or solitary hunters (determined by caller)
+            if (!forceSolitary && groupId >= 0)
             {
-                // Pack hunter
-                _entityManager.Socials[entity] = new Social(
+                // Pack hunter - spawned as part of a group
+                var packSocial = new Social(
                     type: SocialType.Pack,
                     groupAffinity: Vary(0.5f, 0.4f),        // 0.3-0.7
                     preferredGroupSize: Vary(3f, 0.3f),     // 2-4 members
                     cohesionStrength: Vary(0.015f, 0.2f),   // Weaker than herbivores
                     alignmentStrength: Vary(0.01f, 0.2f)
                 );
+                packSocial.GroupId = groupId;
+                packSocial.LeadershipScore = isAlpha ? 0.8f : Vary(0.3f, 0.5f);
+                _entityManager.Socials[entity] = packSocial;
             }
             else
             {

@@ -1044,18 +1044,28 @@ public sealed class ReproductionSystem : ISystem
 /// <summary>
 /// Applies herding/pack cohesion and alignment behaviors to social creatures.
 /// Uses spatial hash for efficient neighbor queries.
+/// Features:
+/// - Group size limits (based on PreferredGroupSize)
+/// - Max join distance (distant creatures don't try to join)
+/// - Priority system (survival needs override social behavior)
 /// </summary>
 public sealed class HerdingSystem : ISystem
 {
     private readonly SpatialHash _spatialHash;
-    private readonly float _socialRadius;
+    private readonly float _socialRadius;        // Max radius to look for group members
+    private readonly float _maxJoinDistance;     // Max distance to join a new group
+    private readonly float _groupSizeTolerance;  // Allow groups to exceed preferred by this factor
     private readonly List<int> _nearbyEntities = new(64);
+    private readonly Dictionary<int, int> _groupSizes = new(32);  // groupId -> member count
     private int _nextGroupId = 1;
 
-    public HerdingSystem(SpatialHash spatialHash, float socialRadius = 8f)
+    public HerdingSystem(SpatialHash spatialHash, float socialRadius = 8f,
+                         float maxJoinDistance = 12f, float groupSizeTolerance = 1.3f)
     {
         _spatialHash = spatialHash;
         _socialRadius = socialRadius;
+        _maxJoinDistance = maxJoinDistance;
+        _groupSizeTolerance = groupSizeTolerance;
     }
 
     public void Process(EntityManager em)
@@ -1063,14 +1073,22 @@ public sealed class HerdingSystem : ISystem
         const ComponentFlags required = ComponentFlags.Position | ComponentFlags.Velocity |
                                         ComponentFlags.Species | ComponentFlags.Social;
 
-        // First pass: Update spatial hash and assign groups
+        // Pre-pass: Count group sizes and update spatial hash
+        _groupSizes.Clear();
         foreach (int entity in em.Query(required))
         {
             ref var pos = ref em.Positions[entity];
+            ref var social = ref em.Socials[entity];
             _spatialHash.Update(entity, pos.X, pos.Y);
+
+            if (social.GroupId >= 0)
+            {
+                _groupSizes.TryGetValue(social.GroupId, out int count);
+                _groupSizes[social.GroupId] = count + 1;
+            }
         }
 
-        // Second pass: Apply social behaviors
+        // Main pass: Apply social behaviors
         foreach (int entity in em.Query(required))
         {
             // Check LOD - skip if not due for update
@@ -1090,14 +1108,55 @@ public sealed class HerdingSystem : ISystem
             if (!social.IsSocial)
                 continue;
 
+            // === PRIORITY CHECK: Survival needs override social behavior ===
+
+            // Priority 1: High terrain discomfort - need to escape
+            if (em.HasComponents(entity, ComponentFlags.TerrainDiscomfort))
+            {
+                ref var discomfort = ref em.TerrainDiscomforts[entity];
+                if (discomfort.Ratio > 0.6f)  // Uncomfortable, focus on escaping
+                    continue;
+            }
+
+            // Priority 2: Fleeing from predator
+            if (em.HasComponents(entity, ComponentFlags.Prey))
+            {
+                ref var prey = ref em.Preys[entity];
+                if (prey.IsFleeing)
+                    continue;
+            }
+
+            // Priority 3: Actively hunting (hungry predator with target)
+            if (em.HasComponents(entity, ComponentFlags.Predator | ComponentFlags.Hunger))
+            {
+                ref var predator = ref em.Predators[entity];
+                ref var hunger = ref em.Hungers[entity];
+                float hungerRatio = hunger.Current / hunger.Max;
+
+                // If hungry and hunting, skip social behavior
+                if (predator.HasTarget && hungerRatio < 0.6f)
+                    continue;
+
+                // If very hungry (even without target), reduce social pull
+                if (hungerRatio < 0.4f)
+                    continue;  // Starving predators prioritize finding food
+            }
+
+            // === SOCIAL BEHAVIOR ===
+
             // Query nearby entities
             _spatialHash.QueryRadius(pos.X, pos.Y, _socialRadius, _nearbyEntities);
 
-            // Calculate group center and average velocity
+            // Calculate group center and average velocity (only from same group or nearby ungrouped)
             float centerX = 0f, centerY = 0f;
             float avgVelX = 0f, avgVelY = 0f;
             int neighborCount = 0;
-            int groupId = social.GroupId;
+            int currentGroupId = social.GroupId;
+            int bestGroupToJoin = -1;
+            float bestJoinDistance = _maxJoinDistance;
+
+            // Get our current group size
+            int currentGroupSize = currentGroupId >= 0 && _groupSizes.TryGetValue(currentGroupId, out int sz) ? sz : 0;
 
             foreach (int other in _nearbyEntities)
             {
@@ -1115,27 +1174,91 @@ public sealed class HerdingSystem : ISystem
                     continue;
 
                 ref var otherPos = ref em.Positions[other];
-                ref var otherVel = ref em.Velocities[other];
+                float dist = MathF.Sqrt(MathUtils.DistanceSquared(pos.X, pos.Y, otherPos.X, otherPos.Y));
 
-                centerX += otherPos.X;
-                centerY += otherPos.Y;
-                avgVelX += otherVel.Dx;
-                avgVelY += otherVel.Dy;
-                neighborCount++;
+                // If we're in the same group, always count as neighbor for cohesion
+                if (currentGroupId >= 0 && otherSocial.GroupId == currentGroupId)
+                {
+                    ref var otherVel = ref em.Velocities[other];
+                    centerX += otherPos.X;
+                    centerY += otherPos.Y;
+                    avgVelX += otherVel.Dx;
+                    avgVelY += otherVel.Dy;
+                    neighborCount++;
+                }
+                // Otherwise, consider joining their group (if within join distance and group not full)
+                else if (currentGroupId < 0 && dist < bestJoinDistance)
+                {
+                    int otherGroupId = otherSocial.GroupId;
+                    if (otherGroupId >= 0)
+                    {
+                        // Check if their group has room
+                        int otherGroupSize = _groupSizes.TryGetValue(otherGroupId, out int gsz) ? gsz : 1;
+                        float maxSize = otherSocial.PreferredGroupSize * _groupSizeTolerance;
 
-                // Adopt group ID from neighbors if we don't have one
-                if (groupId < 0 && otherSocial.GroupId >= 0)
-                    groupId = otherSocial.GroupId;
+                        if (otherGroupSize < maxSize)
+                        {
+                            bestGroupToJoin = otherGroupId;
+                            bestJoinDistance = dist;
+                        }
+                    }
+                }
             }
 
-            // Assign new group if we found neighbors but no group exists
-            if (neighborCount > 0 && groupId < 0)
+            // Handle group membership
+            if (currentGroupId < 0)
             {
-                groupId = _nextGroupId++;
-            }
-            social.GroupId = groupId;
+                // Try to join a nearby group
+                if (bestGroupToJoin >= 0)
+                {
+                    social.GroupId = bestGroupToJoin;
+                    _groupSizes.TryGetValue(bestGroupToJoin, out int cnt);
+                    _groupSizes[bestGroupToJoin] = cnt + 1;
+                }
+                // Or start a new group if we found ungrouped neighbors very close
+                else
+                {
+                    foreach (int other in _nearbyEntities)
+                    {
+                        if (other == entity || !em.IsAlive(other))
+                            continue;
+                        if (!em.HasComponents(other, ComponentFlags.Species | ComponentFlags.Social))
+                            continue;
 
-            // Apply social forces if we have neighbors
+                        ref var otherSpecies = ref em.Species[other];
+                        ref var otherSocial = ref em.Socials[other];
+
+                        if (otherSpecies.Type != species.Type || !otherSocial.IsSocial)
+                            continue;
+
+                        ref var otherPos = ref em.Positions[other];
+                        float dist = MathF.Sqrt(MathUtils.DistanceSquared(pos.X, pos.Y, otherPos.X, otherPos.Y));
+
+                        // Only form new group with very close ungrouped neighbors
+                        if (dist < _socialRadius * 0.5f && otherSocial.GroupId < 0)
+                        {
+                            int newGroupId = _nextGroupId++;
+                            social.GroupId = newGroupId;
+                            _groupSizes[newGroupId] = 1;
+                            break;
+                        }
+                    }
+                }
+            }
+
+            // Check if we should leave an oversized group
+            if (currentGroupId >= 0 && currentGroupSize > social.PreferredGroupSize * _groupSizeTolerance * 1.2f)
+            {
+                // Group too big, consider leaving (based on leadership - lower leaders leave first)
+                if (social.LeadershipScore < 0.3f)
+                {
+                    social.GroupId = -1;
+                    _groupSizes[currentGroupId] = currentGroupSize - 1;
+                    continue;  // Skip cohesion this frame
+                }
+            }
+
+            // Apply social forces if we have group neighbors
             if (neighborCount > 0)
             {
                 centerX /= neighborCount;
@@ -1143,23 +1266,43 @@ public sealed class HerdingSystem : ISystem
                 avgVelX /= neighborCount;
                 avgVelY /= neighborCount;
 
+                // Distance to group center
+                float distToCenter = MathF.Sqrt(MathUtils.DistanceSquared(pos.X, pos.Y, centerX, centerY));
+
+                // Cohesion strength falls off with distance - don't pull from far away
+                float distanceFactor = MathF.Max(0, 1f - (distToCenter / (_socialRadius * 0.8f)));
+
+                // Also reduce cohesion if group is at/above preferred size
+                float sizeFactor = 1f;
+                if (currentGroupSize >= social.PreferredGroupSize)
+                {
+                    // Gradually reduce cohesion as group exceeds preferred size
+                    sizeFactor = MathF.Max(0.1f, 1f - (currentGroupSize - social.PreferredGroupSize) /
+                                                      (social.PreferredGroupSize * 0.5f));
+                }
+
+                float effectiveCohesion = social.CohesionStrength * social.GroupAffinity * distanceFactor * sizeFactor;
+                float effectiveAlignment = social.AlignmentStrength * social.GroupAffinity * distanceFactor;
+
                 // Cohesion: move toward group center
-                float cohesionX = (centerX - pos.X) * social.CohesionStrength * social.GroupAffinity;
-                float cohesionY = (centerY - pos.Y) * social.CohesionStrength * social.GroupAffinity;
+                float cohesionX = (centerX - pos.X) * effectiveCohesion;
+                float cohesionY = (centerY - pos.Y) * effectiveCohesion;
 
                 // Alignment: match group velocity
-                float alignX = (avgVelX - vel.Dx) * social.AlignmentStrength * social.GroupAffinity;
-                float alignY = (avgVelY - vel.Dy) * social.AlignmentStrength * social.GroupAffinity;
+                float alignX = (avgVelX - vel.Dx) * effectiveAlignment;
+                float alignY = (avgVelY - vel.Dy) * effectiveAlignment;
 
                 // Apply forces
                 vel.Dx += cohesionX + alignX;
                 vel.Dy += cohesionY + alignY;
             }
-            else
+            else if (currentGroupId >= 0)
             {
-                // No neighbors - clear group if we're alone for too long
-                // (simplified: just clear immediately for now)
-                social.GroupId = -1;
+                // In a group but no neighbors visible - might have wandered away
+                // Don't immediately clear, give some tolerance
+                // (For now, just clear if truly isolated)
+                if (currentGroupSize <= 1)
+                    social.GroupId = -1;
             }
 
             // Update leadership score based on age (if available)

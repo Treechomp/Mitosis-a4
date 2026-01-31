@@ -52,6 +52,9 @@ public static class TileTypeExtensions
     /// <summary>
     /// Get the discomfort accumulation rate per tick while on this tile.
     /// Higher = more uncomfortable, causes entities to want to leave.
+    /// Values tuned so discomfort threshold (~50) is reached in reasonable time:
+    /// - Shallow water: ~10 ticks to start feeling uncomfortable
+    /// - Deep water: ~4 ticks to become urgent
     /// </summary>
     public static float GetDiscomfortRate(this TileType tile)
     {
@@ -59,27 +62,28 @@ public static class TileTypeExtensions
         {
             TileType.Grass => 0f,           // Comfortable
             TileType.Forest => 0f,          // Comfortable
-            TileType.Sand => 0.5f,          // Mild discomfort (hot/dry)
-            TileType.ShallowWater => 3f,    // Uncomfortable, want to get out
-            TileType.DeepWater => 8f,       // Very uncomfortable, urgent to escape
-            TileType.Mountain => 10f,       // Extremely uncomfortable
-            _ => 1f
+            TileType.Sand => 1f,            // Mild discomfort (hot/dry)
+            TileType.ShallowWater => 5f,    // Uncomfortable, want to get out quickly
+            TileType.DeepWater => 12f,      // Very uncomfortable, urgent to escape
+            TileType.Mountain => 15f,       // Extremely uncomfortable
+            _ => 2f
         };
     }
 
     /// <summary>
     /// Get how much to avoid this tile when pathfinding (used by wander).
     /// Different from discomfort - this is for proactive avoidance.
+    /// Higher values make creatures strongly prefer other directions.
     /// </summary>
     public static float GetAvoidanceWeight(this TileType tile)
     {
         return tile switch
         {
             TileType.Grass => 0f,           // Preferred
-            TileType.Forest => 0f,          // Preferred
-            TileType.Sand => 0.2f,          // Slight preference against
-            TileType.ShallowWater => 0.6f,  // Avoid if possible
-            TileType.DeepWater => 0.9f,     // Strongly avoid
+            TileType.Forest => 0.05f,       // Slightly less preferred (visibility)
+            TileType.Sand => 0.3f,          // Moderate avoidance
+            TileType.ShallowWater => 0.75f, // Strong avoidance
+            TileType.DeepWater => 0.95f,    // Very strong avoidance
             TileType.Mountain => 1.0f,      // Complete avoidance
             _ => 0.5f
         };
