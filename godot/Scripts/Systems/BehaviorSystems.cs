@@ -506,11 +506,17 @@ public sealed class HuntingSystem : ISystem
                     }
                     predator.CurrentCooldown = predator.AttackCooldown;
 
-                    // After attacking, retreat (pack tactic)
+                    // After attacking, retreat only if prey still in herd (pack tactic to disperse)
                     if (isPack && predator.Phase == PackPhase.Rushing)
                     {
-                        predator.Phase = PackPhase.Retreating;
-                        predator.PhaseTimer = _retreatDuration;
+                        bool preyIsolated = IsPreyIsolated(predator.TargetEntity, em);
+                        if (!preyIsolated)
+                        {
+                            // Still in herd - retreat to continue harassment
+                            predator.Phase = PackPhase.Retreating;
+                            predator.PhaseTimer = _retreatDuration;
+                        }
+                        // If isolated, stay in rushing/chase mode
                     }
                 }
                 else if (em.HasComponents(entity, ComponentFlags.Velocity))
@@ -521,7 +527,9 @@ public sealed class HuntingSystem : ISystem
                     // Pack tactics based on role and phase
                     if (isPack && predator.Role != PackRole.None)
                     {
-                        ApplyPackTactics(entity, ref pos, ref vel, ref predator, preyPos.X, preyPos.Y, dist, huntSpeed, em);
+                        // Check if prey is isolated from herd
+                        bool preyIsolated = IsPreyIsolated(predator.TargetEntity, em);
+                        ApplyPackTactics(entity, ref pos, ref vel, ref predator, preyPos.X, preyPos.Y, dist, huntSpeed, em, preyIsolated);
                     }
                     else
                     {
@@ -540,6 +548,37 @@ public sealed class HuntingSystem : ISystem
             _spatialHash.Remove(preyEntity);
             em.DestroyEntity(preyEntity);
         }
+    }
+
+    /// <summary>
+    /// Check if a prey is isolated from its herd (few/no other prey nearby).
+    /// </summary>
+    private bool IsPreyIsolated(int preyEntity, EntityManager em)
+    {
+        if (!em.IsAlive(preyEntity))
+            return true;
+
+        ref var preyPos = ref em.Positions[preyEntity];
+        float isolationRadius = 6f;  // Distance to check for other prey
+        int minHerdSize = 2;         // Need at least this many nearby to be "in herd"
+
+        _nearbyEntities.Clear();
+        _spatialHash.QueryRadius(preyPos.X, preyPos.Y, isolationRadius, _nearbyEntities);
+
+        int nearbyPreyCount = 0;
+        foreach (int other in _nearbyEntities)
+        {
+            if (other == preyEntity || !em.IsAlive(other))
+                continue;
+
+            if (em.HasComponents(other, ComponentFlags.Prey))
+                nearbyPreyCount++;
+
+            if (nearbyPreyCount >= minHerdSize)
+                return false;  // Still has herd protection
+        }
+
+        return true;  // Isolated - few or no other prey nearby
     }
 
     private void AssignPackRole(int entity, int target, EntityManager em, ref Predator predator, ref Social social)
@@ -589,11 +628,30 @@ public sealed class HuntingSystem : ISystem
     }
 
     private void ApplyPackTactics(int entity, ref Position pos, ref Velocity vel, ref Predator predator,
-                                   float targetX, float targetY, float dist, float huntSpeed, EntityManager em)
+                                   float targetX, float targetY, float dist, float huntSpeed, EntityManager em,
+                                   bool preyIsolated)
     {
         float dx = targetX - pos.X;
         float dy = targetY - pos.Y;
 
+        // If prey is isolated, switch to full chase mode - no more retreat/positioning
+        if (preyIsolated)
+        {
+            // Direct chase - prey is separated from herd, go for the kill
+            var chaseDir = MathUtils.Normalize(dx, dy);
+            vel.Dx = chaseDir.X * huntSpeed * 1.2f;  // Slightly faster in chase mode
+            vel.Dy = chaseDir.Y * huntSpeed * 1.2f;
+
+            // Reset phase to rushing (continuous attack)
+            if (predator.Phase != PackPhase.Rushing)
+            {
+                predator.Phase = PackPhase.Rushing;
+                predator.PhaseTimer = _rushDuration;
+            }
+            return;
+        }
+
+        // Prey still in herd - use rush/retreat tactics to disperse
         // Handle phase transitions
         if (predator.PhaseTimer <= 0)
         {
@@ -622,15 +680,15 @@ public sealed class HuntingSystem : ISystem
                 break;
 
             case PackPhase.Rushing:
-                // All rush in together
+                // All rush in together to scatter the herd
                 var rushDir = MathUtils.Normalize(dx, dy);
                 vel.Dx = rushDir.X * huntSpeed * 1.3f;
                 vel.Dy = rushDir.Y * huntSpeed * 1.3f;
                 break;
 
             case PackPhase.Retreating:
-                // Back off after attack
-                float retreatDist = 4f;
+                // Back off after harassment - this gives herd time to scatter
+                float retreatDist = 5f;
                 if (dist < retreatDist)
                 {
                     var retreatDir = MathUtils.Normalize(-dx, -dy);
@@ -639,14 +697,14 @@ public sealed class HuntingSystem : ISystem
                 }
                 else
                 {
-                    // Far enough, go back to positioning
+                    // Far enough, go back to positioning for next rush
                     predator.Phase = PackPhase.Positioning;
                     predator.PhaseTimer = _positioningDuration;
                 }
                 break;
 
             default:
-                // Direct chase
+                // Direct approach
                 var dir = MathUtils.Normalize(dx, dy);
                 vel.Dx = dir.X * huntSpeed;
                 vel.Dy = dir.Y * huntSpeed;
