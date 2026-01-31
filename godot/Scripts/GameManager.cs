@@ -66,6 +66,7 @@ public partial class GameManager : Node2D
         _systems.Add(new GrazingSystem(_worldManager));
         _systems.Add(new WanderSystem());
         _systems.Add(new SeparationSystem(spatialHash, separationRadius: 2.5f, separationStrength: 0.03f));
+        _systems.Add(new CollisionSystem(spatialHash, collisionRadiusScale: 0.4f));
         _systems.Add(new HuntingSystem(spatialHash));
         _systems.Add(new FleeingSystem(spatialHash));
         _systems.Add(new AgingSystem());
@@ -138,6 +139,15 @@ public partial class GameManager : Node2D
         return spawned;
     }
 
+    /// <summary>
+    /// Applies random variation to a base value (±percentage).
+    /// </summary>
+    private float Vary(float baseValue, float variationPercent = 0.2f)
+    {
+        float variation = baseValue * variationPercent;
+        return baseValue + (float)(_rng.NextDouble() * 2 - 1) * variation;
+    }
+
     private void SpawnCreature(float x, float y, bool isHerbivore)
     {
         int entity = _entityManager.CreateEntity();
@@ -176,17 +186,20 @@ public partial class GameManager : Node2D
             _entityManager.Species[entity] = new Species(SpeciesType.Herbivore);
             _entityManager.AddComponent(entity, ComponentFlags.Species);
 
-            _entityManager.Hungers[entity] = new Hunger(80f, decayRate: 0.05f);
+            _entityManager.Hungers[entity] = new Hunger(80f, decayRate: Vary(0.05f, 0.15f));
             _entityManager.AddComponent(entity, ComponentFlags.Hunger);
 
-            _entityManager.Wanders[entity] = new Wander(0.03f, 0.005f);
+            // Vary speed and direction change chance (±20%)
+            _entityManager.Wanders[entity] = new Wander(Vary(0.03f), Vary(0.005f));
             _entityManager.AddComponent(entity, ComponentFlags.Wander);
 
-            _entityManager.Preys[entity] = new Prey(6f, 2f);
+            // Vary flee range and speed multiplier (±25%)
+            _entityManager.Preys[entity] = new Prey(Vary(6f, 0.25f), Vary(2f, 0.25f));
             _entityManager.AddComponent(entity, ComponentFlags.Prey);
 
+            // Slight size variation for visual diversity
             _entityManager.Renderables[entity] = new Renderable(
-                new Color(0.4f, 1f, 0.4f), 8f, ShapeType.Circle);
+                new Color(0.4f, 1f, 0.4f), Vary(8f, 0.15f), ShapeType.Circle);
             _entityManager.AddComponent(entity, ComponentFlags.Renderable);
         }
         else
@@ -194,17 +207,20 @@ public partial class GameManager : Node2D
             _entityManager.Species[entity] = new Species(SpeciesType.Carnivore);
             _entityManager.AddComponent(entity, ComponentFlags.Species);
 
-            _entityManager.Hungers[entity] = new Hunger(70f, decayRate: 0.08f);
+            _entityManager.Hungers[entity] = new Hunger(70f, decayRate: Vary(0.08f, 0.15f));
             _entityManager.AddComponent(entity, ComponentFlags.Hunger);
 
-            _entityManager.Wanders[entity] = new Wander(0.06f, 0.01f);
+            // Vary speed and direction change chance (±20%)
+            _entityManager.Wanders[entity] = new Wander(Vary(0.06f), Vary(0.01f));
             _entityManager.AddComponent(entity, ComponentFlags.Wander);
 
-            _entityManager.Predators[entity] = new Predator(12f, 30f);
+            // Vary hunt range and attack power (±25%)
+            _entityManager.Predators[entity] = new Predator(Vary(12f, 0.25f), Vary(30f, 0.25f));
             _entityManager.AddComponent(entity, ComponentFlags.Predator);
 
+            // Slight size variation for visual diversity
             _entityManager.Renderables[entity] = new Renderable(
-                new Color(1f, 0.4f, 0.4f), 10f, ShapeType.Triangle);
+                new Color(1f, 0.4f, 0.4f), Vary(10f, 0.15f), ShapeType.Triangle);
             _entityManager.AddComponent(entity, ComponentFlags.Renderable);
         }
     }

@@ -448,6 +448,82 @@ public sealed class SeparationSystem : ISystem
 }
 
 /// <summary>
+/// Hard collision resolution to prevent entities from overlapping.
+/// Runs after movement to resolve any overlaps.
+/// </summary>
+public sealed class CollisionSystem : ISystem
+{
+    private readonly SpatialHash _spatialHash;
+    private readonly List<int> _nearbyEntities = new(64);
+    private readonly float _collisionRadiusScale;
+
+    public CollisionSystem(SpatialHash spatialHash, float collisionRadiusScale = 0.5f)
+    {
+        _spatialHash = spatialHash;
+        _collisionRadiusScale = collisionRadiusScale; // Multiplier on Renderable.Size for collision
+    }
+
+    public void Process(EntityManager em)
+    {
+        const ComponentFlags required = ComponentFlags.Position | ComponentFlags.Renderable;
+
+        // Resolve collisions - multiple passes for better resolution
+        for (int pass = 0; pass < 2; pass++)
+        {
+            foreach (int entity in em.Query(required))
+            {
+                ref var pos = ref em.Positions[entity];
+                ref var rend = ref em.Renderables[entity];
+                float radius = rend.Size * _collisionRadiusScale;
+
+                // Update spatial hash position
+                _spatialHash.Update(entity, pos.X, pos.Y);
+
+                // Query nearby entities
+                _spatialHash.QueryRadius(pos.X, pos.Y, radius * 3f, _nearbyEntities);
+
+                foreach (int other in _nearbyEntities)
+                {
+                    if (other <= entity || !em.IsAlive(other))
+                        continue;
+
+                    if (!em.HasComponents(other, ComponentFlags.Position | ComponentFlags.Renderable))
+                        continue;
+
+                    ref var otherPos = ref em.Positions[other];
+                    ref var otherRend = ref em.Renderables[other];
+                    float otherRadius = otherRend.Size * _collisionRadiusScale;
+
+                    float dx = pos.X - otherPos.X;
+                    float dy = pos.Y - otherPos.Y;
+                    float distSq = dx * dx + dy * dy;
+                    float minDist = radius + otherRadius;
+                    float minDistSq = minDist * minDist;
+
+                    // Check for overlap
+                    if (distSq < minDistSq && distSq > 0.0001f)
+                    {
+                        float dist = MathF.Sqrt(distSq);
+                        float overlap = minDist - dist;
+
+                        // Normalize direction
+                        float nx = dx / dist;
+                        float ny = dy / dist;
+
+                        // Push both entities apart (half the overlap each)
+                        float push = overlap * 0.5f;
+                        pos.X += nx * push;
+                        pos.Y += ny * push;
+                        otherPos.X -= nx * push;
+                        otherPos.Y -= ny * push;
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// <summary>
 /// Handles reproduction for mature, well-fed entities.
 /// </summary>
 public sealed class ReproductionSystem : ISystem
