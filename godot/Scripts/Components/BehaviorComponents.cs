@@ -4,6 +4,28 @@ using Godot;
 namespace Mitosis.Components;
 
 /// <summary>
+/// Pack hunting role for coordinated attacks.
+/// </summary>
+public enum PackRole : byte
+{
+    None = 0,       // Not in a hunting pack or solitary
+    Leader = 1,     // Selects target, initiates attacks
+    Flanker = 2,    // Positions to sides to surround
+    Chaser = 3      // Follows directly behind leader
+}
+
+/// <summary>
+/// Pack hunting phase for coordinated attack timing.
+/// </summary>
+public enum PackPhase : byte
+{
+    Idle = 0,       // Not actively hunting as pack
+    Positioning = 1, // Moving to surround positions
+    Rushing = 2,    // Attacking/closing in
+    Retreating = 3  // Backing off after attack
+}
+
+/// <summary>
 /// Marks entity as a predator that hunts prey.
 /// </summary>
 [StructLayout(LayoutKind.Sequential)]
@@ -15,6 +37,9 @@ public struct Predator
     public int AttackCooldown;
     public int CurrentCooldown;
     public int TargetEntity;     // -1 means no target
+    public PackRole Role;        // Role in pack hunting
+    public PackPhase Phase;      // Current phase of pack attack
+    public int PhaseTimer;       // Ticks remaining in current phase
 
     public Predator(
         float huntRange = 5f,
@@ -28,6 +53,9 @@ public struct Predator
         AttackCooldown = attackCooldown;
         CurrentCooldown = 0;
         TargetEntity = -1;
+        Role = PackRole.None;
+        Phase = PackPhase.Idle;
+        PhaseTimer = 0;
     }
 
     public readonly bool HasTarget => TargetEntity >= 0;
@@ -113,6 +141,8 @@ public struct Social
 {
     public SocialType Type;
     public int GroupId;              // -1 = no group, otherwise group identifier
+    public int RecognizedLeader;     // Entity ID of the leader this entity follows (-1 = none)
+    public int LeaderLostTicks;      // Ticks since leader was last in range (for leadership transfer)
     public float GroupAffinity;      // 0-1: How strongly attracted to group (0 = lone, 1 = highly social)
     public float PreferredGroupSize; // Ideal number of nearby same-species
     public float CohesionStrength;   // How strongly pulled toward group center
@@ -129,6 +159,8 @@ public struct Social
     {
         Type = type;
         GroupId = -1;
+        RecognizedLeader = -1;
+        LeaderLostTicks = 0;
         GroupAffinity = groupAffinity;
         PreferredGroupSize = preferredGroupSize;
         CohesionStrength = cohesionStrength;
@@ -138,5 +170,6 @@ public struct Social
     }
 
     public readonly bool HasGroup => GroupId >= 0;
+    public readonly bool HasLeader => RecognizedLeader >= 0;
     public readonly bool IsSocial => Type == SocialType.Herd || Type == SocialType.Pack;
 }

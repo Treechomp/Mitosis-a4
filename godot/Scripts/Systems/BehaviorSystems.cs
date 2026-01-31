@@ -267,33 +267,48 @@ public sealed class WanderSystem : ISystem
 
 /// <summary>
 /// Processes hunting behavior for predators using spatial hashing.
-/// Hunger-driven: predators only hunt when hungry, with stats scaling based on hunger level.
-/// Balances hunger urgency against terrain discomfort when deciding to chase.
+/// Features:
+/// - Hunger-driven hunting with urgency scaling
+/// - Terrain discomfort balance
+/// - Pack hunting coordination (leader selects target, pack adopts)
+/// - Pack tactics: fan out to surround, rush/retreat cycles
 /// </summary>
 public sealed class HuntingSystem : ISystem
 {
     private readonly SpatialHash _spatialHash;
     private readonly WorldManager? _worldManager;
     private readonly float _huntNutrition;
-    private readonly float _huntThreshold;      // Start hunting below this hunger %
+    private readonly float _huntThreshold;
     private readonly float _baseHuntSpeed;
+    private readonly float _packCoordinationRadius;
+    private readonly int _rushDuration;
+    private readonly int _retreatDuration;
+    private readonly int _positioningDuration;
     private readonly List<int> _nearbyEntities = new(64);
+    private readonly List<int> _packMembers = new(8);
     private readonly List<int> _entitiesToKill = new(16);
+    private readonly Dictionary<int, int> _groupTargets = new(16);  // groupId -> target entity
 
     public HuntingSystem(SpatialHash spatialHash, WorldManager? worldManager = null,
                          float huntNutrition = 50f, float huntThreshold = 0.7f,
-                         float baseHuntSpeed = 0.10f)
+                         float baseHuntSpeed = 0.10f, float packCoordinationRadius = 8f,
+                         int rushDuration = 30, int retreatDuration = 20, int positioningDuration = 40)
     {
         _spatialHash = spatialHash;
         _worldManager = worldManager;
         _huntNutrition = huntNutrition;
-        _huntThreshold = huntThreshold;  // Hunt when hunger falls below 70%
+        _huntThreshold = huntThreshold;
         _baseHuntSpeed = baseHuntSpeed;
+        _packCoordinationRadius = packCoordinationRadius;
+        _rushDuration = rushDuration;
+        _retreatDuration = retreatDuration;
+        _positioningDuration = positioningDuration;
     }
 
     public void Process(EntityManager em)
     {
         _entitiesToKill.Clear();
+        _groupTargets.Clear();
 
         // Update spatial hash for all prey
         const ComponentFlags preyRequired = ComponentFlags.Position | ComponentFlags.Prey;
@@ -303,79 +318,116 @@ public sealed class HuntingSystem : ISystem
             _spatialHash.Update(entity, pos.X, pos.Y);
         }
 
-        // Process predators
+        // First pass: Leaders select targets for pack
         const ComponentFlags predatorRequired = ComponentFlags.Position | ComponentFlags.Predator | ComponentFlags.Hunger;
+        foreach (int entity in em.Query(predatorRequired))
+        {
+            ref var predator = ref em.Predators[entity];
+            ref var hunger = ref em.Hungers[entity];
+
+            // Only process pack leaders for target selection
+            if (!em.HasComponents(entity, ComponentFlags.Social))
+                continue;
+
+            ref var social = ref em.Socials[entity];
+            if (social.Type != SocialType.Pack || social.GroupId < 0)
+                continue;
+
+            // Check if this predator is the leader (highest leadership in pack)
+            if (social.RecognizedLeader >= 0 && social.RecognizedLeader != entity)
+                continue;  // Not the leader
+
+            float hungerRatio = hunger.Current / hunger.Max;
+            if (hungerRatio >= _huntThreshold)
+                continue;
+
+            // Leader selects target for pack
+            if (predator.HasTarget && em.IsAlive(predator.TargetEntity))
+            {
+                _groupTargets[social.GroupId] = predator.TargetEntity;
+            }
+        }
+
+        // Second pass: All predators hunt
         foreach (int entity in em.Query(predatorRequired))
         {
             ref var pos = ref em.Positions[entity];
             ref var predator = ref em.Predators[entity];
             ref var hunger = ref em.Hungers[entity];
 
-            // Reduce cooldown
+            // Reduce cooldowns
             if (predator.CurrentCooldown > 0)
                 predator.CurrentCooldown--;
+            if (predator.PhaseTimer > 0)
+                predator.PhaseTimer--;
 
-            // Clear target if it no longer exists
+            // Clear target if dead
             if (predator.HasTarget && !em.IsAlive(predator.TargetEntity))
+            {
                 predator.TargetEntity = -1;
+                predator.Phase = PackPhase.Idle;
+                predator.Role = PackRole.None;
+            }
 
-            // Calculate hunger ratio (0 = starving, 1 = full)
             float hungerRatio = hunger.Current / hunger.Max;
 
-            // Only hunt when hungry enough (below threshold)
-            // Also abandon hunt if we become satiated
+            // Stop hunting if full
             if (hungerRatio >= _huntThreshold)
             {
-                predator.TargetEntity = -1;  // Stop hunting, we're full
+                predator.TargetEntity = -1;
+                predator.Phase = PackPhase.Idle;
+                predator.Role = PackRole.None;
                 continue;
             }
 
-            // Calculate hunger-based modifiers
-            // urgency: 0 at threshold, 1 at starving
             float urgency = 1f - (hungerRatio / _huntThreshold);
 
-            // Check terrain discomfort vs hunger balance
+            // Check terrain discomfort
             float discomfortRatio = 0f;
             if (em.HasComponents(entity, ComponentFlags.TerrainDiscomfort))
             {
                 ref var discomfort = ref em.TerrainDiscomforts[entity];
                 discomfortRatio = discomfort.Ratio;
-
-                // If discomfort exceeds threshold and we're not starving, abandon hunt
-                // The hungrier we are, the more discomfort we'll tolerate
-                float discomfortTolerance = urgency;  // 0 at threshold, 1 when starving
+                float discomfortTolerance = urgency;
                 if (discomfort.ExceedsThreshold && discomfortRatio > discomfortTolerance + 0.3f)
                 {
-                    predator.TargetEntity = -1;  // Too uncomfortable, stop hunting
-                    continue;  // Let wander system handle escape
+                    predator.TargetEntity = -1;
+                    predator.Phase = PackPhase.Idle;
+                    continue;
                 }
             }
 
-            // Hunt range increases with hunger (up to 1.5x when desperate)
-            // But decreases when uncomfortable (don't want to chase far into bad terrain)
+            // Calculate modifiers
             float rangeMultiplier = 1f + (urgency * 0.5f);
             if (discomfortRatio > 0.3f)
-            {
-                // Reduce range when uncomfortable - less willing to chase far
                 rangeMultiplier *= (1f - discomfortRatio * 0.5f);
+
+            float speedMultiplier = hungerRatio < 0.15f
+                ? 0.5f + hungerRatio * 2f
+                : 1f + (urgency * 0.4f);
+
+            // Check for pack membership and coordination
+            bool isPack = false;
+            int groupId = -1;
+            if (em.HasComponents(entity, ComponentFlags.Social))
+            {
+                ref var social = ref em.Socials[entity];
+                isPack = social.Type == SocialType.Pack && social.GroupId >= 0;
+                groupId = social.GroupId;
+
+                // Adopt pack target if leader has one
+                if (isPack && !predator.HasTarget && _groupTargets.TryGetValue(groupId, out int packTarget))
+                {
+                    if (em.IsAlive(packTarget))
+                    {
+                        predator.TargetEntity = packTarget;
+                        // Assign role based on position relative to others
+                        AssignPackRole(entity, packTarget, em, ref predator, ref social);
+                    }
+                }
             }
 
-            // Speed scales with hunger:
-            // - Moderate hunger (0.3-0.7): faster (adrenaline)
-            // - Very low hunger (<0.15): slower (exhaustion)
-            float speedMultiplier;
-            if (hungerRatio < 0.15f)
-            {
-                // Exhaustion: speed drops sharply
-                speedMultiplier = 0.5f + hungerRatio * 2f;  // 0.5 to 0.8
-            }
-            else
-            {
-                // Hungry but not exhausted: speed boost
-                speedMultiplier = 1f + (urgency * 0.4f);  // 1.0 to 1.4
-            }
-
-            // Find nearest prey using spatial hash
+            // Find target if we don't have one
             if (!predator.HasTarget)
             {
                 float effectiveRange = predator.HuntRange * rangeMultiplier;
@@ -396,17 +448,11 @@ public sealed class HuntingSystem : ISystem
                     if (distSq >= huntRangeSq)
                         continue;
 
-                    // Score = distance + terrain penalty
-                    // Prefer nearby prey on good terrain over distant prey on bad terrain
                     float score = distSq;
-
-                    // Add terrain penalty for prey on uncomfortable terrain
-                    // (we'd have to chase through that terrain)
                     if (_worldManager != null)
                     {
                         var preyTile = _worldManager.GetTile(preyPos.X, preyPos.Y);
                         float terrainPenalty = preyTile.GetAvoidanceWeight() * 50f;
-                        // Reduce penalty based on hunger - desperate predators care less
                         terrainPenalty *= (1f - urgency * 0.7f);
                         score += terrainPenalty;
                     }
@@ -419,19 +465,28 @@ public sealed class HuntingSystem : ISystem
                 }
 
                 if (bestPrey >= 0)
+                {
                     predator.TargetEntity = bestPrey;
+                    if (isPack)
+                    {
+                        _groupTargets[groupId] = bestPrey;
+                        predator.Role = PackRole.Leader;
+                        predator.Phase = PackPhase.Positioning;
+                        predator.PhaseTimer = _positioningDuration;
+                    }
+                }
             }
 
             // Hunt the target
             if (predator.HasTarget && em.IsAlive(predator.TargetEntity))
             {
                 ref var preyPos = ref em.Positions[predator.TargetEntity];
-
                 float dx = preyPos.X - pos.X;
                 float dy = preyPos.Y - pos.Y;
+                float dist = MathF.Sqrt(dx * dx + dy * dy);
                 float distSq = dx * dx + dy * dy;
 
-                // Close enough to attack?
+                // Attack if in range
                 float attackRangeSq = predator.AttackRange * predator.AttackRange;
                 if (distSq < attackRangeSq && predator.CurrentCooldown == 0)
                 {
@@ -445,18 +500,36 @@ public sealed class HuntingSystem : ISystem
                             _entitiesToKill.Add(predator.TargetEntity);
                             hunger.Current = MathF.Min(hunger.Max, hunger.Current + _huntNutrition);
                             predator.TargetEntity = -1;
+                            predator.Phase = PackPhase.Idle;
+                            predator.Role = PackRole.None;
                         }
                     }
                     predator.CurrentCooldown = predator.AttackCooldown;
+
+                    // After attacking, retreat (pack tactic)
+                    if (isPack && predator.Phase == PackPhase.Rushing)
+                    {
+                        predator.Phase = PackPhase.Retreating;
+                        predator.PhaseTimer = _retreatDuration;
+                    }
                 }
                 else if (em.HasComponents(entity, ComponentFlags.Velocity))
                 {
-                    // Move towards prey with hunger-scaled speed
                     ref var vel = ref em.Velocities[entity];
                     float huntSpeed = _baseHuntSpeed * speedMultiplier;
-                    var dir = MathUtils.Normalize(dx, dy);
-                    vel.Dx = dir.X * huntSpeed;
-                    vel.Dy = dir.Y * huntSpeed;
+
+                    // Pack tactics based on role and phase
+                    if (isPack && predator.Role != PackRole.None)
+                    {
+                        ApplyPackTactics(entity, ref pos, ref vel, ref predator, preyPos.X, preyPos.Y, dist, huntSpeed, em);
+                    }
+                    else
+                    {
+                        // Solo hunting - direct chase
+                        var dir = MathUtils.Normalize(dx, dy);
+                        vel.Dx = dir.X * huntSpeed;
+                        vel.Dy = dir.Y * huntSpeed;
+                    }
                 }
             }
         }
@@ -466,6 +539,193 @@ public sealed class HuntingSystem : ISystem
         {
             _spatialHash.Remove(preyEntity);
             em.DestroyEntity(preyEntity);
+        }
+    }
+
+    private void AssignPackRole(int entity, int target, EntityManager em, ref Predator predator, ref Social social)
+    {
+        // Find other pack members
+        ref var pos = ref em.Positions[entity];
+        ref var targetPos = ref em.Positions[target];
+        _spatialHash.QueryRadius(pos.X, pos.Y, _packCoordinationRadius, _packMembers);
+
+        int flankersCount = 0;
+        bool hasLeader = false;
+
+        foreach (int other in _packMembers)
+        {
+            if (other == entity || !em.IsAlive(other))
+                continue;
+            if (!em.HasComponents(other, ComponentFlags.Predator | ComponentFlags.Social))
+                continue;
+
+            ref var otherSocial = ref em.Socials[other];
+            if (otherSocial.GroupId != social.GroupId)
+                continue;
+
+            ref var otherPredator = ref em.Predators[other];
+            if (otherPredator.Role == PackRole.Leader)
+                hasLeader = true;
+            else if (otherPredator.Role == PackRole.Flanker)
+                flankersCount++;
+        }
+
+        // Assign role
+        if (!hasLeader && social.LeadershipScore > 0.5f)
+        {
+            predator.Role = PackRole.Leader;
+        }
+        else if (flankersCount < 2)
+        {
+            predator.Role = PackRole.Flanker;
+        }
+        else
+        {
+            predator.Role = PackRole.Chaser;
+        }
+
+        predator.Phase = PackPhase.Positioning;
+        predator.PhaseTimer = _positioningDuration;
+    }
+
+    private void ApplyPackTactics(int entity, ref Position pos, ref Velocity vel, ref Predator predator,
+                                   float targetX, float targetY, float dist, float huntSpeed, EntityManager em)
+    {
+        float dx = targetX - pos.X;
+        float dy = targetY - pos.Y;
+
+        // Handle phase transitions
+        if (predator.PhaseTimer <= 0)
+        {
+            switch (predator.Phase)
+            {
+                case PackPhase.Positioning:
+                    predator.Phase = PackPhase.Rushing;
+                    predator.PhaseTimer = _rushDuration;
+                    break;
+                case PackPhase.Rushing:
+                    predator.Phase = PackPhase.Retreating;
+                    predator.PhaseTimer = _retreatDuration;
+                    break;
+                case PackPhase.Retreating:
+                    predator.Phase = PackPhase.Positioning;
+                    predator.PhaseTimer = _positioningDuration;
+                    break;
+            }
+        }
+
+        switch (predator.Phase)
+        {
+            case PackPhase.Positioning:
+                // Fan out to surround
+                ApplyPositioningMovement(ref pos, ref vel, predator.Role, dx, dy, dist, huntSpeed * 0.7f);
+                break;
+
+            case PackPhase.Rushing:
+                // All rush in together
+                var rushDir = MathUtils.Normalize(dx, dy);
+                vel.Dx = rushDir.X * huntSpeed * 1.3f;
+                vel.Dy = rushDir.Y * huntSpeed * 1.3f;
+                break;
+
+            case PackPhase.Retreating:
+                // Back off after attack
+                float retreatDist = 4f;
+                if (dist < retreatDist)
+                {
+                    var retreatDir = MathUtils.Normalize(-dx, -dy);
+                    vel.Dx = retreatDir.X * huntSpeed * 0.8f;
+                    vel.Dy = retreatDir.Y * huntSpeed * 0.8f;
+                }
+                else
+                {
+                    // Far enough, go back to positioning
+                    predator.Phase = PackPhase.Positioning;
+                    predator.PhaseTimer = _positioningDuration;
+                }
+                break;
+
+            default:
+                // Direct chase
+                var dir = MathUtils.Normalize(dx, dy);
+                vel.Dx = dir.X * huntSpeed;
+                vel.Dy = dir.Y * huntSpeed;
+                break;
+        }
+    }
+
+    private void ApplyPositioningMovement(ref Position pos, ref Velocity vel, PackRole role,
+                                          float dx, float dy, float dist, float speed)
+    {
+        float targetDist = 5f;  // Ideal distance from prey during positioning
+
+        switch (role)
+        {
+            case PackRole.Leader:
+                // Leader approaches from front, maintains distance
+                if (dist > targetDist)
+                {
+                    var dir = MathUtils.Normalize(dx, dy);
+                    vel.Dx = dir.X * speed;
+                    vel.Dy = dir.Y * speed;
+                }
+                else
+                {
+                    // Hold position, circle slowly
+                    vel.Dx = -dy * 0.01f;  // Perpendicular movement
+                    vel.Dy = dx * 0.01f;
+                }
+                break;
+
+            case PackRole.Flanker:
+                // Flankers move to the sides
+                // Calculate perpendicular position
+                float perpX = -dy;
+                float perpY = dx;
+                float perpLen = MathF.Sqrt(perpX * perpX + perpY * perpY);
+                if (perpLen > 0.01f)
+                {
+                    perpX /= perpLen;
+                    perpY /= perpLen;
+                }
+
+                // Determine which side (based on current position)
+                float side = (pos.X - (pos.X + dx)) * perpY - (pos.Y - (pos.Y + dy)) * perpX;
+                float sideSign = side >= 0 ? 1f : -1f;
+
+                // Target position: to the side and at target distance
+                float flankX = (pos.X + dx) + perpX * targetDist * sideSign * 0.8f - dx * 0.3f;
+                float flankY = (pos.Y + dy) + perpY * targetDist * sideSign * 0.8f - dy * 0.3f;
+
+                float toFlankX = flankX - pos.X;
+                float toFlankY = flankY - pos.Y;
+                var flankDir = MathUtils.Normalize(toFlankX, toFlankY);
+                vel.Dx = flankDir.X * speed;
+                vel.Dy = flankDir.Y * speed;
+                break;
+
+            case PackRole.Chaser:
+                // Chasers follow behind, ready to cut off escape
+                if (dist > targetDist * 1.5f)
+                {
+                    var dir = MathUtils.Normalize(dx, dy);
+                    vel.Dx = dir.X * speed * 0.9f;
+                    vel.Dy = dir.Y * speed * 0.9f;
+                }
+                else
+                {
+                    // Stay back a bit
+                    var dir = MathUtils.Normalize(-dx, -dy);
+                    vel.Dx = dir.X * speed * 0.3f;
+                    vel.Dy = dir.Y * speed * 0.3f;
+                }
+                break;
+
+            default:
+                var defaultDir = MathUtils.Normalize(dx, dy);
+                vel.Dx = defaultDir.X * speed;
+                vel.Dy = defaultDir.Y * speed;
+                break;
         }
     }
 }
@@ -1045,27 +1305,35 @@ public sealed class ReproductionSystem : ISystem
 /// Applies herding/pack cohesion and alignment behaviors to social creatures.
 /// Uses spatial hash for efficient neighbor queries.
 /// Features:
+/// - Follow-the-leader behavior (not just converge on center)
+/// - Leader influence radius (only follow nearby recognized leader)
+/// - Dynamic leadership (new leader emerges when old one lost/dies)
 /// - Group size limits (based on PreferredGroupSize)
-/// - Max join distance (distant creatures don't try to join)
 /// - Priority system (survival needs override social behavior)
 /// </summary>
 public sealed class HerdingSystem : ISystem
 {
     private readonly SpatialHash _spatialHash;
     private readonly float _socialRadius;        // Max radius to look for group members
+    private readonly float _leaderInfluenceRadius; // Max distance to recognize/follow a leader
     private readonly float _maxJoinDistance;     // Max distance to join a new group
     private readonly float _groupSizeTolerance;  // Allow groups to exceed preferred by this factor
+    private readonly int _leaderLostThreshold;   // Ticks before seeking new leader
     private readonly List<int> _nearbyEntities = new(64);
     private readonly Dictionary<int, int> _groupSizes = new(32);  // groupId -> member count
+    private readonly Dictionary<int, (int entity, float score)> _groupLeaders = new(32); // groupId -> (leader entity, score)
     private int _nextGroupId = 1;
 
     public HerdingSystem(SpatialHash spatialHash, float socialRadius = 8f,
-                         float maxJoinDistance = 12f, float groupSizeTolerance = 1.3f)
+                         float leaderInfluenceRadius = 6f, float maxJoinDistance = 12f,
+                         float groupSizeTolerance = 1.3f, int leaderLostThreshold = 40)
     {
         _spatialHash = spatialHash;
         _socialRadius = socialRadius;
+        _leaderInfluenceRadius = leaderInfluenceRadius;
         _maxJoinDistance = maxJoinDistance;
         _groupSizeTolerance = groupSizeTolerance;
+        _leaderLostThreshold = leaderLostThreshold;
     }
 
     public void Process(EntityManager em)
@@ -1073,8 +1341,10 @@ public sealed class HerdingSystem : ISystem
         const ComponentFlags required = ComponentFlags.Position | ComponentFlags.Velocity |
                                         ComponentFlags.Species | ComponentFlags.Social;
 
-        // Pre-pass: Count group sizes and update spatial hash
+        // Pre-pass: Count group sizes, find leaders, update spatial hash
         _groupSizes.Clear();
+        _groupLeaders.Clear();
+
         foreach (int entity in em.Query(required))
         {
             ref var pos = ref em.Positions[entity];
@@ -1085,6 +1355,13 @@ public sealed class HerdingSystem : ISystem
             {
                 _groupSizes.TryGetValue(social.GroupId, out int count);
                 _groupSizes[social.GroupId] = count + 1;
+
+                // Track highest leadership score per group
+                if (!_groupLeaders.TryGetValue(social.GroupId, out var current) ||
+                    social.LeadershipScore > current.score)
+                {
+                    _groupLeaders[social.GroupId] = (entity, social.LeadershipScore);
+                }
             }
         }
 
@@ -1108,13 +1385,20 @@ public sealed class HerdingSystem : ISystem
             if (!social.IsSocial)
                 continue;
 
+            // Update leadership score based on age (do this first so it's current)
+            if (em.HasComponents(entity, ComponentFlags.Age))
+            {
+                ref var age = ref em.Ages[entity];
+                social.LeadershipScore = (float)age.Current / age.MaxLifespan;
+            }
+
             // === PRIORITY CHECK: Survival needs override social behavior ===
 
             // Priority 1: High terrain discomfort - need to escape
             if (em.HasComponents(entity, ComponentFlags.TerrainDiscomfort))
             {
                 ref var discomfort = ref em.TerrainDiscomforts[entity];
-                if (discomfort.Ratio > 0.6f)  // Uncomfortable, focus on escaping
+                if (discomfort.Ratio > 0.6f)
                     continue;
             }
 
@@ -1133,37 +1417,120 @@ public sealed class HerdingSystem : ISystem
                 ref var hunger = ref em.Hungers[entity];
                 float hungerRatio = hunger.Current / hunger.Max;
 
-                // If hungry and hunting, skip social behavior
                 if (predator.HasTarget && hungerRatio < 0.6f)
                     continue;
 
-                // If very hungry (even without target), reduce social pull
                 if (hungerRatio < 0.4f)
-                    continue;  // Starving predators prioritize finding food
+                    continue;
             }
 
             // === SOCIAL BEHAVIOR ===
 
-            // Query nearby entities
             _spatialHash.QueryRadius(pos.X, pos.Y, _socialRadius, _nearbyEntities);
 
-            // Calculate group center and average velocity (only from same group or nearby ungrouped)
-            float centerX = 0f, centerY = 0f;
-            float avgVelX = 0f, avgVelY = 0f;
-            int neighborCount = 0;
             int currentGroupId = social.GroupId;
+            int currentGroupSize = currentGroupId >= 0 && _groupSizes.TryGetValue(currentGroupId, out int sz) ? sz : 0;
+
+            // === LEADER TRACKING ===
+            int recognizedLeader = social.RecognizedLeader;
+            float leaderX = 0f, leaderY = 0f;
+            float leaderVelX = 0f, leaderVelY = 0f;
+            bool hasVisibleLeader = false;
+
+            // Check if current leader is still valid and in range
+            if (recognizedLeader >= 0 && em.IsAlive(recognizedLeader))
+            {
+                ref var leaderPos = ref em.Positions[recognizedLeader];
+                float distToLeader = MathF.Sqrt(MathUtils.DistanceSquared(pos.X, pos.Y, leaderPos.X, leaderPos.Y));
+
+                if (distToLeader <= _leaderInfluenceRadius)
+                {
+                    // Leader is in range
+                    leaderX = leaderPos.X;
+                    leaderY = leaderPos.Y;
+                    ref var leaderVel = ref em.Velocities[recognizedLeader];
+                    leaderVelX = leaderVel.Dx;
+                    leaderVelY = leaderVel.Dy;
+                    hasVisibleLeader = true;
+                    social.LeaderLostTicks = 0;
+                }
+                else
+                {
+                    // Leader out of range
+                    social.LeaderLostTicks++;
+                }
+            }
+            else if (recognizedLeader >= 0)
+            {
+                // Leader died
+                social.RecognizedLeader = -1;
+                social.LeaderLostTicks = _leaderLostThreshold;  // Immediately seek new leader
+            }
+
+            // Seek new leader if we've lost ours or don't have one
+            if (!hasVisibleLeader && (social.LeaderLostTicks >= _leaderLostThreshold || recognizedLeader < 0))
+            {
+                // Find best leader candidate in range
+                float bestLeaderScore = social.LeadershipScore;  // Must be better than self
+                int bestLeader = -1;
+
+                foreach (int other in _nearbyEntities)
+                {
+                    if (other == entity || !em.IsAlive(other))
+                        continue;
+
+                    if (!em.HasComponents(other, ComponentFlags.Social | ComponentFlags.Species))
+                        continue;
+
+                    ref var otherSpecies = ref em.Species[other];
+                    ref var otherSocial = ref em.Socials[other];
+
+                    if (otherSpecies.Type != species.Type || !otherSocial.IsSocial)
+                        continue;
+
+                    // Must be in same group (or both ungrouped nearby)
+                    if (currentGroupId >= 0 && otherSocial.GroupId != currentGroupId)
+                        continue;
+
+                    ref var otherPos = ref em.Positions[other];
+                    float dist = MathF.Sqrt(MathUtils.DistanceSquared(pos.X, pos.Y, otherPos.X, otherPos.Y));
+
+                    if (dist <= _leaderInfluenceRadius && otherSocial.LeadershipScore > bestLeaderScore)
+                    {
+                        bestLeaderScore = otherSocial.LeadershipScore;
+                        bestLeader = other;
+                    }
+                }
+
+                if (bestLeader >= 0)
+                {
+                    social.RecognizedLeader = bestLeader;
+                    social.LeaderLostTicks = 0;
+                    recognizedLeader = bestLeader;
+
+                    ref var leaderPos = ref em.Positions[recognizedLeader];
+                    leaderX = leaderPos.X;
+                    leaderY = leaderPos.Y;
+                    ref var leaderVel = ref em.Velocities[recognizedLeader];
+                    leaderVelX = leaderVel.Dx;
+                    leaderVelY = leaderVel.Dy;
+                    hasVisibleLeader = true;
+                }
+            }
+
+            // === GROUP MEMBERSHIP ===
+
+            // Calculate local group info (for spacing, not primary cohesion)
+            float localCenterX = 0f, localCenterY = 0f;
+            int localNeighborCount = 0;
             int bestGroupToJoin = -1;
             float bestJoinDistance = _maxJoinDistance;
-
-            // Get our current group size
-            int currentGroupSize = currentGroupId >= 0 && _groupSizes.TryGetValue(currentGroupId, out int sz) ? sz : 0;
 
             foreach (int other in _nearbyEntities)
             {
                 if (other == entity || !em.IsAlive(other))
                     continue;
 
-                // Must be same species and social
                 if (!em.HasComponents(other, ComponentFlags.Species | ComponentFlags.Social))
                     continue;
 
@@ -1176,23 +1543,17 @@ public sealed class HerdingSystem : ISystem
                 ref var otherPos = ref em.Positions[other];
                 float dist = MathF.Sqrt(MathUtils.DistanceSquared(pos.X, pos.Y, otherPos.X, otherPos.Y));
 
-                // If we're in the same group, always count as neighbor for cohesion
                 if (currentGroupId >= 0 && otherSocial.GroupId == currentGroupId)
                 {
-                    ref var otherVel = ref em.Velocities[other];
-                    centerX += otherPos.X;
-                    centerY += otherPos.Y;
-                    avgVelX += otherVel.Dx;
-                    avgVelY += otherVel.Dy;
-                    neighborCount++;
+                    localCenterX += otherPos.X;
+                    localCenterY += otherPos.Y;
+                    localNeighborCount++;
                 }
-                // Otherwise, consider joining their group (if within join distance and group not full)
                 else if (currentGroupId < 0 && dist < bestJoinDistance)
                 {
                     int otherGroupId = otherSocial.GroupId;
                     if (otherGroupId >= 0)
                     {
-                        // Check if their group has room
                         int otherGroupSize = _groupSizes.TryGetValue(otherGroupId, out int gsz) ? gsz : 1;
                         float maxSize = otherSocial.PreferredGroupSize * _groupSizeTolerance;
 
@@ -1205,19 +1566,19 @@ public sealed class HerdingSystem : ISystem
                 }
             }
 
-            // Handle group membership
+            // Handle group joining
             if (currentGroupId < 0)
             {
-                // Try to join a nearby group
                 if (bestGroupToJoin >= 0)
                 {
                     social.GroupId = bestGroupToJoin;
+                    social.RecognizedLeader = -1;  // Find leader in new group
                     _groupSizes.TryGetValue(bestGroupToJoin, out int cnt);
                     _groupSizes[bestGroupToJoin] = cnt + 1;
                 }
-                // Or start a new group if we found ungrouped neighbors very close
                 else
                 {
+                    // Try to form new group with nearby ungrouped
                     foreach (int other in _nearbyEntities)
                     {
                         if (other == entity || !em.IsAlive(other))
@@ -1234,7 +1595,6 @@ public sealed class HerdingSystem : ISystem
                         ref var otherPos = ref em.Positions[other];
                         float dist = MathF.Sqrt(MathUtils.DistanceSquared(pos.X, pos.Y, otherPos.X, otherPos.Y));
 
-                        // Only form new group with very close ungrouped neighbors
                         if (dist < _socialRadius * 0.5f && otherSocial.GroupId < 0)
                         {
                             int newGroupId = _nextGroupId++;
@@ -1249,67 +1609,81 @@ public sealed class HerdingSystem : ISystem
             // Check if we should leave an oversized group
             if (currentGroupId >= 0 && currentGroupSize > social.PreferredGroupSize * _groupSizeTolerance * 1.2f)
             {
-                // Group too big, consider leaving (based on leadership - lower leaders leave first)
                 if (social.LeadershipScore < 0.3f)
                 {
                     social.GroupId = -1;
+                    social.RecognizedLeader = -1;
                     _groupSizes[currentGroupId] = currentGroupSize - 1;
-                    continue;  // Skip cohesion this frame
+                    continue;
                 }
             }
 
-            // Apply social forces if we have group neighbors
-            if (neighborCount > 0)
+            // === APPLY SOCIAL FORCES ===
+
+            if (hasVisibleLeader)
             {
-                centerX /= neighborCount;
-                centerY /= neighborCount;
-                avgVelX /= neighborCount;
-                avgVelY /= neighborCount;
+                // FOLLOW THE LEADER behavior
+                float distToLeader = MathF.Sqrt(MathUtils.DistanceSquared(pos.X, pos.Y, leaderX, leaderY));
 
-                // Distance to group center
-                float distToCenter = MathF.Sqrt(MathUtils.DistanceSquared(pos.X, pos.Y, centerX, centerY));
+                // Distance-based following: maintain spacing, don't crowd leader
+                float idealFollowDist = 2f;  // Don't get too close to leader
+                float distanceFactor = MathF.Max(0, 1f - (distToLeader / _leaderInfluenceRadius));
 
-                // Cohesion strength falls off with distance - don't pull from far away
-                float distanceFactor = MathF.Max(0, 1f - (distToCenter / (_socialRadius * 0.8f)));
-
-                // Also reduce cohesion if group is at/above preferred size
+                // Size factor (reduce pull in large groups)
                 float sizeFactor = 1f;
                 if (currentGroupSize >= social.PreferredGroupSize)
                 {
-                    // Gradually reduce cohesion as group exceeds preferred size
-                    sizeFactor = MathF.Max(0.1f, 1f - (currentGroupSize - social.PreferredGroupSize) /
+                    sizeFactor = MathF.Max(0.2f, 1f - (currentGroupSize - social.PreferredGroupSize) /
                                                       (social.PreferredGroupSize * 0.5f));
                 }
 
                 float effectiveCohesion = social.CohesionStrength * social.GroupAffinity * distanceFactor * sizeFactor;
-                float effectiveAlignment = social.AlignmentStrength * social.GroupAffinity * distanceFactor;
+                float effectiveAlignment = social.AlignmentStrength * social.GroupAffinity * 1.5f;  // Stronger alignment to leader
 
-                // Cohesion: move toward group center
-                float cohesionX = (centerX - pos.X) * effectiveCohesion;
-                float cohesionY = (centerY - pos.Y) * effectiveCohesion;
+                // Cohesion: move toward leader (but maintain minimum distance)
+                float cohesionX = 0f, cohesionY = 0f;
+                if (distToLeader > idealFollowDist)
+                {
+                    cohesionX = (leaderX - pos.X) * effectiveCohesion;
+                    cohesionY = (leaderY - pos.Y) * effectiveCohesion;
+                }
 
-                // Alignment: match group velocity
-                float alignX = (avgVelX - vel.Dx) * effectiveAlignment;
-                float alignY = (avgVelY - vel.Dy) * effectiveAlignment;
+                // Alignment: strongly match leader's direction
+                float alignX = (leaderVelX - vel.Dx) * effectiveAlignment;
+                float alignY = (leaderVelY - vel.Dy) * effectiveAlignment;
 
-                // Apply forces
                 vel.Dx += cohesionX + alignX;
                 vel.Dy += cohesionY + alignY;
             }
-            else if (currentGroupId >= 0)
+            else if (localNeighborCount > 0)
             {
-                // In a group but no neighbors visible - might have wandered away
-                // Don't immediately clear, give some tolerance
-                // (For now, just clear if truly isolated)
-                if (currentGroupSize <= 1)
-                    social.GroupId = -1;
-            }
+                // No leader visible - fall back to local cohesion
+                localCenterX /= localNeighborCount;
+                localCenterY /= localNeighborCount;
 
-            // Update leadership score based on age (if available)
-            if (em.HasComponents(entity, ComponentFlags.Age))
+                float distToCenter = MathF.Sqrt(MathUtils.DistanceSquared(pos.X, pos.Y, localCenterX, localCenterY));
+                float distanceFactor = MathF.Max(0, 1f - (distToCenter / (_socialRadius * 0.8f)));
+
+                float sizeFactor = 1f;
+                if (currentGroupSize >= social.PreferredGroupSize)
+                {
+                    sizeFactor = MathF.Max(0.1f, 1f - (currentGroupSize - social.PreferredGroupSize) /
+                                                      (social.PreferredGroupSize * 0.5f));
+                }
+
+                float effectiveCohesion = social.CohesionStrength * social.GroupAffinity * distanceFactor * sizeFactor * 0.5f;
+
+                float cohesionX = (localCenterX - pos.X) * effectiveCohesion;
+                float cohesionY = (localCenterY - pos.Y) * effectiveCohesion;
+
+                vel.Dx += cohesionX;
+                vel.Dy += cohesionY;
+            }
+            else if (currentGroupId >= 0 && currentGroupSize <= 1)
             {
-                ref var age = ref em.Ages[entity];
-                social.LeadershipScore = (float)age.Current / age.MaxLifespan;
+                // Alone in group - clear it
+                social.GroupId = -1;
+                social.RecognizedLeader = -1;
             }
         }
     }
