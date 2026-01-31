@@ -38,6 +38,7 @@ public sealed class EntityManager
         Wander = 1 << 10,
         Renderable = 1 << 11,
         SimulationLOD = 1 << 12,
+        Social = 1 << 13,
     }
 
     private readonly ComponentFlags[] _componentFlags;
@@ -56,6 +57,7 @@ public sealed class EntityManager
     public readonly Wander[] Wanders;
     public readonly Renderable[] Renderables;
     public readonly SimulationLOD[] SimulationLODs;
+    public readonly Social[] Socials;
 
     public EntityManager()
     {
@@ -79,6 +81,7 @@ public sealed class EntityManager
         Wanders = new Wander[MaxEntities];
         Renderables = new Renderable[MaxEntities];
         SimulationLODs = new SimulationLOD[MaxEntities];
+        Socials = new Social[MaxEntities];
     }
 
     public int EntityCount => _entityCount;

@@ -93,3 +93,50 @@ public enum ShapeType : byte
     Triangle = 1,
     Square = 2
 }
+
+/// <summary>
+/// Social behavior type - determines how an entity interacts with others of its species.
+/// </summary>
+public enum SocialType : byte
+{
+    Solitary = 0,       // Prefers to be alone, avoids others
+    Territorial = 1,    // Maintains distance, defends area
+    Herd = 2,           // Groups with others for safety (herbivores)
+    Pack = 3            // Coordinates with others for hunting (predators)
+}
+
+/// <summary>
+/// Social behavior component for herding and pack dynamics.
+/// </summary>
+[StructLayout(LayoutKind.Sequential)]
+public struct Social
+{
+    public SocialType Type;
+    public int GroupId;              // -1 = no group, otherwise group identifier
+    public float GroupAffinity;      // 0-1: How strongly attracted to group (0 = lone, 1 = highly social)
+    public float PreferredGroupSize; // Ideal number of nearby same-species
+    public float CohesionStrength;   // How strongly pulled toward group center
+    public float AlignmentStrength;  // How strongly matches group velocity
+    public float LeadershipScore;    // Higher = more likely to lead (based on age/size)
+    public bool IsAlerted;           // Has been warned of danger by group member
+
+    public Social(
+        SocialType type = SocialType.Herd,
+        float groupAffinity = 0.5f,
+        float preferredGroupSize = 5f,
+        float cohesionStrength = 0.02f,
+        float alignmentStrength = 0.01f)
+    {
+        Type = type;
+        GroupId = -1;
+        GroupAffinity = groupAffinity;
+        PreferredGroupSize = preferredGroupSize;
+        CohesionStrength = cohesionStrength;
+        AlignmentStrength = alignmentStrength;
+        LeadershipScore = 0f;
+        IsAlerted = false;
+    }
+
+    public readonly bool HasGroup => GroupId >= 0;
+    public readonly bool IsSocial => Type == SocialType.Herd || Type == SocialType.Pack;
+}

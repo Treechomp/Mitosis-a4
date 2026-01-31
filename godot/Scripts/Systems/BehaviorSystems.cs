@@ -830,3 +830,134 @@ public sealed class ReproductionSystem : ISystem
         }
     }
 }
+
+/// <summary>
+/// Applies herding/pack cohesion and alignment behaviors to social creatures.
+/// Uses spatial hash for efficient neighbor queries.
+/// </summary>
+public sealed class HerdingSystem : ISystem
+{
+    private readonly SpatialHash _spatialHash;
+    private readonly float _socialRadius;
+    private readonly List<int> _nearbyEntities = new(64);
+    private int _nextGroupId = 1;
+
+    public HerdingSystem(SpatialHash spatialHash, float socialRadius = 8f)
+    {
+        _spatialHash = spatialHash;
+        _socialRadius = socialRadius;
+    }
+
+    public void Process(EntityManager em)
+    {
+        const ComponentFlags required = ComponentFlags.Position | ComponentFlags.Velocity |
+                                        ComponentFlags.Species | ComponentFlags.Social;
+
+        // First pass: Update spatial hash and assign groups
+        foreach (int entity in em.Query(required))
+        {
+            ref var pos = ref em.Positions[entity];
+            _spatialHash.Update(entity, pos.X, pos.Y);
+        }
+
+        // Second pass: Apply social behaviors
+        foreach (int entity in em.Query(required))
+        {
+            // Check LOD - skip if not due for update
+            if (em.HasComponents(entity, ComponentFlags.SimulationLOD))
+            {
+                ref var lod = ref em.SimulationLODs[entity];
+                if (!LODSystem.ShouldUpdate(in lod))
+                    continue;
+            }
+
+            ref var pos = ref em.Positions[entity];
+            ref var vel = ref em.Velocities[entity];
+            ref var species = ref em.Species[entity];
+            ref var social = ref em.Socials[entity];
+
+            // Skip non-social types
+            if (!social.IsSocial)
+                continue;
+
+            // Query nearby entities
+            _spatialHash.QueryRadius(pos.X, pos.Y, _socialRadius, _nearbyEntities);
+
+            // Calculate group center and average velocity
+            float centerX = 0f, centerY = 0f;
+            float avgVelX = 0f, avgVelY = 0f;
+            int neighborCount = 0;
+            int groupId = social.GroupId;
+
+            foreach (int other in _nearbyEntities)
+            {
+                if (other == entity || !em.IsAlive(other))
+                    continue;
+
+                // Must be same species and social
+                if (!em.HasComponents(other, ComponentFlags.Species | ComponentFlags.Social))
+                    continue;
+
+                ref var otherSpecies = ref em.Species[other];
+                ref var otherSocial = ref em.Socials[other];
+
+                if (otherSpecies.Type != species.Type || !otherSocial.IsSocial)
+                    continue;
+
+                ref var otherPos = ref em.Positions[other];
+                ref var otherVel = ref em.Velocities[other];
+
+                centerX += otherPos.X;
+                centerY += otherPos.Y;
+                avgVelX += otherVel.Dx;
+                avgVelY += otherVel.Dy;
+                neighborCount++;
+
+                // Adopt group ID from neighbors if we don't have one
+                if (groupId < 0 && otherSocial.GroupId >= 0)
+                    groupId = otherSocial.GroupId;
+            }
+
+            // Assign new group if we found neighbors but no group exists
+            if (neighborCount > 0 && groupId < 0)
+            {
+                groupId = _nextGroupId++;
+            }
+            social.GroupId = groupId;
+
+            // Apply social forces if we have neighbors
+            if (neighborCount > 0)
+            {
+                centerX /= neighborCount;
+                centerY /= neighborCount;
+                avgVelX /= neighborCount;
+                avgVelY /= neighborCount;
+
+                // Cohesion: move toward group center
+                float cohesionX = (centerX - pos.X) * social.CohesionStrength * social.GroupAffinity;
+                float cohesionY = (centerY - pos.Y) * social.CohesionStrength * social.GroupAffinity;
+
+                // Alignment: match group velocity
+                float alignX = (avgVelX - vel.Dx) * social.AlignmentStrength * social.GroupAffinity;
+                float alignY = (avgVelY - vel.Dy) * social.AlignmentStrength * social.GroupAffinity;
+
+                // Apply forces
+                vel.Dx += cohesionX + alignX;
+                vel.Dy += cohesionY + alignY;
+            }
+            else
+            {
+                // No neighbors - clear group if we're alone for too long
+                // (simplified: just clear immediately for now)
+                social.GroupId = -1;
+            }
+
+            // Update leadership score based on age (if available)
+            if (em.HasComponents(entity, ComponentFlags.Age))
+            {
+                ref var age = ref em.Ages[entity];
+                social.LeadershipScore = (float)age.Current / age.MaxLifespan;
+            }
+        }
+    }
+}

@@ -65,6 +65,7 @@ public partial class GameManager : Node2D
         _systems.Add(new HungerSystem());
         _systems.Add(new GrazingSystem(_worldManager));
         _systems.Add(new WanderSystem(_worldManager));
+        _systems.Add(new HerdingSystem(spatialHash, socialRadius: 10f));
         _systems.Add(new SeparationSystem(spatialHash, separationRadius: 2.5f, separationStrength: 0.03f));
         _systems.Add(new CollisionSystem(spatialHash, collisionRadiusScale: 0.5f, tileSize: TileSize));
         _systems.Add(new HuntingSystem(spatialHash));
@@ -201,6 +202,16 @@ public partial class GameManager : Node2D
             _entityManager.Renderables[entity] = new Renderable(
                 new Color(0.4f, 1f, 0.4f), Vary(8f, 0.15f), ShapeType.Circle);
             _entityManager.AddComponent(entity, ComponentFlags.Renderable);
+
+            // Herbivores are herd animals with high group affinity
+            _entityManager.Socials[entity] = new Social(
+                type: SocialType.Herd,
+                groupAffinity: Vary(0.7f, 0.3f),        // 0.5-0.9 (most are social)
+                preferredGroupSize: Vary(6f, 0.4f),     // 3.6-8.4 members
+                cohesionStrength: Vary(0.025f, 0.2f),
+                alignmentStrength: Vary(0.015f, 0.2f)
+            );
+            _entityManager.AddComponent(entity, ComponentFlags.Social);
         }
         else
         {
@@ -226,6 +237,33 @@ public partial class GameManager : Node2D
             _entityManager.Renderables[entity] = new Renderable(
                 new Color(1f, 0.4f, 0.4f), Vary(10f, 0.15f), ShapeType.Triangle);
             _entityManager.AddComponent(entity, ComponentFlags.Renderable);
+
+            // Predators: mix of pack hunters and solitary hunters
+            // ~60% pack hunters, ~40% solitary
+            float socialRoll = (float)_rng.NextDouble();
+            if (socialRoll < 0.6f)
+            {
+                // Pack hunter
+                _entityManager.Socials[entity] = new Social(
+                    type: SocialType.Pack,
+                    groupAffinity: Vary(0.5f, 0.4f),        // 0.3-0.7
+                    preferredGroupSize: Vary(3f, 0.3f),     // 2-4 members
+                    cohesionStrength: Vary(0.015f, 0.2f),   // Weaker than herbivores
+                    alignmentStrength: Vary(0.01f, 0.2f)
+                );
+            }
+            else
+            {
+                // Solitary hunter - still has Social component but won't group
+                _entityManager.Socials[entity] = new Social(
+                    type: SocialType.Solitary,
+                    groupAffinity: 0f,
+                    preferredGroupSize: 0f,
+                    cohesionStrength: 0f,
+                    alignmentStrength: 0f
+                );
+            }
+            _entityManager.AddComponent(entity, ComponentFlags.Social);
         }
     }
 
