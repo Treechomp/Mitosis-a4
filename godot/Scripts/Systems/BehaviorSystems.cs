@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using Godot;
 using Mitosis.Components;
 using Mitosis.ECS;
+using Mitosis.Species;
 using Mitosis.Utils;
 using Mitosis.World;
 using static Mitosis.ECS.EntityManager;
@@ -634,13 +635,31 @@ public sealed class HuntingSystem : ISystem
         float dx = targetX - pos.X;
         float dy = targetY - pos.Y;
 
+        // Get role-specific speed modifier from species definition
+        float roleSpeedMult = 1.0f;
+        if (em.HasComponents(entity, ComponentFlags.Species))
+        {
+            ref var species = ref em.Species[entity];
+            var speciesDef = SpeciesRegistry.GetById(species.SpeciesId);
+            roleSpeedMult = predator.Role switch
+            {
+                PackRole.Leader => speciesDef.LeaderSpeedMult,
+                PackRole.Flanker => speciesDef.FlankerSpeedMult,
+                PackRole.Chaser => speciesDef.ChaserSpeedMult,
+                _ => 1.0f
+            };
+        }
+
+        // Apply role modifier to hunt speed
+        float effectiveSpeed = huntSpeed * roleSpeedMult;
+
         // If prey is isolated, switch to full chase mode - no more retreat/positioning
         if (preyIsolated)
         {
             // Direct chase - prey is separated from herd, go for the kill
             var chaseDir = MathUtils.Normalize(dx, dy);
-            vel.Dx = chaseDir.X * huntSpeed * 1.2f;  // Slightly faster in chase mode
-            vel.Dy = chaseDir.Y * huntSpeed * 1.2f;
+            vel.Dx = chaseDir.X * effectiveSpeed * 1.2f;  // Slightly faster in chase mode
+            vel.Dy = chaseDir.Y * effectiveSpeed * 1.2f;
 
             // Reset phase to rushing (continuous attack)
             if (predator.Phase != PackPhase.Rushing)
@@ -676,14 +695,14 @@ public sealed class HuntingSystem : ISystem
         {
             case PackPhase.Positioning:
                 // Fan out to surround
-                ApplyPositioningMovement(ref pos, ref vel, predator.Role, dx, dy, dist, huntSpeed * 0.7f);
+                ApplyPositioningMovement(ref pos, ref vel, predator.Role, dx, dy, dist, effectiveSpeed * 0.7f);
                 break;
 
             case PackPhase.Rushing:
                 // All rush in together to scatter the herd
                 var rushDir = MathUtils.Normalize(dx, dy);
-                vel.Dx = rushDir.X * huntSpeed * 1.3f;
-                vel.Dy = rushDir.Y * huntSpeed * 1.3f;
+                vel.Dx = rushDir.X * effectiveSpeed * 1.3f;
+                vel.Dy = rushDir.Y * effectiveSpeed * 1.3f;
                 break;
 
             case PackPhase.Retreating:
@@ -692,8 +711,8 @@ public sealed class HuntingSystem : ISystem
                 if (dist < retreatDist)
                 {
                     var retreatDir = MathUtils.Normalize(-dx, -dy);
-                    vel.Dx = retreatDir.X * huntSpeed * 0.8f;
-                    vel.Dy = retreatDir.Y * huntSpeed * 0.8f;
+                    vel.Dx = retreatDir.X * effectiveSpeed * 0.8f;
+                    vel.Dy = retreatDir.Y * effectiveSpeed * 0.8f;
                 }
                 else
                 {
@@ -706,8 +725,8 @@ public sealed class HuntingSystem : ISystem
             default:
                 // Direct approach
                 var dir = MathUtils.Normalize(dx, dy);
-                vel.Dx = dir.X * huntSpeed;
-                vel.Dy = dir.Y * huntSpeed;
+                vel.Dx = dir.X * effectiveSpeed;
+                vel.Dy = dir.Y * effectiveSpeed;
                 break;
         }
     }

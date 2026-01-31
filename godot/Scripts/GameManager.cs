@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using Godot;
 using Mitosis.Components;
 using Mitosis.ECS;
+using Mitosis.Species;
 using Mitosis.Systems;
 using Mitosis.World;
 using static Mitosis.ECS.EntityManager;
@@ -126,6 +127,10 @@ public partial class GameManager : Node2D
         int spawned = 0;
         int targetPerChunk = (int)CreaturesPerChunk;
 
+        // Get available species from registry
+        var herbivoreSpecies = new List<SpeciesDefinition>(SpeciesRegistry.GetHerbivores());
+        var predatorSpecies = new List<SpeciesDefinition>(SpeciesRegistry.GetPredators());
+
         foreach (var chunk in _worldManager.GetLoadedChunks())
         {
             var positions = _worldManager.GetWalkablePositions(chunk, targetPerChunk * 3, _rng);
@@ -140,26 +145,32 @@ public partial class GameManager : Node2D
 
                 if (isHerbivore)
                 {
-                    // Spawn a herd together
-                    int herdSize = 3 + _rng.Next(0, 5);  // 3-7 members
+                    // Pick a random herbivore species
+                    var species = herbivoreSpecies[_rng.Next(herbivoreSpecies.Count)];
+                    int groupSize = (int)species.PreferredGroupSize + _rng.Next(-2, 3);  // Vary around preferred size
+                    groupSize = Math.Max(2, groupSize);  // At least 2 in a herd
                     int groupId = _nextSpawnGroupId++;
-                    spawned += SpawnGroup(x, y, true, herdSize, groupId, positions, ref posIndex);
+                    spawned += SpawnGroup(x, y, species, groupSize, groupId, positions, ref posIndex);
                 }
                 else
                 {
-                    // Check if this will be a pack or solitary
-                    bool isPack = _rng.NextDouble() < 0.6;
-                    if (isPack)
+                    // Pick a random predator species
+                    var species = predatorSpecies[_rng.Next(predatorSpecies.Count)];
+
+                    // Check if this will be a pack or solitary based on species
+                    bool isPack = _rng.NextDouble() < species.PackHunterChance;
+                    if (isPack && species.DefaultSocialType == SocialType.Pack)
                     {
                         // Spawn a pack together
-                        int packSize = 2 + _rng.Next(0, 3);  // 2-4 members
+                        int packSize = (int)species.PreferredGroupSize + _rng.Next(-1, 2);
+                        packSize = Math.Max(2, packSize);
                         int groupId = _nextSpawnGroupId++;
-                        spawned += SpawnGroup(x, y, false, packSize, groupId, positions, ref posIndex);
+                        spawned += SpawnGroup(x, y, species, packSize, groupId, positions, ref posIndex);
                     }
                     else
                     {
                         // Spawn solitary predator
-                        SpawnCreature(x, y, false, -1, true);
+                        SpawnCreature(x, y, species, -1, true);
                         spawned++;
                         posIndex++;
                     }
@@ -173,7 +184,7 @@ public partial class GameManager : Node2D
     /// <summary>
     /// Spawns a group of creatures around a central position.
     /// </summary>
-    private int SpawnGroup(float centerX, float centerY, bool isHerbivore, int groupSize,
+    private int SpawnGroup(float centerX, float centerY, SpeciesDefinition species, int groupSize,
                            int groupId, List<(float x, float y)> positions, ref int posIndex)
     {
         int spawned = 0;
@@ -227,7 +238,7 @@ public partial class GameManager : Node2D
 
             // Spawn with group ID (alpha = first member, higher leadership)
             bool isAlpha = (i == 0);
-            SpawnCreature(x, y, isHerbivore, groupId, false, isAlpha);
+            SpawnCreature(x, y, species, groupId, false, isAlpha);
             spawned++;
         }
 
@@ -244,16 +255,19 @@ public partial class GameManager : Node2D
     }
 
     /// <summary>
-    /// Spawns a creature at the given position.
+    /// Spawns a creature at the given position using a species definition.
     /// </summary>
+    /// <param name="species">The species definition to use</param>
     /// <param name="groupId">Pre-assigned group ID (-1 for no group)</param>
-    /// <param name="forceSolitary">Force solitary social type (for predators)</param>
+    /// <param name="forceSolitary">Force solitary social type</param>
     /// <param name="isAlpha">Whether this is the group leader (higher leadership score)</param>
-    private void SpawnCreature(float x, float y, bool isHerbivore, int groupId = -1,
+    private void SpawnCreature(float x, float y, SpeciesDefinition species, int groupId = -1,
                                bool forceSolitary = false, bool isAlpha = false)
     {
         int entity = _entityManager.CreateEntity();
+        float variation = species.StatVariation;
 
+        // Core components
         _entityManager.Positions[entity] = new Position(x, y);
         _entityManager.AddComponent(entity, ComponentFlags.Position);
 
@@ -263,129 +277,111 @@ public partial class GameManager : Node2D
         _entityManager.ChunkPositions[entity] = new ChunkPosition();
         _entityManager.AddComponent(entity, ComponentFlags.ChunkPosition);
 
+        // Age with variation
         _entityManager.Ages[entity] = new Age(
-            current: _rng.Next(0, 5000),
-            maxLifespan: isHerbivore ? 30000 : 24000,
-            maturityAge: isHerbivore ? 2000 : 1500
+            current: _rng.Next(0, species.MaturityAge * 2),  // Start at random age
+            maxLifespan: (int)Vary(species.MaxLifespan, variation),
+            maturityAge: (int)Vary(species.MaturityAge, variation)
         );
         _entityManager.AddComponent(entity, ComponentFlags.Age);
 
         _entityManager.Energies[entity] = new Energy(100f);
         _entityManager.AddComponent(entity, ComponentFlags.Energy);
 
+        // Reproduction from species
         _entityManager.Reproductions[entity] = new Reproduction(
-            hungerThreshold: isHerbivore ? 70f : 75f,
-            energyThreshold: isHerbivore ? 80f : 85f,
-            cooldown: isHerbivore ? 600 : 800
+            hungerThreshold: Vary(species.ReproHungerThreshold, variation),
+            energyThreshold: Vary(species.ReproEnergyThreshold, variation),
+            cooldown: (int)Vary(species.ReproCooldown, variation)
         );
         _entityManager.AddComponent(entity, ComponentFlags.Reproduction);
 
         _entityManager.SimulationLODs[entity] = new SimulationLOD();
         _entityManager.AddComponent(entity, ComponentFlags.SimulationLOD);
 
-        if (isHerbivore)
+        // Species type based on diet
+        SpeciesType speciesType = species.Diet switch
         {
-            _entityManager.Species[entity] = new Species(SpeciesType.Herbivore);
-            _entityManager.AddComponent(entity, ComponentFlags.Species);
+            DietType.Herbivore => SpeciesType.Herbivore,
+            DietType.Carnivore => SpeciesType.Carnivore,
+            DietType.Omnivore => SpeciesType.Carnivore,  // Treat omnivores as carnivores for now
+            _ => SpeciesType.Herbivore
+        };
+        _entityManager.Species[entity] = new Species(speciesType, 0, SpeciesRegistry.GetId(species.Name));
+        _entityManager.AddComponent(entity, ComponentFlags.Species);
 
-            _entityManager.Hungers[entity] = new Hunger(80f, decayRate: Vary(0.05f, 0.15f));
-            _entityManager.AddComponent(entity, ComponentFlags.Hunger);
+        // Hunger from species
+        _entityManager.Hungers[entity] = new Hunger(
+            current: Vary(species.MaxHunger * 0.8f, variation),
+            max: Vary(species.MaxHunger, variation),
+            decayRate: Vary(species.HungerDecayRate, variation)
+        );
+        _entityManager.AddComponent(entity, ComponentFlags.Hunger);
 
-            // Vary speed and direction change chance (±20%)
-            _entityManager.Wanders[entity] = new Wander(Vary(0.03f), Vary(0.005f));
-            _entityManager.AddComponent(entity, ComponentFlags.Wander);
+        // Wander behavior from species
+        _entityManager.Wanders[entity] = new Wander(
+            speed: Vary(species.BaseWanderSpeed, variation),
+            changeDirectionChance: Vary(species.DirectionChangeChance, variation)
+        );
+        _entityManager.AddComponent(entity, ComponentFlags.Wander);
 
-            // Vary flee range and speed multiplier (±25%)
-            _entityManager.Preys[entity] = new Prey(Vary(6f, 0.25f), Vary(2f, 0.25f));
+        // Visuals from species (slight size variation)
+        _entityManager.Renderables[entity] = new Renderable(
+            species.BaseColor,
+            Vary(species.BaseSize, 0.15f),
+            species.Shape
+        );
+        _entityManager.AddComponent(entity, ComponentFlags.Renderable);
+
+        // Terrain discomfort from species
+        _entityManager.TerrainDiscomforts[entity] = new TerrainDiscomfort(
+            threshold: Vary(species.DiscomfortThreshold, variation),
+            decayRate: Vary(species.DiscomfortDecayRate, variation),
+            grazingPressure: species.CanGraze ? Vary(species.GrazingPressure, variation) : 0f
+        );
+        _entityManager.AddComponent(entity, ComponentFlags.TerrainDiscomfort);
+
+        // Diet-specific components
+        if (species.IsPrey)
+        {
+            // Prey component for fleeing
+            _entityManager.Preys[entity] = new Prey(
+                fleeRange: Vary(species.FleeRange, variation),
+                fleeSpeedMultiplier: Vary(species.FleeSpeedMultiplier, variation)
+            );
             _entityManager.AddComponent(entity, ComponentFlags.Prey);
-
-            // Slight size variation for visual diversity
-            _entityManager.Renderables[entity] = new Renderable(
-                new Color(0.4f, 1f, 0.4f), Vary(8f, 0.15f), ShapeType.Circle);
-            _entityManager.AddComponent(entity, ComponentFlags.Renderable);
-
-            // Herbivores are herd animals with high group affinity
-            var herbSocial = new Social(
-                type: SocialType.Herd,
-                groupAffinity: Vary(0.7f, 0.3f),        // 0.5-0.9 (most are social)
-                preferredGroupSize: Vary(6f, 0.4f),     // 3.6-8.4 members
-                cohesionStrength: Vary(0.025f, 0.2f),
-                alignmentStrength: Vary(0.015f, 0.2f)
-            );
-            herbSocial.GroupId = groupId;
-            herbSocial.LeadershipScore = isAlpha ? 0.8f : Vary(0.3f, 0.5f);
-            _entityManager.Socials[entity] = herbSocial;
-            _entityManager.AddComponent(entity, ComponentFlags.Social);
-
-            // Terrain discomfort with grazing pressure (hungry herbivores feel pressure on non-grazeable terrain)
-            _entityManager.TerrainDiscomforts[entity] = new TerrainDiscomfort(
-                threshold: Vary(50f, 0.2f),
-                decayRate: Vary(2f, 0.2f),
-                grazingPressure: Vary(1.5f, 0.3f)   // Herbivores feel hunger pressure on bad terrain
-            );
-            _entityManager.AddComponent(entity, ComponentFlags.TerrainDiscomfort);
         }
-        else
+
+        if (species.IsPredator)
         {
-            _entityManager.Species[entity] = new Species(SpeciesType.Carnivore);
-            _entityManager.AddComponent(entity, ComponentFlags.Species);
-
-            _entityManager.Hungers[entity] = new Hunger(70f, decayRate: Vary(0.08f, 0.15f));
-            _entityManager.AddComponent(entity, ComponentFlags.Hunger);
-
-            // Vary speed and direction change chance (±20%)
-            _entityManager.Wanders[entity] = new Wander(Vary(0.06f), Vary(0.01f));
-            _entityManager.AddComponent(entity, ComponentFlags.Wander);
-
-            // Vary hunt range, attack range, and attack power (±25%)
-            // attackRange varies from 0.6-1.0 tiles (some pounce, some jab from distance)
+            // Predator component for hunting
             _entityManager.Predators[entity] = new Predator(
-                huntRange: Vary(12f, 0.25f),
-                attackRange: Vary(0.8f, 0.25f),
-                attackPower: Vary(30f, 0.25f));
-            _entityManager.AddComponent(entity, ComponentFlags.Predator);
-
-            // Slight size variation for visual diversity
-            _entityManager.Renderables[entity] = new Renderable(
-                new Color(1f, 0.4f, 0.4f), Vary(10f, 0.15f), ShapeType.Triangle);
-            _entityManager.AddComponent(entity, ComponentFlags.Renderable);
-
-            // Predators: pack hunters or solitary hunters (determined by caller)
-            if (!forceSolitary && groupId >= 0)
-            {
-                // Pack hunter - spawned as part of a group
-                var packSocial = new Social(
-                    type: SocialType.Pack,
-                    groupAffinity: Vary(0.5f, 0.4f),        // 0.3-0.7
-                    preferredGroupSize: Vary(3f, 0.3f),     // 2-4 members
-                    cohesionStrength: Vary(0.015f, 0.2f),   // Weaker than herbivores
-                    alignmentStrength: Vary(0.01f, 0.2f)
-                );
-                packSocial.GroupId = groupId;
-                packSocial.LeadershipScore = isAlpha ? 0.8f : Vary(0.3f, 0.5f);
-                _entityManager.Socials[entity] = packSocial;
-            }
-            else
-            {
-                // Solitary hunter - still has Social component but won't group
-                _entityManager.Socials[entity] = new Social(
-                    type: SocialType.Solitary,
-                    groupAffinity: 0f,
-                    preferredGroupSize: 0f,
-                    cohesionStrength: 0f,
-                    alignmentStrength: 0f
-                );
-            }
-            _entityManager.AddComponent(entity, ComponentFlags.Social);
-
-            // Terrain discomfort (no grazing pressure for predators)
-            _entityManager.TerrainDiscomforts[entity] = new TerrainDiscomfort(
-                threshold: Vary(60f, 0.2f),    // Predators tolerate slightly more discomfort
-                decayRate: Vary(2.5f, 0.2f),   // Slightly faster recovery
-                grazingPressure: 0f            // No grazing pressure for carnivores
+                huntRange: Vary(species.HuntRange, variation),
+                attackRange: Vary(species.AttackRange, variation),
+                attackPower: Vary(species.AttackPower, variation),
+                attackCooldown: (int)Vary(species.AttackCooldown, variation)
             );
-            _entityManager.AddComponent(entity, ComponentFlags.TerrainDiscomfort);
+            _entityManager.AddComponent(entity, ComponentFlags.Predator);
         }
+
+        // Social behavior based on species default and group assignment
+        SocialType socialType = species.DefaultSocialType;
+        if (forceSolitary)
+        {
+            socialType = SocialType.Solitary;
+        }
+
+        var social = new Social(
+            type: socialType,
+            groupAffinity: socialType == SocialType.Solitary ? 0f : Vary(species.GroupAffinity, variation),
+            preferredGroupSize: socialType == SocialType.Solitary ? 0f : Vary(species.PreferredGroupSize, variation),
+            cohesionStrength: socialType == SocialType.Solitary ? 0f : Vary(species.CohesionStrength, variation),
+            alignmentStrength: socialType == SocialType.Solitary ? 0f : Vary(species.AlignmentStrength, variation)
+        );
+        social.GroupId = groupId;
+        social.LeadershipScore = isAlpha ? 0.8f : Vary(0.3f, 0.5f);
+        _entityManager.Socials[entity] = social;
+        _entityManager.AddComponent(entity, ComponentFlags.Social);
     }
 
     private void SpawnPlayer()

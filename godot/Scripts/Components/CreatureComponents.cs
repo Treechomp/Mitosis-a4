@@ -23,10 +23,17 @@ public struct Species
     public SpeciesType Type;
     public int Generation;
 
-    public Species(SpeciesType type, int generation = 0)
+    /// <summary>
+    /// Index into SpeciesRegistry to get the full species definition.
+    /// This is the hash of the species name for fast lookup.
+    /// </summary>
+    public int SpeciesId;
+
+    public Species(SpeciesType type, int generation = 0, int speciesId = 0)
     {
         Type = type;
         Generation = generation;
+        SpeciesId = speciesId;
     }
 }
 
