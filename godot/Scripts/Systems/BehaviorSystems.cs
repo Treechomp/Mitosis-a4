@@ -136,7 +136,8 @@ public sealed class HuntingSystem : ISystem
                 float distSq = dx * dx + dy * dy;
 
                 // Close enough to attack?
-                if (distSq < 1f && predator.CurrentCooldown == 0)
+                float attackRangeSq = predator.AttackRange * predator.AttackRange;
+                if (distSq < attackRangeSq && predator.CurrentCooldown == 0)
                 {
                     if (em.HasComponents(predator.TargetEntity, ComponentFlags.Energy))
                     {
@@ -456,11 +457,13 @@ public sealed class CollisionSystem : ISystem
     private readonly SpatialHash _spatialHash;
     private readonly List<int> _nearbyEntities = new(64);
     private readonly float _collisionRadiusScale;
+    private readonly float _tileSize;
 
-    public CollisionSystem(SpatialHash spatialHash, float collisionRadiusScale = 0.5f)
+    public CollisionSystem(SpatialHash spatialHash, float collisionRadiusScale = 0.5f, float tileSize = 16f)
     {
         _spatialHash = spatialHash;
-        _collisionRadiusScale = collisionRadiusScale; // Multiplier on Renderable.Size for collision
+        _collisionRadiusScale = collisionRadiusScale;
+        _tileSize = tileSize; // Convert pixel sizes to tile/world units
     }
 
     public void Process(EntityManager em)
@@ -474,13 +477,14 @@ public sealed class CollisionSystem : ISystem
             {
                 ref var pos = ref em.Positions[entity];
                 ref var rend = ref em.Renderables[entity];
-                float radius = rend.Size * _collisionRadiusScale;
+                // Convert pixel size to tile units
+                float radius = (rend.Size * _collisionRadiusScale) / _tileSize;
 
                 // Update spatial hash position
                 _spatialHash.Update(entity, pos.X, pos.Y);
 
-                // Query nearby entities
-                _spatialHash.QueryRadius(pos.X, pos.Y, radius * 3f, _nearbyEntities);
+                // Query nearby entities (search radius in tile units)
+                _spatialHash.QueryRadius(pos.X, pos.Y, radius * 4f, _nearbyEntities);
 
                 foreach (int other in _nearbyEntities)
                 {
@@ -492,7 +496,7 @@ public sealed class CollisionSystem : ISystem
 
                     ref var otherPos = ref em.Positions[other];
                     ref var otherRend = ref em.Renderables[other];
-                    float otherRadius = otherRend.Size * _collisionRadiusScale;
+                    float otherRadius = (otherRend.Size * _collisionRadiusScale) / _tileSize;
 
                     float dx = pos.X - otherPos.X;
                     float dy = pos.Y - otherPos.Y;

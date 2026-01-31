@@ -9,18 +9,21 @@ namespace Mitosis.Components;
 [StructLayout(LayoutKind.Sequential)]
 public struct Predator
 {
-    public float HuntRange;
+    public float HuntRange;      // Detection range for finding prey
+    public float AttackRange;    // Distance at which attacks can land (smaller = must overlap, larger = can jab)
     public float AttackPower;
     public int AttackCooldown;
     public int CurrentCooldown;
-    public int TargetEntity;  // -1 means no target
+    public int TargetEntity;     // -1 means no target
 
     public Predator(
         float huntRange = 5f,
+        float attackRange = 0.8f,  // Default: must be close but not fully overlapping
         float attackPower = 25f,
         int attackCooldown = 20)
     {
         HuntRange = huntRange;
+        AttackRange = attackRange;
         AttackPower = attackPower;
         AttackCooldown = attackCooldown;
         CurrentCooldown = 0;

@@ -66,7 +66,7 @@ public partial class GameManager : Node2D
         _systems.Add(new GrazingSystem(_worldManager));
         _systems.Add(new WanderSystem());
         _systems.Add(new SeparationSystem(spatialHash, separationRadius: 2.5f, separationStrength: 0.03f));
-        _systems.Add(new CollisionSystem(spatialHash, collisionRadiusScale: 0.4f));
+        _systems.Add(new CollisionSystem(spatialHash, collisionRadiusScale: 0.5f, tileSize: TileSize));
         _systems.Add(new HuntingSystem(spatialHash));
         _systems.Add(new FleeingSystem(spatialHash));
         _systems.Add(new AgingSystem());
@@ -214,8 +214,12 @@ public partial class GameManager : Node2D
             _entityManager.Wanders[entity] = new Wander(Vary(0.06f), Vary(0.01f));
             _entityManager.AddComponent(entity, ComponentFlags.Wander);
 
-            // Vary hunt range and attack power (±25%)
-            _entityManager.Predators[entity] = new Predator(Vary(12f, 0.25f), Vary(30f, 0.25f));
+            // Vary hunt range, attack range, and attack power (±25%)
+            // attackRange varies from 0.6-1.0 tiles (some pounce, some jab from distance)
+            _entityManager.Predators[entity] = new Predator(
+                huntRange: Vary(12f, 0.25f),
+                attackRange: Vary(0.8f, 0.25f),
+                attackPower: Vary(30f, 0.25f));
             _entityManager.AddComponent(entity, ComponentFlags.Predator);
 
             // Slight size variation for visual diversity
