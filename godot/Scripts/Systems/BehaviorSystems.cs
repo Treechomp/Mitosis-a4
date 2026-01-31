@@ -12,14 +12,23 @@ namespace Mitosis.Systems;
 /// <summary>
 /// Processes wandering behavior for entities.
 /// LOD-aware: only processes entities due for update.
+/// Includes terrain avoidance to steer away from dangerous tiles.
 /// </summary>
 public sealed class WanderSystem : ISystem
 {
     private readonly Random _rng = new();
+    private readonly WorldManager? _worldManager;
+    private readonly float _lookAheadDistance;
+
+    public WanderSystem(WorldManager? worldManager = null, float lookAheadDistance = 1.5f)
+    {
+        _worldManager = worldManager;
+        _lookAheadDistance = lookAheadDistance;
+    }
 
     public void Process(EntityManager em)
     {
-        const ComponentFlags required = ComponentFlags.Wander | ComponentFlags.Velocity;
+        const ComponentFlags required = ComponentFlags.Wander | ComponentFlags.Velocity | ComponentFlags.Position;
 
         foreach (int entity in em.Query(required))
         {
@@ -33,6 +42,7 @@ public sealed class WanderSystem : ISystem
 
             ref var wander = ref em.Wanders[entity];
             ref var vel = ref em.Velocities[entity];
+            ref var pos = ref em.Positions[entity];
 
             // Skip if fleeing
             if (em.HasComponents(entity, ComponentFlags.Prey) && em.Preys[entity].IsFleeing)
@@ -42,32 +52,134 @@ public sealed class WanderSystem : ISystem
             if (em.HasComponents(entity, ComponentFlags.Predator) && em.Predators[entity].HasTarget)
                 continue;
 
+            // Terrain danger avoidance
+            if (_worldManager != null)
+            {
+                var avoidance = GetTerrainAvoidance(pos.X, pos.Y, wander.CurrentDirection);
+                if (avoidance.LengthSquared() > 0.01f)
+                {
+                    // Blend avoidance with current direction
+                    wander.CurrentDirection = (wander.CurrentDirection + avoidance * 2f).Normalized();
+                }
+            }
+
             // Random direction change
             if (MathUtils.RandomFloat(_rng) < wander.ChangeDirectionChance)
             {
-                wander.CurrentDirection = MathUtils.RandomDirection(_rng);
+                var newDir = MathUtils.RandomDirection(_rng);
+
+                // If we have world manager, prefer safe directions
+                if (_worldManager != null)
+                {
+                    float aheadX = pos.X + newDir.X * _lookAheadDistance;
+                    float aheadY = pos.Y + newDir.Y * _lookAheadDistance;
+                    var aheadTile = _worldManager.GetTile(aheadX, aheadY);
+
+                    // If new direction leads to danger, try to pick a safer one
+                    if (aheadTile.GetDangerLevel() > 0.3f)
+                    {
+                        // Try a few random directions and pick safest
+                        float bestDanger = aheadTile.GetDangerLevel();
+                        var bestDir = newDir;
+
+                        for (int i = 0; i < 3; i++)
+                        {
+                            var testDir = MathUtils.RandomDirection(_rng);
+                            float testX = pos.X + testDir.X * _lookAheadDistance;
+                            float testY = pos.Y + testDir.Y * _lookAheadDistance;
+                            float danger = _worldManager.GetTile(testX, testY).GetDangerLevel();
+
+                            if (danger < bestDanger)
+                            {
+                                bestDanger = danger;
+                                bestDir = testDir;
+                            }
+                        }
+                        newDir = bestDir;
+                    }
+                }
+
+                wander.CurrentDirection = newDir;
             }
 
             vel.Dx = wander.CurrentDirection.X * wander.Speed;
             vel.Dy = wander.CurrentDirection.Y * wander.Speed;
         }
     }
+
+    /// <summary>
+    /// Calculate avoidance vector based on nearby terrain danger.
+    /// </summary>
+    private Vector2 GetTerrainAvoidance(float x, float y, Vector2 currentDir)
+    {
+        if (_worldManager == null)
+            return Vector2.Zero;
+
+        float avoidX = 0f;
+        float avoidY = 0f;
+
+        // Sample tiles in the direction of movement
+        float aheadX = x + currentDir.X * _lookAheadDistance;
+        float aheadY = y + currentDir.Y * _lookAheadDistance;
+
+        var aheadTile = _worldManager.GetTile(aheadX, aheadY);
+        float aheadDanger = aheadTile.GetDangerLevel();
+
+        if (aheadDanger > 0.2f)
+        {
+            // Push back from danger
+            avoidX -= currentDir.X * aheadDanger;
+            avoidY -= currentDir.Y * aheadDanger;
+        }
+
+        // Also check perpendicular directions for a better path
+        float perpX = -currentDir.Y;
+        float perpY = currentDir.X;
+
+        float leftX = x + perpX * _lookAheadDistance;
+        float leftY = y + perpY * _lookAheadDistance;
+        float rightX = x - perpX * _lookAheadDistance;
+        float rightY = y - perpY * _lookAheadDistance;
+
+        float leftDanger = _worldManager.GetTile(leftX, leftY).GetDangerLevel();
+        float rightDanger = _worldManager.GetTile(rightX, rightY).GetDangerLevel();
+
+        // Steer toward less dangerous side
+        if (leftDanger < rightDanger)
+        {
+            avoidX += perpX * (rightDanger - leftDanger);
+            avoidY += perpY * (rightDanger - leftDanger);
+        }
+        else if (rightDanger < leftDanger)
+        {
+            avoidX -= perpX * (leftDanger - rightDanger);
+            avoidY -= perpY * (leftDanger - rightDanger);
+        }
+
+        return new Vector2(avoidX, avoidY);
+    }
 }
 
 /// <summary>
 /// Processes hunting behavior for predators using spatial hashing.
+/// Hunger-driven: predators only hunt when hungry, with stats scaling based on hunger level.
 /// </summary>
 public sealed class HuntingSystem : ISystem
 {
     private readonly SpatialHash _spatialHash;
     private readonly float _huntNutrition;
+    private readonly float _huntThreshold;      // Start hunting below this hunger %
+    private readonly float _baseHuntSpeed;
     private readonly List<int> _nearbyEntities = new(64);
     private readonly List<int> _entitiesToKill = new(16);
 
-    public HuntingSystem(SpatialHash spatialHash, float huntNutrition = 50f)
+    public HuntingSystem(SpatialHash spatialHash, float huntNutrition = 50f,
+                         float huntThreshold = 0.7f, float baseHuntSpeed = 0.10f)
     {
         _spatialHash = spatialHash;
         _huntNutrition = huntNutrition;
+        _huntThreshold = huntThreshold;  // Hunt when hunger falls below 70%
+        _baseHuntSpeed = baseHuntSpeed;
     }
 
     public void Process(EntityManager em)
@@ -98,11 +210,45 @@ public sealed class HuntingSystem : ISystem
             if (predator.HasTarget && !em.IsAlive(predator.TargetEntity))
                 predator.TargetEntity = -1;
 
+            // Calculate hunger ratio (0 = starving, 1 = full)
+            float hungerRatio = hunger.Current / hunger.Max;
+
+            // Only hunt when hungry enough (below threshold)
+            // Also abandon hunt if we become satiated
+            if (hungerRatio >= _huntThreshold)
+            {
+                predator.TargetEntity = -1;  // Stop hunting, we're full
+                continue;
+            }
+
+            // Calculate hunger-based modifiers
+            // urgency: 0 at threshold, 1 at starving
+            float urgency = 1f - (hungerRatio / _huntThreshold);
+
+            // Hunt range increases with hunger (up to 1.5x when desperate)
+            float rangeMultiplier = 1f + (urgency * 0.5f);
+
+            // Speed scales with hunger:
+            // - Moderate hunger (0.3-0.7): faster (adrenaline)
+            // - Very low hunger (<0.15): slower (exhaustion)
+            float speedMultiplier;
+            if (hungerRatio < 0.15f)
+            {
+                // Exhaustion: speed drops sharply
+                speedMultiplier = 0.5f + hungerRatio * 2f;  // 0.5 to 0.8
+            }
+            else
+            {
+                // Hungry but not exhausted: speed boost
+                speedMultiplier = 1f + (urgency * 0.4f);  // 1.0 to 1.4
+            }
+
             // Find nearest prey using spatial hash
             if (!predator.HasTarget)
             {
-                float huntRangeSq = predator.HuntRange * predator.HuntRange;
-                _spatialHash.QueryRadius(pos.X, pos.Y, predator.HuntRange, _nearbyEntities);
+                float effectiveRange = predator.HuntRange * rangeMultiplier;
+                float huntRangeSq = effectiveRange * effectiveRange;
+                _spatialHash.QueryRadius(pos.X, pos.Y, effectiveRange, _nearbyEntities);
 
                 float nearestDistSq = float.MaxValue;
                 int nearestPrey = -1;
@@ -155,9 +301,9 @@ public sealed class HuntingSystem : ISystem
                 }
                 else if (em.HasComponents(entity, ComponentFlags.Velocity))
                 {
-                    // Move towards prey
+                    // Move towards prey with hunger-scaled speed
                     ref var vel = ref em.Velocities[entity];
-                    const float huntSpeed = 0.12f;
+                    float huntSpeed = _baseHuntSpeed * speedMultiplier;
                     var dir = MathUtils.Normalize(dx, dy);
                     vel.Dx = dir.X * huntSpeed;
                     vel.Dy = dir.Y * huntSpeed;

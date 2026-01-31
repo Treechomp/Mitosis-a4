@@ -61,10 +61,10 @@ public partial class GameManager : Node2D
         var spatialHash = _worldManager.SpatialHash;
         _lodSystem = new LODSystem();
         _systems.Add(_lodSystem);
-        _systems.Add(new MovementSystem(ChunkSize, WorldSizeChunks));
+        _systems.Add(new MovementSystem(ChunkSize, WorldSizeChunks, _worldManager));
         _systems.Add(new HungerSystem());
         _systems.Add(new GrazingSystem(_worldManager));
-        _systems.Add(new WanderSystem());
+        _systems.Add(new WanderSystem(_worldManager));
         _systems.Add(new SeparationSystem(spatialHash, separationRadius: 2.5f, separationStrength: 0.03f));
         _systems.Add(new CollisionSystem(spatialHash, collisionRadiusScale: 0.5f, tileSize: TileSize));
         _systems.Add(new HuntingSystem(spatialHash));
