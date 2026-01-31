@@ -62,14 +62,15 @@ public partial class GameManager : Node2D
         _lodSystem = new LODSystem();
         _systems.Add(_lodSystem);
         _systems.Add(new MovementSystem(ChunkSize, WorldSizeChunks, _worldManager));
+        _systems.Add(new TerrainDiscomfortSystem(_worldManager));  // Process discomfort early
         _systems.Add(new HungerSystem());
         _systems.Add(new GrazingSystem(_worldManager));
         _systems.Add(new WanderSystem(_worldManager));
         _systems.Add(new HerdingSystem(spatialHash, socialRadius: 10f));
         _systems.Add(new SeparationSystem(spatialHash, separationRadius: 2.5f, separationStrength: 0.03f));
         _systems.Add(new CollisionSystem(spatialHash, collisionRadiusScale: 0.5f, tileSize: TileSize));
-        _systems.Add(new HuntingSystem(spatialHash));
-        _systems.Add(new FleeingSystem(spatialHash));
+        _systems.Add(new HuntingSystem(spatialHash, _worldManager));
+        _systems.Add(new FleeingSystem(spatialHash, _worldManager));
         _systems.Add(new AgingSystem());
         _systems.Add(new ReproductionSystem(_worldManager, MaxPopulation));
 
@@ -212,6 +213,14 @@ public partial class GameManager : Node2D
                 alignmentStrength: Vary(0.015f, 0.2f)
             );
             _entityManager.AddComponent(entity, ComponentFlags.Social);
+
+            // Terrain discomfort with grazing pressure (hungry herbivores feel pressure on non-grazeable terrain)
+            _entityManager.TerrainDiscomforts[entity] = new TerrainDiscomfort(
+                threshold: Vary(50f, 0.2f),
+                decayRate: Vary(2f, 0.2f),
+                grazingPressure: Vary(1.5f, 0.3f)   // Herbivores feel hunger pressure on bad terrain
+            );
+            _entityManager.AddComponent(entity, ComponentFlags.TerrainDiscomfort);
         }
         else
         {
@@ -264,6 +273,14 @@ public partial class GameManager : Node2D
                 );
             }
             _entityManager.AddComponent(entity, ComponentFlags.Social);
+
+            // Terrain discomfort (no grazing pressure for predators)
+            _entityManager.TerrainDiscomforts[entity] = new TerrainDiscomfort(
+                threshold: Vary(60f, 0.2f),    // Predators tolerate slightly more discomfort
+                decayRate: Vary(2.5f, 0.2f),   // Slightly faster recovery
+                grazingPressure: 0f            // No grazing pressure for carnivores
+            );
+            _entityManager.AddComponent(entity, ComponentFlags.TerrainDiscomfort);
         }
     }
 

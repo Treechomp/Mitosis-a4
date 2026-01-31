@@ -1,3 +1,4 @@
+using System;
 using Mitosis.Components;
 using Mitosis.ECS;
 using Mitosis.World;
@@ -7,7 +8,7 @@ namespace Mitosis.Systems;
 
 /// <summary>
 /// Processes movement for all entities with Position and Velocity.
-/// Applies terrain speed modifiers and prevents movement onto non-walkable tiles.
+/// Applies terrain speed modifiers and handles wall/corner sliding.
 /// </summary>
 public sealed class MovementSystem : ISystem
 {
@@ -39,35 +40,49 @@ public sealed class MovementSystem : ISystem
             var currentTile = _worldManager.GetTile(pos.X, pos.Y);
             float speedMult = currentTile.GetSpeedMultiplier();
 
-            // Calculate new position with terrain speed modifier
-            float newX = pos.X + vel.Dx * speedMult;
-            float newY = pos.Y + vel.Dy * speedMult;
+            // Calculate movement delta with terrain speed modifier
+            float dx = vel.Dx * speedMult;
+            float dy = vel.Dy * speedMult;
 
-            // World bounds clamping
-            if (newX < 0) newX = 0;
-            if (newY < 0) newY = 0;
-            if (newX >= _worldSizeTiles) newX = _worldSizeTiles - 0.01f;
-            if (newY >= _worldSizeTiles) newY = _worldSizeTiles - 0.01f;
+            // Try to move
+            bool moved = TryMove(ref pos, dx, dy);
 
-            // Check if destination is walkable
-            var destTile = _worldManager.GetTile(newX, newY);
-            if (destTile.IsWalkable())
+            // If blocked and moving diagonally, try sliding along walls
+            if (!moved && dx != 0 && dy != 0)
             {
-                // Move to new position
-                pos.X = newX;
-                pos.Y = newY;
+                // Try X-axis slide
+                if (TryMove(ref pos, dx, 0))
+                {
+                    moved = true;
+                }
+                // Try Y-axis slide
+                else if (TryMove(ref pos, 0, dy))
+                {
+                    moved = true;
+                }
             }
-            else
-            {
-                // Try sliding along X or Y axis separately
-                var destTileX = _worldManager.GetTile(newX, pos.Y);
-                var destTileY = _worldManager.GetTile(pos.X, newY);
 
-                if (destTileX.IsWalkable())
-                    pos.X = newX;
-                else if (destTileY.IsWalkable())
-                    pos.Y = newY;
-                // else: blocked completely, don't move
+            // If still blocked (corner case), try nudging perpendicular to escape
+            if (!moved)
+            {
+                // Try small perpendicular movements to escape corners
+                float nudge = 0.05f;
+                if (dx != 0)
+                {
+                    // Moving horizontally but blocked - try nudging up/down
+                    if (TryMove(ref pos, 0, nudge) || TryMove(ref pos, 0, -nudge))
+                    {
+                        // Nudged successfully, velocity will move us next frame
+                    }
+                }
+                else if (dy != 0)
+                {
+                    // Moving vertically but blocked - try nudging left/right
+                    if (TryMove(ref pos, nudge, 0) || TryMove(ref pos, -nudge, 0))
+                    {
+                        // Nudged successfully
+                    }
+                }
             }
 
             // Update chunk position if entity has it
@@ -76,5 +91,32 @@ public sealed class MovementSystem : ISystem
                 em.ChunkPositions[entity].Update(in pos, _chunkSize);
             }
         }
+    }
+
+    /// <summary>
+    /// Attempts to move an entity by the given delta. Returns true if successful.
+    /// </summary>
+    private bool TryMove(ref Position pos, float dx, float dy)
+    {
+        if (dx == 0 && dy == 0)
+            return false;
+
+        float newX = pos.X + dx;
+        float newY = pos.Y + dy;
+
+        // World bounds clamping
+        newX = Math.Clamp(newX, 0f, _worldSizeTiles - 0.01f);
+        newY = Math.Clamp(newY, 0f, _worldSizeTiles - 0.01f);
+
+        // Check if destination is walkable
+        var destTile = _worldManager.GetTile(newX, newY);
+        if (destTile.IsWalkable())
+        {
+            pos.X = newX;
+            pos.Y = newY;
+            return true;
+        }
+
+        return false;
     }
 }

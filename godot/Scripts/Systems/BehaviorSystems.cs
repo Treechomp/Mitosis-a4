@@ -10,9 +10,63 @@ using static Mitosis.ECS.EntityManager;
 namespace Mitosis.Systems;
 
 /// <summary>
+/// Accumulates terrain discomfort when on uncomfortable tiles, decays on comfortable ones.
+/// Also applies grazing pressure for hungry herbivores on non-grazeable terrain.
+/// </summary>
+public sealed class TerrainDiscomfortSystem : ISystem
+{
+    private readonly WorldManager _worldManager;
+
+    public TerrainDiscomfortSystem(WorldManager worldManager)
+    {
+        _worldManager = worldManager;
+    }
+
+    public void Process(EntityManager em)
+    {
+        const ComponentFlags required = ComponentFlags.Position | ComponentFlags.TerrainDiscomfort;
+
+        foreach (int entity in em.Query(required))
+        {
+            ref var pos = ref em.Positions[entity];
+            ref var discomfort = ref em.TerrainDiscomforts[entity];
+
+            // Get current tile
+            var tile = _worldManager.GetTile(pos.X, pos.Y);
+            float tileDiscomfort = tile.GetDiscomfortRate();
+
+            // Add grazing pressure for hungry herbivores on non-grazeable terrain
+            if (discomfort.GrazingPressure > 0 && !tile.IsGrazeable())
+            {
+                // Check hunger level
+                if (em.HasComponents(entity, ComponentFlags.Hunger))
+                {
+                    ref var hunger = ref em.Hungers[entity];
+                    // Grazing pressure scales with hunger (hungrier = more pressure)
+                    float hungerFactor = 1f - (hunger.Current / hunger.Max);
+                    tileDiscomfort += discomfort.GrazingPressure * hungerFactor;
+                }
+            }
+
+            // Accumulate or decay discomfort
+            if (tileDiscomfort > 0)
+            {
+                // Accumulate discomfort
+                discomfort.Current += tileDiscomfort;
+            }
+            else
+            {
+                // Decay discomfort on comfortable terrain
+                discomfort.Current = MathF.Max(0, discomfort.Current - discomfort.DecayRate);
+            }
+        }
+    }
+}
+
+/// <summary>
 /// Processes wandering behavior for entities.
 /// LOD-aware: only processes entities due for update.
-/// Includes terrain avoidance to steer away from dangerous tiles.
+/// Includes terrain avoidance and discomfort-driven escape behavior.
 /// </summary>
 public sealed class WanderSystem : ISystem
 {
@@ -52,19 +106,39 @@ public sealed class WanderSystem : ISystem
             if (em.HasComponents(entity, ComponentFlags.Predator) && em.Predators[entity].HasTarget)
                 continue;
 
-            // Terrain danger avoidance
-            if (_worldManager != null)
+            // Check if entity has high discomfort - prioritize escaping
+            bool needsEscape = false;
+            if (em.HasComponents(entity, ComponentFlags.TerrainDiscomfort))
+            {
+                ref var discomfort = ref em.TerrainDiscomforts[entity];
+                if (discomfort.Ratio > 0.5f)  // More than half way to threshold
+                {
+                    needsEscape = true;
+                    // Find direction to escape (toward lowest avoidance terrain)
+                    var escapeDir = FindEscapeDirection(pos.X, pos.Y);
+                    if (escapeDir.LengthSquared() > 0.01f)
+                    {
+                        // Blend escape direction strongly with current direction
+                        float escapeUrgency = discomfort.Ratio;  // 0.5 to 1+
+                        wander.CurrentDirection = (wander.CurrentDirection * (1 - escapeUrgency) +
+                                                   escapeDir * escapeUrgency).Normalized();
+                    }
+                }
+            }
+
+            // Terrain avoidance (proactive - avoid entering bad terrain)
+            if (_worldManager != null && !needsEscape)
             {
                 var avoidance = GetTerrainAvoidance(pos.X, pos.Y, wander.CurrentDirection);
                 if (avoidance.LengthSquared() > 0.01f)
                 {
-                    // Blend avoidance with current direction
                     wander.CurrentDirection = (wander.CurrentDirection + avoidance * 2f).Normalized();
                 }
             }
 
-            // Random direction change
-            if (MathUtils.RandomFloat(_rng) < wander.ChangeDirectionChance)
+            // Random direction change (less likely if escaping)
+            float directionChangeChance = needsEscape ? wander.ChangeDirectionChance * 0.3f : wander.ChangeDirectionChance;
+            if (MathUtils.RandomFloat(_rng) < directionChangeChance)
             {
                 var newDir = MathUtils.RandomDirection(_rng);
 
@@ -75,23 +149,22 @@ public sealed class WanderSystem : ISystem
                     float aheadY = pos.Y + newDir.Y * _lookAheadDistance;
                     var aheadTile = _worldManager.GetTile(aheadX, aheadY);
 
-                    // If new direction leads to danger, try to pick a safer one
-                    if (aheadTile.GetDangerLevel() > 0.3f)
+                    // If new direction leads to bad terrain, try to pick a safer one
+                    if (aheadTile.GetAvoidanceWeight() > 0.3f)
                     {
-                        // Try a few random directions and pick safest
-                        float bestDanger = aheadTile.GetDangerLevel();
+                        float bestAvoidance = aheadTile.GetAvoidanceWeight();
                         var bestDir = newDir;
 
-                        for (int i = 0; i < 3; i++)
+                        for (int i = 0; i < 4; i++)
                         {
                             var testDir = MathUtils.RandomDirection(_rng);
                             float testX = pos.X + testDir.X * _lookAheadDistance;
                             float testY = pos.Y + testDir.Y * _lookAheadDistance;
-                            float danger = _worldManager.GetTile(testX, testY).GetDangerLevel();
+                            float avoidance = _worldManager.GetTile(testX, testY).GetAvoidanceWeight();
 
-                            if (danger < bestDanger)
+                            if (avoidance < bestAvoidance)
                             {
-                                bestDanger = danger;
+                                bestAvoidance = avoidance;
                                 bestDir = testDir;
                             }
                         }
@@ -108,7 +181,39 @@ public sealed class WanderSystem : ISystem
     }
 
     /// <summary>
-    /// Calculate avoidance vector based on nearby terrain danger.
+    /// Find the best direction to escape uncomfortable terrain.
+    /// </summary>
+    private Vector2 FindEscapeDirection(float x, float y)
+    {
+        if (_worldManager == null)
+            return Vector2.Zero;
+
+        float bestAvoidance = float.MaxValue;
+        Vector2 bestDir = Vector2.Zero;
+
+        // Sample 8 directions
+        for (int i = 0; i < 8; i++)
+        {
+            float angle = i * MathF.PI / 4f;
+            float dx = MathF.Cos(angle);
+            float dy = MathF.Sin(angle);
+
+            float testX = x + dx * _lookAheadDistance;
+            float testY = y + dy * _lookAheadDistance;
+            float avoidance = _worldManager.GetTile(testX, testY).GetAvoidanceWeight();
+
+            if (avoidance < bestAvoidance)
+            {
+                bestAvoidance = avoidance;
+                bestDir = new Vector2(dx, dy);
+            }
+        }
+
+        return bestDir;
+    }
+
+    /// <summary>
+    /// Calculate avoidance vector based on nearby terrain.
     /// </summary>
     private Vector2 GetTerrainAvoidance(float x, float y, Vector2 currentDir)
     {
@@ -123,13 +228,13 @@ public sealed class WanderSystem : ISystem
         float aheadY = y + currentDir.Y * _lookAheadDistance;
 
         var aheadTile = _worldManager.GetTile(aheadX, aheadY);
-        float aheadDanger = aheadTile.GetDangerLevel();
+        float aheadAvoidance = aheadTile.GetAvoidanceWeight();
 
-        if (aheadDanger > 0.2f)
+        if (aheadAvoidance > 0.2f)
         {
-            // Push back from danger
-            avoidX -= currentDir.X * aheadDanger;
-            avoidY -= currentDir.Y * aheadDanger;
+            // Push back from bad terrain
+            avoidX -= currentDir.X * aheadAvoidance;
+            avoidY -= currentDir.Y * aheadAvoidance;
         }
 
         // Also check perpendicular directions for a better path
@@ -141,19 +246,19 @@ public sealed class WanderSystem : ISystem
         float rightX = x - perpX * _lookAheadDistance;
         float rightY = y - perpY * _lookAheadDistance;
 
-        float leftDanger = _worldManager.GetTile(leftX, leftY).GetDangerLevel();
-        float rightDanger = _worldManager.GetTile(rightX, rightY).GetDangerLevel();
+        float leftAvoidance = _worldManager.GetTile(leftX, leftY).GetAvoidanceWeight();
+        float rightAvoidance = _worldManager.GetTile(rightX, rightY).GetAvoidanceWeight();
 
-        // Steer toward less dangerous side
-        if (leftDanger < rightDanger)
+        // Steer toward better side
+        if (leftAvoidance < rightAvoidance)
         {
-            avoidX += perpX * (rightDanger - leftDanger);
-            avoidY += perpY * (rightDanger - leftDanger);
+            avoidX += perpX * (rightAvoidance - leftAvoidance);
+            avoidY += perpY * (rightAvoidance - leftAvoidance);
         }
-        else if (rightDanger < leftDanger)
+        else if (rightAvoidance < leftAvoidance)
         {
-            avoidX -= perpX * (leftDanger - rightDanger);
-            avoidY -= perpY * (leftDanger - rightDanger);
+            avoidX -= perpX * (leftAvoidance - rightAvoidance);
+            avoidY -= perpY * (leftAvoidance - rightAvoidance);
         }
 
         return new Vector2(avoidX, avoidY);
@@ -163,20 +268,24 @@ public sealed class WanderSystem : ISystem
 /// <summary>
 /// Processes hunting behavior for predators using spatial hashing.
 /// Hunger-driven: predators only hunt when hungry, with stats scaling based on hunger level.
+/// Balances hunger urgency against terrain discomfort when deciding to chase.
 /// </summary>
 public sealed class HuntingSystem : ISystem
 {
     private readonly SpatialHash _spatialHash;
+    private readonly WorldManager? _worldManager;
     private readonly float _huntNutrition;
     private readonly float _huntThreshold;      // Start hunting below this hunger %
     private readonly float _baseHuntSpeed;
     private readonly List<int> _nearbyEntities = new(64);
     private readonly List<int> _entitiesToKill = new(16);
 
-    public HuntingSystem(SpatialHash spatialHash, float huntNutrition = 50f,
-                         float huntThreshold = 0.7f, float baseHuntSpeed = 0.10f)
+    public HuntingSystem(SpatialHash spatialHash, WorldManager? worldManager = null,
+                         float huntNutrition = 50f, float huntThreshold = 0.7f,
+                         float baseHuntSpeed = 0.10f)
     {
         _spatialHash = spatialHash;
+        _worldManager = worldManager;
         _huntNutrition = huntNutrition;
         _huntThreshold = huntThreshold;  // Hunt when hunger falls below 70%
         _baseHuntSpeed = baseHuntSpeed;
@@ -225,8 +334,31 @@ public sealed class HuntingSystem : ISystem
             // urgency: 0 at threshold, 1 at starving
             float urgency = 1f - (hungerRatio / _huntThreshold);
 
+            // Check terrain discomfort vs hunger balance
+            float discomfortRatio = 0f;
+            if (em.HasComponents(entity, ComponentFlags.TerrainDiscomfort))
+            {
+                ref var discomfort = ref em.TerrainDiscomforts[entity];
+                discomfortRatio = discomfort.Ratio;
+
+                // If discomfort exceeds threshold and we're not starving, abandon hunt
+                // The hungrier we are, the more discomfort we'll tolerate
+                float discomfortTolerance = urgency;  // 0 at threshold, 1 when starving
+                if (discomfort.ExceedsThreshold && discomfortRatio > discomfortTolerance + 0.3f)
+                {
+                    predator.TargetEntity = -1;  // Too uncomfortable, stop hunting
+                    continue;  // Let wander system handle escape
+                }
+            }
+
             // Hunt range increases with hunger (up to 1.5x when desperate)
+            // But decreases when uncomfortable (don't want to chase far into bad terrain)
             float rangeMultiplier = 1f + (urgency * 0.5f);
+            if (discomfortRatio > 0.3f)
+            {
+                // Reduce range when uncomfortable - less willing to chase far
+                rangeMultiplier *= (1f - discomfortRatio * 0.5f);
+            }
 
             // Speed scales with hunger:
             // - Moderate hunger (0.3-0.7): faster (adrenaline)
@@ -250,8 +382,8 @@ public sealed class HuntingSystem : ISystem
                 float huntRangeSq = effectiveRange * effectiveRange;
                 _spatialHash.QueryRadius(pos.X, pos.Y, effectiveRange, _nearbyEntities);
 
-                float nearestDistSq = float.MaxValue;
-                int nearestPrey = -1;
+                float bestScore = float.MaxValue;
+                int bestPrey = -1;
 
                 foreach (int preyEntity in _nearbyEntities)
                 {
@@ -261,15 +393,33 @@ public sealed class HuntingSystem : ISystem
                     ref var preyPos = ref em.Positions[preyEntity];
                     float distSq = MathUtils.DistanceSquared(pos.X, pos.Y, preyPos.X, preyPos.Y);
 
-                    if (distSq < huntRangeSq && distSq < nearestDistSq)
+                    if (distSq >= huntRangeSq)
+                        continue;
+
+                    // Score = distance + terrain penalty
+                    // Prefer nearby prey on good terrain over distant prey on bad terrain
+                    float score = distSq;
+
+                    // Add terrain penalty for prey on uncomfortable terrain
+                    // (we'd have to chase through that terrain)
+                    if (_worldManager != null)
                     {
-                        nearestDistSq = distSq;
-                        nearestPrey = preyEntity;
+                        var preyTile = _worldManager.GetTile(preyPos.X, preyPos.Y);
+                        float terrainPenalty = preyTile.GetAvoidanceWeight() * 50f;
+                        // Reduce penalty based on hunger - desperate predators care less
+                        terrainPenalty *= (1f - urgency * 0.7f);
+                        score += terrainPenalty;
+                    }
+
+                    if (score < bestScore)
+                    {
+                        bestScore = score;
+                        bestPrey = preyEntity;
                     }
                 }
 
-                if (nearestPrey >= 0)
-                    predator.TargetEntity = nearestPrey;
+                if (bestPrey >= 0)
+                    predator.TargetEntity = bestPrey;
             }
 
             // Hunt the target
@@ -322,19 +472,22 @@ public sealed class HuntingSystem : ISystem
 
 /// <summary>
 /// Processes fleeing behavior for prey.
+/// Balances fear (predator threat) against terrain discomfort.
 /// </summary>
 public sealed class FleeingSystem : ISystem
 {
     private readonly SpatialHash _spatialHash;
+    private readonly WorldManager? _worldManager;
 
     // Pre-allocated arrays for predator positions
     private float[] _predatorXs = new float[128];
     private float[] _predatorYs = new float[128];
     private int _predatorCount;
 
-    public FleeingSystem(SpatialHash spatialHash)
+    public FleeingSystem(SpatialHash spatialHash, WorldManager? worldManager = null)
     {
         _spatialHash = spatialHash;
+        _worldManager = worldManager;
     }
 
     public void Process(EntityManager em)
@@ -384,8 +537,65 @@ public sealed class FleeingSystem : ISystem
 
             if (hasThreat)
             {
+                // Calculate fear level (closer predator = more fear)
+                float fear = 1.0f;  // Base fear level
+
+                // Check discomfort level - high discomfort may override flee behavior
+                float discomfortRatio = 0f;
+                if (em.HasComponents(entity, ComponentFlags.TerrainDiscomfort))
+                {
+                    ref var discomfort = ref em.TerrainDiscomforts[entity];
+                    discomfortRatio = discomfort.Ratio;
+
+                    // If discomfort exceeds threshold, stop fleeing and try to escape terrain instead
+                    if (discomfort.ExceedsThreshold)
+                    {
+                        prey.IsFleeing = false;
+                        continue;  // Let wander system handle escape
+                    }
+                }
+
                 prey.IsFleeing = true;
                 float fleeSpeed = wander.Speed * prey.FleeSpeedMultiplier;
+
+                // If on uncomfortable terrain and we have world info, try to modify flee direction
+                // to also escape toward better terrain (but still away from predator)
+                if (_worldManager != null && discomfortRatio > 0.3f)
+                {
+                    // Check if fleeing would take us to worse terrain
+                    float fleeAheadX = pos.X + fleeDir.X * 2f;
+                    float fleeAheadY = pos.Y + fleeDir.Y * 2f;
+                    var aheadTile = _worldManager.GetTile(fleeAheadX, fleeAheadY);
+
+                    // If fleeing leads to worse terrain, try to find a compromise direction
+                    if (aheadTile.GetAvoidanceWeight() > 0.5f)
+                    {
+                        // Try perpendicular directions to see if either is better
+                        float perpX = -fleeDir.Y;
+                        float perpY = fleeDir.X;
+
+                        float leftAvoid = _worldManager.GetTile(pos.X + perpX * 2f, pos.Y + perpY * 2f).GetAvoidanceWeight();
+                        float rightAvoid = _worldManager.GetTile(pos.X - perpX * 2f, pos.Y - perpY * 2f).GetAvoidanceWeight();
+
+                        // Blend flee direction with side-step based on discomfort
+                        float blendFactor = discomfortRatio * 0.5f;  // Max 50% adjustment
+                        if (leftAvoid < rightAvoid && leftAvoid < aheadTile.GetAvoidanceWeight())
+                        {
+                            fleeDir = new Vector2(
+                                fleeDir.X * (1 - blendFactor) + perpX * blendFactor,
+                                fleeDir.Y * (1 - blendFactor) + perpY * blendFactor
+                            ).Normalized();
+                        }
+                        else if (rightAvoid < aheadTile.GetAvoidanceWeight())
+                        {
+                            fleeDir = new Vector2(
+                                fleeDir.X * (1 - blendFactor) - perpX * blendFactor,
+                                fleeDir.Y * (1 - blendFactor) - perpY * blendFactor
+                            ).Normalized();
+                        }
+                    }
+                }
+
                 vel.Dx = fleeDir.X * fleeSpeed;
                 vel.Dy = fleeDir.Y * fleeSpeed;
             }

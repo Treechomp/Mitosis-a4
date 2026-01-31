@@ -39,6 +39,7 @@ public sealed class EntityManager
         Renderable = 1 << 11,
         SimulationLOD = 1 << 12,
         Social = 1 << 13,
+        TerrainDiscomfort = 1 << 14,
     }
 
     private readonly ComponentFlags[] _componentFlags;
@@ -58,6 +59,7 @@ public sealed class EntityManager
     public readonly Renderable[] Renderables;
     public readonly SimulationLOD[] SimulationLODs;
     public readonly Social[] Socials;
+    public readonly TerrainDiscomfort[] TerrainDiscomforts;
 
     public EntityManager()
     {
@@ -82,6 +84,7 @@ public sealed class EntityManager
         Renderables = new Renderable[MaxEntities];
         SimulationLODs = new SimulationLOD[MaxEntities];
         Socials = new Social[MaxEntities];
+        TerrainDiscomforts = new TerrainDiscomfort[MaxEntities];
     }
 
     public int EntityCount => _entityCount;

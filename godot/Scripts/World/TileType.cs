@@ -17,16 +17,11 @@ public static class TileTypeExtensions
 {
     /// <summary>
     /// Check if a tile type is walkable by creatures.
+    /// Water is passable but uncomfortable. Only mountains block movement.
     /// </summary>
     public static bool IsWalkable(this TileType tile)
     {
-        return tile switch
-        {
-            TileType.Sand => true,
-            TileType.Grass => true,
-            TileType.Forest => true,
-            _ => false
-        };
+        return tile != TileType.Mountain;
     }
 
     /// <summary>
@@ -44,28 +39,48 @@ public static class TileTypeExtensions
     {
         return tile switch
         {
-            TileType.Sand => 0.7f,      // Sand slows movement
-            TileType.Grass => 1.0f,     // Grass is normal
-            TileType.Forest => 0.85f,   // Forest slightly slower
-            TileType.ShallowWater => 0.3f,  // Very slow in water (if somehow in it)
-            _ => 0.1f                   // Deep water/mountain = nearly impassable
+            TileType.Grass => 1.0f,         // Grass is normal
+            TileType.Forest => 0.85f,       // Forest slightly slower
+            TileType.Sand => 0.7f,          // Sand slows movement
+            TileType.ShallowWater => 0.4f,  // Wading through shallow water
+            TileType.DeepWater => 0.25f,    // Swimming is slow
+            TileType.Mountain => 0.05f,     // Nearly impassable
+            _ => 0.5f
         };
     }
 
     /// <summary>
-    /// Get how dangerous/undesirable a tile is (0 = safe, higher = avoid).
-    /// Used for pathfinding and avoidance behavior.
+    /// Get the discomfort accumulation rate per tick while on this tile.
+    /// Higher = more uncomfortable, causes entities to want to leave.
     /// </summary>
-    public static float GetDangerLevel(this TileType tile)
+    public static float GetDiscomfortRate(this TileType tile)
     {
         return tile switch
         {
-            TileType.DeepWater => 1.0f,     // Very dangerous - avoid
-            TileType.ShallowWater => 0.8f,  // Dangerous
-            TileType.Mountain => 0.6f,      // Avoid but less urgent
-            TileType.Sand => 0.1f,          // Slight preference against
-            TileType.Grass => 0.0f,         // Preferred
-            TileType.Forest => 0.0f,        // Preferred
+            TileType.Grass => 0f,           // Comfortable
+            TileType.Forest => 0f,          // Comfortable
+            TileType.Sand => 0.5f,          // Mild discomfort (hot/dry)
+            TileType.ShallowWater => 3f,    // Uncomfortable, want to get out
+            TileType.DeepWater => 8f,       // Very uncomfortable, urgent to escape
+            TileType.Mountain => 10f,       // Extremely uncomfortable
+            _ => 1f
+        };
+    }
+
+    /// <summary>
+    /// Get how much to avoid this tile when pathfinding (used by wander).
+    /// Different from discomfort - this is for proactive avoidance.
+    /// </summary>
+    public static float GetAvoidanceWeight(this TileType tile)
+    {
+        return tile switch
+        {
+            TileType.Grass => 0f,           // Preferred
+            TileType.Forest => 0f,          // Preferred
+            TileType.Sand => 0.2f,          // Slight preference against
+            TileType.ShallowWater => 0.6f,  // Avoid if possible
+            TileType.DeepWater => 0.9f,     // Strongly avoid
+            TileType.Mountain => 1.0f,      // Complete avoidance
             _ => 0.5f
         };
     }

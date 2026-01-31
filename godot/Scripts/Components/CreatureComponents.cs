@@ -189,3 +189,31 @@ public struct SimulationLOD
         return LODLevel.Aggregate;
     }
 }
+
+/// <summary>
+/// Tracks accumulated terrain discomfort - influences behavior decisions.
+/// Accumulates on uncomfortable terrain, decays on comfortable terrain.
+/// </summary>
+[StructLayout(LayoutKind.Sequential)]
+public struct TerrainDiscomfort
+{
+    public float Current;           // Current accumulated discomfort (0 = comfortable)
+    public float Threshold;         // Discomfort level that triggers behavior change
+    public float DecayRate;         // How fast discomfort decays on comfortable terrain
+    public float GrazingPressure;   // Extra discomfort when hungry and not on grazeable terrain (herbivores)
+
+    public TerrainDiscomfort(
+        float threshold = 50f,
+        float decayRate = 2f,
+        float grazingPressure = 0f)
+    {
+        Current = 0f;
+        Threshold = threshold;
+        DecayRate = decayRate;
+        GrazingPressure = grazingPressure;
+    }
+
+    public readonly bool IsUncomfortable => Current > 0;
+    public readonly bool ExceedsThreshold => Current >= Threshold;
+    public readonly float Ratio => Current / Threshold;  // 0-1+ how close to threshold
+}
