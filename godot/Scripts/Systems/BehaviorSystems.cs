@@ -855,9 +855,6 @@ public sealed class FleeingSystem : ISystem
 
             if (hasThreat)
             {
-                // Calculate fear level (closer predator = more fear)
-                float fear = 1.0f;  // Base fear level
-
                 // Check discomfort level - high discomfort may override flee behavior
                 float discomfortRatio = 0f;
                 if (em.HasComponents(entity, ComponentFlags.TerrainDiscomfort))

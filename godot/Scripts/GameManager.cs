@@ -126,10 +126,6 @@ public partial class GameManager : Node2D
         int spawned = 0;
         int targetPerChunk = (int)CreaturesPerChunk;
 
-        // Calculate how many herds/packs to spawn based on average group size
-        float avgHerdSize = 6f;
-        float avgPackSize = 3f;
-
         foreach (var chunk in _worldManager.GetLoadedChunks())
         {
             var positions = _worldManager.GetWalkablePositions(chunk, targetPerChunk * 3, _rng);
@@ -185,7 +181,7 @@ public partial class GameManager : Node2D
 
         for (int i = 0; i < groupSize && _entityManager.EntityCount < MaxPopulation; i++)
         {
-            float x, y;
+            float x = centerX, y = centerY;  // Default to center position
 
             // First member (alpha) spawns at the given position
             if (i == 0 && posIndex < positions.Count)
@@ -210,19 +206,22 @@ public partial class GameManager : Node2D
                         found = true;
                         break;
                     }
-                    x = centerX;
-                    y = centerY;
                 }
 
-                // If we couldn't find a good spot, use the next available position
-                if (!found && posIndex < positions.Count)
+                // If we couldn't find a good spot, use the next available position or center
+                if (!found)
                 {
-                    (x, y) = positions[posIndex];
-                    posIndex++;
-                }
-                else if (!found)
-                {
-                    continue;  // Skip this member
+                    if (posIndex < positions.Count)
+                    {
+                        (x, y) = positions[posIndex];
+                        posIndex++;
+                    }
+                    else
+                    {
+                        // Fall back to center position (already set as default)
+                        x = centerX;
+                        y = centerY;
+                    }
                 }
             }
 
