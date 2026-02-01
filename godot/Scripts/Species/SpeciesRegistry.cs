@@ -3,7 +3,7 @@ using Godot;
 using Mitosis.Components;
 using Mitosis.World;
 
-namespace Mitosis.Species;
+namespace Mitosis.SpeciesData;
 
 /// <summary>
 /// Registry of all species definitions.

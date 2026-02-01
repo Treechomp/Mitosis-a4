@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using Godot;
 using Mitosis.Components;
 using Mitosis.ECS;
-using Mitosis.Species;
+using Mitosis.SpeciesData;
 using Mitosis.Systems;
 using Mitosis.World;
 using static Mitosis.ECS.EntityManager;

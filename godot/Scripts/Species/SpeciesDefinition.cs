@@ -3,7 +3,7 @@ using Godot;
 using Mitosis.Components;
 using Mitosis.World;
 
-namespace Mitosis.Species;
+namespace Mitosis.SpeciesData;
 
 /// <summary>
 /// Defines dietary type - what a species eats.
