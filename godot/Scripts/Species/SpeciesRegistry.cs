@@ -34,9 +34,14 @@ public static class SpeciesRegistry
 
     /// <summary>
     /// Get a species definition by ID (hash of name).
+    /// Returns a default if ID is 0 or not found (silently for ID 0).
     /// </summary>
     public static SpeciesDefinition GetById(int id)
     {
+        // ID 0 means uninitialized - return default silently
+        if (id == 0)
+            return _species["Deer"];
+
         if (_speciesById.TryGetValue(id, out var species))
             return species;
 

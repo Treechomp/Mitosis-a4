@@ -22,6 +22,7 @@ public partial class GameManager : Node2D
     [Export] public int TileSize = 16;
     [Export] public int TargetTPS = 20;
     [Export] public int MaxPopulation = 500;
+    [Export] public int InitialPopulation = 200;  // Starting population (separate from max)
     [Export] public float HerbivoreRatio = 0.85f;
     [Export] public float CreaturesPerChunk = 2f;
 
@@ -133,14 +134,26 @@ public partial class GameManager : Node2D
         var herbivoreSpecies = new List<SpeciesDefinition>(SpeciesRegistry.GetHerbivores());
         var predatorSpecies = new List<SpeciesDefinition>(SpeciesRegistry.GetPredators());
 
-        foreach (var chunk in _worldManager.GetLoadedChunks())
+        // Get all chunks and shuffle to distribute creatures evenly across the world
+        var allChunks = new List<Chunk>(_worldManager.GetLoadedChunks());
+        for (int i = allChunks.Count - 1; i > 0; i--)
         {
+            int j = _rng.Next(i + 1);
+            (allChunks[i], allChunks[j]) = (allChunks[j], allChunks[i]);
+        }
+
+        foreach (var chunk in allChunks)
+        {
+            // Stop when we've reached initial population target
+            if (_entityManager.EntityCount >= InitialPopulation)
+                break;
+
             var positions = _worldManager.GetWalkablePositions(chunk, targetPerChunk * 3, _rng);
             if (positions.Count == 0) continue;
 
             int posIndex = 0;
 
-            while (posIndex < positions.Count && _entityManager.EntityCount < MaxPopulation)
+            while (posIndex < positions.Count && _entityManager.EntityCount < InitialPopulation)
             {
                 var (x, y) = positions[posIndex];
                 bool isHerbivore = _rng.NextDouble() < HerbivoreRatio;
