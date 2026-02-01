@@ -809,16 +809,19 @@ public sealed class HuntingSystem : ISystem
 
 /// <summary>
 /// Processes fleeing behavior for prey.
-/// Balances fear (predator threat) against terrain discomfort.
+/// Uses accumulated fear to determine response type and intensity.
+/// Balances fear against terrain discomfort.
 /// </summary>
 public sealed class FleeingSystem : ISystem
 {
     private readonly SpatialHash _spatialHash;
     private readonly WorldManager? _worldManager;
+    private readonly Random _rng = new();
 
     // Pre-allocated arrays for predator positions
     private float[] _predatorXs = new float[128];
     private float[] _predatorYs = new float[128];
+    private float[] _predatorDistSq = new float[128];  // Store squared distances
     private int _predatorCount;
 
     public FleeingSystem(SpatialHash spatialHash, WorldManager? worldManager = null)
@@ -841,6 +844,7 @@ public sealed class FleeingSystem : ISystem
                 int newSize = _predatorXs.Length * 2;
                 Array.Resize(ref _predatorXs, newSize);
                 Array.Resize(ref _predatorYs, newSize);
+                Array.Resize(ref _predatorDistSq, newSize);
             }
 
             ref var pos = ref em.Positions[entity];
@@ -867,22 +871,59 @@ public sealed class FleeingSystem : ISystem
 
             float fleeRangeSq = prey.FleeRange * prey.FleeRange;
 
-            var (fleeDir, hasThreat) = MathUtils.CalculateFleeVector(
+            // Calculate flee direction and find closest threat distance
+            var (fleeDir, hasThreat, closestDistSq) = CalculateFleeVectorWithDistance(
                 pos.X, pos.Y,
                 predXSpan, predYSpan,
                 fleeRangeSq);
 
-            if (hasThreat)
+            // Update fear state if entity has Fear component
+            bool hasFear = em.HasComponents(entity, ComponentFlags.Fear);
+            FearResponse fearResponse = FearResponse.Flee;
+            float fearRatio = 0f;
+
+            if (hasFear)
             {
-                // Check discomfort level - high discomfort may override flee behavior
+                ref var fear = ref em.Fears[entity];
+                fearResponse = fear.Response;
+
+                if (hasThreat)
+                {
+                    // Accumulate fear based on threat proximity
+                    // Closer = more fear accumulation
+                    float proximityFactor = 1f - (closestDistSq / fleeRangeSq);
+                    float fearIncrease = fear.AccumulationRate * proximityFactor;
+                    fear.Current = MathF.Min(fear.Max, fear.Current + fearIncrease);
+
+                    // Enter vigilant state
+                    fear.VigilanceTicks = 100;  // Will stay alert after threat leaves
+                }
+                else
+                {
+                    // Decay fear when safe
+                    float decayRate = fear.IsVigilant ? fear.VigilanceDecay : fear.DecayRate;
+                    fear.Current = MathF.Max(0, fear.Current - decayRate);
+
+                    // Decrement vigilance
+                    if (fear.VigilanceTicks > 0)
+                        fear.VigilanceTicks--;
+                }
+
+                fearRatio = fear.Ratio;
+            }
+
+            // Determine behavior based on fear level and response type
+            if (hasThreat || (hasFear && fearRatio > 0.5f))  // React to threats or if still scared
+            {
+                // Check discomfort level - extreme discomfort may override flee behavior
                 float discomfortRatio = 0f;
                 if (em.HasComponents(entity, ComponentFlags.TerrainDiscomfort))
                 {
                     ref var discomfort = ref em.TerrainDiscomforts[entity];
                     discomfortRatio = discomfort.Ratio;
 
-                    // If discomfort exceeds threshold, stop fleeing and try to escape terrain instead
-                    if (discomfort.ExceedsThreshold)
+                    // Only override flee if discomfort is extreme AND we're not panicking
+                    if (discomfort.ExceedsThreshold && fearRatio < 0.9f)
                     {
                         prey.IsFleeing = false;
                         continue;  // Let wander system handle escape
@@ -890,54 +931,165 @@ public sealed class FleeingSystem : ISystem
                 }
 
                 prey.IsFleeing = true;
-                float fleeSpeed = wander.Speed * prey.FleeSpeedMultiplier;
 
-                // If on uncomfortable terrain and we have world info, try to modify flee direction
-                // to also escape toward better terrain (but still away from predator)
-                if (_worldManager != null && discomfortRatio > 0.3f)
+                // Apply fear response behavior
+                switch (fearResponse)
                 {
-                    // Check if fleeing would take us to worse terrain
-                    float fleeAheadX = pos.X + fleeDir.X * 2f;
-                    float fleeAheadY = pos.Y + fleeDir.Y * 2f;
-                    var aheadTile = _worldManager.GetTile(fleeAheadX, fleeAheadY);
+                    case FearResponse.Freeze:
+                        ApplyFreezeResponse(ref vel, fearRatio);
+                        break;
 
-                    // If fleeing leads to worse terrain, try to find a compromise direction
-                    if (aheadTile.GetAvoidanceWeight() > 0.5f)
-                    {
-                        // Try perpendicular directions to see if either is better
-                        float perpX = -fleeDir.Y;
-                        float perpY = fleeDir.X;
+                    case FearResponse.Panic:
+                        ApplyPanicResponse(ref pos, ref vel, ref wander, ref prey, fleeDir, fearRatio, discomfortRatio);
+                        break;
 
-                        float leftAvoid = _worldManager.GetTile(pos.X + perpX * 2f, pos.Y + perpY * 2f).GetAvoidanceWeight();
-                        float rightAvoid = _worldManager.GetTile(pos.X - perpX * 2f, pos.Y - perpY * 2f).GetAvoidanceWeight();
+                    case FearResponse.Defensive:
+                        // TODO: Implement defensive grouping behavior
+                        // For now, fall through to normal flee
+                        ApplyFleeResponse(ref pos, ref vel, ref wander, ref prey, fleeDir, fearRatio, discomfortRatio);
+                        break;
 
-                        // Blend flee direction with side-step based on discomfort
-                        float blendFactor = discomfortRatio * 0.5f;  // Max 50% adjustment
-                        if (leftAvoid < rightAvoid && leftAvoid < aheadTile.GetAvoidanceWeight())
-                        {
-                            fleeDir = new Vector2(
-                                fleeDir.X * (1 - blendFactor) + perpX * blendFactor,
-                                fleeDir.Y * (1 - blendFactor) + perpY * blendFactor
-                            ).Normalized();
-                        }
-                        else if (rightAvoid < aheadTile.GetAvoidanceWeight())
-                        {
-                            fleeDir = new Vector2(
-                                fleeDir.X * (1 - blendFactor) - perpX * blendFactor,
-                                fleeDir.Y * (1 - blendFactor) - perpY * blendFactor
-                            ).Normalized();
-                        }
-                    }
+                    case FearResponse.Flee:
+                    default:
+                        ApplyFleeResponse(ref pos, ref vel, ref wander, ref prey, fleeDir, fearRatio, discomfortRatio);
+                        break;
                 }
-
-                vel.Dx = fleeDir.X * fleeSpeed;
-                vel.Dy = fleeDir.Y * fleeSpeed;
             }
             else
             {
                 prey.IsFleeing = false;
             }
         }
+    }
+
+    /// <summary>
+    /// Calculate flee vector and return closest threat distance squared.
+    /// </summary>
+    private (Vector2 dir, bool hasThreat, float closestDistSq) CalculateFleeVectorWithDistance(
+        float x, float y,
+        ReadOnlySpan<float> predX, ReadOnlySpan<float> predY,
+        float maxDistSq)
+    {
+        float fleeX = 0, fleeY = 0;
+        float closestDistSq = float.MaxValue;
+        bool hasThreat = false;
+
+        for (int i = 0; i < predX.Length; i++)
+        {
+            float dx = x - predX[i];
+            float dy = y - predY[i];
+            float distSq = dx * dx + dy * dy;
+
+            if (distSq < maxDistSq && distSq > 0.001f)
+            {
+                hasThreat = true;
+                float weight = 1f / distSq;  // Closer predators have more influence
+                fleeX += dx * weight;
+                fleeY += dy * weight;
+
+                if (distSq < closestDistSq)
+                    closestDistSq = distSq;
+            }
+        }
+
+        if (hasThreat)
+        {
+            float len = MathF.Sqrt(fleeX * fleeX + fleeY * fleeY);
+            if (len > 0.001f)
+                return (new Vector2(fleeX / len, fleeY / len), true, closestDistSq);
+        }
+
+        return (Vector2.Zero, false, closestDistSq);
+    }
+
+    /// <summary>
+    /// Freeze response - stop moving, hoping predator doesn't notice.
+    /// Movement decreases as fear increases.
+    /// </summary>
+    private void ApplyFreezeResponse(ref Velocity vel, float fearRatio)
+    {
+        // More afraid = more frozen
+        float freezeFactor = MathF.Min(1f, fearRatio);
+        vel.Dx *= (1f - freezeFactor * 0.9f);  // Reduce to 10% at max fear
+        vel.Dy *= (1f - freezeFactor * 0.9f);
+    }
+
+    /// <summary>
+    /// Panic response - erratic movement, ignores terrain danger.
+    /// Speed increases with fear, direction becomes random.
+    /// </summary>
+    private void ApplyPanicResponse(ref Position pos, ref Velocity vel, ref Wander wander,
+                                     ref Prey prey, Vector2 fleeDir, float fearRatio, float discomfortRatio)
+    {
+        float panicSpeed = wander.Speed * prey.FleeSpeedMultiplier * (1f + fearRatio * 0.5f);
+
+        // Add randomness to flee direction based on fear level
+        float randomAngle = (float)((_rng.NextDouble() - 0.5) * Math.PI * fearRatio);
+        float cos = MathF.Cos(randomAngle);
+        float sin = MathF.Sin(randomAngle);
+
+        Vector2 panicDir = new(
+            fleeDir.X * cos - fleeDir.Y * sin,
+            fleeDir.X * sin + fleeDir.Y * cos
+        );
+
+        // At high panic, ignore terrain completely
+        vel.Dx = panicDir.X * panicSpeed;
+        vel.Dy = panicDir.Y * panicSpeed;
+    }
+
+    /// <summary>
+    /// Normal flee response - run away, considering terrain.
+    /// </summary>
+    private void ApplyFleeResponse(ref Position pos, ref Velocity vel, ref Wander wander,
+                                    ref Prey prey, Vector2 fleeDir, float fearRatio, float discomfortRatio)
+    {
+        float fleeSpeed = wander.Speed * prey.FleeSpeedMultiplier;
+
+        // Speed boost when very afraid
+        if (fearRatio > 0.7f)
+            fleeSpeed *= 1f + (fearRatio - 0.7f) * 0.5f;
+
+        // If on uncomfortable terrain and we have world info, try to modify flee direction
+        // to also escape toward better terrain (but still away from predator)
+        if (_worldManager != null && discomfortRatio > 0.3f && fearRatio < 0.8f)
+        {
+            // Check if fleeing would take us to worse terrain
+            float fleeAheadX = pos.X + fleeDir.X * 2f;
+            float fleeAheadY = pos.Y + fleeDir.Y * 2f;
+            var aheadTile = _worldManager.GetTile(fleeAheadX, fleeAheadY);
+
+            // If fleeing leads to worse terrain, try to find a compromise direction
+            if (aheadTile.GetAvoidanceWeight() > 0.5f)
+            {
+                // Try perpendicular directions to see if either is better
+                float perpX = -fleeDir.Y;
+                float perpY = fleeDir.X;
+
+                float leftAvoid = _worldManager.GetTile(pos.X + perpX * 2f, pos.Y + perpY * 2f).GetAvoidanceWeight();
+                float rightAvoid = _worldManager.GetTile(pos.X - perpX * 2f, pos.Y - perpY * 2f).GetAvoidanceWeight();
+
+                // Blend flee direction with side-step based on discomfort (less adjustment when afraid)
+                float blendFactor = discomfortRatio * 0.5f * (1f - fearRatio);
+                if (leftAvoid < rightAvoid && leftAvoid < aheadTile.GetAvoidanceWeight())
+                {
+                    fleeDir = new Vector2(
+                        fleeDir.X * (1 - blendFactor) + perpX * blendFactor,
+                        fleeDir.Y * (1 - blendFactor) + perpY * blendFactor
+                    ).Normalized();
+                }
+                else if (rightAvoid < aheadTile.GetAvoidanceWeight())
+                {
+                    fleeDir = new Vector2(
+                        fleeDir.X * (1 - blendFactor) - perpX * blendFactor,
+                        fleeDir.Y * (1 - blendFactor) - perpY * blendFactor
+                    ).Normalized();
+                }
+            }
+        }
+
+        vel.Dx = fleeDir.X * fleeSpeed;
+        vel.Dy = fleeDir.Y * fleeSpeed;
     }
 }
 

@@ -224,3 +224,56 @@ public struct TerrainDiscomfort
     public readonly bool ExceedsThreshold => Current >= Threshold;
     public readonly float Ratio => Current / Threshold;  // 0-1+ how close to threshold
 }
+
+/// <summary>
+/// Fear response types - how a creature reacts when fear threshold is exceeded.
+/// </summary>
+public enum FearResponse : byte
+{
+    Flee = 0,       // Run away (most common)
+    Freeze = 1,     // Stop moving, hope predator doesn't notice
+    Defensive = 2,  // Form defensive group (requires herd)
+    Panic = 3       // Erratic movement, ignores terrain danger
+}
+
+/// <summary>
+/// Tracks accumulated fear from threats - influences behavior decisions.
+/// Fear builds up when threats are nearby, decays when safe.
+/// Different from instant flee reaction - allows for vigilance, panic, etc.
+/// </summary>
+[StructLayout(LayoutKind.Sequential)]
+public struct Fear
+{
+    public float Current;           // Current fear level (0 = calm)
+    public float Max;               // Maximum fear before panic
+    public float Threshold;         // Fear level that triggers response behavior
+    public float AccumulationRate;  // How fast fear builds when threatened
+    public float DecayRate;         // How fast fear decays when safe
+    public float VigilanceDecay;    // Slower decay rate when recently threatened
+    public int VigilanceTicks;      // Ticks remaining in vigilant state
+    public FearResponse Response;   // How this creature responds to fear
+
+    public Fear(
+        float threshold = 50f,
+        float max = 100f,
+        float accumulationRate = 5f,
+        float decayRate = 1f,
+        float vigilanceDecay = 0.3f,
+        FearResponse response = FearResponse.Flee)
+    {
+        Current = 0f;
+        Max = max;
+        Threshold = threshold;
+        AccumulationRate = accumulationRate;
+        DecayRate = decayRate;
+        VigilanceDecay = vigilanceDecay;
+        VigilanceTicks = 0;
+        Response = response;
+    }
+
+    public readonly bool IsAfraid => Current > 0;
+    public readonly bool ExceedsThreshold => Current >= Threshold;
+    public readonly bool IsPanicking => Current >= Max * 0.9f;
+    public readonly bool IsVigilant => VigilanceTicks > 0;
+    public readonly float Ratio => Current / Threshold;  // 0-1+ how close to threshold
+}

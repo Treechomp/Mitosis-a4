@@ -41,6 +41,15 @@ public sealed class SpeciesDefinition
     public float FleeRange { get; init; } = 6f;
     public float FleeSpeedMultiplier { get; init; } = 2f;
 
+    // === FEAR RESPONSE ===
+    public float FearThreshold { get; init; } = 50f;         // Fear level that triggers response
+    public float FearMax { get; init; } = 100f;              // Max fear (panic level)
+    public float FearAccumulationRate { get; init; } = 5f;   // How fast fear builds up per tick near threat
+    public float FearDecayRate { get; init; } = 1f;          // How fast fear decays when safe
+    public float FearVigilanceDecay { get; init; } = 0.3f;   // Slower decay when recently threatened
+    public int FearVigilanceDuration { get; init; } = 100;   // Ticks to stay vigilant after threat
+    public FearResponse DefaultFearResponse { get; init; } = FearResponse.Flee;
+
     // === SURVIVAL ===
     public float MaxHunger { get; init; } = 80f;
     public float HungerDecayRate { get; init; } = 0.05f;

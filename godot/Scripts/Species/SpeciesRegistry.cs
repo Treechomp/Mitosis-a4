@@ -103,6 +103,15 @@ public static class SpeciesRegistry
             FleeRange = 6f,
             FleeSpeedMultiplier = 2.2f,  // Fast runners
 
+            // Fear - standard herd animal, alert but not paranoid
+            FearThreshold = 50f,
+            FearMax = 100f,
+            FearAccumulationRate = 6f,
+            FearDecayRate = 1f,
+            FearVigilanceDecay = 0.3f,
+            FearVigilanceDuration = 120,
+            DefaultFearResponse = FearResponse.Flee,
+
             // Survival
             MaxHunger = 80f,
             HungerDecayRate = 0.05f,
@@ -155,6 +164,15 @@ public static class SpeciesRegistry
             // Fleeing - very fast, alert
             FleeRange = 8f,
             FleeSpeedMultiplier = 2.8f,
+
+            // Fear - very nervous, prone to panic
+            FearThreshold = 30f,           // Startles easily
+            FearMax = 80f,
+            FearAccumulationRate = 10f,    // Fear builds quickly
+            FearDecayRate = 0.5f,          // Takes longer to calm down
+            FearVigilanceDecay = 0.2f,
+            FearVigilanceDuration = 200,   // Stays alert longer
+            DefaultFearResponse = FearResponse.Panic,  // Erratic when scared
 
             // Survival - shorter lifespan, faster metabolism
             MaxHunger = 60f,

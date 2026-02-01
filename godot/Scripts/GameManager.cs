@@ -350,6 +350,17 @@ public partial class GameManager : Node2D
                 fleeSpeedMultiplier: Vary(species.FleeSpeedMultiplier, variation)
             );
             _entityManager.AddComponent(entity, ComponentFlags.Prey);
+
+            // Fear component for nuanced threat response
+            _entityManager.Fears[entity] = new Fear(
+                threshold: Vary(species.FearThreshold, variation),
+                max: Vary(species.FearMax, variation),
+                accumulationRate: Vary(species.FearAccumulationRate, variation),
+                decayRate: Vary(species.FearDecayRate, variation),
+                vigilanceDecay: Vary(species.FearVigilanceDecay, variation),
+                response: species.DefaultFearResponse
+            );
+            _entityManager.AddComponent(entity, ComponentFlags.Fear);
         }
 
         if (species.IsPredator)
