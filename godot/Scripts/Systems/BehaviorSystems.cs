@@ -523,7 +523,16 @@ public sealed class HuntingSystem : ISystem
                 else if (em.HasComponents(entity, ComponentFlags.Velocity))
                 {
                     ref var vel = ref em.Velocities[entity];
-                    float huntSpeed = _baseHuntSpeed * speedMultiplier;
+
+                    // Use species-specific hunt speed, fallback to system default
+                    float baseSpeed = _baseHuntSpeed;
+                    if (em.HasComponents(entity, ComponentFlags.Species))
+                    {
+                        ref var species = ref em.Species[entity];
+                        var speciesDef = SpeciesRegistry.GetById(species.SpeciesId);
+                        baseSpeed = speciesDef.BaseHuntSpeed;
+                    }
+                    float huntSpeed = baseSpeed * speedMultiplier;
 
                     // Pack tactics based on role and phase
                     if (isPack && predator.Role != PackRole.None)

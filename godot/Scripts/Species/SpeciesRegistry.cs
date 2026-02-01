@@ -161,9 +161,9 @@ public static class SpeciesRegistry
             BaseWanderSpeed = 0.04f,
             DirectionChangeChance = 0.015f,  // Changes direction often
 
-            // Fleeing - very fast, alert
+            // Fleeing - fast but catchable by foxes
             FleeRange = 8f,
-            FleeSpeedMultiplier = 2.8f,
+            FleeSpeedMultiplier = 2.4f,  // Reduced from 2.8 - foxes hunt at 0.11, rabbits flee at 0.04*2.4=0.096
 
             // Fear - very nervous, prone to panic
             FearThreshold = 30f,           // Startles easily
@@ -234,16 +234,16 @@ public static class SpeciesRegistry
             AttackCooldown = 20,
             BaseHuntSpeed = 0.12f,
 
-            // Survival
+            // Survival - predators need lower decay to survive between hunts
             MaxHunger = 70f,
-            HungerDecayRate = 0.08f,
+            HungerDecayRate = 0.04f,  // Half of previous (0.08) - gives ~1750 ticks to find food
             MaxLifespan = 24000,
             MaturityAge = 1500,
 
-            // Reproduction
-            ReproHungerThreshold = 75f,
-            ReproEnergyThreshold = 85f,
-            ReproCooldown = 800,
+            // Reproduction - lower thresholds since hunts are risky
+            ReproHungerThreshold = 65f,
+            ReproEnergyThreshold = 75f,
+            ReproCooldown = 1000,  // Longer cooldown
 
             // Social - pack hunters
             GroupAffinity = 0.5f,
@@ -299,16 +299,16 @@ public static class SpeciesRegistry
             AttackCooldown = 15,
             BaseHuntSpeed = 0.11f,
 
-            // Survival
+            // Survival - solitary hunter, needs to sustain longer between kills
             MaxHunger = 60f,
-            HungerDecayRate = 0.07f,
+            HungerDecayRate = 0.035f,  // Half of previous - gives ~1700 ticks
             MaxLifespan = 20000,
             MaturityAge = 1200,
 
             // Reproduction
-            ReproHungerThreshold = 70f,
-            ReproEnergyThreshold = 80f,
-            ReproCooldown = 700,
+            ReproHungerThreshold = 60f,
+            ReproEnergyThreshold = 70f,
+            ReproCooldown = 800,
 
             // Social - mostly solitary
             GroupAffinity = 0.2f,
