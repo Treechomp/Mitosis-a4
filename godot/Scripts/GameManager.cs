@@ -145,25 +145,34 @@ public partial class GameManager : Node2D
         var predatorSpecies = new List<SpeciesDefinition>(SpeciesRegistry.GetPredators());
         var terraformerSpecies = new List<SpeciesDefinition>(SpeciesRegistry.GetTerraformers());
 
-        // Calculate target counts
-        int targetHerbivores = (int)(InitialPopulation * HerbivoreRatio);
-        int targetPredators = InitialPopulation - targetHerbivores;
-        int targetTerraformers = (int)(InitialPopulation * 0.15f);
+        // Budget all categories from InitialPopulation (not additive)
+        float terraformerShare = terraformerSpecies.Count > 0 ? 0.12f : 0f;
+        float predatorShare = predatorSpecies.Count > 0 ? (1f - HerbivoreRatio) * (1f - terraformerShare) : 0f;
+        float herbivoreShare = 1f - predatorShare - terraformerShare;
+
+        int targetHerbivores = (int)(InitialPopulation * herbivoreShare);
+        int targetPredators = (int)(InitialPopulation * predatorShare);
+        int targetTerraformers = InitialPopulation - targetHerbivores - targetPredators;
+
+        GD.Print($"Spawn targets: {targetHerbivores} herbivores, {targetPredators} predators, {targetTerraformers} terraformers (total {InitialPopulation})");
 
         // Get all chunks and shuffle
         var allChunks = new List<Chunk>(_worldManager.GetLoadedChunks());
         ShuffleList(allChunks);
+
+        // Scale position sampling based on target size
+        int baseSamples = Math.Max(6, InitialPopulation / allChunks.Count + 2);
 
         // Track which chunks have prey spawned in them (for predator placement)
         var preyChunks = new List<Chunk>();
 
         // === Phase 1: Spawn herbivores spread across the world ===
         // Different herbivore species can share territory — this is natural.
-        spawned += SpawnCategory(herbivoreSpecies, targetHerbivores, allChunks, preyChunks);
+        spawned += SpawnCategory(herbivoreSpecies, targetHerbivores, allChunks, preyChunks, baseSamples);
 
         // === Phase 2: Spawn terraformers in their preferred biomes ===
         ShuffleList(allChunks);
-        spawned += SpawnCategory(terraformerSpecies, targetTerraformers, allChunks, preyChunks);
+        spawned += SpawnCategory(terraformerSpecies, targetTerraformers, allChunks, preyChunks, baseSamples);
 
         // === Phase 3: Spawn predators NEAR existing prey populations ===
         // Predators need food — place them in or adjacent to chunks with prey.
@@ -210,7 +219,7 @@ public partial class GameManager : Node2D
                     if (speciesSpawned >= target) break;
 
                     var positions = _worldManager.GetSpawnablePositionsForSpecies(
-                        chunk, 4, _rng, species);
+                        chunk, baseSamples, _rng, species);
                     if (positions.Count == 0) continue;
 
                     int posIndex = 0;
@@ -241,6 +250,8 @@ public partial class GameManager : Node2D
                         }
                     }
                 }
+
+                GD.Print($"  {species.Name}: spawned {speciesSpawned}/{target}");
             }
         }
 
@@ -253,7 +264,7 @@ public partial class GameManager : Node2D
     /// Tracks which chunks received prey for later predator placement.
     /// </summary>
     private int SpawnCategory(List<SpeciesDefinition> speciesList, int totalTarget,
-                               List<Chunk> chunks, List<Chunk> preyChunks)
+                               List<Chunk> chunks, List<Chunk> preyChunks, int samplesPerChunk)
     {
         if (speciesList.Count == 0 || totalTarget <= 0) return 0;
 
@@ -269,10 +280,9 @@ public partial class GameManager : Node2D
             foreach (var chunk in chunks)
             {
                 if (speciesSpawned >= target) break;
-                if (_entityManager.EntityCount >= MaxPopulation) break;
 
                 var positions = _worldManager.GetSpawnablePositionsForSpecies(
-                    chunk, 6, _rng, species);
+                    chunk, samplesPerChunk, _rng, species);
                 if (positions.Count == 0) continue;
 
                 int posIndex = 0;
@@ -297,6 +307,8 @@ public partial class GameManager : Node2D
                 if (spawnedInChunk && species.IsPrey)
                     preyChunks.Add(chunk);
             }
+
+            GD.Print($"  {species.Name}: spawned {speciesSpawned}/{target}");
         }
 
         return spawned;
@@ -326,7 +338,7 @@ public partial class GameManager : Node2D
         // Increment posIndex for the center position we're using
         posIndex++;
 
-        for (int i = 0; i < groupSize && _entityManager.EntityCount < MaxPopulation; i++)
+        for (int i = 0; i < groupSize; i++)
         {
             float x = centerX, y = centerY;  // Default to center position
 

@@ -9,7 +9,8 @@ WorldSizeChunks = 16
 WorldSeed = 42
 TileSize = 16
 TargetTPS = 20
-MaxPopulation = 500
+MaxPopulation = 2000
+InitialPopulation = 200
 HerbivoreRatio = 0.85
 CreaturesPerChunk = 2.0
 
