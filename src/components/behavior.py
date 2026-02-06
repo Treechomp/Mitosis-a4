@@ -29,3 +29,19 @@ class Wander:
     speed: float = 0.1
     change_direction_chance: float = 0.02
     current_direction: tuple[float, float] = field(default_factory=lambda: (0.0, 0.0))
+
+
+@dataclass
+class Terraform:
+    """Species ability to modify terrain tiles over time.
+
+    The influence_direction determines how tiles shift on the moisture spectrum:
+      ARID <-> SAND <-> GRASS <-> FOREST <-> WETLAND
+      -1 = drier (Sectids), +1 = wetter (Shroomers), 0 = toward GRASS (Faelings)
+    """
+
+    influence_direction: int = 0  # -1=dry, 0=balance, +1=wet
+    radius: float = 2.0  # Tile radius of influence
+    strength: float = 0.02  # Probability per tick of changing a tile
+    cooldown: int = 10  # Ticks between terraform attempts
+    current_cooldown: int = 0

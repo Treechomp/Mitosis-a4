@@ -14,6 +14,7 @@ class TerrainGenerator:
         self.elevation_noise = OpenSimplex(seed=seed)
         self.moisture_noise = OpenSimplex(seed=seed + 1000)
         self.detail_noise = OpenSimplex(seed=seed + 2000)
+        self.river_noise = OpenSimplex(seed=seed + 3000)
 
     def generate_chunk(self, chunk: Chunk) -> None:
         """Generate terrain for a chunk using vectorized operations."""
@@ -37,8 +38,11 @@ class TerrainGenerator:
 
         # Determine tile types (vectorized)
         tiles = self._elevation_to_tiles_vectorized(elevation, moisture)
-        chunk.tiles = tiles
 
+        # Carve rivers through land
+        tiles = self._carve_rivers(tiles, elevation, moisture, world_x, world_y)
+
+        chunk.tiles = tiles
         chunk.is_generated = True
 
     def _get_elevation_vectorized(self, x: np.ndarray, y: np.ndarray) -> np.ndarray:
@@ -90,19 +94,32 @@ class TerrainGenerator:
 
         # Main land - depends on moisture
         land_mask = (elevation >= 0.42) & (elevation < 0.7)
+
+        # Wetland: very high moisture land
         tiles = np.where(
-            land_mask & (moisture >= 0.6),
+            land_mask & (moisture >= 0.75),
+            TileType.WETLAND.value,
+            tiles
+        )
+        tiles = np.where(
+            land_mask & (moisture >= 0.55) & (moisture < 0.75),
             TileType.FOREST.value,
             tiles
         )
         tiles = np.where(
-            land_mask & (moisture >= 0.4) & (moisture < 0.6),
+            land_mask & (moisture >= 0.35) & (moisture < 0.55),
             TileType.GRASS.value,
             tiles
         )
         tiles = np.where(
-            land_mask & (moisture < 0.4),
+            land_mask & (moisture >= 0.2) & (moisture < 0.35),
             TileType.SAND.value,
+            tiles
+        )
+        # Arid: very low moisture land
+        tiles = np.where(
+            land_mask & (moisture < 0.2),
+            TileType.ARID.value,
             tiles
         )
 
@@ -121,5 +138,44 @@ class TerrainGenerator:
         )
 
         # Deep water is already the default
+
+        return tiles
+
+    def _carve_rivers(
+        self, tiles: np.ndarray, elevation: np.ndarray, moisture: np.ndarray,
+        world_x: np.ndarray, world_y: np.ndarray,
+    ) -> np.ndarray:
+        """Carve rivers using noise zero-crossing on land tiles."""
+        # River path noise - low frequency for wide, meandering paths
+        river_val = self.river_noise.noise2array(world_x * 0.012, world_y * 0.012)
+
+        # River width varies with elevation (wider in valleys, narrower in hills)
+        # Thinner threshold = narrower river
+        base_threshold = 0.018
+        # Wider in lower-elevation land (valleys)
+        threshold = base_threshold + (0.7 - elevation) * 0.02
+        threshold = np.clip(threshold, 0.01, 0.04)
+
+        # River mask: near the noise zero-crossing AND on walkable land
+        land_tiles = (
+            (tiles == TileType.GRASS.value) |
+            (tiles == TileType.FOREST.value) |
+            (tiles == TileType.SAND.value) |
+            (tiles == TileType.WETLAND.value) |
+            (tiles == TileType.ARID.value)
+        )
+        river_mask = (np.abs(river_val) < threshold) & land_tiles
+
+        tiles = np.where(river_mask, TileType.RIVER.value, tiles)
+
+        # Add wetland banks along rivers (tiles adjacent to river path but not river)
+        # Use a slightly wider threshold for wetland fringe
+        fringe_mask = (
+            (np.abs(river_val) < threshold * 2.5) &
+            (np.abs(river_val) >= threshold) &
+            land_tiles &
+            (tiles != TileType.RIVER.value)
+        )
+        tiles = np.where(fringe_mask, TileType.WETLAND.value, tiles)
 
         return tiles

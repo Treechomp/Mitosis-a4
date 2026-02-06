@@ -14,6 +14,9 @@ class TileType(Enum):
     FOREST = auto()
     MOUNTAIN = auto()
     SNOW = auto()
+    RIVER = auto()
+    WETLAND = auto()
+    ARID = auto()
 
 
 # Tile colors for rendering (RGB)
@@ -25,10 +28,13 @@ TILE_COLORS: dict[TileType, tuple[int, int, int]] = {
     TileType.FOREST: (0, 100, 0),
     TileType.MOUNTAIN: (128, 128, 128),
     TileType.SNOW: (255, 250, 250),
+    TileType.RIVER: (30, 120, 200),
+    TileType.WETLAND: (20, 110, 70),
+    TileType.ARID: (180, 140, 80),
 }
 
 # Walkable tiles for collision
-WALKABLE_TILES = {TileType.SAND, TileType.GRASS, TileType.FOREST}
+WALKABLE_TILES = {TileType.SAND, TileType.GRASS, TileType.FOREST, TileType.WETLAND, TileType.ARID}
 
 
 @dataclass

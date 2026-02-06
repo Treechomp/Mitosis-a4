@@ -92,6 +92,9 @@ class WorldManager:
     # Callback for chunk unload
     on_chunk_unload: Callable[[int, int], None] | None = field(default=None)
 
+    # Chunks whose tiles have been modified and need render rebuild
+    _dirty_chunks: set[tuple[int, int]] = field(default_factory=set)
+
     def __post_init__(self) -> None:
         """Initialize generator, spatial hash, and process pool."""
         self.generator = TerrainGenerator(seed=self.seed)
@@ -200,6 +203,31 @@ class WorldManager:
         local_x = int(world_x) % self.chunk_size
         local_y = int(world_y) % self.chunk_size
         return chunk.get_tile(local_x, local_y)
+
+    def set_tile(self, world_x: float, world_y: float, tile_type: TileType) -> bool:
+        """Set tile type at world coordinates. Returns True if successful."""
+        chunk_x = int(world_x // self.chunk_size)
+        chunk_y = int(world_y // self.chunk_size)
+
+        chunk = self.get_chunk(chunk_x, chunk_y)
+        if chunk is None:
+            return False
+
+        local_x = int(world_x) % self.chunk_size
+        local_y = int(world_y) % self.chunk_size
+        chunk.set_tile(local_x, local_y, tile_type)
+        self._dirty_chunks.add((chunk_x, chunk_y))
+        return True
+
+    def get_and_clear_dirty_chunks(self) -> list[Chunk]:
+        """Get chunks that need render rebuild and clear the dirty set."""
+        dirty = []
+        for key in self._dirty_chunks:
+            chunk = self.chunks.get(key)
+            if chunk is not None:
+                dirty.append(chunk)
+        self._dirty_chunks.clear()
+        return dirty
 
     def is_walkable(self, world_x: float, world_y: float) -> bool:
         """Check if world position is walkable."""
@@ -397,6 +425,26 @@ class WorldManager:
             for local_x in range(chunk.size):
                 tile = chunk.get_tile(local_x, local_y)
                 if tile in grazeable_tiles:
+                    world_x = chunk.chunk_x * chunk.size + local_x + 0.5
+                    world_y = chunk.chunk_y * chunk.size + local_y + 0.5
+                    positions.append((world_x, world_y))
+
+        if not positions:
+            return []
+
+        return random.sample(positions, min(count, len(positions)))
+
+    def get_tile_positions_in_chunk(
+        self, chunk: Chunk, tile_types: set[TileType], count: int
+    ) -> list[tuple[float, float]]:
+        """Get random world positions matching the given tile types in a chunk."""
+        import random
+
+        positions = []
+        for local_y in range(chunk.size):
+            for local_x in range(chunk.size):
+                tile = chunk.get_tile(local_x, local_y)
+                if tile in tile_types:
                     world_x = chunk.chunk_x * chunk.size + local_x + 0.5
                     world_y = chunk.chunk_y * chunk.size + local_y + 0.5
                     positions.append((world_x, world_y))
