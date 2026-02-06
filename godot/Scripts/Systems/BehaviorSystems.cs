@@ -73,12 +73,26 @@ public sealed class WanderSystem : ISystem
 {
     private readonly Random _rng = new();
     private readonly WorldManager? _worldManager;
+    private readonly SpatialHash? _spatialHash;
     private readonly float _lookAheadDistance;
+    private readonly float _roamDistance;
+    private readonly int _roamCooldownBase;
+    private readonly float _roamArrivalDist;
+    private readonly float _crowdingThreshold;
+    private readonly List<int> _nearbyBuffer = new(32);
 
-    public WanderSystem(WorldManager? worldManager = null, float lookAheadDistance = 1.5f)
+    public WanderSystem(WorldManager? worldManager = null, float lookAheadDistance = 1.5f,
+                        float roamDistance = 60f, int roamCooldownBase = 500,
+                        float roamArrivalDist = 5f, float crowdingThreshold = 1.5f,
+                        SpatialHash? spatialHash = null)
     {
         _worldManager = worldManager;
+        _spatialHash = spatialHash;
         _lookAheadDistance = lookAheadDistance;
+        _roamDistance = roamDistance;
+        _roamCooldownBase = roamCooldownBase;
+        _roamArrivalDist = roamArrivalDist;
+        _crowdingThreshold = crowdingThreshold;
     }
 
     public void Process(EntityManager em)
@@ -106,6 +120,69 @@ public sealed class WanderSystem : ISystem
             // Skip if hunting
             if (em.HasComponents(entity, ComponentFlags.Predator) && em.Predators[entity].HasTarget)
                 continue;
+
+            // === Roaming logic ===
+            if (wander.RoamCooldown > 0)
+                wander.RoamCooldown--;
+
+            // Check if we should start roaming
+            if (!wander.IsRoaming && wander.RoamCooldown <= 0)
+            {
+                bool shouldRoam = ShouldStartRoaming(entity, em, ref pos);
+                if (shouldRoam)
+                {
+                    // Pick a distant waypoint
+                    float angle = (float)(_rng.NextDouble() * Math.PI * 2);
+                    float dist = _roamDistance * (0.5f + (float)_rng.NextDouble() * 0.5f);
+                    float targetX = pos.X + MathF.Cos(angle) * dist;
+                    float targetY = pos.Y + MathF.Sin(angle) * dist;
+
+                    // Clamp to world bounds
+                    int worldSize = _worldManager?.WorldSizeTiles ?? 512;
+                    targetX = Math.Clamp(targetX, 2f, worldSize - 2f);
+                    targetY = Math.Clamp(targetY, 2f, worldSize - 2f);
+
+                    wander.RoamTargetX = targetX;
+                    wander.RoamTargetY = targetY;
+                }
+            }
+
+            // If roaming, move toward target
+            if (wander.IsRoaming)
+            {
+                float dx = wander.RoamTargetX - pos.X;
+                float dy = wander.RoamTargetY - pos.Y;
+                float distSq = dx * dx + dy * dy;
+
+                if (distSq < _roamArrivalDist * _roamArrivalDist)
+                {
+                    // Arrived — stop roaming, set cooldown
+                    wander.RoamTargetX = 0f;
+                    wander.RoamTargetY = 0f;
+                    wander.RoamCooldown = _roamCooldownBase + _rng.Next(_roamCooldownBase / 2);
+                }
+                else
+                {
+                    float dist = MathF.Sqrt(distSq);
+                    float roamSpeed = wander.Speed * wander.RoamSpeedMultiplier;
+
+                    // Blend roam direction with terrain avoidance
+                    var roamDir = new Vector2(dx / dist, dy / dist);
+                    if (_worldManager != null)
+                    {
+                        var avoidance = GetTerrainAvoidance(pos.X, pos.Y, roamDir);
+                        if (avoidance.LengthSquared() > 0.01f)
+                            roamDir = (roamDir + avoidance * 2f).Normalized();
+                    }
+
+                    wander.CurrentDirection = roamDir;
+                    vel.Dx = roamDir.X * roamSpeed;
+                    vel.Dy = roamDir.Y * roamSpeed;
+                    continue;  // Skip normal wander while roaming
+                }
+            }
+
+            // === Normal wander logic ===
 
             // Check if entity has high discomfort - prioritize escaping
             bool needsEscape = false;
@@ -161,11 +238,11 @@ public sealed class WanderSystem : ISystem
                             var testDir = MathUtils.RandomDirection(_rng);
                             float testX = pos.X + testDir.X * _lookAheadDistance;
                             float testY = pos.Y + testDir.Y * _lookAheadDistance;
-                            float avoidance = _worldManager.GetTile(testX, testY).GetAvoidanceWeight();
+                            float avoidWeight = _worldManager.GetTile(testX, testY).GetAvoidanceWeight();
 
-                            if (avoidance < bestAvoidance)
+                            if (avoidWeight < bestAvoidance)
                             {
-                                bestAvoidance = avoidance;
+                                bestAvoidance = avoidWeight;
                                 bestDir = testDir;
                             }
                         }
@@ -179,6 +256,58 @@ public sealed class WanderSystem : ISystem
             vel.Dx = wander.CurrentDirection.X * wander.Speed;
             vel.Dy = wander.CurrentDirection.Y * wander.Speed;
         }
+    }
+
+    /// <summary>
+    /// Determines if an entity should start a long-distance roam.
+    /// Predators roam when hungry without a target.
+    /// Herbivores roam when local same-species density is too high.
+    /// </summary>
+    private bool ShouldStartRoaming(int entity, EntityManager em, ref Position pos)
+    {
+        // Predators: roam when hungry and idle (no target)
+        if (em.HasComponents(entity, ComponentFlags.Predator))
+        {
+            if (em.HasComponents(entity, ComponentFlags.Hunger))
+            {
+                ref var hunger = ref em.Hungers[entity];
+                float ratio = hunger.Current / hunger.Max;
+                // Hungrier = more likely to roam. Below 50% hunger, start roaming.
+                if (ratio < 0.5f)
+                    return _rng.NextDouble() < 0.02;  // ~2% chance per eligible tick
+            }
+            return false;
+        }
+
+        // Herbivores/Terraformers: roam when crowded
+        if (_spatialHash != null && em.HasComponents(entity, ComponentFlags.Species | ComponentFlags.Social))
+        {
+            ref var social = ref em.Socials[entity];
+            float checkRadius = 15f;
+
+            _nearbyBuffer.Clear();
+            _spatialHash.QueryRadius(pos.X, pos.Y, checkRadius, _nearbyBuffer);
+
+            ref var mySpecies = ref em.Species[entity];
+            int sameSpeciesCount = 0;
+            foreach (int other in _nearbyBuffer)
+            {
+                if (other == entity || !em.IsAlive(other))
+                    continue;
+                if (!em.HasComponents(other, ComponentFlags.Species))
+                    continue;
+                if (em.Species[other].SpeciesId == mySpecies.SpeciesId)
+                    sameSpeciesCount++;
+            }
+
+            // If nearby same-species count exceeds preferred group size by crowding threshold,
+            // this entity should roam to reduce local density
+            float preferred = social.PreferredGroupSize;
+            if (preferred > 0 && sameSpeciesCount > preferred * _crowdingThreshold)
+                return _rng.NextDouble() < 0.01;  // ~1% chance per eligible tick
+        }
+
+        return false;
     }
 
     /// <summary>

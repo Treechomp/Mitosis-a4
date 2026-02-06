@@ -81,6 +81,7 @@ public struct Prey
 
 /// <summary>
 /// Simple wandering behavior for entities.
+/// Includes roaming state for long-distance travel to increase species encounters.
 /// </summary>
 [StructLayout(LayoutKind.Sequential)]
 public struct Wander
@@ -89,12 +90,24 @@ public struct Wander
     public float ChangeDirectionChance;
     public Vector2 CurrentDirection;
 
+    // Roaming: long-distance directed travel
+    public float RoamTargetX;       // World-space target (0,0 = no target)
+    public float RoamTargetY;
+    public int RoamCooldown;        // Ticks until next roam check
+    public float RoamSpeedMultiplier; // Speed boost while roaming (default 1.5x)
+
     public Wander(float speed = 0.1f, float changeDirectionChance = 0.02f)
     {
         Speed = speed;
         ChangeDirectionChance = changeDirectionChance;
         CurrentDirection = Vector2.Zero;
+        RoamTargetX = 0f;
+        RoamTargetY = 0f;
+        RoamCooldown = 0;
+        RoamSpeedMultiplier = 1.5f;
     }
+
+    public readonly bool IsRoaming => RoamTargetX != 0f || RoamTargetY != 0f;
 }
 
 /// <summary>
