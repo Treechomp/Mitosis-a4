@@ -91,6 +91,49 @@ public sealed class SpeciesDefinition
     /// </summary>
     public Dictionary<TileType, float>? TerrainComfortModifiers { get; init; }
 
+    /// <summary>
+    /// Biomes where this species can spawn. Empty/null = spawn in any biome.
+    /// </summary>
+    public List<BiomeType>? PreferredBiomes { get; init; }
+
+    /// <summary>
+    /// Whether this species is aquatic (spawns in water instead of on land).
+    /// </summary>
+    public bool IsAquatic { get; init; } = false;
+
+    /// <summary>
+    /// Specific tile types where this species can spawn. If null, uses default logic
+    /// (aquatic = water tiles, land = non-water spawnable tiles).
+    /// </summary>
+    public List<TileType>? AllowedSpawnTiles { get; init; }
+
+    /// <summary>
+    /// Check if this species can spawn in the given biome.
+    /// </summary>
+    public bool CanSpawnInBiome(BiomeType biome)
+    {
+        if (PreferredBiomes == null || PreferredBiomes.Count == 0)
+            return true;  // No preference = spawn anywhere
+        return PreferredBiomes.Contains(biome);
+    }
+
+    /// <summary>
+    /// Check if this species can spawn on the given tile type.
+    /// </summary>
+    public bool CanSpawnOnTile(TileType tile)
+    {
+        // If specific tiles are defined, use those
+        if (AllowedSpawnTiles != null && AllowedSpawnTiles.Count > 0)
+            return AllowedSpawnTiles.Contains(tile);
+
+        // Otherwise use default logic based on aquatic flag
+        if (IsAquatic)
+            return tile.IsWater();
+
+        // Land creatures use the spawnable check (excludes water, cliffs, etc)
+        return tile.IsSpawnable();
+    }
+
     // === PREY PREFERENCES (for predators) ===
     /// <summary>
     /// List of species names this predator prefers to hunt (in order of preference).

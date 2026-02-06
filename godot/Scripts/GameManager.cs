@@ -26,6 +26,13 @@ public partial class GameManager : Node2D
     [Export] public float HerbivoreRatio = 0.85f;
     [Export] public float CreaturesPerChunk = 2f;
 
+    // Spectator settings
+    [Export] public float PlayerSpeed = 1.0f;         // Base movement speed (tiles per tick)
+    [Export] public float PlayerSprintMultiplier = 3.0f;  // Speed when holding shift
+    [Export] public float ZoomMin = 0.1f;             // Maximum zoom out
+    [Export] public float ZoomMax = 5.0f;             // Maximum zoom in
+    [Export] public float ZoomSpeed = 0.15f;          // Zoom sensitivity
+
     // Core systems
     private EntityManager _entityManager = null!;
     private WorldManager _worldManager = null!;
@@ -134,6 +141,10 @@ public partial class GameManager : Node2D
         var herbivoreSpecies = new List<SpeciesDefinition>(SpeciesRegistry.GetHerbivores());
         var predatorSpecies = new List<SpeciesDefinition>(SpeciesRegistry.GetPredators());
 
+        // Calculate target counts for each type based on ratio
+        int targetHerbivores = (int)(InitialPopulation * HerbivoreRatio);
+        int targetPredators = InitialPopulation - targetHerbivores;
+
         // Get all chunks and shuffle to distribute creatures evenly across the world
         var allChunks = new List<Chunk>(_worldManager.GetLoadedChunks());
         for (int i = allChunks.Count - 1; i > 0; i--)
@@ -142,53 +153,102 @@ public partial class GameManager : Node2D
             (allChunks[i], allChunks[j]) = (allChunks[j], allChunks[i]);
         }
 
+        // Spawn herbivores first
+        int herbivoreCount = 0;
         foreach (var chunk in allChunks)
         {
-            // Stop when we've reached initial population target
-            if (_entityManager.EntityCount >= InitialPopulation)
+            if (herbivoreCount >= targetHerbivores)
                 break;
 
-            var positions = _worldManager.GetWalkablePositions(chunk, targetPerChunk * 3, _rng);
+            // Use spawnable positions (excludes water, cliffs, etc)
+            var positions = _worldManager.GetSpawnablePositions(chunk, targetPerChunk * 3, _rng);
             if (positions.Count == 0) continue;
 
             int posIndex = 0;
 
-            while (posIndex < positions.Count && _entityManager.EntityCount < InitialPopulation)
+            while (posIndex < positions.Count && herbivoreCount < targetHerbivores)
             {
-                var (x, y) = positions[posIndex];
-                bool isHerbivore = _rng.NextDouble() < HerbivoreRatio;
+                var (x, y, biome, tile) = positions[posIndex];
 
-                if (isHerbivore)
+                // Find a species that can spawn in this biome AND on this tile type
+                var validSpecies = herbivoreSpecies.FindAll(s =>
+                    s.CanSpawnInBiome(biome) && s.CanSpawnOnTile(tile));
+                if (validSpecies.Count == 0)
                 {
-                    // Pick a random herbivore species
-                    var species = herbivoreSpecies[_rng.Next(herbivoreSpecies.Count)];
-                    int groupSize = (int)species.PreferredGroupSize + _rng.Next(-2, 3);  // Vary around preferred size
-                    groupSize = Math.Max(2, groupSize);  // At least 2 in a herd
+                    posIndex++;
+                    continue;
+                }
+
+                var species = validSpecies[_rng.Next(validSpecies.Count)];
+
+                // Calculate group size, but don't exceed remaining target
+                int groupSize = (int)species.PreferredGroupSize + _rng.Next(-2, 3);
+                groupSize = Math.Max(2, groupSize);
+                groupSize = Math.Min(groupSize, targetHerbivores - herbivoreCount);
+
+                int groupId = _nextSpawnGroupId++;
+                int groupSpawned = SpawnGroup(x, y, species, groupSize, groupId, ref posIndex);
+                herbivoreCount += groupSpawned;
+                spawned += groupSpawned;
+            }
+        }
+
+        // Re-shuffle chunks for predator distribution
+        for (int i = allChunks.Count - 1; i > 0; i--)
+        {
+            int j = _rng.Next(i + 1);
+            (allChunks[i], allChunks[j]) = (allChunks[j], allChunks[i]);
+        }
+
+        // Spawn predators
+        int predatorCount = 0;
+        foreach (var chunk in allChunks)
+        {
+            if (predatorCount >= targetPredators)
+                break;
+
+            // Use spawnable positions (excludes water, cliffs, etc)
+            var positions = _worldManager.GetSpawnablePositions(chunk, targetPerChunk * 3, _rng);
+            if (positions.Count == 0) continue;
+
+            int posIndex = 0;
+
+            while (posIndex < positions.Count && predatorCount < targetPredators)
+            {
+                var (x, y, biome, tile) = positions[posIndex];
+
+                // Find a species that can spawn in this biome AND on this tile type
+                var validSpecies = predatorSpecies.FindAll(s =>
+                    s.CanSpawnInBiome(biome) && s.CanSpawnOnTile(tile));
+                if (validSpecies.Count == 0)
+                {
+                    posIndex++;
+                    continue;
+                }
+
+                var species = validSpecies[_rng.Next(validSpecies.Count)];
+
+                // Check if this will be a pack or solitary based on species
+                bool isPack = _rng.NextDouble() < species.PackHunterChance;
+                if (isPack && species.DefaultSocialType == SocialType.Pack)
+                {
+                    // Spawn a pack together
+                    int packSize = (int)species.PreferredGroupSize + _rng.Next(-1, 2);
+                    packSize = Math.Max(2, packSize);
+                    packSize = Math.Min(packSize, targetPredators - predatorCount);
+
                     int groupId = _nextSpawnGroupId++;
-                    spawned += SpawnGroup(x, y, species, groupSize, groupId, positions, ref posIndex);
+                    int groupSpawned = SpawnGroup(x, y, species, packSize, groupId, ref posIndex);
+                    predatorCount += groupSpawned;
+                    spawned += groupSpawned;
                 }
                 else
                 {
-                    // Pick a random predator species
-                    var species = predatorSpecies[_rng.Next(predatorSpecies.Count)];
-
-                    // Check if this will be a pack or solitary based on species
-                    bool isPack = _rng.NextDouble() < species.PackHunterChance;
-                    if (isPack && species.DefaultSocialType == SocialType.Pack)
-                    {
-                        // Spawn a pack together
-                        int packSize = (int)species.PreferredGroupSize + _rng.Next(-1, 2);
-                        packSize = Math.Max(2, packSize);
-                        int groupId = _nextSpawnGroupId++;
-                        spawned += SpawnGroup(x, y, species, packSize, groupId, positions, ref posIndex);
-                    }
-                    else
-                    {
-                        // Spawn solitary predator
-                        SpawnCreature(x, y, species, -1, true);
-                        spawned++;
-                        posIndex++;
-                    }
+                    // Spawn solitary predator
+                    SpawnCreature(x, y, species, -1, true);
+                    predatorCount++;
+                    spawned++;
+                    posIndex++;
                 }
             }
         }
@@ -200,25 +260,27 @@ public partial class GameManager : Node2D
     /// Spawns a group of creatures around a central position.
     /// </summary>
     private int SpawnGroup(float centerX, float centerY, SpeciesDefinition species, int groupSize,
-                           int groupId, List<(float x, float y)> positions, ref int posIndex)
+                           int groupId, ref int posIndex)
     {
         int spawned = 0;
         float groupRadius = 3f;  // Spawn within this radius of center
+
+        // Increment posIndex for the center position we're using
+        posIndex++;
 
         for (int i = 0; i < groupSize && _entityManager.EntityCount < MaxPopulation; i++)
         {
             float x = centerX, y = centerY;  // Default to center position
 
             // First member (alpha) spawns at the given position
-            if (i == 0 && posIndex < positions.Count)
+            if (i == 0)
             {
-                (x, y) = positions[posIndex];
-                posIndex++;
+                x = centerX;
+                y = centerY;
             }
             else
             {
-                // Other members spawn nearby
-                // Try to find a walkable position near center
+                // Other members spawn nearby - try to find a spawnable position for this species
                 bool found = false;
                 for (int attempt = 0; attempt < 10; attempt++)
                 {
@@ -227,27 +289,18 @@ public partial class GameManager : Node2D
                     x = centerX + MathF.Cos(angle) * dist;
                     y = centerY + MathF.Sin(angle) * dist;
 
-                    if (_worldManager.IsWalkable(x, y))
+                    if (_worldManager.IsSpawnableForSpecies(x, y, species))
                     {
                         found = true;
                         break;
                     }
                 }
 
-                // If we couldn't find a good spot, use the next available position or center
+                // If we couldn't find a spawnable spot, use center
                 if (!found)
                 {
-                    if (posIndex < positions.Count)
-                    {
-                        (x, y) = positions[posIndex];
-                        posIndex++;
-                    }
-                    else
-                    {
-                        // Fall back to center position (already set as default)
-                        x = centerX;
-                        y = centerY;
-                    }
+                    x = centerX;
+                    y = centerY;
                 }
             }
 
@@ -517,7 +570,11 @@ public partial class GameManager : Node2D
             return;
 
         ref var vel = ref _entityManager.Velocities[_playerEntity];
-        const float speed = 0.2f;
+
+        // Calculate effective speed (with sprint modifier)
+        float speed = PlayerSpeed;
+        if (Input.IsKeyPressed(Key.Shift))
+            speed *= PlayerSprintMultiplier;
 
         vel.Dx = 0;
         vel.Dy = 0;
@@ -534,11 +591,32 @@ public partial class GameManager : Node2D
             vel.Dy *= 0.707f;
         }
 
-        // Zoom
-        if (Input.IsActionJustPressed("zoom_in") && _camera != null)
-            _camera.Zoom = (_camera.Zoom * 1.2f).Clamp(new Vector2(0.25f, 0.25f), new Vector2(4f, 4f));
-        if (Input.IsActionJustPressed("zoom_out") && _camera != null)
-            _camera.Zoom = (_camera.Zoom / 1.2f).Clamp(new Vector2(0.25f, 0.25f), new Vector2(4f, 4f));
+        // Keyboard zoom (+/- keys)
+        if (Input.IsActionJustPressed("zoom_in"))
+            ApplyZoom(1f + ZoomSpeed);
+        if (Input.IsActionJustPressed("zoom_out"))
+            ApplyZoom(1f - ZoomSpeed);
+    }
+
+    public override void _UnhandledInput(InputEvent @event)
+    {
+        // Mouse wheel zoom
+        if (@event is InputEventMouseButton mouseEvent && mouseEvent.Pressed)
+        {
+            if (mouseEvent.ButtonIndex == MouseButton.WheelUp)
+                ApplyZoom(1f + ZoomSpeed);
+            else if (mouseEvent.ButtonIndex == MouseButton.WheelDown)
+                ApplyZoom(1f - ZoomSpeed);
+        }
+    }
+
+    private void ApplyZoom(float factor)
+    {
+        if (_camera == null) return;
+
+        var minZoom = new Vector2(ZoomMin, ZoomMin);
+        var maxZoom = new Vector2(ZoomMax, ZoomMax);
+        _camera.Zoom = (_camera.Zoom * factor).Clamp(minZoom, maxZoom);
     }
 
     private void UpdateCamera(double delta)

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using Mitosis.SpeciesData;
 using Mitosis.Utils;
 
 namespace Mitosis.World;
@@ -168,5 +169,114 @@ public sealed class WorldManager
         }
 
         return positions;
+    }
+
+    /// <summary>
+    /// Get random spawnable positions in a chunk (excludes water, cliffs, etc).
+    /// Returns positions with their biome and tile type for species filtering.
+    /// </summary>
+    public List<(float x, float y, BiomeType biome, TileType tile)> GetSpawnablePositions(Chunk chunk, int count, Random rng)
+    {
+        var positions = new List<(float, float, BiomeType, TileType)>();
+        var spawnable = new List<(int lx, int ly, BiomeType biome, TileType tile)>();
+
+        // Collect all spawnable tiles with their biomes and tile types
+        for (int ly = 0; ly < chunk.Size; ly++)
+        {
+            for (int lx = 0; lx < chunk.Size; lx++)
+            {
+                if (chunk.IsSpawnable(lx, ly))
+                {
+                    var biome = chunk.GetBiome(lx, ly);
+                    var tile = chunk.GetTile(lx, ly);
+                    spawnable.Add((lx, ly, biome, tile));
+                }
+            }
+        }
+
+        if (spawnable.Count == 0)
+            return positions;
+
+        // Sample random positions
+        int sampleCount = Math.Min(count, spawnable.Count);
+        for (int i = 0; i < sampleCount; i++)
+        {
+            int idx = rng.Next(spawnable.Count);
+            var (lx, ly, biome, tile) = spawnable[idx];
+            spawnable.RemoveAt(idx);
+
+            float worldX = chunk.ChunkX * chunk.Size + lx + 0.5f;
+            float worldY = chunk.ChunkY * chunk.Size + ly + 0.5f;
+            positions.Add((worldX, worldY, biome, tile));
+        }
+
+        return positions;
+    }
+
+    /// <summary>
+    /// Get random spawnable positions in a chunk for a specific species.
+    /// Uses the species' CanSpawnOnTile() method to filter valid tiles.
+    /// </summary>
+    public List<(float x, float y, BiomeType biome, TileType tile)> GetSpawnablePositionsForSpecies(
+        Chunk chunk, int count, Random rng, SpeciesDefinition species)
+    {
+        var positions = new List<(float, float, BiomeType, TileType)>();
+        var spawnable = new List<(int lx, int ly, BiomeType biome, TileType tile)>();
+
+        // Collect all tiles that this species can spawn on
+        for (int ly = 0; ly < chunk.Size; ly++)
+        {
+            for (int lx = 0; lx < chunk.Size; lx++)
+            {
+                var tile = chunk.GetTile(lx, ly);
+                if (species.CanSpawnOnTile(tile))
+                {
+                    var biome = chunk.GetBiome(lx, ly);
+                    spawnable.Add((lx, ly, biome, tile));
+                }
+            }
+        }
+
+        if (spawnable.Count == 0)
+            return positions;
+
+        // Sample random positions
+        int sampleCount = Math.Min(count, spawnable.Count);
+        for (int i = 0; i < sampleCount; i++)
+        {
+            int idx = rng.Next(spawnable.Count);
+            var (lx, ly, biome, tile) = spawnable[idx];
+            spawnable.RemoveAt(idx);
+
+            float worldX = chunk.ChunkX * chunk.Size + lx + 0.5f;
+            float worldY = chunk.ChunkY * chunk.Size + ly + 0.5f;
+            positions.Add((worldX, worldY, biome, tile));
+        }
+
+        return positions;
+    }
+
+    /// <summary>
+    /// Check if a position is spawnable (safe land, not water).
+    /// </summary>
+    public bool IsSpawnable(float worldX, float worldY)
+    {
+        return GetTile(worldX, worldY).IsSpawnable();
+    }
+
+    /// <summary>
+    /// Check if a species can spawn at a world position.
+    /// </summary>
+    public bool IsSpawnableForSpecies(float worldX, float worldY, SpeciesDefinition species)
+    {
+        return species.CanSpawnOnTile(GetTile(worldX, worldY));
+    }
+
+    /// <summary>
+    /// Get the biome at a world position.
+    /// </summary>
+    public BiomeType GetBiome(float worldX, float worldY)
+    {
+        return GetTile(worldX, worldY).GetTypicalBiome();
     }
 }
