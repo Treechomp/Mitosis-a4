@@ -158,6 +158,9 @@ public static class SpeciesRegistry
             CanGraze = true,
             GrazeNutrition = 0.5f,
 
+            // Trophic - medium herbivore
+            BodyMass = 4.0f,
+
             // Visuals
             BaseColor = new Color(0.4f, 1f, 0.4f),
             BaseSize = 8f,
@@ -219,6 +222,9 @@ public static class SpeciesRegistry
             // Grazing
             CanGraze = true,
             GrazeNutrition = 0.3f,
+
+            // Trophic - small herbivore
+            BodyMass = 1.0f,
 
             // Visuals - small
             BaseColor = new Color(0.6f, 0.5f, 0.4f),
@@ -283,8 +289,17 @@ public static class SpeciesRegistry
                 { TileType.Sand, 0.85f },
             },
 
-            // Prey preference
+            // Trophic - medium pack predator
+            // Solo wolf (mass 3.5) vs Deer (mass 4.0): 4.0 > 3.5*1.2=4.2 — borderline, can solo
+            // Solo wolf vs Rabbit (mass 1.0): easily
+            // Pack of 3 wolves: effectiveMass = 3.5 * 3^0.7 ≈ 7.8 — can take deer comfortably
+            BodyMass = 3.5f,
+            SoloHuntMaxRatio = 1.2f,
+            PackHuntMassExponent = 0.7f,
+
+            // Prey preference - soft bias toward deer and rabbit
             PreferredPrey = new List<string> { "Deer", "Rabbit" },
+            PreferredPreyBias = 0.5f,
 
             // Grazing
             CanGraze = false,
@@ -342,8 +357,16 @@ public static class SpeciesRegistry
                 { TileType.Grass, 1.0f },
             },
 
+            // Trophic - small solitary predator
+            // Fox (mass 2.0) vs Rabbit (mass 1.0): 1.0 <= 2.0*1.0=2.0 — yes
+            // Fox (mass 2.0) vs Deer (mass 4.0): 4.0 > 2.0*1.0=2.0 — no, too large
+            // Fox (mass 2.0) vs Sectid (mass 0.5): 0.5 <= 2.0 — yes, opportunistic
+            BodyMass = 2.0f,
+            SoloHuntMaxRatio = 1.0f,  // Can only take prey up to own mass (small predator)
+
             // Prey preference - prefers small prey
             PreferredPrey = new List<string> { "Rabbit" },
+            PreferredPreyBias = 0.4f,  // Strong preference for familiar prey
 
             // Grazing
             CanGraze = false,
@@ -414,6 +437,13 @@ public static class SpeciesRegistry
                 { TileType.Grass, 2f },           // Uncomfortable on land
                 { TileType.Sand, 0f },            // Neutral on sand (sunbathing)
             },
+
+            // Trophic - large ambush predator
+            // Croc (mass 8.0) vs Deer (mass 4.0): easily
+            // Croc (mass 8.0) vs Rabbit (mass 1.0): easily
+            // Croc is solitary so no pack bonuses, but high solo mass
+            BodyMass = 8.0f,
+            SoloHuntMaxRatio = 1.5f,  // Powerful ambush can take large prey
 
             // Grazing
             CanGraze = false,
@@ -503,6 +533,9 @@ public static class SpeciesRegistry
             TerraformStrength = 0.03f,
             TerraformCooldown = 8,
 
+            // Trophic - medium-small fungi (not very nutritious but huntable)
+            BodyMass = 2.5f,
+
             // Visuals - purple/violet fungi
             BaseColor = new Color(0.55f, 0.23f, 0.78f),
             BaseSize = 9f,
@@ -584,6 +617,9 @@ public static class SpeciesRegistry
             TerraformStrength = 0.04f,
             TerraformCooldown = 6,
 
+            // Trophic - tiny insects
+            BodyMass = 0.5f,
+
             // Visuals - orange insects
             BaseColor = new Color(0.86f, 0.55f, 0.16f),
             BaseSize = 6f,
@@ -664,6 +700,9 @@ public static class SpeciesRegistry
             TerraformRadius = 2.5f,
             TerraformStrength = 0.025f,
             TerraformCooldown = 10,
+
+            // Trophic - medium plant creature
+            BodyMass = 3.0f,
 
             // Visuals - teal/cyan
             BaseColor = new Color(0.24f, 0.86f, 0.78f),

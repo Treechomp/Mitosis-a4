@@ -435,6 +435,36 @@ public sealed class HuntingSystem : ISystem
                 float huntRangeSq = effectiveRange * effectiveRange;
                 _spatialHash.QueryRadius(pos.X, pos.Y, effectiveRange, _nearbyEntities);
 
+                // Get predator's species definition for size-based hunting
+                SpeciesDefinition? predatorDef = null;
+                if (em.HasComponents(entity, ComponentFlags.Species))
+                {
+                    ref var predSpecies = ref em.Species[entity];
+                    predatorDef = SpeciesRegistry.GetById(predSpecies.SpeciesId);
+                }
+
+                // Calculate effective hunting mass (solo or pack)
+                float effectiveMass = predatorDef?.BodyMass ?? 1.0f;
+                float maxHuntRatio = predatorDef?.SoloHuntMaxRatio ?? 1.2f;
+                if (isPack)
+                {
+                    // Count nearby pack members for effective mass
+                    int packSize = 1;
+                    foreach (int other in _nearbyEntities)
+                    {
+                        if (other == entity || !em.IsAlive(other))
+                            continue;
+                        if (!em.HasComponents(other, ComponentFlags.Predator | ComponentFlags.Social))
+                            continue;
+                        ref var otherSocial = ref em.Socials[other];
+                        if (otherSocial.GroupId == groupId)
+                            packSize++;
+                    }
+                    float exponent = predatorDef?.PackHuntMassExponent ?? 0.7f;
+                    effectiveMass *= MathF.Pow(packSize, exponent);
+                }
+                float maxPreyMass = effectiveMass * maxHuntRatio;
+
                 float bestScore = float.MaxValue;
                 int bestPrey = -1;
 
@@ -443,6 +473,15 @@ public sealed class HuntingSystem : ISystem
                     if (!em.IsAlive(preyEntity) || !em.HasComponents(preyEntity, ComponentFlags.Prey))
                         continue;
 
+                    // Size-based eligibility: prey must not be too large
+                    if (em.HasComponents(preyEntity, ComponentFlags.Species))
+                    {
+                        ref var preySpecies = ref em.Species[preyEntity];
+                        var preyDef = SpeciesRegistry.GetById(preySpecies.SpeciesId);
+                        if (preyDef.BodyMass > maxPreyMass)
+                            continue;  // Too large to hunt
+                    }
+
                     ref var preyPos = ref em.Positions[preyEntity];
                     float distSq = MathUtils.DistanceSquared(pos.X, pos.Y, preyPos.X, preyPos.Y);
 
@@ -450,12 +489,23 @@ public sealed class HuntingSystem : ISystem
                         continue;
 
                     float score = distSq;
+
+                    // Terrain penalty
                     if (_worldManager != null)
                     {
                         var preyTile = _worldManager.GetTile(preyPos.X, preyPos.Y);
                         float terrainPenalty = preyTile.GetAvoidanceWeight() * 50f;
                         terrainPenalty *= (1f - urgency * 0.7f);
                         score += terrainPenalty;
+                    }
+
+                    // Preferred prey bias: familiar prey scores better (lower)
+                    if (predatorDef?.PreferredPrey != null && em.HasComponents(preyEntity, ComponentFlags.Species))
+                    {
+                        ref var preySpecies = ref em.Species[preyEntity];
+                        var preyDef = SpeciesRegistry.GetById(preySpecies.SpeciesId);
+                        if (predatorDef.PreferredPrey.Contains(preyDef.Name))
+                            score *= predatorDef.PreferredPreyBias;
                     }
 
                     if (score < bestScore)

@@ -135,12 +135,39 @@ public sealed class SpeciesDefinition
         return tile.IsSpawnable();
     }
 
-    // === PREY PREFERENCES (for predators) ===
+    // === TROPHIC INTERACTIONS ===
     /// <summary>
-    /// List of species names this predator prefers to hunt (in order of preference).
-    /// Empty = hunts any prey.
+    /// Relative body mass for size-based hunting eligibility.
+    /// Predators can only solo-hunt prey with BodyMass &lt;= own BodyMass * SoloHuntMaxRatio.
+    /// Pack effective mass = leader BodyMass * packSize^PackHuntMassExponent.
+    /// </summary>
+    public float BodyMass { get; init; } = 1.0f;
+
+    /// <summary>
+    /// Maximum prey-to-predator mass ratio for solo hunting.
+    /// E.g. 1.2 means a solo predator can hunt prey up to 1.2x its own mass.
+    /// </summary>
+    public float SoloHuntMaxRatio { get; init; } = 1.2f;
+
+    /// <summary>
+    /// Exponent for pack effective mass: effectiveMass = leaderMass * packSize^exponent.
+    /// Sub-linear (0.7) means diminishing returns from larger packs.
+    /// </summary>
+    public float PackHuntMassExponent { get; init; } = 0.7f;
+
+    /// <summary>
+    /// List of species names this predator prefers to hunt (soft bias, not a hard gate).
+    /// Preferred prey get a scoring bonus during target selection.
+    /// Empty = no preference bias.
     /// </summary>
     public List<string>? PreferredPrey { get; init; }
+
+    /// <summary>
+    /// Scoring bonus multiplier for preferred prey (lower = more preferred).
+    /// Applied as: score *= PreferredPreyBias for preferred species.
+    /// E.g. 0.5 means preferred prey scores 50% better (closer effective distance).
+    /// </summary>
+    public float PreferredPreyBias { get; init; } = 0.5f;
 
     // === GRAZING ===
     public bool CanGraze { get; init; } = false;
