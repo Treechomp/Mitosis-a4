@@ -1,374 +1,433 @@
 # Mitosis Godot 4.6 Development Roadmap
 
-## Current State (v0.1 - Foundation Complete)
+## Current State Summary (v0.2 - Ecosystem Foundations)
 
-The Godot 4.6 migration has established a solid foundation:
+### Architecture Overview
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    SPECIES DEFINITION LAYER                  │
+│  (Data-driven creature configuration)                        │
+│  • SpeciesDefinition - all stats, behaviors, preferences    │
+│  • SpeciesRegistry - lookup by name/ID                       │
+└─────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────┐
+│                    ECS SIMULATION LAYER                      │
+│  (Structure of Arrays for cache efficiency)                  │
+│  • EntityManager - 16,384 entity capacity                   │
+│  • Components - Position, Velocity, Hunger, Fear, etc.      │
+│  • Systems - Movement, Hunting, Fleeing, Reproduction       │
+└─────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────┐
+│                    WORLD LAYER                               │
+│  (Chunk-based terrain with biomes)                           │
+│  • WorldManager - chunk loading, spatial queries            │
+│  • TerrainGenerator - noise-based generation                 │
+│  • SpatialHash - efficient entity proximity queries          │
+└─────────────────────────────────────────────────────────────┘
+```
 
-### Implemented
-- **ECS Architecture** (Structure of Arrays for cache efficiency)
-  - EntityManager supporting 16,384 entities
-  - 12 component types with flag-based querying
-  - Pre-allocated arrays for zero-allocation gameplay
+### Implemented Features
 
-- **World System**
-  - Chunk-based terrain (32x32 tiles per chunk)
-  - Simplex noise terrain generation
-  - 6 tile types with walkability rules
-  - WorldManager with frustum culling
+#### Core ECS (100% Complete)
+- [x] EntityManager with SoA layout (16,384 entities)
+- [x] Flag-based component queries
+- [x] 15 component types (Position, Velocity, Hunger, Energy, Age, Species, etc.)
 
-- **Core Behaviors**
-  - Movement with collision
-  - Hunger decay and starvation
-  - Predator hunting (spatial hash queries)
-  - Prey fleeing
-  - Random wandering
-  - Aging and natural death
+#### Species System (90% Complete)
+- [x] SpeciesDefinition - comprehensive data class with 40+ configurable properties
+- [x] SpeciesRegistry - lookup by name or ID (hash)
+- [x] 5 species defined: Deer, Rabbit, Wolf, Fox, Crocodile
+- [x] Diet types: Herbivore, Carnivore (Omnivore prepared)
+- [x] Social types: Herd, Pack, Solitary
+- [x] Biome preferences per species
+- [x] Spawn tile preferences (IsAquatic, AllowedSpawnTiles, CanSpawnOnTile)
+- [x] Terrain speed/comfort modifiers per species
+- [ ] Missing: Faction species (Shroomer, Sectid, Faeling)
 
-- **Rendering**
-  - Tile rendering with visibility culling
-  - Entity shapes (circles, triangles, squares)
-  - Camera following with smooth lerp
-  - Zoom controls
+#### Terrain & World (85% Complete)
+- [x] Chunk-based storage (32x32 tiles)
+- [x] Simplex noise terrain generation
+- [x] 9 tile types with walkability/speed rules
+- [x] 6 biome types (Arctic, Temperate, Tropical, Desert, Highland, Wetland)
+- [x] IsSpawnable(), IsWater(), IsGrazeable() tile queries
+- [x] BiomeType calculation from temperature/moisture
+- [x] Species-specific spawn filtering (biome + tile)
+- [ ] Missing: Rivers, advanced hydrology
+- [ ] Missing: Tile depletion/regrowth
 
-### Not Yet Implemented
-- Grazing (herbivores eating from terrain)
-- Reproduction system
-- Additional species (Shroomer, Sectid, Faeling)
-- LOD simulation for off-screen entities
-- UI/HUD
-- Save/Load
-- Evolution mechanics
+#### Behavior Systems (80% Complete)
+- [x] MovementSystem - terrain speed modifiers, panic boost
+- [x] TerrainDiscomfortSystem - accumulating discomfort on bad terrain
+- [x] HungerSystem - decay, starvation damage
+- [x] GrazingSystem - herbivores feed on grass/forest
+- [x] WanderSystem - random exploration with terrain awareness
+- [x] HerdingSystem - flocking, cohesion, alignment
+- [x] SeparationSystem - collision avoidance
+- [x] HuntingSystem - predator behavior with pack roles
+- [x] FleeingSystem - prey escape with fear integration
+- [x] AgingSystem - maturity, natural death
+- [x] ReproductionSystem - species-aware offspring spawning
+- [x] LODSystem - distance-based simulation detail
+- [ ] Missing: TerritorySystem
+- [ ] Missing: StatisticalSimSystem (chunk-level populations)
 
----
+#### Fear & Threat Response (100% Complete)
+- [x] Fear component with accumulation/decay
+- [x] FearResponse types: Flee, Freeze, Defensive, Panic
+- [x] Vigilance state (slower fear decay after threats)
+- [x] Integration with FleeingSystem
 
-## Phase 1: Ecosystem Completion (Priority: HIGH)
-
-**Goal:** Complete the basic food chain so populations self-sustain
-
-### 1.1 Grazing System
-- [ ] Add `GrazingSystem.cs` to process herbivore feeding
-- [ ] Herbivores on Grass/Forest tiles restore hunger
-- [ ] Grazing rate: 0.5 hunger/tick (configurable)
-- [ ] Consider tile "depletion" for future (grass regrows over time)
-
-### 1.2 Reproduction System
-- [ ] Add `ReproductionSystem.cs`
-- [ ] Check maturity (Age >= maturity_age)
-- [ ] Check resources (Hunger >= threshold, Energy >= threshold)
-- [ ] Spawn offspring nearby on walkable tiles
-- [ ] Apply reproduction cost (hunger/energy drain)
-- [ ] Cooldown between reproductions
-- [ ] Track generation number for evolution prep
-
-### 1.3 Balance Tuning
-- [ ] Adjust hunger decay rates for sustainability
-- [ ] Tune reproduction thresholds
-- [ ] Balance predator attack power vs prey flee speed
-- [ ] Test population stability over extended runs
-
-**Success Criteria:**
-- Population stabilizes (no extinction, no explosion)
-- Predator-prey cycles emerge naturally
-- 500+ entities sustained for 10+ minutes
-
----
-
-## Phase 2: Performance & Scale (Priority: HIGH)
-
-**Goal:** Support 10,000+ simulated entities with smooth gameplay
-
-### 2.1 LOD Simulation System
-- [ ] Add `SimulationLOD` component
-- [ ] Calculate LOD level based on distance from player:
-  - LOD 0 (visible): Full simulation every tick
-  - LOD 1 (near): Every 5 ticks
-  - LOD 2 (far): Every 30 ticks (statistical)
-  - LOD 3 (distant): Every 60 ticks (aggregate)
-- [ ] Skip expensive systems for high-LOD entities
-
-### 2.2 Statistical Simulation
-- [ ] Per-chunk population tracking
-- [ ] Statistical birth/death rates for distant chunks
-- [ ] Chunk-level ecosystem balance
-- [ ] Entity "promotion" when chunks come into view
-
-### 2.3 Chunk Streaming
-- [ ] Async chunk generation
-- [ ] Chunk unloading for distant areas
-- [ ] Entity serialization for unloaded chunks
-- [ ] Progressive detail loading
-
-### 2.4 Profiling & Optimization
-- [ ] Add performance metrics to debug overlay
-- [ ] Profile system execution times
-- [ ] Optimize hot paths with `[MethodImpl(MethodImplOptions.AggressiveInlining)]`
-- [ ] Consider SIMD for position updates if needed
-
-**Success Criteria:**
-- 10,000+ total entities simulated
-- 60 FPS with 500+ visible entities
-- Simulation tick rate >= 20 TPS
+#### Spectator/Player (70% Complete)
+- [x] Player entity spawning
+- [x] WASD movement with sprint (Shift)
+- [x] Configurable speed (Export variables)
+- [x] Zoom controls (mouse wheel, +/- keys)
+- [x] Camera follow with smooth lerp
+- [x] Debug overlay (FPS, entity counts)
+- [ ] Missing: Entity selection/inspection
+- [ ] Missing: Time controls (pause, speed)
+- [ ] Missing: Minimap
 
 ---
 
-## Phase 3: World Generation v2 (Priority: MEDIUM)
+## Architectural Guidelines
 
-**Goal:** Create varied, interesting worlds with distinct biomes
+### Design Principles
 
-### 3.1 Biome System
-- [ ] Define BiomeType enum (Forest, Grassland, Desert, Swamp, Tundra)
-- [ ] Biome distribution based on elevation + moisture
-- [ ] Biome-specific tile distributions
-- [ ] Visual variety per biome
+1. **Data-Driven Species**: All creature behavior should be configurable through SpeciesDefinition. Avoid hardcoding species-specific logic in systems.
 
-### 3.2 Advanced Terrain
-- [ ] Domain warping for organic patterns
-- [ ] River generation (graph-based hydrology)
-- [ ] Lake formation in low elevation areas
-- [ ] Beach transitions between water/land
+2. **Extensible Components**: When adding new features, check if existing components can be extended rather than creating new ones.
 
-### 3.3 Ecosystem Zones
-- [ ] Biome-specific spawn rates per species
-- [ ] Carrying capacity per biome
-- [ ] Movement modifiers (swamp = slow)
-- [ ] Visibility modifiers (forest = reduced hunt range)
+3. **Species-Aware Spawning**: Always use species-specific methods for spawn location validation:
+   - `species.CanSpawnOnTile(tile)` for tile checks
+   - `species.CanSpawnInBiome(biome)` for biome checks
+   - `WorldManager.IsSpawnableForSpecies(x, y, species)` for world queries
 
-### 3.4 World Size Expansion
-- [ ] Support 64x64 chunks (2048x2048 tiles)
-- [ ] Efficient chunk indexing
-- [ ] Memory-mapped chunk storage for huge worlds
+4. **Terrain Abstraction**: Use tile type methods rather than raw enums:
+   - `tile.IsWalkable()`, `tile.IsSpawnable()`, `tile.IsWater()`, `tile.IsGrazeable()`
+   - Add new methods to TileType.cs when needed
 
-**Success Criteria:**
-- 5+ distinct biome types
-- Natural-looking terrain patterns
-- Biome influences creature behavior
+5. **LOD Awareness**: New systems should check LOD level before expensive operations:
+   ```csharp
+   if (lod.Level > LODLevel.Reduced) continue; // Skip for distant entities
+   ```
+
+### Component Addition Checklist
+
+When adding a new component:
+1. Define struct in appropriate Components file with `[StructLayout(LayoutKind.Sequential)]`
+2. Add array to EntityManager (matching MAX_ENTITIES size)
+3. Add flag to ComponentFlags enum
+4. Update CreateEntity() if needed for default values
+5. Consider if SpeciesDefinition should configure it
+
+### System Addition Checklist
+
+When adding a new system:
+1. Implement ISystem interface
+2. Register in GameManager._Ready() in correct order
+3. Document dependencies (must run before/after X)
+4. Consider LOD levels - when to skip processing
+5. Use SpatialHash for proximity queries (not O(n²) loops)
 
 ---
 
-## Phase 4: Species Diversity (Priority: MEDIUM)
+## Phase 1: Ecosystem Stability (Priority: CRITICAL)
 
-**Goal:** Implement unique faction species with distinct behaviors
+**Goal**: Self-sustaining populations that don't collapse or explode
+
+### 1.1 Population Monitoring
+- [ ] Add per-species population tracking in GameManager
+- [ ] Log population every 1000 ticks to file
+- [ ] Detect extinction events (species count = 0)
+- [ ] Detect explosion events (species count = cap)
+- [ ] Add population graph to debug overlay
+
+### 1.2 Balance Tuning
+Current balance status:
+| Species | Hunger Decay | Hunt Success | Reproduction | Status |
+|---------|-------------|--------------|--------------|--------|
+| Deer | 0.05/tick | N/A | Works | Stable |
+| Rabbit | 0.08/tick | N/A | Works | Stable |
+| Wolf | 0.04/tick | ~60% | Works | Needs testing |
+| Fox | 0.035/tick | ~70% | Works | Needs testing |
+
+Tasks:
+- [ ] Run 10-minute simulation, log population curves
+- [ ] Adjust predator hunger decay if dying out
+- [ ] Adjust reproduction thresholds if population unstable
+- [ ] Verify hunt success rates with spatial hash optimization
+
+### 1.3 Spawn Distribution
+- [x] Fix spawn ratio (entity counts, not spawn events)
+- [x] Biome-aware spawning
+- [x] Tile-aware spawning (species-specific)
+- [ ] Verify initial distribution across world
+- [ ] Add spawn logging for debugging
+
+---
+
+## Phase 2: World Generation v2 (Priority: HIGH)
+
+**Goal**: Diverse, interesting terrain with ecosystem implications
+
+### 2.1 River System
+Design:
+- Rivers flow from high elevation to low
+- River tiles: RiverSource, River, RiverDelta
+- Rivers block land movement but some species can swim
+
+Tasks:
+- [ ] Add river tile types to TileType enum
+- [ ] Implement river generation in TerrainGenerator
+  - [ ] Find high elevation points as sources
+  - [ ] Path downhill using A* or gradient descent
+  - [ ] Join rivers at confluences
+  - [ ] End at ocean/lake
+- [ ] Add river speed/walkability rules
+- [ ] Add river spawnable rules (fish species later)
+
+### 2.2 Tile Depletion & Regrowth
+Design:
+- Grazed tiles become depleted (lower nutrition)
+- Depleted tiles slowly regenerate
+- Enables migration patterns as herds move to fresh grass
+
+Tasks:
+- [ ] Add nutrition field to Chunk (per-tile float)
+- [ ] GrazingSystem reduces tile nutrition when feeding
+- [ ] Add TileRegenerationSystem
+- [ ] Herbivores prefer high-nutrition tiles
+- [ ] Consider seasonal variation later
+
+### 2.3 Domain Warping
+- [ ] Implement domain warping in TerrainGenerator
+- [ ] Create organic biome boundaries
+- [ ] Reduce "blobby" noise artifacts
+
+---
+
+## Phase 3: Aquatic Ecosystem (Priority: MEDIUM)
+
+**Goal**: Populate water bodies with appropriate creatures
+
+### 3.1 Aquatic Movement
+Design:
+- Aquatic creatures have IsAquatic = true
+- They spawn in water, move fast in water, slow/die on land
+- Semi-aquatic (like Crocodile) work in both
+
+Tasks:
+- [ ] Verify MovementSystem handles aquatic speed correctly
+- [ ] Add drowning equivalent (land creatures in deep water)
+- [ ] Add suffocation equivalent (fish out of water)
+- [ ] Test Crocodile spawning and behavior
+
+### 3.2 Fish Species
+Design:
+- Small fish: prey, school behavior
+- Large fish: predators
+
+Tasks:
+- [ ] Add Fish species to SpeciesRegistry (IsAquatic = true)
+- [ ] Add Shark species (aquatic predator)
+- [ ] Verify aquatic spawning works correctly
+- [ ] Add fish-specific behaviors (schooling)
+
+### 3.3 Shore Interactions
+- [ ] Crocodile hunts prey at water's edge
+- [ ] Prey avoid water edges when predators present
+- [ ] Amphibian species concept (later)
+
+---
+
+## Phase 4: Faction Species (Priority: MEDIUM)
+
+**Goal**: Three unique faction species with emergent dynamics
 
 ### 4.1 Shroomer (Fungi Faction)
-- [ ] Spore-based reproduction (spread to nearby tiles)
-- [ ] Passive - doesn't hunt or flee
-- [ ] Absorbs nutrients from dead entities
-- [ ] Forms networks (connected Shroomers share resources)
-- [ ] Purple/pink coloring
+Design:
+- Reproduction: Spore-based, spreads to adjacent tiles
+- Behavior: Passive, doesn't hunt or flee
+- Resource: Absorbs nutrients from dead entities (decomposer)
+- Social: Network formation (connected shroomers share resources)
+
+Tasks:
+- [ ] Add Shroomer to SpeciesRegistry
+- [ ] Create SporeReproductionSystem
+  - [ ] Check for adjacent valid tiles
+  - [ ] Spawn probability based on local shroomer density
+  - [ ] Resource sharing in network
+- [ ] Create DecomposerSystem
+  - [ ] Detect death events
+  - [ ] Shroomers near corpses gain hunger
+- [ ] Add ShroomerNetwork component for resource sharing
 
 ### 4.2 Sectid (Insect Faction)
-- [ ] Hive-based social structure
-- [ ] Queen entity spawns workers
-- [ ] Workers gather food for hive
-- [ ] Soldiers defend territory
-- [ ] Swarm behavior when threatened
-- [ ] Orange/brown coloring
+Design:
+- Reproduction: Queen spawns workers
+- Behavior: Hive-based, workers gather food, soldiers defend
+- Structure: Queen + Workers + Soldiers (role differentiation)
+
+Tasks:
+- [ ] Add Sectid roles (Queen, Worker, Soldier) to components
+- [ ] Create HiveSystem
+  - [ ] Queens spawn workers periodically
+  - [ ] Workers bring food to queen
+  - [ ] Soldiers patrol hive perimeter
+- [ ] Add SwarmBehavior for defense
+- [ ] Hive territory marking
 
 ### 4.3 Faeling (Crystal Faction)
-- [ ] Crystal growth reproduction (budding)
-- [ ] Energy absorption from environment
-- [ ] Territorial - defends crystal formations
-- [ ] Slow but durable (high energy)
-- [ ] Blue/cyan coloring
+Design:
+- Reproduction: Budding (crystal growth)
+- Behavior: Territorial, defends crystal formations
+- Resource: Energy absorption from environment
+- Movement: Slow but durable
 
-### 4.4 Species Interactions
-- [ ] Faction territory conflicts
-- [ ] Resource competition
-- [ ] Symbiotic relationships (Shroomer + Faeling?)
-- [ ] Faction-specific AI behaviors
+Tasks:
+- [ ] Add Faeling to SpeciesRegistry
+- [ ] Create BuddingReproductionSystem
+  - [ ] Requires high energy threshold
+  - [ ] Creates adjacent crystal (slower than spores)
+- [ ] Create CrystalFormationSystem
+  - [ ] Track connected crystals
+  - [ ] Formation size affects defense bonus
+- [ ] Add territory defense behavior
 
-**Success Criteria:**
-- 3 unique factions with distinct behaviors
-- Factions compete for territory
-- Emergent ecosystem dynamics
+### 4.4 Faction Interactions
+- [ ] Shroomer decomposes Sectid/Faeling corpses
+- [ ] Sectid raids Shroomer networks
+- [ ] Faeling crystals block Sectid expansion
+- [ ] Territory conflict system
 
 ---
 
-## Phase 5: Player Systems (Priority: MEDIUM)
+## Phase 5: LOD & Scale (Priority: HIGH)
 
-**Goal:** Transform observer into interactive participant
+**Goal**: 10,000+ entities with smooth performance
 
-### 5.1 Player Entity Enhancement
-- [ ] Player stats (hunger, energy) - optional survival mode
-- [ ] Inventory system
-- [ ] Interaction with world (place/remove tiles)
-- [ ] Creature interaction (taming, feeding)
+### 5.1 Statistical Simulation
+Design:
+- Distant chunks use population-level math, not individual entities
+- When player approaches, entities are "materialized" from stats
 
-### 5.2 UI/HUD
-- [ ] Entity count display
-- [ ] Population graph over time
-- [ ] Selected entity info panel
-- [ ] Minimap with biome colors
-- [ ] Time controls (pause, 1x, 2x, 4x speed)
+Tasks:
+- [ ] Add ChunkPopulationData structure
+  - [ ] Per-species count
+  - [ ] Average hunger/age
+  - [ ] Birth/death rates
+- [ ] Create StatisticalSimSystem
+  - [ ] Run for LOD 2+ chunks
+  - [ ] Apply birth/death rates to counts
+  - [ ] Don't track individuals
+- [ ] Entity materialization when chunk becomes visible
+- [ ] Entity aggregation when chunk becomes distant
 
-### 5.3 Debug Tools
-- [ ] Entity inspector (click to view stats)
-- [ ] Spawn entities manually
-- [ ] Kill/heal entities
-- [ ] Teleport player
-- [ ] Chunk visualization overlay
+### 5.2 Performance Profiling
+- [ ] Add per-system timing to debug overlay
+- [ ] Identify hotspots in each system
+- [ ] Profile memory allocation patterns
+- [ ] Test with 5K, 10K, 20K entities
 
-### 5.4 Camera Improvements
-- [ ] Edge panning
-- [ ] Click-drag panning
-- [ ] Zoom to mouse position
+### 5.3 Optimization Targets
+Based on profiling:
+- [ ] SpatialHash optimization if needed
+- [ ] Consider SIMD for position updates
+- [ ] Batch entity creation/destruction
+- [ ] Object pooling for temporary lists
+
+---
+
+## Phase 6: Player Interaction (Priority: MEDIUM)
+
+### 6.1 Entity Selection
+- [ ] Click to select entity
+- [ ] Display entity stats panel
 - [ ] Follow selected entity mode
+- [ ] Highlight selected entity
 
-**Success Criteria:**
-- Full simulation observation capabilities
-- Time control for analysis
-- Debug tools for development
+### 6.2 Time Controls
+- [ ] Pause simulation (P key)
+- [ ] Speed controls: 0.5x, 1x, 2x, 4x
+- [ ] Display current speed in overlay
+
+### 6.3 Debug Commands
+- [ ] Spawn entity at cursor
+- [ ] Kill entity under cursor
+- [ ] Teleport player to location
+- [ ] Force reproduction
 
 ---
 
-## Phase 6: Persistence (Priority: MEDIUM)
+## Phase 7: Persistence (Priority: LOW)
 
-**Goal:** Save and load world state
+### 7.1 Save Format Design
+Design considerations:
+- JSON for human readability and debugging
+- Optional binary for performance
+- Version field for compatibility
 
-### 6.1 Save System
+Structure:
+```json
+{
+  "version": "0.2",
+  "seed": 42,
+  "tick": 12345,
+  "chunks": [...],
+  "entities": [...]
+}
+```
+
+### 7.2 Implementation
 - [ ] Serialize chunk terrain data
 - [ ] Serialize entity components
-- [ ] Save format (JSON or binary)
-- [ ] Compression for large worlds
-- [ ] Auto-save functionality
-
-### 6.2 Load System
-- [ ] Deserialize world state
-- [ ] Validate save file integrity
-- [ ] Version compatibility checks
-- [ ] Load progress indicator
-
-### 6.3 World Management
-- [ ] Multiple save slots
-- [ ] World browser UI
-- [ ] Delete/rename worlds
-- [ ] Export/import worlds
-
-**Success Criteria:**
-- Save/load works reliably
-- Large worlds save in reasonable time
-- Backwards compatibility considered
+- [ ] Save/load UI
+- [ ] Auto-save timer
 
 ---
 
-## Phase 7: Evolution & Genetics (Priority: LOW)
+## Phase 8: Evolution (Priority: LOW)
 
-**Goal:** Creatures evolve over generations
+### 8.1 Genetic System
+- [ ] Add Genetics component
+- [ ] Trait inheritance on reproduction
+- [ ] Mutation rates
+- [ ] Trait visualization
 
-### 7.1 Genetic System
-- [ ] Gene component with trait values
-- [ ] Trait inheritance from parents
-- [ ] Random mutations
-- [ ] Dominant/recessive traits
-
-### 7.2 Evolvable Traits
-- [ ] Speed (movement rate)
-- [ ] Size (affects visibility, energy needs)
-- [ ] Aggression (hunt behavior)
-- [ ] Fertility (reproduction rate)
-- [ ] Lifespan
-- [ ] Sensory range (hunt/flee detection)
-
-### 7.3 Natural Selection
-- [ ] Traits affect survival
-- [ ] Better adapted creatures reproduce more
-- [ ] Speciation over many generations
-- [ ] Visualization of trait distributions
-
-**Success Criteria:**
-- Observable evolution over time
-- Populations adapt to environment
-- Trait distributions shift naturally
+### 8.2 Natural Selection
+- [ ] Better traits = better survival
+- [ ] Track trait distributions over time
+- [ ] Speciation detection
 
 ---
 
-## Phase 8: Polish (Priority: LOW)
+## Technical Debt
 
-**Goal:** Production-ready quality
+### Known Issues
+- [ ] Creatures can still spawn in valid tiles but isolated positions
+- [ ] Pack hunting coordination could be tighter
+- [ ] Fear decay might be too slow for some species
 
-### 8.1 Audio
-- [ ] Ambient sounds per biome
-- [ ] Creature sounds
-- [ ] UI feedback sounds
-- [ ] Music system
-
-### 8.2 Visual Polish
-- [ ] Sprite-based rendering (replace shapes)
-- [ ] Animations (idle, walk, attack)
-- [ ] Particle effects (death, birth, combat)
-- [ ] Day/night cycle
-- [ ] Weather effects
-
-### 8.3 Performance Polish
-- [ ] Memory optimization
-- [ ] Load time optimization
-- [ ] Battery-friendly mode for laptops
-- [ ] Settings menu
-
-### 8.4 Accessibility
-- [ ] Colorblind modes
-- [ ] Font size options
-- [ ] Control remapping
-- [ ] Speed options for simulation
-
-**Success Criteria:**
-- Professional presentation
-- Smooth user experience
-- Accessible to wide audience
-
----
-
-## Technical Debt & Maintenance
-
-### Ongoing
+### Code Quality
+- [ ] Add XML documentation to all public methods
 - [ ] Unit tests for core systems
-- [ ] Integration tests for ecosystem
-- [ ] Documentation for all public APIs
-- [ ] Performance regression tests
-- [ ] Code review standards
-
-### Refactoring Candidates
-- [ ] Extract creature creation into factory pattern
-- [ ] Centralize configuration constants
-- [ ] Add dependency injection for systems
-- [ ] Improve error handling and logging
+- [ ] Integration tests for ecosystem balance
 
 ---
 
-## Milestone Summary
+## Version History
 
-| Milestone | Phase | Target | Status |
-|-----------|-------|--------|--------|
-| **v0.1** | Foundation | Core ECS + Rendering | COMPLETE |
-| **v0.2** | Phase 1 | Ecosystem Complete | PENDING |
-| **v0.3** | Phase 2 | Scale to 10K entities | PENDING |
-| **v0.4** | Phase 3+4 | Biomes + Species | PENDING |
-| **v0.5** | Phase 5 | Player Systems | PENDING |
-| **v0.6** | Phase 6 | Save/Load | PENDING |
-| **v1.0** | Phase 7+8 | Evolution + Polish | PENDING |
+| Version | Date | Changes |
+|---------|------|---------|
+| v0.1 | Jan 2026 | Core ECS, basic rendering |
+| v0.2 | Feb 2026 | Species system, reproduction, fear, terrain discomfort, biome spawning |
 
 ---
 
-## Quick Start for Contributors
-
-### Priority Work Items
-1. Implement GrazingSystem (Phase 1.1)
-2. Implement ReproductionSystem (Phase 1.2)
-3. Balance creature stats for population stability (Phase 1.3)
-
-### Key Files to Modify (in godot/ folder)
-- `Scripts/Systems/BehaviorSystems.cs` - Add new systems here
-- `Scripts/GameManager.cs` - Register new systems
-- `Scripts/Components/CreatureComponents.cs` - Add new components if needed
-- `Scripts/ECS/EntityManager.cs` - Add component arrays if needed
-
-### Testing Approach
-1. Run game, observe population counter
-2. Check for population collapse (all die) or explosion (hit cap immediately)
-3. Watch predator-prey interactions
-4. Monitor FPS and tick rate in debug overlay
-
----
-
-*Last Updated: January 2026*
+*Last Updated: February 2026*
 *Engine: Godot 4.6 with C#*
