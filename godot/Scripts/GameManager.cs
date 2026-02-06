@@ -145,111 +145,158 @@ public partial class GameManager : Node2D
         var predatorSpecies = new List<SpeciesDefinition>(SpeciesRegistry.GetPredators());
         var terraformerSpecies = new List<SpeciesDefinition>(SpeciesRegistry.GetTerraformers());
 
-        // Calculate target counts per species (distribute evenly within category)
+        // Calculate target counts
         int targetHerbivores = (int)(InitialPopulation * HerbivoreRatio);
         int targetPredators = InitialPopulation - targetHerbivores;
         int targetTerraformers = (int)(InitialPopulation * 0.15f);
-
-        // Build per-species spawn targets
-        var spawnTargets = new List<(SpeciesDefinition species, int count)>();
-
-        if (herbivoreSpecies.Count > 0)
-        {
-            int perSpecies = targetHerbivores / herbivoreSpecies.Count;
-            int remainder = targetHerbivores % herbivoreSpecies.Count;
-            foreach (var species in herbivoreSpecies)
-            {
-                int count = perSpecies + (remainder-- > 0 ? 1 : 0);
-                spawnTargets.Add((species, count));
-            }
-        }
-        if (predatorSpecies.Count > 0)
-        {
-            int perSpecies = targetPredators / predatorSpecies.Count;
-            int remainder = targetPredators % predatorSpecies.Count;
-            foreach (var species in predatorSpecies)
-            {
-                int count = perSpecies + (remainder-- > 0 ? 1 : 0);
-                spawnTargets.Add((species, count));
-            }
-        }
-        if (terraformerSpecies.Count > 0)
-        {
-            int perSpecies = targetTerraformers / terraformerSpecies.Count;
-            int remainder = targetTerraformers % terraformerSpecies.Count;
-            foreach (var species in terraformerSpecies)
-            {
-                int count = perSpecies + (remainder-- > 0 ? 1 : 0);
-                spawnTargets.Add((species, count));
-            }
-        }
 
         // Get all chunks and shuffle
         var allChunks = new List<Chunk>(_worldManager.GetLoadedChunks());
         ShuffleList(allChunks);
 
-        // Assign dedicated chunk ranges to each species so clusters don't overlap.
-        // Each species gets a slice of the shuffled chunk list to pick from.
-        int totalChunks = allChunks.Count;
-        int chunkIndex = 0;
+        // Track which chunks have prey spawned in them (for predator placement)
+        var preyChunks = new List<Chunk>();
 
-        foreach (var (species, targetCount) in spawnTargets)
+        // === Phase 1: Spawn herbivores spread across the world ===
+        // Different herbivore species can share territory — this is natural.
+        spawned += SpawnCategory(herbivoreSpecies, targetHerbivores, allChunks, preyChunks);
+
+        // === Phase 2: Spawn terraformers in their preferred biomes ===
+        ShuffleList(allChunks);
+        spawned += SpawnCategory(terraformerSpecies, targetTerraformers, allChunks, preyChunks);
+
+        // === Phase 3: Spawn predators NEAR existing prey populations ===
+        // Predators need food — place them in or adjacent to chunks with prey.
+        if (predatorSpecies.Count > 0 && preyChunks.Count > 0)
         {
-            if (targetCount <= 0) continue;
+            // Build a list of chunks near prey: the prey chunks themselves + their neighbors
+            var predatorCandidateChunks = new List<Chunk>();
+            var addedChunks = new HashSet<(int, int)>();
 
-            // Estimate chunks needed: each group uses ~1 position, allow headroom
-            int groupSize = Math.Max(2, (int)species.PreferredGroupSize);
-            int groupsNeeded = (targetCount + groupSize - 1) / groupSize;
-            // Reserve enough chunks — at least groupsNeeded, but don't starve other species
-            int chunksForSpecies = Math.Max(groupsNeeded, totalChunks / spawnTargets.Count);
-            chunksForSpecies = Math.Min(chunksForSpecies, totalChunks - chunkIndex);
-
-            int speciesSpawned = 0;
-            int endChunkIndex = chunkIndex + chunksForSpecies;
-
-            for (int ci = chunkIndex; ci < endChunkIndex && speciesSpawned < targetCount; ci++)
+            foreach (var preyChunk in preyChunks)
             {
-                // Wrap around if we exhaust our slice (fallback)
-                var chunk = allChunks[ci % totalChunks];
+                // Add the prey chunk itself and its neighbors
+                for (int dx = -1; dx <= 1; dx++)
+                {
+                    for (int dy = -1; dy <= 1; dy++)
+                    {
+                        int cx = preyChunk.ChunkX + dx;
+                        int cy = preyChunk.ChunkY + dy;
+                        if (!addedChunks.Contains((cx, cy)))
+                        {
+                            var neighbor = _worldManager.GetChunk(cx, cy);
+                            if (neighbor != null)
+                            {
+                                predatorCandidateChunks.Add(neighbor);
+                                addedChunks.Add((cx, cy));
+                            }
+                        }
+                    }
+                }
+            }
+
+            ShuffleList(predatorCandidateChunks);
+
+            int perSpecies = targetPredators / predatorSpecies.Count;
+            int remainder = targetPredators % predatorSpecies.Count;
+
+            foreach (var species in predatorSpecies)
+            {
+                int target = perSpecies + (remainder-- > 0 ? 1 : 0);
+                int speciesSpawned = 0;
+
+                foreach (var chunk in predatorCandidateChunks)
+                {
+                    if (speciesSpawned >= target) break;
+
+                    var positions = _worldManager.GetSpawnablePositionsForSpecies(
+                        chunk, 4, _rng, species);
+                    if (positions.Count == 0) continue;
+
+                    int posIndex = 0;
+                    while (posIndex < positions.Count && speciesSpawned < target)
+                    {
+                        var (x, y, _, _) = positions[posIndex];
+
+                        bool isPack = _rng.NextDouble() < species.PackHunterChance
+                                      && species.DefaultSocialType == SocialType.Pack;
+
+                        if (!isPack)
+                        {
+                            SpawnCreature(x, y, species, -1, true);
+                            speciesSpawned++;
+                            spawned++;
+                            posIndex++;
+                        }
+                        else
+                        {
+                            int packSize = (int)species.PreferredGroupSize + _rng.Next(-1, 2);
+                            packSize = Math.Max(2, packSize);
+                            packSize = Math.Min(packSize, target - speciesSpawned);
+
+                            int gid = _nextSpawnGroupId++;
+                            int gs = SpawnGroup(x, y, species, packSize, gid, ref posIndex);
+                            speciesSpawned += gs;
+                            spawned += gs;
+                        }
+                    }
+                }
+            }
+        }
+
+        return spawned;
+    }
+
+    /// <summary>
+    /// Spawns a category of species (herbivores or terraformers) spread across chunks.
+    /// Different species within the category can share chunks.
+    /// Tracks which chunks received prey for later predator placement.
+    /// </summary>
+    private int SpawnCategory(List<SpeciesDefinition> speciesList, int totalTarget,
+                               List<Chunk> chunks, List<Chunk> preyChunks)
+    {
+        if (speciesList.Count == 0 || totalTarget <= 0) return 0;
+
+        int spawned = 0;
+        int perSpecies = totalTarget / speciesList.Count;
+        int remainder = totalTarget % speciesList.Count;
+
+        foreach (var species in speciesList)
+        {
+            int target = perSpecies + (remainder-- > 0 ? 1 : 0);
+            int speciesSpawned = 0;
+
+            foreach (var chunk in chunks)
+            {
+                if (speciesSpawned >= target) break;
+                if (_entityManager.EntityCount >= MaxPopulation) break;
 
                 var positions = _worldManager.GetSpawnablePositionsForSpecies(
                     chunk, 6, _rng, species);
                 if (positions.Count == 0) continue;
 
                 int posIndex = 0;
+                bool spawnedInChunk = false;
 
-                while (posIndex < positions.Count && speciesSpawned < targetCount)
+                while (posIndex < positions.Count && speciesSpawned < target)
                 {
                     var (x, y, _, _) = positions[posIndex];
 
-                    bool isPredator = species.IsPredator;
-                    bool isPack = isPredator && _rng.NextDouble() < species.PackHunterChance
-                                  && species.DefaultSocialType == SocialType.Pack;
+                    int groupSize = (int)species.PreferredGroupSize + _rng.Next(-2, 3);
+                    groupSize = Math.Max(2, groupSize);
+                    groupSize = Math.Min(groupSize, target - speciesSpawned);
 
-                    if (isPredator && !isPack)
-                    {
-                        // Solitary predator
-                        SpawnCreature(x, y, species, -1, true);
-                        speciesSpawned++;
-                        spawned++;
-                        posIndex++;
-                    }
-                    else
-                    {
-                        // Group/herd/pack spawn
-                        int size = (int)species.PreferredGroupSize + _rng.Next(-2, 3);
-                        size = Math.Max(2, size);
-                        size = Math.Min(size, targetCount - speciesSpawned);
-
-                        int gid = _nextSpawnGroupId++;
-                        int gs = SpawnGroup(x, y, species, size, gid, ref posIndex);
-                        speciesSpawned += gs;
-                        spawned += gs;
-                    }
+                    int gid = _nextSpawnGroupId++;
+                    int gs = SpawnGroup(x, y, species, groupSize, gid, ref posIndex);
+                    speciesSpawned += gs;
+                    spawned += gs;
+                    if (gs > 0) spawnedInChunk = true;
                 }
-            }
 
-            chunkIndex = endChunkIndex;
+                // Track this chunk as having prey (for predator spawning)
+                if (spawnedInChunk && species.IsPrey)
+                    preyChunks.Add(chunk);
+            }
         }
 
         return spawned;

@@ -78,13 +78,11 @@ public sealed class WanderSystem : ISystem
     private readonly float _roamDistance;
     private readonly int _roamCooldownBase;
     private readonly float _roamArrivalDist;
-    private readonly float _crowdingThreshold;
     private readonly List<int> _nearbyBuffer = new(32);
 
     public WanderSystem(WorldManager? worldManager = null, float lookAheadDistance = 1.5f,
                         float roamDistance = 60f, int roamCooldownBase = 500,
-                        float roamArrivalDist = 5f, float crowdingThreshold = 1.5f,
-                        SpatialHash? spatialHash = null)
+                        float roamArrivalDist = 5f, SpatialHash? spatialHash = null)
     {
         _worldManager = worldManager;
         _spatialHash = spatialHash;
@@ -92,7 +90,6 @@ public sealed class WanderSystem : ISystem
         _roamDistance = roamDistance;
         _roamCooldownBase = roamCooldownBase;
         _roamArrivalDist = roamArrivalDist;
-        _crowdingThreshold = crowdingThreshold;
     }
 
     public void Process(EntityManager em)
@@ -260,51 +257,91 @@ public sealed class WanderSystem : ISystem
 
     /// <summary>
     /// Determines if an entity should start a long-distance roam.
-    /// Predators roam when hungry without a target.
-    /// Herbivores roam when local same-species density is too high.
+    /// Driven by food scarcity: predators roam when no prey is nearby,
+    /// herbivores/terraformers roam when too many competitors share limited food.
     /// </summary>
     private bool ShouldStartRoaming(int entity, EntityManager em, ref Position pos)
     {
-        // Predators: roam when hungry and idle (no target)
-        if (em.HasComponents(entity, ComponentFlags.Predator))
+        if (_spatialHash == null) return false;
+
+        // Predators: roam when hungry and no prey nearby
+        if (em.HasComponents(entity, ComponentFlags.Predator | ComponentFlags.Hunger))
         {
-            if (em.HasComponents(entity, ComponentFlags.Hunger))
+            ref var hunger = ref em.Hungers[entity];
+            float hungerRatio = hunger.Current / hunger.Max;
+
+            // Only consider roaming when getting hungry (below 60%)
+            if (hungerRatio >= 0.6f) return false;
+
+            // Check if any prey exists within hunt range
+            ref var predator = ref em.Predators[entity];
+            _nearbyBuffer.Clear();
+            _spatialHash.QueryRadius(pos.X, pos.Y, predator.HuntRange, _nearbyBuffer);
+
+            bool preyNearby = false;
+            foreach (int other in _nearbyBuffer)
             {
-                ref var hunger = ref em.Hungers[entity];
-                float ratio = hunger.Current / hunger.Max;
-                // Hungrier = more likely to roam. Below 50% hunger, start roaming.
-                if (ratio < 0.5f)
-                    return _rng.NextDouble() < 0.02;  // ~2% chance per eligible tick
+                if (other != entity && em.IsAlive(other)
+                    && em.HasComponents(other, ComponentFlags.Prey))
+                {
+                    preyNearby = true;
+                    break;
+                }
+            }
+
+            // No prey in hunt range and getting hungry — time to migrate
+            if (!preyNearby)
+            {
+                // More urgent the hungrier we are
+                float roamChance = hungerRatio < 0.3f ? 0.04f : 0.015f;
+                return _rng.NextDouble() < roamChance;
             }
             return false;
         }
 
-        // Herbivores/Terraformers: roam when crowded
-        if (_spatialHash != null && em.HasComponents(entity, ComponentFlags.Species | ComponentFlags.Social))
+        // Herbivores/Terraformers: roam when food competition is too high
+        // (too many same-diet creatures competing for the same food tiles)
+        if (em.HasComponents(entity, ComponentFlags.Species | ComponentFlags.Hunger))
         {
-            ref var social = ref em.Socials[entity];
-            float checkRadius = 15f;
+            ref var hunger = ref em.Hungers[entity];
+            float hungerRatio = hunger.Current / hunger.Max;
 
+            // Only consider roaming when hunger is dropping (below 50%)
+            if (hungerRatio >= 0.5f) return false;
+
+            float checkRadius = 12f;
             _nearbyBuffer.Clear();
             _spatialHash.QueryRadius(pos.X, pos.Y, checkRadius, _nearbyBuffer);
 
             ref var mySpecies = ref em.Species[entity];
-            int sameSpeciesCount = 0;
+            var myDef = SpeciesRegistry.GetById(mySpecies.SpeciesId);
+
+            // Count creatures competing for the same food source
+            int competitorCount = 0;
             foreach (int other in _nearbyBuffer)
             {
-                if (other == entity || !em.IsAlive(other))
-                    continue;
-                if (!em.HasComponents(other, ComponentFlags.Species))
-                    continue;
-                if (em.Species[other].SpeciesId == mySpecies.SpeciesId)
-                    sameSpeciesCount++;
+                if (other == entity || !em.IsAlive(other)) continue;
+                if (!em.HasComponents(other, ComponentFlags.Species)) continue;
+
+                ref var otherSpecies = ref em.Species[other];
+                var otherDef = SpeciesRegistry.GetById(otherSpecies.SpeciesId);
+
+                // Same diet = competing for same food
+                if (otherDef.Diet == myDef.Diet)
+                    competitorCount++;
             }
 
-            // If nearby same-species count exceeds preferred group size by crowding threshold,
-            // this entity should roam to reduce local density
-            float preferred = social.PreferredGroupSize;
-            if (preferred > 0 && sameSpeciesCount > preferred * _crowdingThreshold)
-                return _rng.NextDouble() < 0.01;  // ~1% chance per eligible tick
+            // High competition + low hunger = migrate to find better grazing
+            float competitionPressure = competitorCount / Math.Max(1f,
+                em.HasComponents(entity, ComponentFlags.Social)
+                    ? em.Socials[entity].PreferredGroupSize * 2f
+                    : 6f);
+
+            if (competitionPressure > 1.0f)
+            {
+                float roamChance = hungerRatio < 0.3f ? 0.02f : 0.008f;
+                return _rng.NextDouble() < roamChance;
+            }
         }
 
         return false;
