@@ -41,6 +41,7 @@ public sealed class EntityManager
         Social = 1 << 13,
         TerrainDiscomfort = 1 << 14,
         Fear = 1 << 15,
+        Terraform = 1 << 16,
     }
 
     private readonly ComponentFlags[] _componentFlags;
@@ -62,6 +63,7 @@ public sealed class EntityManager
     public readonly Social[] Socials;
     public readonly TerrainDiscomfort[] TerrainDiscomforts;
     public readonly Fear[] Fears;
+    public readonly Terraform[] Terraforms;
 
     public EntityManager()
     {
@@ -88,6 +90,7 @@ public sealed class EntityManager
         Socials = new Social[MaxEntities];
         TerrainDiscomforts = new TerrainDiscomfort[MaxEntities];
         Fears = new Fear[MaxEntities];
+        Terraforms = new Terraform[MaxEntities];
     }
 
     public int EntityCount => _entityCount;

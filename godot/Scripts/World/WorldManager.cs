@@ -87,6 +87,24 @@ public sealed class WorldManager
     }
 
     /// <summary>
+    /// Set a tile type at world coordinates. Returns true if successful.
+    /// </summary>
+    public bool SetTile(float worldX, float worldY, TileType type)
+    {
+        int chunkX = (int)(worldX / ChunkSize);
+        int chunkY = (int)(worldY / ChunkSize);
+
+        var chunk = GetChunk(chunkX, chunkY);
+        if (chunk == null)
+            return false;
+
+        int localX = (int)worldX % ChunkSize;
+        int localY = (int)worldY % ChunkSize;
+        chunk.SetTile(localX, localY, type);
+        return true;
+    }
+
+    /// <summary>
     /// Check if world position is walkable.
     /// </summary>
     public bool IsWalkable(float worldX, float worldY)

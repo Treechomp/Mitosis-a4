@@ -40,6 +40,22 @@ public sealed class Chunk
     }
 
     /// <summary>
+    /// Check if a tile is safe to spawn creatures on.
+    /// </summary>
+    public bool IsSpawnable(int localX, int localY)
+    {
+        return GetTile(localX, localY).IsSpawnable();
+    }
+
+    /// <summary>
+    /// Get the biome type at a local tile position.
+    /// </summary>
+    public BiomeType GetBiome(int localX, int localY)
+    {
+        return GetTile(localX, localY).GetTypicalBiome();
+    }
+
+    /// <summary>
     /// Get the color for rendering a tile type.
     /// </summary>
     public static Color GetTileColor(TileType tile)
@@ -52,6 +68,9 @@ public sealed class Chunk
             TileType.Grass => new Color(0.3f, 0.7f, 0.3f),
             TileType.Forest => new Color(0.15f, 0.5f, 0.2f),
             TileType.Mountain => new Color(0.5f, 0.5f, 0.5f),
+            TileType.River => new Color(0.15f, 0.45f, 0.75f),
+            TileType.Wetland => new Color(0.1f, 0.45f, 0.3f),
+            TileType.Arid => new Color(0.75f, 0.6f, 0.35f),
             _ => new Color(1f, 0f, 1f) // Magenta for unknown
         };
     }

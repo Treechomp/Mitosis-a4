@@ -11,6 +11,7 @@ public sealed class TerrainGenerator
     private readonly int _seed;
     private readonly FastNoiseLite _elevationNoise;
     private readonly FastNoiseLite _moistureNoise;
+    private readonly FastNoiseLite _riverNoise;
 
     public TerrainGenerator(int seed = 42)
     {
@@ -31,6 +32,14 @@ public sealed class TerrainGenerator
         _moistureNoise.Frequency = 0.03f;
         _moistureNoise.FractalType = FastNoiseLite.FractalTypeEnum.Fbm;
         _moistureNoise.FractalOctaves = 3;
+
+        // River noise - low frequency for wide, meandering paths
+        _riverNoise = new FastNoiseLite();
+        _riverNoise.NoiseType = FastNoiseLite.NoiseTypeEnum.SimplexSmooth;
+        _riverNoise.Seed = seed + 3000;
+        _riverNoise.Frequency = 0.012f;
+        _riverNoise.FractalType = FastNoiseLite.FractalTypeEnum.Fbm;
+        _riverNoise.FractalOctaves = 2;
     }
 
     /// <summary>
@@ -53,6 +62,28 @@ public sealed class TerrainGenerator
                 float moisture = (_moistureNoise.GetNoise2D(worldX, worldY) + 1f) * 0.5f;
 
                 TileType tile = DetermineTileType(elevation, moisture);
+
+                // Carve rivers and add wetland banks on land tiles
+                if (tile.IsSpawnable())
+                {
+                    float riverVal = _riverNoise.GetNoise2D(worldX, worldY);
+                    float absRiver = MathF.Abs(riverVal);
+
+                    // River width varies with elevation (wider in valleys)
+                    float threshold = 0.018f + (0.7f - elevation) * 0.02f;
+                    threshold = Math.Clamp(threshold, 0.01f, 0.04f);
+
+                    if (absRiver < threshold)
+                    {
+                        tile = TileType.River;
+                    }
+                    else if (absRiver < threshold * 2.5f)
+                    {
+                        // Wetland fringe along river banks
+                        tile = TileType.Wetland;
+                    }
+                }
+
                 chunk.SetTile(localX, localY, tile);
             }
         }
@@ -76,10 +107,24 @@ public sealed class TerrainGenerator
         if (elevation > 0.8f)
             return TileType.Mountain;
 
-        // Forest or grass based on moisture
+        // Land tiles: moisture spectrum determines type
+        // Very high moisture -> Wetland
+        if (moisture > 0.75f)
+            return TileType.Wetland;
+
+        // High moisture -> Forest
         if (moisture > 0.55f)
             return TileType.Forest;
 
-        return TileType.Grass;
+        // Moderate moisture -> Grass
+        if (moisture > 0.35f)
+            return TileType.Grass;
+
+        // Low moisture -> Sand
+        if (moisture > 0.2f)
+            return TileType.Sand;
+
+        // Very low moisture -> Arid
+        return TileType.Arid;
     }
 }

@@ -54,6 +54,9 @@ public partial class GameManager : Node2D
     private int _frameCount;
     private int _herbivoreCount;
     private int _predatorCount;
+    private int _shroomerCount;
+    private int _sectidCount;
+    private int _faelingCount;
     private double _statsTimer;
 
     // Rendering
@@ -84,6 +87,7 @@ public partial class GameManager : Node2D
         _systems.Add(new FleeingSystem(spatialHash, _worldManager));
         _systems.Add(new AgingSystem());
         _systems.Add(new ReproductionSystem(_worldManager, MaxPopulation));
+        _systems.Add(new TerraformSystem(_worldManager));
 
         // Get camera reference
         _camera = GetNode<Camera2D>("Camera2D");
@@ -253,6 +257,51 @@ public partial class GameManager : Node2D
             }
         }
 
+        // Spawn faction species (terraformers) in their preferred biomes
+        var terraformerSpecies = new List<SpeciesDefinition>(SpeciesRegistry.GetTerraformers());
+        if (terraformerSpecies.Count > 0)
+        {
+            // Target ~15% of initial population as terraformers
+            int targetTerraformers = (int)(InitialPopulation * 0.15f);
+            int terraformerCount = 0;
+
+            // Re-shuffle chunks
+            for (int i = allChunks.Count - 1; i > 0; i--)
+            {
+                int j = _rng.Next(i + 1);
+                (allChunks[i], allChunks[j]) = (allChunks[j], allChunks[i]);
+            }
+
+            foreach (var chunk in allChunks)
+            {
+                if (terraformerCount >= targetTerraformers)
+                    break;
+
+                foreach (var species in terraformerSpecies)
+                {
+                    if (terraformerCount >= targetTerraformers)
+                        break;
+
+                    var positions = _worldManager.GetSpawnablePositionsForSpecies(
+                        chunk, 3, _rng, species);
+                    if (positions.Count == 0) continue;
+
+                    int groupId = _nextSpawnGroupId++;
+                    foreach (var (x, y, biome, tile) in positions)
+                    {
+                        if (terraformerCount >= targetTerraformers)
+                            break;
+                        if (_entityManager.EntityCount >= MaxPopulation)
+                            break;
+
+                        SpawnCreature(x, y, species, groupId, false);
+                        terraformerCount++;
+                        spawned++;
+                    }
+                }
+            }
+        }
+
         return spawned;
     }
 
@@ -372,7 +421,14 @@ public partial class GameManager : Node2D
         {
             DietType.Herbivore => SpeciesType.Herbivore,
             DietType.Carnivore => SpeciesType.Carnivore,
-            DietType.Omnivore => SpeciesType.Carnivore,  // Treat omnivores as carnivores for now
+            DietType.Omnivore => SpeciesType.Carnivore,
+            DietType.Terraformer => species.Name switch
+            {
+                "Shroomer" => SpeciesType.Shroomer,
+                "Sectid" => SpeciesType.Sectid,
+                "Faeling" => SpeciesType.Faeling,
+                _ => SpeciesType.Faeling
+            },
             _ => SpeciesType.Herbivore
         };
         _entityManager.Species[entity] = new Species(speciesType, 0, SpeciesRegistry.GetId(species.Name));
@@ -408,6 +464,18 @@ public partial class GameManager : Node2D
             grazingPressure: species.CanGraze ? Vary(species.GrazingPressure, variation) : 0f
         );
         _entityManager.AddComponent(entity, ComponentFlags.TerrainDiscomfort);
+
+        // Terraform component for faction species
+        if (species.Diet == DietType.Terraformer)
+        {
+            _entityManager.Terraforms[entity] = new Terraform(
+                direction: species.TerraformDir,
+                radius: Vary(species.TerraformRadius, variation),
+                strength: Vary(species.TerraformStrength, variation),
+                cooldown: (int)Vary(species.TerraformCooldown, variation)
+            );
+            _entityManager.AddComponent(entity, ComponentFlags.Terraform);
+        }
 
         // Diet-specific components
         if (species.IsPrey)
@@ -542,15 +610,22 @@ public partial class GameManager : Node2D
         // Count entities by type
         _herbivoreCount = 0;
         _predatorCount = 0;
+        _shroomerCount = 0;
+        _sectidCount = 0;
+        _faelingCount = 0;
 
         const ComponentFlags speciesRequired = ComponentFlags.Species;
         foreach (int entity in _entityManager.Query(speciesRequired))
         {
             ref var species = ref _entityManager.Species[entity];
-            if (species.Type == SpeciesType.Herbivore)
-                _herbivoreCount++;
-            else if (species.Type == SpeciesType.Carnivore)
-                _predatorCount++;
+            switch (species.Type)
+            {
+                case SpeciesType.Herbivore: _herbivoreCount++; break;
+                case SpeciesType.Carnivore: _predatorCount++; break;
+                case SpeciesType.Shroomer: _shroomerCount++; break;
+                case SpeciesType.Sectid: _sectidCount++; break;
+                case SpeciesType.Faeling: _faelingCount++; break;
+            }
         }
 
         // Update debug label
@@ -560,6 +635,9 @@ public partial class GameManager : Node2D
                               $"Entities: {_entityManager.EntityCount}\n" +
                               $"Herbivores: {_herbivoreCount}\n" +
                               $"Predators: {_predatorCount}\n" +
+                              $"Shroomers: {_shroomerCount}\n" +
+                              $"Sectids: {_sectidCount}\n" +
+                              $"Faelings: {_faelingCount}\n" +
                               $"TPS: {TargetTPS}";
         }
     }

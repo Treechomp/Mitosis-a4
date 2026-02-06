@@ -173,3 +173,40 @@ public struct Social
     public readonly bool HasLeader => RecognizedLeader >= 0;
     public readonly bool IsSocial => Type == SocialType.Herd || Type == SocialType.Pack;
 }
+
+/// <summary>
+/// Terraform influence direction for faction species.
+/// </summary>
+public enum TerraformDirection : sbyte
+{
+    Drier = -1,     // Sectids: push tiles toward Arid
+    Balanced = 0,   // Faelings: push tiles toward Grass
+    Wetter = 1      // Shroomers: push tiles toward Wetland
+}
+
+/// <summary>
+/// Enables a creature to gradually modify terrain tiles over time.
+/// Part of the faction species mechanic: Shroomers moisturize, Sectids dry, Faelings balance.
+/// </summary>
+[StructLayout(LayoutKind.Sequential)]
+public struct Terraform
+{
+    public TerraformDirection Direction;
+    public float Radius;            // Tile radius of influence
+    public float Strength;          // Probability per attempt of changing a tile (0-1)
+    public int Cooldown;            // Ticks between terraform attempts
+    public int CurrentCooldown;
+
+    public Terraform(
+        TerraformDirection direction = TerraformDirection.Balanced,
+        float radius = 2f,
+        float strength = 0.02f,
+        int cooldown = 10)
+    {
+        Direction = direction;
+        Radius = radius;
+        Strength = strength;
+        Cooldown = cooldown;
+        CurrentCooldown = 0;
+    }
+}

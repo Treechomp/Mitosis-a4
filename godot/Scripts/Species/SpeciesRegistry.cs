@@ -80,6 +80,16 @@ public static class SpeciesRegistry
     }
 
     /// <summary>
+    /// Get all terraformer (faction) species.
+    /// </summary>
+    public static IEnumerable<SpeciesDefinition> GetTerraformers()
+    {
+        foreach (var species in _species.Values)
+            if (species.Diet == DietType.Terraformer)
+                yield return species;
+    }
+
+    /// <summary>
     /// Register a new species.
     /// </summary>
     public static void Register(SpeciesDefinition species)
@@ -414,6 +424,253 @@ public static class SpeciesRegistry
             Shape = ShapeType.Triangle,
 
             StatVariation = 0.15f,
+        });
+
+        // ============================
+        // FACTION SPECIES (Terraformers)
+        // ============================
+
+        Register(new SpeciesDefinition
+        {
+            Name = "Shroomer",
+            Diet = DietType.Terraformer,
+            DefaultSocialType = SocialType.Herd,
+
+            // Movement - slow, sedentary fungi
+            BaseWanderSpeed = 0.02f,
+            DirectionChangeChance = 0.003f,
+
+            // Fleeing - slow but durable
+            FleeRange = 4f,
+            FleeSpeedMultiplier = 1.4f,
+
+            // Fear - calm, hard to startle
+            FearThreshold = 70f,
+            FearMax = 100f,
+            FearAccumulationRate = 3f,
+            FearDecayRate = 1.5f,
+            FearVigilanceDecay = 0.5f,
+            FearVigilanceDuration = 60,
+            DefaultFearResponse = FearResponse.Freeze,
+
+            // Survival - long-lived
+            MaxHunger = 70f,
+            HungerDecayRate = 0.04f,
+            MaxLifespan = 35000,
+            MaturityAge = 2500,
+
+            // Reproduction - spore spread
+            ReproHungerThreshold = 65f,
+            ReproEnergyThreshold = 75f,
+            ReproCooldown = 700,
+
+            // Social - loose clusters
+            GroupAffinity = 0.4f,
+            PreferredGroupSize = 4f,
+            CohesionStrength = 0.01f,
+            AlignmentStrength = 0.005f,
+
+            // Terrain - thrives in wet areas
+            DiscomfortThreshold = 60f,
+            DiscomfortDecayRate = 2f,
+            GrazingPressure = 0f,
+            TerrainSpeedModifiers = new Dictionary<TileType, float>
+            {
+                { TileType.Wetland, 1.2f },
+                { TileType.Forest, 1.1f },
+                { TileType.Grass, 0.9f },
+                { TileType.Sand, 0.6f },
+                { TileType.Arid, 0.4f },
+            },
+            TerrainComfortModifiers = new Dictionary<TileType, float>
+            {
+                { TileType.Wetland, -3f },   // Loves wet terrain
+                { TileType.Forest, -1f },
+                { TileType.Grass, 0f },
+                { TileType.Sand, 3f },       // Uncomfortable on dry
+                { TileType.Arid, 6f },       // Very uncomfortable on arid
+            },
+            AllowedSpawnTiles = new List<TileType> { TileType.Wetland, TileType.Forest },
+
+            // Grazing - feeds from wet/forest tiles
+            CanGraze = false,
+            FeedTiles = new List<TileType> { TileType.Wetland, TileType.Forest },
+            FeedNutrition = 0.4f,
+
+            // Terraform - increases moisture
+            TerraformDir = TerraformDirection.Wetter,
+            TerraformRadius = 2.0f,
+            TerraformStrength = 0.03f,
+            TerraformCooldown = 8,
+
+            // Visuals - purple/violet fungi
+            BaseColor = new Color(0.55f, 0.23f, 0.78f),
+            BaseSize = 9f,
+            Shape = ShapeType.Circle,
+
+            StatVariation = 0.2f,
+        });
+
+        Register(new SpeciesDefinition
+        {
+            Name = "Sectid",
+            Diet = DietType.Terraformer,
+            DefaultSocialType = SocialType.Herd,
+
+            // Movement - quick, jittery insects
+            BaseWanderSpeed = 0.05f,
+            DirectionChangeChance = 0.015f,
+
+            // Fleeing - fast
+            FleeRange = 6f,
+            FleeSpeedMultiplier = 2.0f,
+
+            // Fear - nervous swarm insects
+            FearThreshold = 40f,
+            FearMax = 80f,
+            FearAccumulationRate = 8f,
+            FearDecayRate = 1.2f,
+            FearVigilanceDecay = 0.4f,
+            FearVigilanceDuration = 80,
+            DefaultFearResponse = FearResponse.Panic,
+
+            // Survival - short-lived, fast metabolism
+            MaxHunger = 55f,
+            HungerDecayRate = 0.07f,
+            MaxLifespan = 20000,
+            MaturityAge = 1200,
+
+            // Reproduction - swarm breeders
+            ReproHungerThreshold = 60f,
+            ReproEnergyThreshold = 70f,
+            ReproCooldown = 400,
+
+            // Social - loose swarms
+            GroupAffinity = 0.5f,
+            PreferredGroupSize = 6f,
+            CohesionStrength = 0.012f,
+            AlignmentStrength = 0.008f,
+
+            // Terrain - thrives in dry areas
+            DiscomfortThreshold = 55f,
+            DiscomfortDecayRate = 2.5f,
+            GrazingPressure = 0f,
+            TerrainSpeedModifiers = new Dictionary<TileType, float>
+            {
+                { TileType.Arid, 1.2f },
+                { TileType.Sand, 1.1f },
+                { TileType.Grass, 0.9f },
+                { TileType.Forest, 0.6f },
+                { TileType.Wetland, 0.4f },
+            },
+            TerrainComfortModifiers = new Dictionary<TileType, float>
+            {
+                { TileType.Arid, -3f },     // Loves dry terrain
+                { TileType.Sand, -1f },
+                { TileType.Grass, 0f },
+                { TileType.Forest, 3f },     // Uncomfortable in wet
+                { TileType.Wetland, 6f },    // Very uncomfortable in wetland
+            },
+            AllowedSpawnTiles = new List<TileType> { TileType.Arid, TileType.Sand },
+
+            // Feeding - feeds from dry tiles
+            CanGraze = false,
+            FeedTiles = new List<TileType> { TileType.Arid, TileType.Sand },
+            FeedNutrition = 0.35f,
+
+            // Terraform - decreases moisture
+            TerraformDir = TerraformDirection.Drier,
+            TerraformRadius = 1.5f,
+            TerraformStrength = 0.04f,
+            TerraformCooldown = 6,
+
+            // Visuals - orange insects
+            BaseColor = new Color(0.86f, 0.55f, 0.16f),
+            BaseSize = 6f,
+            Shape = ShapeType.Triangle,
+
+            StatVariation = 0.25f,
+        });
+
+        Register(new SpeciesDefinition
+        {
+            Name = "Faeling",
+            Diet = DietType.Terraformer,
+            DefaultSocialType = SocialType.Herd,
+
+            // Movement - moderate pace
+            BaseWanderSpeed = 0.035f,
+            DirectionChangeChance = 0.008f,
+
+            // Fleeing
+            FleeRange = 5f,
+            FleeSpeedMultiplier = 1.8f,
+
+            // Fear - calm, measured response
+            FearThreshold = 55f,
+            FearMax = 90f,
+            FearAccumulationRate = 4f,
+            FearDecayRate = 1.5f,
+            FearVigilanceDecay = 0.4f,
+            FearVigilanceDuration = 80,
+            DefaultFearResponse = FearResponse.Flee,
+
+            // Survival - moderate lifespan
+            MaxHunger = 65f,
+            HungerDecayRate = 0.05f,
+            MaxLifespan = 28000,
+            MaturityAge = 1800,
+
+            // Reproduction
+            ReproHungerThreshold = 70f,
+            ReproEnergyThreshold = 80f,
+            ReproCooldown = 650,
+
+            // Social - communal groups
+            GroupAffinity = 0.6f,
+            PreferredGroupSize = 5f,
+            CohesionStrength = 0.018f,
+            AlignmentStrength = 0.01f,
+
+            // Terrain - prefers balanced grass
+            DiscomfortThreshold = 50f,
+            DiscomfortDecayRate = 2f,
+            GrazingPressure = 0f,
+            TerrainSpeedModifiers = new Dictionary<TileType, float>
+            {
+                { TileType.Grass, 1.2f },   // Fastest on balanced terrain
+                { TileType.Forest, 0.9f },
+                { TileType.Sand, 0.8f },
+                { TileType.Wetland, 0.7f },
+                { TileType.Arid, 0.7f },
+            },
+            TerrainComfortModifiers = new Dictionary<TileType, float>
+            {
+                { TileType.Grass, -2f },     // Loves balance
+                { TileType.Forest, 1f },
+                { TileType.Sand, 1f },
+                { TileType.Wetland, 3f },    // Dislikes extremes
+                { TileType.Arid, 3f },
+            },
+            AllowedSpawnTiles = new List<TileType> { TileType.Grass },
+
+            // Feeding - feeds from grass
+            CanGraze = false,
+            FeedTiles = new List<TileType> { TileType.Grass },
+            FeedNutrition = 0.45f,
+
+            // Terraform - restores balance
+            TerraformDir = TerraformDirection.Balanced,
+            TerraformRadius = 2.5f,
+            TerraformStrength = 0.025f,
+            TerraformCooldown = 10,
+
+            // Visuals - teal/cyan
+            BaseColor = new Color(0.24f, 0.86f, 0.78f),
+            BaseSize = 8f,
+            Shape = ShapeType.Square,
+
+            StatVariation = 0.2f,
         });
     }
 }

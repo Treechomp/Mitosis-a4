@@ -10,9 +10,10 @@ namespace Mitosis.SpeciesData;
 /// </summary>
 public enum DietType : byte
 {
-    Herbivore = 0,   // Eats plants (grazes)
-    Carnivore = 1,   // Eats other creatures
-    Omnivore = 2     // Eats both (future)
+    Herbivore = 0,    // Eats plants (grazes)
+    Carnivore = 1,    // Eats other creatures
+    Omnivore = 2,     // Eats both (future)
+    Terraformer = 3   // Feeds from terrain it shapes (faction species)
 }
 
 /// <summary>
@@ -145,6 +146,19 @@ public sealed class SpeciesDefinition
     public bool CanGraze { get; init; } = false;
     public float GrazeNutrition { get; init; } = 0.5f;
 
+    // === TERRAFORM (faction species) ===
+    public TerraformDirection TerraformDir { get; init; } = TerraformDirection.Balanced;
+    public float TerraformRadius { get; init; } = 2f;
+    public float TerraformStrength { get; init; } = 0.02f;
+    public int TerraformCooldown { get; init; } = 10;
+
+    /// <summary>
+    /// Tile types that this species feeds from (faction species).
+    /// If null or empty, uses standard grazing logic.
+    /// </summary>
+    public List<TileType>? FeedTiles { get; init; }
+    public float FeedNutrition { get; init; } = 0.4f;
+
     // === VISUALS ===
     public Color BaseColor { get; init; } = new(0.5f, 0.5f, 0.5f);
     public float BaseSize { get; init; } = 8f;
@@ -184,5 +198,5 @@ public sealed class SpeciesDefinition
     /// <summary>
     /// Check if this species can be prey (can be hunted).
     /// </summary>
-    public bool IsPrey => Diet == DietType.Herbivore || Diet == DietType.Omnivore;
+    public bool IsPrey => Diet == DietType.Herbivore || Diet == DietType.Omnivore || Diet == DietType.Terraformer;
 }

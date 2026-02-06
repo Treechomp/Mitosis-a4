@@ -1170,6 +1170,7 @@ public sealed class AgingSystem : ISystem
 
 /// <summary>
 /// Herbivores graze on grass/forest tiles to restore hunger.
+/// Faction species (Shroomer, Sectid, Faeling) feed from their preferred tile types.
 /// </summary>
 public sealed class GrazingSystem : ISystem
 {
@@ -1189,21 +1190,91 @@ public sealed class GrazingSystem : ISystem
         foreach (int entity in em.Query(required))
         {
             ref var species = ref em.Species[entity];
+            ref var pos = ref em.Positions[entity];
+            ref var hunger = ref em.Hungers[entity];
+            var tile = _worldManager.GetTile(pos.X, pos.Y);
 
-            // Only herbivores graze
-            if (species.Type != SpeciesType.Herbivore)
+            // Standard herbivore grazing
+            if (species.Type == SpeciesType.Herbivore)
+            {
+                if (tile.IsGrazeable())
+                    hunger.Current = MathF.Min(hunger.Max, hunger.Current + _grazeRate);
+                continue;
+            }
+
+            // Faction species: feed from their preferred tiles
+            if (species.Type == SpeciesType.Shroomer ||
+                species.Type == SpeciesType.Sectid ||
+                species.Type == SpeciesType.Faeling)
+            {
+                var speciesDef = SpeciesRegistry.GetById(species.SpeciesId);
+                if (speciesDef.FeedTiles != null && speciesDef.FeedTiles.Contains(tile))
+                {
+                    hunger.Current = MathF.Min(hunger.Max, hunger.Current + speciesDef.FeedNutrition);
+                }
+            }
+        }
+    }
+}
+
+/// <summary>
+/// Faction species gradually modify terrain tiles based on their terraform direction.
+/// Shroomers push tiles wetter, Sectids push drier, Faelings push toward balance.
+/// </summary>
+public sealed class TerraformSystem : ISystem
+{
+    private readonly World.WorldManager _worldManager;
+    private readonly Random _rng = new();
+
+    public TerraformSystem(World.WorldManager worldManager)
+    {
+        _worldManager = worldManager;
+    }
+
+    public void Process(EntityManager em)
+    {
+        const ComponentFlags required = ComponentFlags.Position | ComponentFlags.Terraform;
+
+        foreach (int entity in em.Query(required))
+        {
+            ref var terraform = ref em.Terraforms[entity];
+
+            // Cooldown
+            if (terraform.CurrentCooldown > 0)
+            {
+                terraform.CurrentCooldown--;
+                continue;
+            }
+
+            terraform.CurrentCooldown = terraform.Cooldown;
+
+            // Roll against strength probability
+            if ((float)_rng.NextDouble() > terraform.Strength)
                 continue;
 
             ref var pos = ref em.Positions[entity];
-            ref var hunger = ref em.Hungers[entity];
 
-            // Check tile type at entity position
-            var tile = _worldManager.GetTile(pos.X, pos.Y);
-            if (tile.IsGrazeable())
+            // Pick a random tile within influence radius
+            float offsetX = ((float)_rng.NextDouble() * 2f - 1f) * terraform.Radius;
+            float offsetY = ((float)_rng.NextDouble() * 2f - 1f) * terraform.Radius;
+            float targetX = pos.X + offsetX;
+            float targetY = pos.Y + offsetY;
+
+            var currentTile = _worldManager.GetTile(targetX, targetY);
+            if (!currentTile.IsTerraformable())
+                continue;
+
+            // Determine transformation based on direction
+            TileType? newTile = terraform.Direction switch
             {
-                // Restore hunger (capped at max)
-                hunger.Current = MathF.Min(hunger.Max, hunger.Current + _grazeRate);
-            }
+                TerraformDirection.Wetter => currentTile.ShiftWetter(),
+                TerraformDirection.Drier => currentTile.ShiftDrier(),
+                TerraformDirection.Balanced => currentTile.ShiftBalanced(),
+                _ => null
+            };
+
+            if (newTile.HasValue)
+                _worldManager.SetTile(targetX, targetY, newTile.Value);
         }
     }
 }
@@ -1386,7 +1457,7 @@ public sealed class ReproductionSystem : ISystem
     private readonly World.WorldManager _worldManager;
     private readonly int _maxPopulation;
     private readonly Random _rng = new();
-    private readonly List<(float x, float y, bool isHerbivore)> _toSpawn = new(32);
+    private readonly List<(float x, float y, SpeciesType speciesType, int speciesId)> _toSpawn = new(32);
 
     public ReproductionSystem(World.WorldManager worldManager, int maxPopulation = 500)
     {
@@ -1449,22 +1520,21 @@ public sealed class ReproductionSystem : ISystem
             energy.Current -= reproduction.EnergyCost;
             reproduction.CurrentCooldown = reproduction.Cooldown;
 
-            // Queue offspring for spawning
-            bool isHerbivore = species.Type == SpeciesType.Herbivore;
+            // Queue offspring for spawning (inherit parent species)
             for (int i = 0; i < reproduction.OffspringCount; i++)
             {
-                _toSpawn.Add((spawnX, spawnY, isHerbivore));
+                _toSpawn.Add((spawnX, spawnY, species.Type, species.SpeciesId));
             }
         }
 
         // Spawn offspring
-        foreach (var (x, y, isHerbivore) in _toSpawn)
+        foreach (var (x, y, speciesType, speciesId) in _toSpawn)
         {
-            SpawnCreature(em, x, y, isHerbivore);
+            SpawnCreature(em, x, y, speciesType, speciesId);
         }
     }
 
-    private void SpawnCreature(EntityManager em, float x, float y, bool isHerbivore)
+    private void SpawnCreature(EntityManager em, float x, float y, SpeciesType speciesType, int speciesId)
     {
         int entity = em.CreateEntity();
 
@@ -1477,61 +1547,75 @@ public sealed class ReproductionSystem : ISystem
         em.ChunkPositions[entity] = new ChunkPosition();
         em.AddComponent(entity, ComponentFlags.ChunkPosition);
 
+        em.SimulationLODs[entity] = new SimulationLOD();
+        em.AddComponent(entity, ComponentFlags.SimulationLOD);
+
+        // Use SpeciesRegistry to inherit parent stats where possible
+        var speciesDef = SpeciesRegistry.GetById(speciesId);
+
+        em.Species[entity] = new Species(speciesType, 0, speciesId);
+        em.AddComponent(entity, ComponentFlags.Species);
+
         em.Ages[entity] = new Age(
             current: 0,
-            maxLifespan: isHerbivore ? 30000 : 24000,
-            maturityAge: isHerbivore ? 2000 : 1500
+            maxLifespan: (int)speciesDef.MaxLifespan,
+            maturityAge: (int)speciesDef.MaturityAge
         );
         em.AddComponent(entity, ComponentFlags.Age);
 
         em.Energies[entity] = new Energy(80f);
         em.AddComponent(entity, ComponentFlags.Energy);
 
+        em.Hungers[entity] = new Hunger(
+            current: speciesDef.MaxHunger * 0.6f,
+            max: speciesDef.MaxHunger,
+            decayRate: speciesDef.HungerDecayRate
+        );
+        em.AddComponent(entity, ComponentFlags.Hunger);
+
         em.Reproductions[entity] = new Reproduction(
-            hungerThreshold: isHerbivore ? 70f : 75f,
-            energyThreshold: isHerbivore ? 80f : 85f,
-            cooldown: isHerbivore ? 600 : 800
+            hungerThreshold: speciesDef.ReproHungerThreshold,
+            energyThreshold: speciesDef.ReproEnergyThreshold,
+            cooldown: (int)speciesDef.ReproCooldown
         );
         em.AddComponent(entity, ComponentFlags.Reproduction);
 
-        em.SimulationLODs[entity] = new SimulationLOD();
-        em.AddComponent(entity, ComponentFlags.SimulationLOD);
+        em.Wanders[entity] = new Wander(
+            speed: speciesDef.BaseWanderSpeed,
+            changeDirectionChance: speciesDef.DirectionChangeChance
+        );
+        em.AddComponent(entity, ComponentFlags.Wander);
 
-        if (isHerbivore)
+        em.Renderables[entity] = new Renderable(
+            speciesDef.BaseColor, speciesDef.BaseSize, speciesDef.Shape);
+        em.AddComponent(entity, ComponentFlags.Renderable);
+
+        // Prey behavior (herbivores and faction species are prey)
+        if (speciesDef.IsPrey)
         {
-            em.Species[entity] = new Species(SpeciesType.Herbivore);
-            em.AddComponent(entity, ComponentFlags.Species);
-
-            em.Hungers[entity] = new Hunger(60f, decayRate: 0.05f);
-            em.AddComponent(entity, ComponentFlags.Hunger);
-
-            em.Wanders[entity] = new Wander(0.03f, 0.005f);
-            em.AddComponent(entity, ComponentFlags.Wander);
-
-            em.Preys[entity] = new Prey(6f, 2f);
+            em.Preys[entity] = new Prey(speciesDef.FleeRange, speciesDef.FleeSpeedMultiplier);
             em.AddComponent(entity, ComponentFlags.Prey);
-
-            em.Renderables[entity] = new Renderable(
-                new Color(0.4f, 1f, 0.4f), 8f, ShapeType.Circle);
-            em.AddComponent(entity, ComponentFlags.Renderable);
         }
-        else
+
+        // Predator behavior
+        if (speciesDef.IsPredator)
         {
-            em.Species[entity] = new Species(SpeciesType.Carnivore);
-            em.AddComponent(entity, ComponentFlags.Species);
-
-            em.Hungers[entity] = new Hunger(50f, decayRate: 0.08f);
-            em.AddComponent(entity, ComponentFlags.Hunger);
-
-            em.Wanders[entity] = new Wander(0.06f, 0.01f);
-            em.AddComponent(entity, ComponentFlags.Wander);
-
-            em.Predators[entity] = new Predator(12f, 30f);
+            em.Predators[entity] = new Predator(
+                speciesDef.HuntRange, speciesDef.AttackRange, speciesDef.AttackPower,
+                (int)speciesDef.AttackCooldown);
             em.AddComponent(entity, ComponentFlags.Predator);
+        }
 
-            em.Renderables[entity] = new Renderable(
-                new Color(1f, 0.4f, 0.4f), 10f, ShapeType.Triangle);
-            em.AddComponent(entity, ComponentFlags.Renderable);
+        // Terraform for faction species
+        if (speciesDef.Diet == DietType.Terraformer)
+        {
+            em.Terraforms[entity] = new Terraform(
+                direction: speciesDef.TerraformDir,
+                radius: speciesDef.TerraformRadius,
+                strength: speciesDef.TerraformStrength,
+                cooldown: speciesDef.TerraformCooldown
+            );
+            em.AddComponent(entity, ComponentFlags.Terraform);
         }
     }
 }
