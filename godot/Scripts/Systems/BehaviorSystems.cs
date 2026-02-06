@@ -114,13 +114,30 @@ public sealed class WanderSystem : ISystem
             if (em.HasComponents(entity, ComponentFlags.Prey) && em.Preys[entity].IsFleeing)
                 continue;
 
-            // Skip if hunting
+            // Skip if hunting (has active target)
             if (em.HasComponents(entity, ComponentFlags.Predator) && em.Predators[entity].HasTarget)
+            {
+                // Cancel roam if we just acquired a target
+                if (wander.IsRoaming)
+                {
+                    wander.RoamTargetX = 0f;
+                    wander.RoamTargetY = 0f;
+                }
                 continue;
+            }
 
             // === Roaming logic ===
             if (wander.RoamCooldown > 0)
                 wander.RoamCooldown--;
+
+            // Determine hunger urgency for roaming behavior
+            float hungerUrgency = 0f;
+            if (em.HasComponents(entity, ComponentFlags.Hunger))
+            {
+                ref var hunger = ref em.Hungers[entity];
+                float ratio = hunger.Current / hunger.Max;
+                hungerUrgency = Math.Clamp(1f - ratio, 0f, 1f);  // 0 = full, 1 = starving
+            }
 
             // Check if we should start roaming
             if (!wander.IsRoaming && wander.RoamCooldown <= 0)
@@ -153,15 +170,19 @@ public sealed class WanderSystem : ISystem
 
                 if (distSq < _roamArrivalDist * _roamArrivalDist)
                 {
-                    // Arrived — stop roaming, set cooldown
+                    // Arrived — stop roaming, cooldown scales with urgency
                     wander.RoamTargetX = 0f;
                     wander.RoamTargetY = 0f;
-                    wander.RoamCooldown = _roamCooldownBase + _rng.Next(_roamCooldownBase / 2);
+                    // Hungry creatures re-roam faster (min 100 ticks when starving)
+                    int cooldown = (int)(_roamCooldownBase * (1f - hungerUrgency * 0.8f));
+                    wander.RoamCooldown = cooldown + _rng.Next(cooldown / 3);
                 }
                 else
                 {
                     float dist = MathF.Sqrt(distSq);
-                    float roamSpeed = wander.Speed * wander.RoamSpeedMultiplier;
+                    // Roam speed scales with hunger: base 1.5x up to 3x when starving
+                    float roamMult = wander.RoamSpeedMultiplier + hungerUrgency * 1.5f;
+                    float roamSpeed = wander.Speed * roamMult;
 
                     // Blend roam direction with terrain avoidance
                     var roamDir = new Vector2(dx / dist, dy / dist);
@@ -270,10 +291,10 @@ public sealed class WanderSystem : ISystem
             ref var hunger = ref em.Hungers[entity];
             float hungerRatio = hunger.Current / hunger.Max;
 
-            // Only consider roaming when getting hungry (below 60%)
-            if (hungerRatio >= 0.6f) return false;
+            // Only consider roaming when getting hungry (below 70%)
+            if (hungerRatio >= 0.7f) return false;
 
-            // Check if any prey exists within hunt range
+            // Check if any eligible prey exists within hunt range
             ref var predator = ref em.Predators[entity];
             _nearbyBuffer.Clear();
             _spatialHash.QueryRadius(pos.X, pos.Y, predator.HuntRange, _nearbyBuffer);
@@ -289,11 +310,11 @@ public sealed class WanderSystem : ISystem
                 }
             }
 
-            // No prey in hunt range and getting hungry — time to migrate
+            // No prey in hunt range — time to migrate
             if (!preyNearby)
             {
-                // More urgent the hungrier we are
-                float roamChance = hungerRatio < 0.3f ? 0.04f : 0.015f;
+                // Scales with hunger: 3% at 70%, 8% at 30%, 15% near starvation
+                float roamChance = 0.03f + (1f - hungerRatio) * 0.12f;
                 return _rng.NextDouble() < roamChance;
             }
             return false;
@@ -569,20 +590,48 @@ public sealed class HuntingSystem : ISystem
             if (discomfortRatio > 0.3f)
                 rangeMultiplier *= (1f - discomfortRatio * 0.5f);
 
-            float speedMultiplier = hungerRatio < 0.15f
-                ? 0.5f + hungerRatio * 2f
-                : 1f + (urgency * 0.4f);
+            // Hungrier = more desperate = faster hunting (up to 1.5x at starvation)
+            float speedMultiplier = 1f + (urgency * 0.5f);
 
             // Check for pack membership and coordination
+            // A predator is only "in a pack" if it has SocialType.Pack, a valid group,
+            // AND at least one nearby pack member. Otherwise it hunts solo.
             bool isPack = false;
             int groupId = -1;
             if (em.HasComponents(entity, ComponentFlags.Social))
             {
                 ref var social = ref em.Socials[entity];
-                isPack = social.Type == SocialType.Pack && social.GroupId >= 0;
-                groupId = social.GroupId;
+                if (social.Type == SocialType.Pack && social.GroupId >= 0)
+                {
+                    groupId = social.GroupId;
 
-                // Adopt pack target if leader has one
+                    // Count nearby pack members to confirm this is a real pack hunt
+                    _packMembers.Clear();
+                    _spatialHash.QueryRadius(pos.X, pos.Y, _packCoordinationRadius, _packMembers);
+                    int nearbyPackCount = 0;
+                    foreach (int other in _packMembers)
+                    {
+                        if (other == entity || !em.IsAlive(other)) continue;
+                        if (!em.HasComponents(other, ComponentFlags.Predator | ComponentFlags.Social)) continue;
+                        ref var otherSocial = ref em.Socials[other];
+                        if (otherSocial.GroupId == groupId)
+                        {
+                            nearbyPackCount++;
+                            break;  // At least one is enough
+                        }
+                    }
+
+                    isPack = nearbyPackCount > 0;
+
+                    // If alone, reset pack state to hunt solo
+                    if (!isPack)
+                    {
+                        predator.Role = PackRole.None;
+                        predator.Phase = PackPhase.Idle;
+                    }
+                }
+
+                // Adopt pack target if leader has one and we're actually in a pack
                 if (isPack && !predator.HasTarget && _groupTargets.TryGetValue(groupId, out int packTarget))
                 {
                     if (em.IsAlive(packTarget))
