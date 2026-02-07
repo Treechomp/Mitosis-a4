@@ -184,27 +184,21 @@ public partial class GameManager : Node2D
 
             foreach (var preyChunk in preyChunks)
             {
-                // Add the prey chunk itself and its neighbors
                 for (int dx = -1; dx <= 1; dx++)
                 {
                     for (int dy = -1; dy <= 1; dy++)
                     {
                         int cx = preyChunk.ChunkX + dx;
                         int cy = preyChunk.ChunkY + dy;
-                        if (!addedChunks.Contains((cx, cy)))
+                        if (addedChunks.Add((cx, cy)))
                         {
                             var neighbor = _worldManager.GetChunk(cx, cy);
                             if (neighbor != null)
-                            {
                                 predatorCandidateChunks.Add(neighbor);
-                                addedChunks.Add((cx, cy));
-                            }
                         }
                     }
                 }
             }
-
-            ShuffleList(predatorCandidateChunks);
 
             int perSpecies = targetPredators / predatorSpecies.Count;
             int remainder = targetPredators % predatorSpecies.Count;
@@ -214,18 +208,22 @@ public partial class GameManager : Node2D
                 int target = perSpecies + (remainder-- > 0 ? 1 : 0);
                 int speciesSpawned = 0;
 
-                foreach (var chunk in predatorCandidateChunks)
+                // Round-robin: one group/solo per chunk per pass
+                const int maxPasses = 10;
+                for (int pass = 0; pass < maxPasses && speciesSpawned < target; pass++)
                 {
-                    if (speciesSpawned >= target) break;
+                    ShuffleList(predatorCandidateChunks);
+                    bool spawnedAnyThisPass = false;
 
-                    var positions = _worldManager.GetSpawnablePositionsForSpecies(
-                        chunk, baseSamples, _rng, species);
-                    if (positions.Count == 0) continue;
-
-                    int posIndex = 0;
-                    while (posIndex < positions.Count && speciesSpawned < target)
+                    foreach (var chunk in predatorCandidateChunks)
                     {
-                        var (x, y, _, _) = positions[posIndex];
+                        if (speciesSpawned >= target) break;
+
+                        var positions = _worldManager.GetSpawnablePositionsForSpecies(
+                            chunk, baseSamples, _rng, species);
+                        if (positions.Count == 0) continue;
+
+                        var (x, y, _, _) = positions[0];
 
                         bool isPack = _rng.NextDouble() < species.PackHunterChance
                                       && species.DefaultSocialType == SocialType.Pack;
@@ -235,7 +233,6 @@ public partial class GameManager : Node2D
                             SpawnCreature(x, y, species, -1, true);
                             speciesSpawned++;
                             spawned++;
-                            posIndex++;
                         }
                         else
                         {
@@ -243,12 +240,17 @@ public partial class GameManager : Node2D
                             packSize = Math.Max(2, packSize);
                             packSize = Math.Min(packSize, target - speciesSpawned);
 
+                            int posIndex = 0;
                             int gid = _nextSpawnGroupId++;
                             int gs = SpawnGroup(x, y, species, packSize, gid, ref posIndex);
                             speciesSpawned += gs;
                             spawned += gs;
                         }
+
+                        spawnedAnyThisPass = true;
                     }
+
+                    if (!spawnedAnyThisPass) break;
                 }
 
                 GD.Print($"  {species.Name}: spawned {speciesSpawned}/{target}");
@@ -259,9 +261,9 @@ public partial class GameManager : Node2D
     }
 
     /// <summary>
-    /// Spawns a category of species (herbivores or terraformers) spread across chunks.
-    /// Different species within the category can share chunks.
-    /// Tracks which chunks received prey for later predator placement.
+    /// Spawns a category of species spread across chunks using round-robin distribution.
+    /// Places at most one group per chunk per pass, then re-shuffles and cycles again.
+    /// This ensures entities are spread across the entire world, not clumped in early chunks.
     /// </summary>
     private int SpawnCategory(List<SpeciesDefinition> speciesList, int totalTarget,
                                List<Chunk> chunks, List<Chunk> preyChunks, int samplesPerChunk)
@@ -276,36 +278,43 @@ public partial class GameManager : Node2D
         {
             int target = perSpecies + (remainder-- > 0 ? 1 : 0);
             int speciesSpawned = 0;
+            var preyChunkSet = new HashSet<(int, int)>();
 
-            foreach (var chunk in chunks)
+            // Round-robin: keep cycling through shuffled chunks, one group per chunk per pass
+            const int maxPasses = 10;  // Safety limit
+            for (int pass = 0; pass < maxPasses && speciesSpawned < target; pass++)
             {
-                if (speciesSpawned >= target) break;
+                ShuffleList(chunks);
+                bool spawnedAnyThisPass = false;
 
-                var positions = _worldManager.GetSpawnablePositionsForSpecies(
-                    chunk, samplesPerChunk, _rng, species);
-                if (positions.Count == 0) continue;
-
-                int posIndex = 0;
-                bool spawnedInChunk = false;
-
-                while (posIndex < positions.Count && speciesSpawned < target)
+                foreach (var chunk in chunks)
                 {
-                    var (x, y, _, _) = positions[posIndex];
+                    if (speciesSpawned >= target) break;
+
+                    var positions = _worldManager.GetSpawnablePositionsForSpecies(
+                        chunk, samplesPerChunk, _rng, species);
+                    if (positions.Count == 0) continue;
+
+                    // One group per chunk per pass
+                    var (x, y, _, _) = positions[0];
 
                     int groupSize = (int)species.PreferredGroupSize + _rng.Next(-2, 3);
                     groupSize = Math.Max(2, groupSize);
                     groupSize = Math.Min(groupSize, target - speciesSpawned);
 
+                    int posIndex = 0;
                     int gid = _nextSpawnGroupId++;
                     int gs = SpawnGroup(x, y, species, groupSize, gid, ref posIndex);
                     speciesSpawned += gs;
                     spawned += gs;
-                    if (gs > 0) spawnedInChunk = true;
+                    spawnedAnyThisPass |= gs > 0;
+
+                    // Track prey chunks (deduplicated)
+                    if (gs > 0 && species.IsPrey && preyChunkSet.Add((chunk.ChunkX, chunk.ChunkY)))
+                        preyChunks.Add(chunk);
                 }
 
-                // Track this chunk as having prey (for predator spawning)
-                if (spawnedInChunk && species.IsPrey)
-                    preyChunks.Add(chunk);
+                if (!spawnedAnyThisPass) break;  // No valid chunks left for this species
             }
 
             GD.Print($"  {species.Name}: spawned {speciesSpawned}/{target}");
