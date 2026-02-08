@@ -1,0 +1,363 @@
+using System;
+using System.Collections.Generic;
+using Godot;
+using Mitosis.Components;
+using Mitosis.ECS;
+using Mitosis.SpeciesData;
+using Mitosis.Utils;
+using Mitosis.World;
+using static Mitosis.ECS.EntityManager;
+
+namespace Mitosis.Systems;
+
+/// <summary>
+/// Manages Shroomer spore lifecycle and Shroomer growth.
+///
+/// Spore lifecycle:
+/// - Mature Shroomers spread spores when moisture is high
+/// - Spores gain moisture on wet tiles, wither on dry tiles
+/// - Once enough moisture accumulated, spore transforms into small Shroomer
+/// - Spores are edible by Sectids and herbivores (they have Prey flag)
+///
+/// Shroomer growth:
+/// - Shroomers grow continuously over their lifetime
+/// - Old Shroomers become the largest entities on the map
+/// - AoE attack radius and damage scale with growth
+/// </summary>
+public sealed class SporeSystem : ISystem
+{
+    private readonly WorldManager _worldManager;
+    private readonly SpatialHash _spatialHash;
+    private readonly Random _rng = new();
+    private readonly float _sporeMoistureThreshold = 0.6f; // Tile moisture level that counts as "wet"
+    private readonly float _sporeSpreadRadius = 8f;        // How far spores are thrown from parent
+    private readonly float _sporeSpreadChance = 0.002f;    // Per-tick chance of mature Shroomer spreading spores
+    private readonly int _sporesPerSpread = 3;             // Number of spores per spread event
+
+    private readonly List<(float x, float y, int speciesId)> _pendingSpores = new(16);
+    private readonly List<(float x, float y, int speciesId)> _pendingTransforms = new(8);
+    private readonly List<int> _toKill = new(16);
+
+    public SporeSystem(WorldManager worldManager, SpatialHash spatialHash)
+    {
+        _worldManager = worldManager;
+        _spatialHash = spatialHash;
+    }
+
+    public void Process(EntityManager em)
+    {
+        _pendingSpores.Clear();
+        _pendingTransforms.Clear();
+        _toKill.Clear();
+
+        // === PROCESS EXISTING SPORES ===
+        const ComponentFlags sporeRequired = ComponentFlags.Position | ComponentFlags.Spore |
+                                              ComponentFlags.Energy;
+
+        foreach (int entity in em.Query(sporeRequired))
+        {
+            ref var spore = ref em.Spores[entity];
+            ref var pos = ref em.Positions[entity];
+            ref var energy = ref em.Energies[entity];
+
+            var tile = _worldManager.GetTile(pos.X, pos.Y);
+            float tileMoisture = GetTileMoisture(tile);
+
+            if (tileMoisture >= _sporeMoistureThreshold)
+            {
+                // Wet tile: accumulate moisture
+                spore.MoistureAccumulated += spore.MoistureGainRate * tileMoisture;
+            }
+            else
+            {
+                // Dry tile: wither
+                energy.Current -= spore.WitherRate;
+            }
+
+            // Check for transformation
+            if (spore.IsReadyToTransform)
+            {
+                _pendingTransforms.Add((pos.X, pos.Y, spore.ParentSpeciesId));
+                _toKill.Add(entity);
+                continue;
+            }
+
+            // Check for death from withering
+            if (energy.IsDead)
+            {
+                _toKill.Add(entity);
+            }
+        }
+
+        // === MATURE SHROOMERS SPREAD SPORES ===
+        const ComponentFlags shroomRequired = ComponentFlags.Position | ComponentFlags.Species |
+                                               ComponentFlags.Age | ComponentFlags.Hunger;
+
+        foreach (int entity in em.Query(shroomRequired))
+        {
+            ref var species = ref em.Species[entity];
+            if (species.Type != SpeciesType.Shroomer) continue;
+
+            ref var age = ref em.Ages[entity];
+            if (!age.IsMature) continue;
+
+            ref var hunger = ref em.Hungers[entity];
+            if (hunger.Percent < 0.5f) continue; // Need decent food to spread
+
+            // Check moisture of current tile
+            ref var pos = ref em.Positions[entity];
+            var tile = _worldManager.GetTile(pos.X, pos.Y);
+            if (GetTileMoisture(tile) < _sporeMoistureThreshold) continue;
+
+            // Random chance to spread
+            if (_rng.NextDouble() >= _sporeSpreadChance) continue;
+
+            // Spread spores
+            hunger.Current -= hunger.Max * 0.15f; // Costs some hunger
+            for (int i = 0; i < _sporesPerSpread; i++)
+            {
+                float angle = (float)(_rng.NextDouble() * Math.PI * 2);
+                float dist = (float)(_rng.NextDouble() * _sporeSpreadRadius) + 2f;
+                float sx = pos.X + MathF.Cos(angle) * dist;
+                float sy = pos.Y + MathF.Sin(angle) * dist;
+
+                if (_worldManager.IsWalkable(sx, sy))
+                    _pendingSpores.Add((sx, sy, species.SpeciesId));
+            }
+        }
+
+        // === GROWTH SYSTEM (Shroomers grow over time) ===
+        const ComponentFlags growthRequired = ComponentFlags.Growth | ComponentFlags.Renderable;
+        foreach (int entity in em.Query(growthRequired))
+        {
+            ref var growth = ref em.Growths[entity];
+            if (growth.CurrentScale >= growth.MaxScale) continue;
+
+            growth.CurrentScale = MathF.Min(growth.MaxScale, growth.CurrentScale + growth.GrowthRate);
+
+            // Update visual size
+            ref var rend = ref em.Renderables[entity];
+            var speciesDef = GetSpeciesDef(em, entity);
+            if (speciesDef != null)
+                rend.Size = speciesDef.BaseSize * growth.CurrentScale;
+        }
+
+        // === SHROOMER AOE ATTACK (scales with growth) ===
+        ProcessShroomAoE(em);
+
+        // === CLEANUP AND SPAWNING ===
+        foreach (int entity in _toKill)
+            em.DestroyEntity(entity);
+
+        foreach (var (x, y, speciesId) in _pendingSpores)
+            SpawnSpore(em, x, y, speciesId);
+
+        foreach (var (x, y, speciesId) in _pendingTransforms)
+            SpawnShroomer(em, x, y, speciesId);
+    }
+
+    private float GetTileMoisture(TileType tile)
+    {
+        return tile switch
+        {
+            TileType.Wetland => 1.0f,
+            TileType.Forest => 0.7f,
+            TileType.Grass => 0.4f,
+            TileType.ShallowWater => 1.0f,
+            TileType.DeepWater => 1.0f,
+            TileType.Sand => 0.1f,
+            TileType.Arid => 0.0f,
+            _ => 0.2f,
+        };
+    }
+
+    private SpeciesDefinition? GetSpeciesDef(EntityManager em, int entity)
+    {
+        if (!em.HasComponents(entity, ComponentFlags.Species)) return null;
+        ref var species = ref em.Species[entity];
+        return SpeciesRegistry.GetById(species.SpeciesId);
+    }
+
+    private void SpawnSpore(EntityManager em, float x, float y, int parentSpeciesId)
+    {
+        int entity = em.CreateEntity();
+
+        em.Positions[entity] = new Position(x, y);
+        em.AddComponent(entity, ComponentFlags.Position);
+
+        // Spores don't move
+        em.Velocities[entity] = new Velocity();
+        em.AddComponent(entity, ComponentFlags.Velocity);
+
+        em.ChunkPositions[entity] = new ChunkPosition();
+        em.AddComponent(entity, ComponentFlags.ChunkPosition);
+
+        em.Spores[entity] = new Spore(
+            transformThreshold: 60f,
+            witherRate: 2f,
+            moistureGainRate: 0.5f,
+            parentSpeciesId: parentSpeciesId);
+        em.AddComponent(entity, ComponentFlags.Spore);
+
+        // Spores have low energy (die easily)
+        em.Energies[entity] = new Energy(40f, 40f);
+        em.AddComponent(entity, ComponentFlags.Energy);
+
+        // Spores are edible (prey for Sectids and herbivores)
+        em.Preys[entity] = new Prey(0f, 0f); // Can't flee
+        em.AddComponent(entity, ComponentFlags.Prey);
+
+        // Small purple dot visual
+        em.Renderables[entity] = new Renderable(
+            new Color(0.7f, 0.3f, 0.9f), 3f, ShapeType.Circle);
+        em.AddComponent(entity, ComponentFlags.Renderable);
+
+        // Mark as Shroomer species for type checks
+        em.Species[entity] = new Species(SpeciesType.Shroomer, 0, parentSpeciesId);
+        em.AddComponent(entity, ComponentFlags.Species);
+
+        _spatialHash.Update(entity, x, y);
+    }
+
+    private void SpawnShroomer(EntityManager em, float x, float y, int speciesId)
+    {
+        var speciesDef = SpeciesRegistry.GetById(speciesId);
+        int entity = em.CreateEntity();
+
+        em.Positions[entity] = new Position(x, y);
+        em.AddComponent(entity, ComponentFlags.Position);
+
+        em.Velocities[entity] = new Velocity();
+        em.AddComponent(entity, ComponentFlags.Velocity);
+
+        em.ChunkPositions[entity] = new ChunkPosition();
+        em.AddComponent(entity, ComponentFlags.ChunkPosition);
+
+        em.SimulationLODs[entity] = new SimulationLOD();
+        em.AddComponent(entity, ComponentFlags.SimulationLOD);
+
+        em.Species[entity] = new Species(SpeciesType.Shroomer, 0, speciesId);
+        em.AddComponent(entity, ComponentFlags.Species);
+
+        em.Ages[entity] = new Age(0, speciesDef.MaxLifespan, speciesDef.MaturityAge);
+        em.AddComponent(entity, ComponentFlags.Age);
+
+        em.Energies[entity] = new Energy(80f);
+        em.AddComponent(entity, ComponentFlags.Energy);
+
+        em.Hungers[entity] = new Hunger(speciesDef.MaxHunger * 0.5f, speciesDef.MaxHunger, speciesDef.HungerDecayRate);
+        em.AddComponent(entity, ComponentFlags.Hunger);
+
+        em.Wanders[entity] = new Wander(speciesDef.BaseWanderSpeed, speciesDef.DirectionChangeChance);
+        em.AddComponent(entity, ComponentFlags.Wander);
+
+        // Start small, grow over time
+        em.Renderables[entity] = new Renderable(speciesDef.BaseColor, speciesDef.BaseSize * 0.5f, speciesDef.Shape);
+        em.AddComponent(entity, ComponentFlags.Renderable);
+
+        // Growth — Shroomers grow to become the largest entities on the map
+        em.Growths[entity] = new Growth(maxScale: 4f, growthRate: 0.00008f);
+        em.Growths[entity].CurrentScale = 0.5f; // Start small
+        em.AddComponent(entity, ComponentFlags.Growth);
+
+        // Shroomers are prey
+        em.Preys[entity] = new Prey(speciesDef.FleeRange, speciesDef.FleeSpeedMultiplier);
+        em.AddComponent(entity, ComponentFlags.Prey);
+
+        em.Fears[entity] = new Fear(
+            speciesDef.FearThreshold, speciesDef.FearMax, speciesDef.FearAccumulationRate,
+            speciesDef.FearDecayRate, speciesDef.FearVigilanceDecay, speciesDef.DefaultFearResponse);
+        em.AddComponent(entity, ComponentFlags.Fear);
+
+        // Social
+        em.Socials[entity] = new Social(SocialType.Herd, speciesDef.GroupAffinity,
+            speciesDef.PreferredGroupSize, speciesDef.CohesionStrength, speciesDef.AlignmentStrength);
+        em.AddComponent(entity, ComponentFlags.Social);
+
+        // Terraform
+        em.Terraforms[entity] = new Terraform(speciesDef.TerraformDir,
+            speciesDef.TerraformRadius, speciesDef.TerraformStrength, speciesDef.TerraformCooldown);
+        em.AddComponent(entity, ComponentFlags.Terraform);
+
+        em.TerrainDiscomforts[entity] = new TerrainDiscomfort(
+            speciesDef.DiscomfortThreshold, speciesDef.DiscomfortDecayRate);
+        em.AddComponent(entity, ComponentFlags.TerrainDiscomfort);
+    }
+
+    /// <summary>
+    /// Shroomers with AoE attack damage nearby Faelings and Sectids.
+    /// AoE radius and damage scale with Growth.CurrentScale.
+    /// Uses Terraform cooldown as attack timer (shared resource).
+    /// </summary>
+    private void ProcessShroomAoE(EntityManager em)
+    {
+        const ComponentFlags required = ComponentFlags.Position | ComponentFlags.Species |
+                                         ComponentFlags.Growth | ComponentFlags.Terraform;
+        var nearbyBuffer = new List<int>(32);
+
+        foreach (int entity in em.Query(required))
+        {
+            ref var species = ref em.Species[entity];
+            if (species.Type != SpeciesType.Shroomer) continue;
+
+            var speciesDef = SpeciesRegistry.GetById(species.SpeciesId);
+            if (!speciesDef.HasAoEAttack) continue;
+
+            ref var growth = ref em.Growths[entity];
+            if (growth.CurrentScale < 1.5f) continue; // Only mature shroomers attack
+
+            ref var terraform = ref em.Terraforms[entity];
+            // Reuse terraform cooldown timer as AoE attack timer
+            // (AoE triggers separately on a longer cycle)
+            // We'll use a simple tick modulo check instead
+            if (em.HasComponents(entity, ComponentFlags.Age))
+            {
+                ref var age = ref em.Ages[entity];
+                if (age.Current % speciesDef.AoEAttackCooldown != 0) continue;
+            }
+
+            ref var pos = ref em.Positions[entity];
+            float aoeRadius = speciesDef.AoEAttackRadius * growth.CurrentScale;
+            float aoeDamage = speciesDef.AoEAttackDamage * growth.CurrentScale;
+
+            _spatialHash.QueryRadius(pos.X, pos.Y, aoeRadius, nearbyBuffer);
+
+            foreach (int other in nearbyBuffer)
+            {
+                if (other == entity || !em.IsAlive(other)) continue;
+                if (!em.HasComponents(other, ComponentFlags.Species | ComponentFlags.Energy)) continue;
+
+                ref var otherSpecies = ref em.Species[other];
+                // Only damage Faelings and Sectids (enemy terraformers)
+                if (otherSpecies.Type != SpeciesType.Faeling && otherSpecies.Type != SpeciesType.Sectid)
+                    continue;
+
+                // Don't damage spores
+                if (em.HasComponents(other, ComponentFlags.Spore)) continue;
+
+                ref var otherEnergy = ref em.Energies[other];
+                otherEnergy.Current -= aoeDamage;
+
+                if (otherEnergy.IsDead)
+                {
+                    // Handle Faeling death → crystal power inheritance
+                    if (em.HasComponents(other, ComponentFlags.FaelingPower))
+                    {
+                        ref var power = ref em.FaelingPowers[other];
+                        int crystalId = power.LinkedCrystal;
+                        if (crystalId >= 0 && em.IsAlive(crystalId) &&
+                            em.HasComponents(crystalId, ComponentFlags.Crystal))
+                        {
+                            ref var crystal = ref em.Crystals[crystalId];
+                            crystal.InheritedPower = power.Power * 0.5f;
+                            crystal.LinkedFaeling = -1;
+                            crystal.SpawnTimer = crystal.SpawnDelay;
+                        }
+                    }
+
+                    em.DestroyEntity(other);
+                }
+            }
+        }
+    }
+}

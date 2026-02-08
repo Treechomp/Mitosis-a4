@@ -186,6 +186,60 @@ public sealed class SpeciesDefinition
     public List<TileType>? FeedTiles { get; init; }
     public float FeedNutrition { get; init; } = 0.4f;
 
+    // === FACTION-SPECIFIC ===
+    /// <summary>
+    /// Max food a single Sectid can carry to a nest.
+    /// </summary>
+    public float MaxCarryFood { get; init; } = 5f;
+
+    /// <summary>
+    /// Whether this species reproduces only via nests (Sectids).
+    /// Disables normal ReproductionSystem for this species.
+    /// </summary>
+    public bool NestBreeder { get; init; } = false;
+
+    /// <summary>
+    /// Whether this species reproduces via spores (Shroomers).
+    /// Disables normal ReproductionSystem for this species.
+    /// </summary>
+    public bool SporeReproducer { get; init; } = false;
+
+    /// <summary>
+    /// Whether this species spawns from crystals (Faelings).
+    /// Disables normal ReproductionSystem for this species.
+    /// </summary>
+    public bool CrystalSpawned { get; init; } = false;
+
+    /// <summary>
+    /// Whether this species never starves (hunger decay = 0).
+    /// </summary>
+    public bool ImmuneToStarvation { get; init; } = false;
+
+    /// <summary>
+    /// Whether this species cannot be hunted by normal predators.
+    /// </summary>
+    public bool UnhuntableByPredators { get; init; } = false;
+
+    /// <summary>
+    /// Whether this species has AoE attack that scales with growth.
+    /// </summary>
+    public bool HasAoEAttack { get; init; } = false;
+
+    /// <summary>
+    /// Base AoE attack radius (scales with Growth.CurrentScale).
+    /// </summary>
+    public float AoEAttackRadius { get; init; } = 3f;
+
+    /// <summary>
+    /// Base AoE attack damage (scales with Growth.CurrentScale).
+    /// </summary>
+    public float AoEAttackDamage { get; init; } = 8f;
+
+    /// <summary>
+    /// AoE attack cooldown in ticks.
+    /// </summary>
+    public int AoEAttackCooldown { get; init; } = 40;
+
     // === VISUALS ===
     public Color BaseColor { get; init; } = new(0.5f, 0.5f, 0.5f);
     public float BaseSize { get; init; } = 8f;

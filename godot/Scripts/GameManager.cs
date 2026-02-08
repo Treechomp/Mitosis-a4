@@ -33,12 +33,19 @@ public partial class GameManager : Node2D
     [Export] public float ZoomMax = 5.0f;             // Maximum zoom in
     [Export] public float ZoomSpeed = 0.15f;          // Zoom sensitivity
 
+    // Faction spawning
+    [Export] public int CrystalCount = 5;             // Number of Faeling crystals in the world
+    [Export] public int InitialNestsPerColony = 2;    // Starting Sectid nests per colony
+    [Export] public int InitialSectidColonies = 3;    // Starting Sectid colonies
+
     // Core systems
     private EntityManager _entityManager = null!;
     private WorldManager _worldManager = null!;
     private readonly List<ISystem> _systems = new();
     private readonly Random _rng = new();
     private LODSystem? _lodSystem;
+    private NestSystem? _nestSystem;
+    private CrystalSystem? _crystalSystem;
 
     // Simulation timing
     private double _simulationAccumulator;
@@ -57,6 +64,9 @@ public partial class GameManager : Node2D
     private int _shroomerCount;
     private int _sectidCount;
     private int _faelingCount;
+    private int _nestCount;
+    private int _sporeCount;
+    private int _crystalCount;
     private double _statsTimer;
 
     // Rendering
@@ -89,6 +99,14 @@ public partial class GameManager : Node2D
         _systems.Add(new ReproductionSystem(_worldManager, MaxPopulation));
         _systems.Add(new TerraformSystem(_worldManager));
 
+        // Faction systems
+        _nestSystem = new NestSystem(_worldManager, spatialHash);
+        _systems.Add(_nestSystem);
+        var sporeSystem = new SporeSystem(_worldManager, spatialHash);
+        _systems.Add(sporeSystem);
+        _crystalSystem = new CrystalSystem(_worldManager, spatialHash);
+        _systems.Add(_crystalSystem);
+
         // Get camera reference
         _camera = GetNode<Camera2D>("Camera2D");
 
@@ -101,7 +119,13 @@ public partial class GameManager : Node2D
         });
         GD.Print($"World generated: {_worldManager.LoadedChunkCount} chunks");
 
-        // Spawn creatures
+        // Spawn faction structures (crystals and nests) before creatures
+        GD.Print("Spawning faction structures...");
+        SpawnCrystals();
+        SpawnInitialNests();
+
+        // Spawn creatures (herbivores, predators, initial Shroomers)
+        // Sectids and Faelings are spawned by their respective systems
         GD.Print("Spawning creatures...");
         int spawnedCount = SpawnCreatures();
         GD.Print($"Spawned {spawnedCount} creatures");
@@ -141,9 +165,15 @@ public partial class GameManager : Node2D
         int spawned = 0;
 
         // Collect all species by category
+        // Sectids spawn from nests, Faelings from crystals — only Shroomers use normal spawning
         var herbivoreSpecies = new List<SpeciesDefinition>(SpeciesRegistry.GetHerbivores());
         var predatorSpecies = new List<SpeciesDefinition>(SpeciesRegistry.GetPredators());
-        var terraformerSpecies = new List<SpeciesDefinition>(SpeciesRegistry.GetTerraformers());
+        var terraformerSpecies = new List<SpeciesDefinition>();
+        foreach (var tf in SpeciesRegistry.GetTerraformers())
+        {
+            if (!tf.NestBreeder && !tf.CrystalSpawned)
+                terraformerSpecies.Add(tf); // Only Shroomers
+        }
 
         // Budget all categories from InitialPopulation (not additive)
         float terraformerShare = terraformerSpecies.Count > 0 ? 0.12f : 0f;
@@ -559,6 +589,119 @@ public partial class GameManager : Node2D
         social.LeadershipScore = isAlpha ? 0.8f : Vary(0.3f, 0.5f);
         _entityManager.Socials[entity] = social;
         _entityManager.AddComponent(entity, ComponentFlags.Social);
+
+        // === Faction-specific components ===
+
+        // Sectids: add Predator + FoodCarrier (they hunt AND carry food to nests)
+        if (species.NestBreeder)
+        {
+            if (!species.IsPredator) // Don't double-add if already a predator
+            {
+                _entityManager.Predators[entity] = new Predator(
+                    huntRange: Vary(species.HuntRange, variation),
+                    attackRange: Vary(species.AttackRange, variation),
+                    attackPower: Vary(species.AttackPower, variation),
+                    attackCooldown: (int)Vary(species.AttackCooldown, variation)
+                );
+                _entityManager.AddComponent(entity, ComponentFlags.Predator);
+            }
+            _entityManager.FoodCarriers[entity] = new FoodCarrier(species.MaxCarryFood);
+            _entityManager.AddComponent(entity, ComponentFlags.FoodCarrier);
+        }
+
+        // Shroomers: add Growth component (they grow over their lifetime)
+        if (species.SporeReproducer)
+        {
+            _entityManager.Growths[entity] = new Growth(maxScale: 4f, growthRate: 0.00008f);
+            _entityManager.AddComponent(entity, ComponentFlags.Growth);
+        }
+
+        // Faelings spawned from crystals get their components from CrystalSystem,
+        // not from GameManager, so no special handling needed here.
+    }
+
+    /// <summary>
+    /// Spawns Faeling crystals spread across the world on grass tiles.
+    /// </summary>
+    private void SpawnCrystals()
+    {
+        if (_crystalSystem == null) return;
+
+        var allChunks = new List<Chunk>(_worldManager.GetLoadedChunks());
+        ShuffleList(allChunks);
+
+        int spawned = 0;
+        int chunkIndex = 0;
+
+        while (spawned < CrystalCount && chunkIndex < allChunks.Count)
+        {
+            var chunk = allChunks[chunkIndex++];
+            var positions = _worldManager.GetSpawnablePositionsForSpecies(
+                chunk, 4, _rng, SpeciesRegistry.Get("Faeling"));
+            if (positions.Count == 0) continue;
+
+            var (x, y, _, _) = positions[0];
+            _crystalSystem.SpawnCrystal(_entityManager, x, y);
+            spawned++;
+            GD.Print($"  Crystal spawned at ({x:F0}, {y:F0})");
+        }
+
+        GD.Print($"  Total crystals: {spawned}/{CrystalCount}");
+    }
+
+    /// <summary>
+    /// Spawns initial Sectid nests on dry tiles with starter Sectids around each.
+    /// </summary>
+    private void SpawnInitialNests()
+    {
+        if (_nestSystem == null) return;
+
+        var allChunks = new List<Chunk>(_worldManager.GetLoadedChunks());
+        ShuffleList(allChunks);
+        var sectidDef = SpeciesRegistry.Get("Sectid");
+
+        int totalNests = 0;
+        int totalSectids = 0;
+        int chunkIndex = 0;
+
+        for (int colony = 0; colony < InitialSectidColonies; colony++)
+        {
+            int colonyId = colony + 1;
+            int nestsThisColony = 0;
+
+            while (nestsThisColony < InitialNestsPerColony && chunkIndex < allChunks.Count)
+            {
+                var chunk = allChunks[chunkIndex++];
+                var positions = _worldManager.GetSpawnablePositionsForSpecies(
+                    chunk, 4, _rng, sectidDef);
+                if (positions.Count == 0) continue;
+
+                var (x, y, _, _) = positions[0];
+                int nestEntity = _nestSystem.SpawnNest(_entityManager, x, y, colonyId);
+                nestsThisColony++;
+                totalNests++;
+
+                // Spawn starter Sectids around each nest
+                int starterCount = 4 + _rng.Next(0, 3);
+                for (int i = 0; i < starterCount; i++)
+                {
+                    float angle = (float)(_rng.NextDouble() * Math.PI * 2);
+                    float dist = 2f + (float)(_rng.NextDouble() * 4f);
+                    float sx = x + MathF.Cos(angle) * dist;
+                    float sy = y + MathF.Sin(angle) * dist;
+
+                    if (_worldManager.IsWalkable(sx, sy))
+                    {
+                        SpawnCreature(sx, sy, sectidDef, colonyId);
+                        totalSectids++;
+                    }
+                }
+            }
+
+            GD.Print($"  Colony {colonyId}: {nestsThisColony} nests");
+        }
+
+        GD.Print($"  Total nests: {totalNests}, starter Sectids: {totalSectids}");
     }
 
     private void SpawnPlayer()
@@ -643,18 +786,30 @@ public partial class GameManager : Node2D
         _shroomerCount = 0;
         _sectidCount = 0;
         _faelingCount = 0;
+        _nestCount = 0;
+        _sporeCount = 0;
+        _crystalCount = 0;
 
-        const ComponentFlags speciesRequired = ComponentFlags.Species;
-        foreach (int entity in _entityManager.Query(speciesRequired))
+        foreach (int entity in _entityManager.AllEntities())
         {
-            ref var species = ref _entityManager.Species[entity];
-            switch (species.Type)
+            if (_entityManager.HasComponents(entity, ComponentFlags.Nest))
+            { _nestCount++; continue; }
+            if (_entityManager.HasComponents(entity, ComponentFlags.Crystal))
+            { _crystalCount++; continue; }
+            if (_entityManager.HasComponents(entity, ComponentFlags.Spore))
+            { _sporeCount++; continue; }
+
+            if (_entityManager.HasComponents(entity, ComponentFlags.Species))
             {
-                case SpeciesType.Herbivore: _herbivoreCount++; break;
-                case SpeciesType.Carnivore: _predatorCount++; break;
-                case SpeciesType.Shroomer: _shroomerCount++; break;
-                case SpeciesType.Sectid: _sectidCount++; break;
-                case SpeciesType.Faeling: _faelingCount++; break;
+                ref var species = ref _entityManager.Species[entity];
+                switch (species.Type)
+                {
+                    case SpeciesType.Herbivore: _herbivoreCount++; break;
+                    case SpeciesType.Carnivore: _predatorCount++; break;
+                    case SpeciesType.Shroomer: _shroomerCount++; break;
+                    case SpeciesType.Sectid: _sectidCount++; break;
+                    case SpeciesType.Faeling: _faelingCount++; break;
+                }
             }
         }
 
@@ -665,9 +820,9 @@ public partial class GameManager : Node2D
                               $"Entities: {_entityManager.EntityCount}\n" +
                               $"Herbivores: {_herbivoreCount}\n" +
                               $"Predators: {_predatorCount}\n" +
-                              $"Shroomers: {_shroomerCount}\n" +
-                              $"Sectids: {_sectidCount}\n" +
-                              $"Faelings: {_faelingCount}\n" +
+                              $"Shroomers: {_shroomerCount} (spores: {_sporeCount})\n" +
+                              $"Sectids: {_sectidCount} (nests: {_nestCount})\n" +
+                              $"Faelings: {_faelingCount} (crystals: {_crystalCount})\n" +
                               $"TPS: {TargetTPS}";
         }
     }

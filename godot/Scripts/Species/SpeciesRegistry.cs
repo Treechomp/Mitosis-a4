@@ -483,16 +483,15 @@ public static class SpeciesRegistry
             FearVigilanceDuration = 60,
             DefaultFearResponse = FearResponse.Freeze,
 
-            // Survival - long-lived
+            // Survival - long-lived, effectively can't starve near water
             MaxHunger = 70f,
             HungerDecayRate = 0.04f,
-            MaxLifespan = 35000,
+            MaxLifespan = 50000,   // Very long lived — old shroomers become huge
             MaturityAge = 2500,
 
-            // Reproduction - spore spread
-            ReproHungerThreshold = 65f,
-            ReproEnergyThreshold = 75f,
-            ReproCooldown = 700,
+            // Reproduction — via spores only (SporeSystem handles this)
+            SporeReproducer = true,
+            ReproCooldown = 9999, // Effectively disabled in ReproductionSystem
 
             // Social - loose clusters
             GroupAffinity = 0.4f,
@@ -522,10 +521,10 @@ public static class SpeciesRegistry
             },
             AllowedSpawnTiles = new List<TileType> { TileType.Wetland, TileType.Forest },
 
-            // Grazing - feeds from wet/forest tiles
+            // Grazing - feeds from wet/forest tiles (near water = can't starve)
             CanGraze = false,
             FeedTiles = new List<TileType> { TileType.Wetland, TileType.Forest },
-            FeedNutrition = 0.4f,
+            FeedNutrition = 0.5f,  // Increased — effectively can't starve on wet tiles
 
             // Terraform - increases moisture
             TerraformDir = TerraformDirection.Wetter,
@@ -533,7 +532,13 @@ public static class SpeciesRegistry
             TerraformStrength = 0.03f,
             TerraformCooldown = 8,
 
-            // Trophic - medium-small fungi (not very nutritious but huntable)
+            // AoE attack — scales with growth (large Shroomers have huge AoE)
+            HasAoEAttack = true,
+            AoEAttackRadius = 3f,   // Base radius, scales with CurrentScale
+            AoEAttackDamage = 8f,   // Base damage, scales with CurrentScale
+            AoEAttackCooldown = 40,
+
+            // Trophic - medium-small fungi (huntable, spores are edible)
             BodyMass = 2.5f,
 
             // Visuals - purple/violet fungi
@@ -548,11 +553,22 @@ public static class SpeciesRegistry
         {
             Name = "Sectid",
             Diet = DietType.Terraformer,
-            DefaultSocialType = SocialType.Herd,
+            DefaultSocialType = SocialType.Pack,  // Pack hunters — swarm tactics
 
-            // Movement - quick, jittery insects
-            BaseWanderSpeed = 0.05f,
+            // Movement - quick, numerous insects
+            BaseWanderSpeed = 0.06f,
             DirectionChangeChance = 0.015f,
+
+            // Combat — Sectids are predators too (hunt small prey, spores)
+            // Individually weak, but effective mass scales with pack size
+            // Pack of 8: 0.5 * 8^0.7 = 2.38 — can hunt rabbits and spores
+            // Pack of 15: 0.5 * 15^0.7 = 3.52 — can threaten Shroomers
+            HuntRange = 8f,
+            AttackRange = 0.5f,
+            AttackPower = 8f,     // Weak individually
+            AttackCooldown = 12,
+            BaseHuntSpeed = 0.09f,
+            PackHunterChance = 0.9f,  // Almost always hunt in groups
 
             // Fleeing - fast
             FleeRange = 6f,
@@ -571,18 +587,23 @@ public static class SpeciesRegistry
             MaxHunger = 55f,
             HungerDecayRate = 0.07f,
             MaxLifespan = 20000,
-            MaturityAge = 1200,
+            MaturityAge = 800,   // Mature quickly
 
-            // Reproduction - swarm breeders
-            ReproHungerThreshold = 60f,
-            ReproEnergyThreshold = 70f,
-            ReproCooldown = 400,
+            // Reproduction — via nests only (NestSystem handles this)
+            NestBreeder = true,
+            MaxCarryFood = 5f,    // How much food one Sectid can carry to nest
+            ReproCooldown = 9999, // Effectively disabled in ReproductionSystem
 
-            // Social - loose swarms
-            GroupAffinity = 0.5f,
-            PreferredGroupSize = 6f,
-            CohesionStrength = 0.012f,
-            AlignmentStrength = 0.008f,
+            // Social - pack swarms, large groups
+            GroupAffinity = 0.7f,
+            PreferredGroupSize = 8f,  // Larger swarms
+            CohesionStrength = 0.015f,
+            AlignmentStrength = 0.01f,
+
+            // Pack role speeds
+            LeaderSpeedMult = 1.0f,
+            FlankerSpeedMult = 1.05f,
+            ChaserSpeedMult = 1.1f,
 
             // Terrain - thrives in dry areas
             DiscomfortThreshold = 55f,
@@ -617,12 +638,16 @@ public static class SpeciesRegistry
             TerraformStrength = 0.04f,
             TerraformCooldown = 6,
 
-            // Trophic - tiny insects
+            // Trophic - tiny insects, hunt in packs
             BodyMass = 0.5f,
+            SoloHuntMaxRatio = 0.8f,       // Solo Sectid can barely hunt anything
+            PackHuntMassExponent = 0.7f,    // Sub-linear pack scaling
+            PreferredPrey = new List<string> { "Shroomer", "Faeling" },
+            PreferredPreyBias = 0.4f,
 
             // Visuals - orange insects
             BaseColor = new Color(0.86f, 0.55f, 0.16f),
-            BaseSize = 6f,
+            BaseSize = 5f,   // Smaller — numerous
             Shape = ShapeType.Triangle,
 
             StatVariation = 0.25f,
@@ -632,43 +657,42 @@ public static class SpeciesRegistry
         {
             Name = "Faeling",
             Diet = DietType.Terraformer,
-            DefaultSocialType = SocialType.Herd,
+            DefaultSocialType = SocialType.Solitary,  // Lone guardians spawned from crystals
 
-            // Movement - moderate pace
+            // Movement - moderate pace, roams to find terraformed tiles
             BaseWanderSpeed = 0.035f,
             DirectionChangeChance = 0.008f,
 
-            // Fleeing
-            FleeRange = 5f,
-            FleeSpeedMultiplier = 1.8f,
+            // No fleeing — Faelings fight, not flee (ranged attack)
+            FleeRange = 0f,
+            FleeSpeedMultiplier = 1.0f,
 
-            // Fear - calm, measured response
-            FearThreshold = 55f,
-            FearMax = 90f,
-            FearAccumulationRate = 4f,
-            FearDecayRate = 1.5f,
-            FearVigilanceDecay = 0.4f,
-            FearVigilanceDuration = 80,
-            DefaultFearResponse = FearResponse.Flee,
+            // Fear - fearless guardian
+            FearThreshold = 999f,  // Effectively never afraid
+            FearMax = 999f,
+            FearAccumulationRate = 0f,
+            FearDecayRate = 10f,
+            DefaultFearResponse = FearResponse.Defensive,
 
-            // Survival - moderate lifespan
+            // Survival - very long-lived, doesn't starve
             MaxHunger = 65f,
-            HungerDecayRate = 0.05f,
-            MaxLifespan = 28000,
-            MaturityAge = 1800,
+            HungerDecayRate = 0f,  // Never decays — Faelings don't starve
+            ImmuneToStarvation = true,
+            MaxLifespan = 60000,  // Very long lived
+            MaturityAge = 1000,
 
-            // Reproduction
-            ReproHungerThreshold = 70f,
-            ReproEnergyThreshold = 80f,
-            ReproCooldown = 650,
+            // Reproduction — via crystals only (CrystalSystem handles this)
+            CrystalSpawned = true,
+            UnhuntableByPredators = true, // Predators don't hunt Faelings
+            ReproCooldown = 9999, // Effectively disabled
 
-            // Social - communal groups
-            GroupAffinity = 0.6f,
-            PreferredGroupSize = 5f,
-            CohesionStrength = 0.018f,
-            AlignmentStrength = 0.01f,
+            // Social - solitary guardians
+            GroupAffinity = 0f,
+            PreferredGroupSize = 0f,
+            CohesionStrength = 0f,
+            AlignmentStrength = 0f,
 
-            // Terrain - prefers balanced grass
+            // Terrain - prefers balanced grass, moves to find terraformed tiles
             DiscomfortThreshold = 50f,
             DiscomfortDecayRate = 2f,
             GrazingPressure = 0f,
@@ -690,18 +714,18 @@ public static class SpeciesRegistry
             },
             AllowedSpawnTiles = new List<TileType> { TileType.Grass },
 
-            // Feeding - feeds from grass
+            // Feeding - feeds from grass (but hunger doesn't decay, so this is just flavor)
             CanGraze = false,
             FeedTiles = new List<TileType> { TileType.Grass },
             FeedNutrition = 0.45f,
 
-            // Terraform - restores balance
+            // Terraform - restores balance (gains power per tile restored)
             TerraformDir = TerraformDirection.Balanced,
-            TerraformRadius = 2.5f,
-            TerraformStrength = 0.025f,
-            TerraformCooldown = 10,
+            TerraformRadius = 3.0f,       // Slightly larger than before
+            TerraformStrength = 0.03f,     // Stronger restoration
+            TerraformCooldown = 8,
 
-            // Trophic - medium plant creature
+            // Trophic - medium plant creature, NOT huntable by predators
             BodyMass = 3.0f,
 
             // Visuals - teal/cyan
@@ -709,7 +733,7 @@ public static class SpeciesRegistry
             BaseSize = 8f,
             Shape = ShapeType.Square,
 
-            StatVariation = 0.2f,
+            StatVariation = 0.15f,
         });
     }
 }

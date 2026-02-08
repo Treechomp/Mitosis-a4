@@ -689,12 +689,16 @@ public sealed class HuntingSystem : ISystem
                         continue;
 
                     // Size-based eligibility: prey must not be too large
+                    // Also skip species marked as unhuntable by predators (e.g. Faelings)
                     if (em.HasComponents(preyEntity, ComponentFlags.Species))
                     {
                         ref var preySpecies = ref em.Species[preyEntity];
                         var preyDef = SpeciesRegistry.GetById(preySpecies.SpeciesId);
                         if (preyDef.BodyMass > maxPreyMass)
                             continue;  // Too large to hunt
+                        if (preyDef.UnhuntableByPredators && predatorDef != null
+                            && predatorDef.Diet == DietType.Carnivore)
+                            continue;  // Faelings can't be hunted by carnivores
                     }
 
                     ref var preyPos = ref em.Positions[preyEntity];
@@ -764,7 +768,21 @@ public sealed class HuntingSystem : ISystem
                         if (preyEnergy.IsDead)
                         {
                             _entitiesToKill.Add(predator.TargetEntity);
-                            hunger.Current = MathF.Min(hunger.Max, hunger.Current + _huntNutrition);
+
+                            // Sectids carry food to nests instead of eating directly
+                            if (em.HasComponents(entity, ComponentFlags.FoodCarrier))
+                            {
+                                ref var carrier = ref em.FoodCarriers[entity];
+                                float foodGain = MathF.Min(_huntNutrition, carrier.MaxCarry - carrier.FoodCarried);
+                                carrier.FoodCarried += foodGain;
+                                // Sectids eat a small portion themselves
+                                hunger.Current = MathF.Min(hunger.Max, hunger.Current + _huntNutrition * 0.3f);
+                            }
+                            else
+                            {
+                                hunger.Current = MathF.Min(hunger.Max, hunger.Current + _huntNutrition);
+                            }
+
                             predator.TargetEntity = -1;
                             predator.Phase = PackPhase.Idle;
                             predator.Role = PackRole.None;
@@ -820,6 +838,20 @@ public sealed class HuntingSystem : ISystem
         // Kill dead prey
         foreach (int preyEntity in _entitiesToKill)
         {
+            // Faeling death: pass power to crystal for next spawn
+            if (em.HasComponents(preyEntity, ComponentFlags.FaelingPower))
+            {
+                ref var power = ref em.FaelingPowers[preyEntity];
+                int crystalId = power.LinkedCrystal;
+                if (crystalId >= 0 && em.IsAlive(crystalId) && em.HasComponents(crystalId, ComponentFlags.Crystal))
+                {
+                    ref var crystal = ref em.Crystals[crystalId];
+                    crystal.InheritedPower = power.Power * 0.5f;
+                    crystal.LinkedFaeling = -1;
+                    crystal.SpawnTimer = crystal.SpawnDelay;
+                }
+            }
+
             _spatialHash.Remove(preyEntity);
             em.DestroyEntity(preyEntity);
         }
@@ -1381,6 +1413,11 @@ public sealed class HungerSystem : ISystem
 
         foreach (int entity in em.Query(required))
         {
+            // Skip structures (nests, crystals) — they don't eat
+            if (em.HasComponents(entity, ComponentFlags.Nest) ||
+                em.HasComponents(entity, ComponentFlags.Crystal))
+                continue;
+
             ref var hunger = ref em.Hungers[entity];
 
             // Decay hunger
@@ -1399,6 +1436,20 @@ public sealed class HungerSystem : ISystem
 
         foreach (int entity in _toKill)
         {
+            // Faeling death from starvation: pass power to crystal
+            if (em.HasComponents(entity, ComponentFlags.FaelingPower))
+            {
+                ref var power = ref em.FaelingPowers[entity];
+                int crystalId = power.LinkedCrystal;
+                if (crystalId >= 0 && em.IsAlive(crystalId) && em.HasComponents(crystalId, ComponentFlags.Crystal))
+                {
+                    ref var crystal = ref em.Crystals[crystalId];
+                    crystal.InheritedPower = power.Power * 0.5f;
+                    crystal.LinkedFaeling = -1;
+                    crystal.SpawnTimer = crystal.SpawnDelay;
+                }
+            }
+
             em.DestroyEntity(entity);
         }
     }
@@ -1418,6 +1469,11 @@ public sealed class AgingSystem : ISystem
 
         foreach (int entity in em.Query(required))
         {
+            // Skip structures (nests, crystals don't age)
+            if (em.HasComponents(entity, ComponentFlags.Nest) ||
+                em.HasComponents(entity, ComponentFlags.Crystal))
+                continue;
+
             ref var age = ref em.Ages[entity];
             age.Current++;
 
@@ -1428,6 +1484,20 @@ public sealed class AgingSystem : ISystem
 
         foreach (int entity in _toKill)
         {
+            // Faeling death: pass power to crystal for next spawn
+            if (em.HasComponents(entity, ComponentFlags.FaelingPower))
+            {
+                ref var power = ref em.FaelingPowers[entity];
+                int crystalId = power.LinkedCrystal;
+                if (crystalId >= 0 && em.IsAlive(crystalId) && em.HasComponents(crystalId, ComponentFlags.Crystal))
+                {
+                    ref var crystal = ref em.Crystals[crystalId];
+                    crystal.InheritedPower = power.Power * 0.5f; // Half power inheritance
+                    crystal.LinkedFaeling = -1;
+                    crystal.SpawnTimer = crystal.SpawnDelay;
+                }
+            }
+
             em.DestroyEntity(entity);
         }
     }
@@ -1756,6 +1826,15 @@ public sealed class ReproductionSystem : ISystem
             ref var age = ref em.Ages[entity];
             if (!age.IsMature)
                 continue;
+
+            // Skip faction species that reproduce via special systems
+            if (em.HasComponents(entity, ComponentFlags.Species))
+            {
+                ref var species = ref em.Species[entity];
+                var speciesDef = SpeciesRegistry.GetById(species.SpeciesId);
+                if (speciesDef.NestBreeder || speciesDef.SporeReproducer || speciesDef.CrystalSpawned)
+                    continue;
+            }
 
             ref var hunger = ref em.Hungers[entity];
             ref var energy = ref em.Energies[entity];

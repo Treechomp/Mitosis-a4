@@ -42,6 +42,13 @@ public sealed class EntityManager
         TerrainDiscomfort = 1 << 14,
         Fear = 1 << 15,
         Terraform = 1 << 16,
+        Nest = 1 << 17,
+        FoodCarrier = 1 << 18,
+        Spore = 1 << 19,
+        Growth = 1 << 20,
+        Crystal = 1 << 21,
+        FaelingPower = 1 << 22,
+        RangedAttack = 1 << 23,
     }
 
     private readonly ComponentFlags[] _componentFlags;
@@ -64,6 +71,13 @@ public sealed class EntityManager
     public readonly TerrainDiscomfort[] TerrainDiscomforts;
     public readonly Fear[] Fears;
     public readonly Terraform[] Terraforms;
+    public readonly Nest[] Nests;
+    public readonly FoodCarrier[] FoodCarriers;
+    public readonly Spore[] Spores;
+    public readonly Growth[] Growths;
+    public readonly Crystal[] Crystals;
+    public readonly FaelingPower[] FaelingPowers;
+    public readonly RangedAttack[] RangedAttacks;
 
     public EntityManager()
     {
@@ -91,6 +105,13 @@ public sealed class EntityManager
         TerrainDiscomforts = new TerrainDiscomfort[MaxEntities];
         Fears = new Fear[MaxEntities];
         Terraforms = new Terraform[MaxEntities];
+        Nests = new Nest[MaxEntities];
+        FoodCarriers = new FoodCarrier[MaxEntities];
+        Spores = new Spore[MaxEntities];
+        Growths = new Growth[MaxEntities];
+        Crystals = new Crystal[MaxEntities];
+        FaelingPowers = new FaelingPower[MaxEntities];
+        RangedAttacks = new RangedAttack[MaxEntities];
     }
 
     public int EntityCount => _entityCount;
