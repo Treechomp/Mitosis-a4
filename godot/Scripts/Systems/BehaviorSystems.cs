@@ -1827,10 +1827,10 @@ public sealed class ReproductionSystem : ISystem
             if (!age.IsMature)
                 continue;
 
+            ref var species = ref em.Species[entity];
+
             // Skip faction species that reproduce via special systems
-            if (em.HasComponents(entity, ComponentFlags.Species))
             {
-                ref var species = ref em.Species[entity];
                 var speciesDef = SpeciesRegistry.GetById(species.SpeciesId);
                 if (speciesDef.NestBreeder || speciesDef.SporeReproducer || speciesDef.CrystalSpawned)
                     continue;
@@ -1849,7 +1849,6 @@ public sealed class ReproductionSystem : ISystem
                 break;
 
             ref var pos = ref em.Positions[entity];
-            ref var species = ref em.Species[entity];
 
             // Find spawn position
             float spawnX = pos.X + ((float)_rng.NextDouble() * 2 - 1) * reproduction.SpawnRadius;

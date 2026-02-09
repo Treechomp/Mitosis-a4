@@ -34,8 +34,6 @@ public sealed class NestSystem : ISystem
     private readonly int _nestsForExpedition = 5;      // Nests in colony to trigger expedition
     private readonly float _newNestRadius = 15f;       // Search radius for new nest placement
     private readonly float _expeditionDistance = 80f;   // Distance for expedition founding
-    private readonly int _nestDecayRate = 1;            // Damage per tick when unattended (no food)
-    private readonly int _nestStarveThreshold = 500;    // Ticks without food delivery before decay
 
     // Spawn tracking
     private readonly List<(float x, float y, int colonyId)> _pendingSpawns = new(16);
