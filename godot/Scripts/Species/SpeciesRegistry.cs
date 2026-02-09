@@ -638,11 +638,11 @@ public static class SpeciesRegistry
             TerraformStrength = 0.04f,
             TerraformCooldown = 6,
 
-            // Trophic - tiny insects, hunt in packs
+            // Trophic - tiny insects, hunt in packs — eat anything that moves
             BodyMass = 0.5f,
-            SoloHuntMaxRatio = 0.8f,       // Solo Sectid can barely hunt anything
+            SoloHuntMaxRatio = 1.0f,       // Solo Sectid can hunt spores
             PackHuntMassExponent = 0.7f,    // Sub-linear pack scaling
-            PreferredPrey = new List<string> { "Shroomer", "Faeling" },
+            PreferredPrey = new List<string> { "Shroomer", "Rabbit", "Faeling" },
             PreferredPreyBias = 0.4f,
 
             // Visuals - orange insects

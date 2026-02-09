@@ -156,6 +156,15 @@ public sealed class SpeciesDefinition
     public float PackHuntMassExponent { get; init; } = 0.7f;
 
     /// <summary>
+    /// How much hunger a predator gains from killing this creature.
+    /// Defaults to BodyMass * 20 if not explicitly set (-1 means use default).
+    /// </summary>
+    public float NutritionValue { get; init; } = -1f;
+
+    /// <summary>Resolved nutrition: explicit value or BodyMass * 20.</summary>
+    public float EffectiveNutrition => NutritionValue >= 0 ? NutritionValue : BodyMass * 20f;
+
+    /// <summary>
     /// List of species names this predator prefers to hunt (soft bias, not a hard gate).
     /// Preferred prey get a scoring bonus during target selection.
     /// Empty = no preference bias.

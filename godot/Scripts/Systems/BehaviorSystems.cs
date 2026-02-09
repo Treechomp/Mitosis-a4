@@ -465,29 +465,43 @@ public sealed class HuntingSystem : ISystem
 {
     private readonly SpatialHash _spatialHash;
     private readonly WorldManager? _worldManager;
-    private readonly float _huntNutrition;
     private readonly float _huntThreshold;
     private readonly float _baseHuntSpeed;
     private readonly float _packCoordinationRadius;
+    private readonly float _packShareRadius;
+    private readonly float _killerShareRatio;
+    private readonly float _fallbackNutrition;
+    private readonly float _sporeBodyMass;
+    private readonly float _trackingHungerThreshold;
+    private readonly float _trackingRange;
     private readonly int _rushDuration;
     private readonly int _retreatDuration;
     private readonly int _positioningDuration;
     private readonly List<int> _nearbyEntities = new(64);
     private readonly List<int> _packMembers = new(8);
+    private readonly List<int> _shareBuffer = new(16);
     private readonly List<int> _entitiesToKill = new(16);
     private readonly Dictionary<int, int> _groupTargets = new(16);  // groupId -> target entity
 
     public HuntingSystem(SpatialHash spatialHash, WorldManager? worldManager = null,
-                         float huntNutrition = 50f, float huntThreshold = 0.7f,
+                         float huntThreshold = 0.7f,
                          float baseHuntSpeed = 0.10f, float packCoordinationRadius = 8f,
+                         float packShareRadius = 10f, float killerShareRatio = 0.5f,
+                         float fallbackNutrition = 40f, float sporeBodyMass = 0.2f,
+                         float trackingHungerThreshold = 0.5f, float trackingRange = 80f,
                          int rushDuration = 30, int retreatDuration = 20, int positioningDuration = 40)
     {
         _spatialHash = spatialHash;
         _worldManager = worldManager;
-        _huntNutrition = huntNutrition;
         _huntThreshold = huntThreshold;
         _baseHuntSpeed = baseHuntSpeed;
         _packCoordinationRadius = packCoordinationRadius;
+        _packShareRadius = packShareRadius;
+        _killerShareRatio = killerShareRatio;
+        _fallbackNutrition = fallbackNutrition;
+        _sporeBodyMass = sporeBodyMass;
+        _trackingHungerThreshold = trackingHungerThreshold;
+        _trackingRange = trackingRange;
         _rushDuration = rushDuration;
         _retreatDuration = retreatDuration;
         _positioningDuration = positioningDuration;
@@ -689,13 +703,15 @@ public sealed class HuntingSystem : ISystem
                         continue;
 
                     // Size-based eligibility: prey must not be too large
-                    // Also skip species marked as unhuntable by predators (e.g. Faelings)
+                    float preyMass = GetPreyBodyMass(preyEntity, em);
+                    if (preyMass > maxPreyMass)
+                        continue;  // Too large to hunt
+
+                    // Skip species marked as unhuntable by predators (e.g. Faelings)
                     if (em.HasComponents(preyEntity, ComponentFlags.Species))
                     {
                         ref var preySpecies = ref em.Species[preyEntity];
                         var preyDef = SpeciesRegistry.GetById(preySpecies.SpeciesId);
-                        if (preyDef.BodyMass > maxPreyMass)
-                            continue;  // Too large to hunt
                         if (preyDef.UnhuntableByPredators && predatorDef != null
                             && predatorDef.Diet == DietType.Carnivore)
                             continue;  // Faelings can't be hunted by carnivores
@@ -747,6 +763,46 @@ public sealed class HuntingSystem : ISystem
                 }
             }
 
+            // Hunger-driven tracking: when hungry and no target, search wide range
+            if (!predator.HasTarget && hungerRatio < _trackingHungerThreshold
+                && em.HasComponents(entity, ComponentFlags.Velocity))
+            {
+                // Wide-range scan for nearest prey (simulates scent/tracking)
+                _nearbyEntities.Clear();
+                _spatialHash.QueryRadius(pos.X, pos.Y, _trackingRange, _nearbyEntities);
+
+                float bestTrackDistSq = float.MaxValue;
+                int bestTrackTarget = -1;
+
+                foreach (int preyEntity in _nearbyEntities)
+                {
+                    if (!em.IsAlive(preyEntity) || !em.HasComponents(preyEntity, ComponentFlags.Prey))
+                        continue;
+
+                    ref var preyPos2 = ref em.Positions[preyEntity];
+                    float trackDistSq = MathUtils.DistanceSquared(pos.X, pos.Y, preyPos2.X, preyPos2.Y);
+                    if (trackDistSq < bestTrackDistSq)
+                    {
+                        bestTrackDistSq = trackDistSq;
+                        bestTrackTarget = preyEntity;
+                    }
+                }
+
+                if (bestTrackTarget >= 0)
+                {
+                    // Move toward prey at wander speed (tracking, not chasing)
+                    ref var vel = ref em.Velocities[entity];
+                    ref var trackPreyPos = ref em.Positions[bestTrackTarget];
+                    float tdx = trackPreyPos.X - pos.X;
+                    float tdy = trackPreyPos.Y - pos.Y;
+                    var trackDir = MathUtils.Normalize(tdx, tdy);
+                    float trackSpeed = _baseHuntSpeed * 0.8f;
+                    vel.Dx = trackDir.X * trackSpeed;
+                    vel.Dy = trackDir.Y * trackSpeed;
+                    continue;  // Skip normal hunt movement — we're just tracking
+                }
+            }
+
             // Hunt the target
             if (predator.HasTarget && em.IsAlive(predator.TargetEntity))
             {
@@ -769,18 +825,64 @@ public sealed class HuntingSystem : ISystem
                         {
                             _entitiesToKill.Add(predator.TargetEntity);
 
-                            // Sectids carry food to nests instead of eating directly
-                            if (em.HasComponents(entity, ComponentFlags.FoodCarrier))
+                            // Calculate nutrition from prey body mass
+                            float nutrition = _fallbackNutrition;
+                            if (em.HasComponents(predator.TargetEntity, ComponentFlags.Spore))
                             {
-                                ref var carrier = ref em.FoodCarriers[entity];
-                                float foodGain = MathF.Min(_huntNutrition, carrier.MaxCarry - carrier.FoodCarried);
-                                carrier.FoodCarried += foodGain;
-                                // Sectids eat a small portion themselves
-                                hunger.Current = MathF.Min(hunger.Max, hunger.Current + _huntNutrition * 0.3f);
+                                nutrition = _sporeBodyMass * 20f;  // Spores are tiny
+                            }
+                            else if (em.HasComponents(predator.TargetEntity, ComponentFlags.Species))
+                            {
+                                ref var preySpecies = ref em.Species[predator.TargetEntity];
+                                var preyDef = SpeciesRegistry.GetById(preySpecies.SpeciesId);
+                                nutrition = preyDef.EffectiveNutrition;
+                            }
+
+                            // Pack food sharing: killer gets half, rest split among nearby pack
+                            if (isPack)
+                            {
+                                float killerPortion = nutrition * _killerShareRatio;
+                                float sharePortion = nutrition - killerPortion;
+
+                                ApplyFoodGain(entity, killerPortion, em, ref hunger);
+
+                                // Find nearby same-species pack members to share with
+                                _shareBuffer.Clear();
+                                _spatialHash.QueryRadius(pos.X, pos.Y, _packShareRadius, _shareBuffer);
+                                int shareCount = 0;
+                                foreach (int other in _shareBuffer)
+                                {
+                                    if (other == entity || !em.IsAlive(other)) continue;
+                                    if (!em.HasComponents(other, ComponentFlags.Hunger | ComponentFlags.Social)) continue;
+                                    ref var otherSocial = ref em.Socials[other];
+                                    if (otherSocial.GroupId == groupId)
+                                        shareCount++;
+                                }
+                                if (shareCount > 0)
+                                {
+                                    float perMember = sharePortion / shareCount;
+                                    foreach (int other in _shareBuffer)
+                                    {
+                                        if (other == entity || !em.IsAlive(other)) continue;
+                                        if (!em.HasComponents(other, ComponentFlags.Hunger | ComponentFlags.Social)) continue;
+                                        ref var otherSocial = ref em.Socials[other];
+                                        if (otherSocial.GroupId == groupId)
+                                        {
+                                            ref var otherHunger = ref em.Hungers[other];
+                                            ApplyFoodGain(other, perMember, em, ref otherHunger);
+                                        }
+                                    }
+                                }
+                                else
+                                {
+                                    // No pack members nearby — killer gets everything
+                                    ApplyFoodGain(entity, sharePortion, em, ref hunger);
+                                }
                             }
                             else
                             {
-                                hunger.Current = MathF.Min(hunger.Max, hunger.Current + _huntNutrition);
+                                // Solo hunter gets all the nutrition
+                                ApplyFoodGain(entity, nutrition, em, ref hunger);
                             }
 
                             predator.TargetEntity = -1;
@@ -1110,6 +1212,44 @@ public sealed class HuntingSystem : ISystem
                 vel.Dy = defaultDir.Y * speed;
                 break;
         }
+    }
+
+    /// <summary>
+    /// Apply food gain to an entity, handling Sectid food carriers specially.
+    /// </summary>
+    private static void ApplyFoodGain(int entity, float nutrition, EntityManager em, ref Hunger hunger)
+    {
+        if (em.HasComponents(entity, ComponentFlags.FoodCarrier))
+        {
+            ref var carrier = ref em.FoodCarriers[entity];
+            float foodGain = MathF.Min(nutrition, carrier.MaxCarry - carrier.FoodCarried);
+            carrier.FoodCarried += foodGain;
+            // Sectids eat a small portion themselves
+            hunger.Current = MathF.Min(hunger.Max, hunger.Current + nutrition * 0.3f);
+        }
+        else
+        {
+            hunger.Current = MathF.Min(hunger.Max, hunger.Current + nutrition);
+        }
+    }
+
+    /// <summary>
+    /// Get the effective body mass of a prey entity for hunting eligibility.
+    /// Spores use a small fixed mass instead of the parent Shroomer's mass.
+    /// </summary>
+    private float GetPreyBodyMass(int preyEntity, EntityManager em)
+    {
+        if (em.HasComponents(preyEntity, ComponentFlags.Spore))
+            return _sporeBodyMass;
+
+        if (em.HasComponents(preyEntity, ComponentFlags.Species))
+        {
+            ref var preySpecies = ref em.Species[preyEntity];
+            var preyDef = SpeciesRegistry.GetById(preySpecies.SpeciesId);
+            return preyDef.BodyMass;
+        }
+
+        return 1f;
     }
 }
 

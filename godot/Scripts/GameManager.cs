@@ -92,7 +92,6 @@ public partial class GameManager : Node2D
         _systems.Add(new SeparationSystem(spatialHash, separationRadius: 2.5f, separationStrength: 0.03f));
         _systems.Add(new CollisionSystem(spatialHash, collisionRadiusScale: 0.5f, tileSize: TileSize));
         _systems.Add(new HuntingSystem(spatialHash, _worldManager,
-            huntNutrition: 60f,      // Increased from 50 - one kill sustains ~1500 ticks
             huntThreshold: 0.75f));  // Hunt when below 75% hunger
         _systems.Add(new FleeingSystem(spatialHash, _worldManager));
         _systems.Add(new AgingSystem());
