@@ -75,20 +75,15 @@ public sealed class WanderSystem : ISystem
     private readonly WorldManager? _worldManager;
     private readonly SpatialHash? _spatialHash;
     private readonly float _lookAheadDistance;
-    private readonly float _roamDistance;
-    private readonly int _roamCooldownBase;
     private readonly float _roamArrivalDist;
     private readonly List<int> _nearbyBuffer = new(32);
 
     public WanderSystem(WorldManager? worldManager = null, float lookAheadDistance = 1.5f,
-                        float roamDistance = 60f, int roamCooldownBase = 500,
                         float roamArrivalDist = 5f, SpatialHash? spatialHash = null)
     {
         _worldManager = worldManager;
         _spatialHash = spatialHash;
         _lookAheadDistance = lookAheadDistance;
-        _roamDistance = roamDistance;
-        _roamCooldownBase = roamCooldownBase;
         _roamArrivalDist = roamArrivalDist;
     }
 
@@ -109,6 +104,16 @@ public sealed class WanderSystem : ISystem
             ref var wander = ref em.Wanders[entity];
             ref var vel = ref em.Velocities[entity];
             ref var pos = ref em.Positions[entity];
+
+            // Get species definition for roaming parameters
+            SpeciesDefinition? wanderSpeciesDef = null;
+            if (em.HasComponents(entity, ComponentFlags.Species))
+            {
+                ref var sp = ref em.Species[entity];
+                wanderSpeciesDef = SpeciesRegistry.GetById(sp.SpeciesId);
+            }
+            float roamDistance = wanderSpeciesDef?.RoamDistance ?? 60f;
+            int roamCooldownBase = wanderSpeciesDef?.RoamCooldown ?? 500;
 
             // Skip if fleeing
             if (em.HasComponents(entity, ComponentFlags.Prey) && em.Preys[entity].IsFleeing)
@@ -147,7 +152,7 @@ public sealed class WanderSystem : ISystem
                 {
                     // Pick a distant waypoint
                     float angle = (float)(_rng.NextDouble() * Math.PI * 2);
-                    float dist = _roamDistance * (0.5f + (float)_rng.NextDouble() * 0.5f);
+                    float dist = roamDistance * (0.5f + (float)_rng.NextDouble() * 0.5f);
                     float targetX = pos.X + MathF.Cos(angle) * dist;
                     float targetY = pos.Y + MathF.Sin(angle) * dist;
 
@@ -174,7 +179,7 @@ public sealed class WanderSystem : ISystem
                     wander.RoamTargetX = 0f;
                     wander.RoamTargetY = 0f;
                     // Hungry creatures re-roam faster (min 100 ticks when starving)
-                    int cooldown = (int)(_roamCooldownBase * (1f - hungerUrgency * 0.8f));
+                    int cooldown = (int)(roamCooldownBase * (1f - hungerUrgency * 0.8f));
                     wander.RoamCooldown = cooldown + _rng.Next(cooldown / 3);
                 }
                 else
@@ -465,46 +470,18 @@ public sealed class HuntingSystem : ISystem
 {
     private readonly SpatialHash _spatialHash;
     private readonly WorldManager? _worldManager;
-    private readonly float _huntThreshold;
-    private readonly float _baseHuntSpeed;
-    private readonly float _packCoordinationRadius;
-    private readonly float _packShareRadius;
-    private readonly float _killerShareRatio;
-    private readonly float _fallbackNutrition;
-    private readonly float _sporeBodyMass;
-    private readonly float _trackingHungerThreshold;
-    private readonly float _trackingRange;
-    private readonly int _rushDuration;
-    private readonly int _retreatDuration;
-    private readonly int _positioningDuration;
     private readonly List<int> _nearbyEntities = new(64);
     private readonly List<int> _packMembers = new(8);
     private readonly List<int> _shareBuffer = new(16);
     private readonly List<int> _entitiesToKill = new(16);
     private readonly Dictionary<int, int> _groupTargets = new(16);  // groupId -> target entity
+    private const float SporeBodyMass = 0.2f;
+    private const float FallbackNutrition = 40f;
 
-    public HuntingSystem(SpatialHash spatialHash, WorldManager? worldManager = null,
-                         float huntThreshold = 0.7f,
-                         float baseHuntSpeed = 0.10f, float packCoordinationRadius = 8f,
-                         float packShareRadius = 10f, float killerShareRatio = 0.5f,
-                         float fallbackNutrition = 40f, float sporeBodyMass = 0.2f,
-                         float trackingHungerThreshold = 0.5f, float trackingRange = 80f,
-                         int rushDuration = 30, int retreatDuration = 20, int positioningDuration = 40)
+    public HuntingSystem(SpatialHash spatialHash, WorldManager? worldManager = null)
     {
         _spatialHash = spatialHash;
         _worldManager = worldManager;
-        _huntThreshold = huntThreshold;
-        _baseHuntSpeed = baseHuntSpeed;
-        _packCoordinationRadius = packCoordinationRadius;
-        _packShareRadius = packShareRadius;
-        _killerShareRatio = killerShareRatio;
-        _fallbackNutrition = fallbackNutrition;
-        _sporeBodyMass = sporeBodyMass;
-        _trackingHungerThreshold = trackingHungerThreshold;
-        _trackingRange = trackingRange;
-        _rushDuration = rushDuration;
-        _retreatDuration = retreatDuration;
-        _positioningDuration = positioningDuration;
     }
 
     public void Process(EntityManager em)
@@ -552,6 +529,18 @@ public sealed class HuntingSystem : ISystem
             ref var predator = ref em.Predators[entity];
             ref var hunger = ref em.Hungers[entity];
 
+            // Get species definition for this predator (all hunting params are per-species)
+            SpeciesDefinition speciesDef;
+            if (em.HasComponents(entity, ComponentFlags.Species))
+            {
+                ref var sp = ref em.Species[entity];
+                speciesDef = SpeciesRegistry.GetById(sp.SpeciesId);
+            }
+            else
+            {
+                speciesDef = SpeciesRegistry.Get("Wolf"); // fallback
+            }
+
             // Reduce cooldowns
             if (predator.CurrentCooldown > 0)
                 predator.CurrentCooldown--;
@@ -569,7 +558,7 @@ public sealed class HuntingSystem : ISystem
             float hungerRatio = hunger.Current / hunger.Max;
 
             // Stop hunting if full
-            if (hungerRatio >= _huntThreshold)
+            if (hungerRatio >= speciesDef.HuntThreshold)
             {
                 predator.TargetEntity = -1;
                 predator.Phase = PackPhase.Idle;
@@ -577,7 +566,7 @@ public sealed class HuntingSystem : ISystem
                 continue;
             }
 
-            float urgency = 1f - (hungerRatio / _huntThreshold);
+            float urgency = 1f - (hungerRatio / speciesDef.HuntThreshold);
 
             // Check terrain discomfort
             float discomfortRatio = 0f;
@@ -616,7 +605,7 @@ public sealed class HuntingSystem : ISystem
 
                     // Count nearby pack members to confirm this is a real pack hunt
                     _packMembers.Clear();
-                    _spatialHash.QueryRadius(pos.X, pos.Y, _packCoordinationRadius, _packMembers);
+                    _spatialHash.QueryRadius(pos.X, pos.Y, speciesDef.PackCoordinationRadius, _packMembers);
                     int nearbyPackCount = 0;
                     foreach (int other in _packMembers)
                     {
@@ -646,7 +635,7 @@ public sealed class HuntingSystem : ISystem
                     if (!predator.HasTarget || predator.TargetEntity != packTarget)
                     {
                         predator.TargetEntity = packTarget;
-                        AssignPackRole(entity, packTarget, em, ref predator, ref social);
+                        AssignPackRole(entity, packTarget, em, ref predator, ref social, speciesDef);
                     }
                 }
             }
@@ -658,17 +647,9 @@ public sealed class HuntingSystem : ISystem
                 float huntRangeSq = effectiveRange * effectiveRange;
                 _spatialHash.QueryRadius(pos.X, pos.Y, effectiveRange, _nearbyEntities);
 
-                // Get predator's species definition for size-based hunting
-                SpeciesDefinition? predatorDef = null;
-                if (em.HasComponents(entity, ComponentFlags.Species))
-                {
-                    ref var predSpecies = ref em.Species[entity];
-                    predatorDef = SpeciesRegistry.GetById(predSpecies.SpeciesId);
-                }
-
                 // Calculate effective hunting mass (solo or pack)
-                float effectiveMass = predatorDef?.BodyMass ?? 1.0f;
-                float maxHuntRatio = predatorDef?.SoloHuntMaxRatio ?? 1.2f;
+                float effectiveMass = speciesDef.BodyMass;
+                float maxHuntRatio = speciesDef.SoloHuntMaxRatio;
                 if (isPack)
                 {
                     // Count nearby pack members for effective mass
@@ -683,7 +664,7 @@ public sealed class HuntingSystem : ISystem
                         if (otherSocial.GroupId == groupId)
                             packSize++;
                     }
-                    float exponent = predatorDef?.PackHuntMassExponent ?? 0.7f;
+                    float exponent = speciesDef.PackHuntMassExponent;
                     effectiveMass *= MathF.Pow(packSize, exponent);
                 }
                 float maxPreyMass = effectiveMass * maxHuntRatio;
@@ -706,8 +687,8 @@ public sealed class HuntingSystem : ISystem
                     {
                         ref var preySpecies = ref em.Species[preyEntity];
                         var preyDef = SpeciesRegistry.GetById(preySpecies.SpeciesId);
-                        if (preyDef.UnhuntableByPredators && predatorDef != null
-                            && predatorDef.Diet == DietType.Carnivore)
+                        if (preyDef.UnhuntableByPredators
+                            && speciesDef.Diet == DietType.Carnivore)
                             continue;  // Faelings can't be hunted by carnivores
                     }
 
@@ -729,12 +710,12 @@ public sealed class HuntingSystem : ISystem
                     }
 
                     // Preferred prey bias: familiar prey scores better (lower)
-                    if (predatorDef?.PreferredPrey != null && em.HasComponents(preyEntity, ComponentFlags.Species))
+                    if (speciesDef.PreferredPrey != null && em.HasComponents(preyEntity, ComponentFlags.Species))
                     {
                         ref var preySpecies = ref em.Species[preyEntity];
                         var preyDef = SpeciesRegistry.GetById(preySpecies.SpeciesId);
-                        if (predatorDef.PreferredPrey.Contains(preyDef.Name))
-                            score *= predatorDef.PreferredPreyBias;
+                        if (speciesDef.PreferredPrey.Contains(preyDef.Name))
+                            score *= speciesDef.PreferredPreyBias;
                     }
 
                     if (score < bestScore)
@@ -752,18 +733,18 @@ public sealed class HuntingSystem : ISystem
                         _groupTargets[groupId] = bestPrey;
                         predator.Role = PackRole.Leader;
                         predator.Phase = PackPhase.Positioning;
-                        predator.PhaseTimer = _positioningDuration;
+                        predator.PhaseTimer = speciesDef.PositioningDuration;
                     }
                 }
             }
 
             // Hunger-driven tracking: when hungry and no target, search wide range
-            if (!predator.HasTarget && hungerRatio < _trackingHungerThreshold
+            if (!predator.HasTarget && hungerRatio < speciesDef.TrackingHungerThreshold
                 && em.HasComponents(entity, ComponentFlags.Velocity))
             {
                 // Wide-range scan for nearest prey (simulates scent/tracking)
                 _nearbyEntities.Clear();
-                _spatialHash.QueryRadius(pos.X, pos.Y, _trackingRange, _nearbyEntities);
+                _spatialHash.QueryRadius(pos.X, pos.Y, speciesDef.TrackingRange, _nearbyEntities);
 
                 float bestTrackDistSq = float.MaxValue;
                 int bestTrackTarget = -1;
@@ -790,7 +771,7 @@ public sealed class HuntingSystem : ISystem
                     float tdx = trackPreyPos.X - pos.X;
                     float tdy = trackPreyPos.Y - pos.Y;
                     var trackDir = MathUtils.Normalize(tdx, tdy);
-                    float trackSpeed = _baseHuntSpeed * 0.8f;
+                    float trackSpeed = speciesDef.BaseHuntSpeed * 0.8f;
                     vel.Dx = trackDir.X * trackSpeed;
                     vel.Dy = trackDir.Y * trackSpeed;
                     continue;  // Skip normal hunt movement — we're just tracking
@@ -825,14 +806,14 @@ public sealed class HuntingSystem : ISystem
                             // Pack food sharing: killer gets half, rest split among nearby pack
                             if (isPack)
                             {
-                                float killerPortion = nutrition * _killerShareRatio;
+                                float killerPortion = nutrition * speciesDef.KillerShareRatio;
                                 float sharePortion = nutrition - killerPortion;
 
                                 ApplyFoodGain(entity, killerPortion, em, ref hunger);
 
                                 // Find nearby same-species pack members to share with
                                 _shareBuffer.Clear();
-                                _spatialHash.QueryRadius(pos.X, pos.Y, _packShareRadius, _shareBuffer);
+                                _spatialHash.QueryRadius(pos.X, pos.Y, speciesDef.PackShareRadius, _shareBuffer);
                                 int shareCount = 0;
                                 foreach (int other in _shareBuffer)
                                 {
@@ -884,7 +865,7 @@ public sealed class HuntingSystem : ISystem
                         {
                             // Still in herd - retreat to continue harassment
                             predator.Phase = PackPhase.Retreating;
-                            predator.PhaseTimer = _retreatDuration;
+                            predator.PhaseTimer = speciesDef.RetreatDuration;
                         }
                         // If isolated, stay in rushing/chase mode
                     }
@@ -893,22 +874,14 @@ public sealed class HuntingSystem : ISystem
                 {
                     ref var vel = ref em.Velocities[entity];
 
-                    // Use species-specific hunt speed, fallback to system default
-                    float baseSpeed = _baseHuntSpeed;
-                    if (em.HasComponents(entity, ComponentFlags.Species))
-                    {
-                        ref var species = ref em.Species[entity];
-                        var speciesDef = SpeciesRegistry.GetById(species.SpeciesId);
-                        baseSpeed = speciesDef.BaseHuntSpeed;
-                    }
-                    float huntSpeed = baseSpeed * speedMultiplier;
+                    float huntSpeed = speciesDef.BaseHuntSpeed * speedMultiplier;
 
                     // Pack tactics based on role and phase
                     if (isPack && predator.Role != PackRole.None)
                     {
                         // Check if prey is isolated from herd
                         bool preyIsolated = IsPreyIsolated(predator.TargetEntity, em);
-                        ApplyPackTactics(entity, ref pos, ref vel, ref predator, preyPos.X, preyPos.Y, dist, huntSpeed, em, preyIsolated);
+                        ApplyPackTactics(entity, ref pos, ref vel, ref predator, preyPos.X, preyPos.Y, dist, huntSpeed, em, preyIsolated, speciesDef);
                     }
                     else
                     {
@@ -974,12 +947,13 @@ public sealed class HuntingSystem : ISystem
         return true;  // Isolated - few or no other prey nearby
     }
 
-    private void AssignPackRole(int entity, int target, EntityManager em, ref Predator predator, ref Social social)
+    private void AssignPackRole(int entity, int target, EntityManager em, ref Predator predator, ref Social social,
+                                SpeciesDefinition speciesDef)
     {
         // Find other pack members
         ref var pos = ref em.Positions[entity];
         ref var targetPos = ref em.Positions[target];
-        _spatialHash.QueryRadius(pos.X, pos.Y, _packCoordinationRadius, _packMembers);
+        _spatialHash.QueryRadius(pos.X, pos.Y, speciesDef.PackCoordinationRadius, _packMembers);
 
         int flankersCount = 0;
         bool hasLeader = false;
@@ -1017,12 +991,12 @@ public sealed class HuntingSystem : ISystem
         }
 
         predator.Phase = PackPhase.Positioning;
-        predator.PhaseTimer = _positioningDuration;
+        predator.PhaseTimer = speciesDef.PositioningDuration;
     }
 
     private void ApplyPackTactics(int entity, ref Position pos, ref Velocity vel, ref Predator predator,
                                    float targetX, float targetY, float dist, float huntSpeed, EntityManager em,
-                                   bool preyIsolated)
+                                   bool preyIsolated, SpeciesDefinition speciesDef)
     {
         float dx = targetX - pos.X;
         float dy = targetY - pos.Y;
@@ -1057,7 +1031,7 @@ public sealed class HuntingSystem : ISystem
             if (predator.Phase != PackPhase.Rushing)
             {
                 predator.Phase = PackPhase.Rushing;
-                predator.PhaseTimer = _rushDuration;
+                predator.PhaseTimer = speciesDef.RushDuration;
             }
             return;
         }
@@ -1070,15 +1044,15 @@ public sealed class HuntingSystem : ISystem
             {
                 case PackPhase.Positioning:
                     predator.Phase = PackPhase.Rushing;
-                    predator.PhaseTimer = _rushDuration;
+                    predator.PhaseTimer = speciesDef.RushDuration;
                     break;
                 case PackPhase.Rushing:
                     predator.Phase = PackPhase.Retreating;
-                    predator.PhaseTimer = _retreatDuration;
+                    predator.PhaseTimer = speciesDef.RetreatDuration;
                     break;
                 case PackPhase.Retreating:
                     predator.Phase = PackPhase.Positioning;
-                    predator.PhaseTimer = _positioningDuration;
+                    predator.PhaseTimer = speciesDef.PositioningDuration;
                     break;
             }
         }
@@ -1110,7 +1084,7 @@ public sealed class HuntingSystem : ISystem
                 {
                     // Far enough, go back to positioning for next rush
                     predator.Phase = PackPhase.Positioning;
-                    predator.PhaseTimer = _positioningDuration;
+                    predator.PhaseTimer = speciesDef.PositioningDuration;
                 }
                 break;
 
@@ -1224,7 +1198,7 @@ public sealed class HuntingSystem : ISystem
     private float GetPreyBodyMass(int preyEntity, EntityManager em)
     {
         if (em.HasComponents(preyEntity, ComponentFlags.Spore))
-            return _sporeBodyMass;
+            return SporeBodyMass;
 
         if (em.HasComponents(preyEntity, ComponentFlags.Species))
         {
@@ -1251,7 +1225,7 @@ public sealed class HuntingSystem : ISystem
     private float GetPreyNutrition(int preyEntity, EntityManager em)
     {
         if (em.HasComponents(preyEntity, ComponentFlags.Spore))
-            return _sporeBodyMass * 20f;
+            return SporeBodyMass * 20f;
 
         if (em.HasComponents(preyEntity, ComponentFlags.Species))
         {
@@ -1268,7 +1242,7 @@ public sealed class HuntingSystem : ISystem
             return nutrition;
         }
 
-        return _fallbackNutrition;
+        return FallbackNutrition;
     }
 }
 
@@ -1669,12 +1643,10 @@ public sealed class AgingSystem : ISystem
 public sealed class GrazingSystem : ISystem
 {
     private readonly World.WorldManager _worldManager;
-    private readonly float _grazeRate;
 
-    public GrazingSystem(World.WorldManager worldManager, float grazeRate = 0.5f)
+    public GrazingSystem(World.WorldManager worldManager)
     {
         _worldManager = worldManager;
-        _grazeRate = grazeRate;
     }
 
     public void Process(EntityManager em)
@@ -1691,8 +1663,9 @@ public sealed class GrazingSystem : ISystem
             // Standard herbivore grazing
             if (species.Type == SpeciesType.Herbivore)
             {
+                var herbDef = SpeciesRegistry.GetById(species.SpeciesId);
                 if (tile.IsGrazeable())
-                    hunger.Current = MathF.Min(hunger.Max, hunger.Current + _grazeRate);
+                    hunger.Current = MathF.Min(hunger.Max, hunger.Current + herbDef.GrazeNutrition);
                 continue;
             }
 
@@ -1780,14 +1753,10 @@ public sealed class SeparationSystem : ISystem
 {
     private readonly SpatialHash _spatialHash;
     private readonly List<int> _nearbyEntities = new(64);
-    private readonly float _separationRadius;
-    private readonly float _separationStrength;
 
-    public SeparationSystem(SpatialHash spatialHash, float separationRadius = 2f, float separationStrength = 0.02f)
+    public SeparationSystem(SpatialHash spatialHash)
     {
         _spatialHash = spatialHash;
-        _separationRadius = separationRadius;
-        _separationStrength = separationStrength;
     }
 
     public void Process(EntityManager em)
@@ -1816,8 +1785,13 @@ public sealed class SeparationSystem : ISystem
             ref var vel = ref em.Velocities[entity];
             ref var species = ref em.Species[entity];
 
+            // Get species-specific separation parameters
+            var sepSpeciesDef = SpeciesRegistry.GetById(species.SpeciesId);
+            float separationRadius = sepSpeciesDef.SeparationRadius;
+            float separationStrength = sepSpeciesDef.SeparationStrength;
+
             // Query nearby entities
-            _spatialHash.QueryRadius(pos.X, pos.Y, _separationRadius, _nearbyEntities);
+            _spatialHash.QueryRadius(pos.X, pos.Y, separationRadius, _nearbyEntities);
 
             float separationX = 0f;
             float separationY = 0f;
@@ -1841,10 +1815,10 @@ public sealed class SeparationSystem : ISystem
                 float dy = pos.Y - otherPos.Y;
                 float distSq = dx * dx + dy * dy;
 
-                if (distSq > 0.001f && distSq < _separationRadius * _separationRadius)
+                if (distSq > 0.001f && distSq < separationRadius * separationRadius)
                 {
                     float dist = MathF.Sqrt(distSq);
-                    float factor = 1f - (dist / _separationRadius); // Stronger when closer
+                    float factor = 1f - (dist / separationRadius); // Stronger when closer
                     separationX += (dx / dist) * factor;
                     separationY += (dy / dist) * factor;
                     neighborCount++;
@@ -1857,8 +1831,8 @@ public sealed class SeparationSystem : ISystem
                 separationX /= neighborCount;
                 separationY /= neighborCount;
 
-                vel.Dx += separationX * _separationStrength;
-                vel.Dy += separationY * _separationStrength;
+                vel.Dx += separationX * separationStrength;
+                vel.Dy += separationY * separationStrength;
             }
         }
     }
@@ -2065,7 +2039,7 @@ public sealed class ReproductionSystem : ISystem
         );
         em.AddComponent(entity, ComponentFlags.Age);
 
-        em.Energies[entity] = new Energy(80f);
+        em.Energies[entity] = new Energy(speciesDef.MaxEnergy, speciesDef.MaxEnergy);
         em.AddComponent(entity, ComponentFlags.Energy);
 
         em.Hungers[entity] = new Hunger(
@@ -2078,7 +2052,11 @@ public sealed class ReproductionSystem : ISystem
         em.Reproductions[entity] = new Reproduction(
             hungerThreshold: speciesDef.ReproHungerThreshold,
             energyThreshold: speciesDef.ReproEnergyThreshold,
-            cooldown: (int)speciesDef.ReproCooldown
+            hungerCost: speciesDef.ReproHungerCost,
+            energyCost: speciesDef.ReproEnergyCost,
+            cooldown: (int)speciesDef.ReproCooldown,
+            offspringCount: speciesDef.OffspringCount,
+            spawnRadius: speciesDef.SpawnRadius
         );
         em.AddComponent(entity, ComponentFlags.Reproduction);
 
@@ -2135,26 +2113,14 @@ public sealed class ReproductionSystem : ISystem
 public sealed class HerdingSystem : ISystem
 {
     private readonly SpatialHash _spatialHash;
-    private readonly float _socialRadius;        // Max radius to look for group members
-    private readonly float _leaderInfluenceRadius; // Max distance to recognize/follow a leader
-    private readonly float _maxJoinDistance;     // Max distance to join a new group
-    private readonly float _groupSizeTolerance;  // Allow groups to exceed preferred by this factor
-    private readonly int _leaderLostThreshold;   // Ticks before seeking new leader
     private readonly List<int> _nearbyEntities = new(64);
     private readonly Dictionary<int, int> _groupSizes = new(32);  // groupId -> member count
     private readonly Dictionary<int, (int entity, float score)> _groupLeaders = new(32); // groupId -> (leader entity, score)
     private int _nextGroupId = 1;
 
-    public HerdingSystem(SpatialHash spatialHash, float socialRadius = 8f,
-                         float leaderInfluenceRadius = 6f, float maxJoinDistance = 12f,
-                         float groupSizeTolerance = 1.3f, int leaderLostThreshold = 40)
+    public HerdingSystem(SpatialHash spatialHash)
     {
         _spatialHash = spatialHash;
-        _socialRadius = socialRadius;
-        _leaderInfluenceRadius = leaderInfluenceRadius;
-        _maxJoinDistance = maxJoinDistance;
-        _groupSizeTolerance = groupSizeTolerance;
-        _leaderLostThreshold = leaderLostThreshold;
     }
 
     public void Process(EntityManager em)
@@ -2206,6 +2172,14 @@ public sealed class HerdingSystem : ISystem
             if (!social.IsSocial)
                 continue;
 
+            // Get species definition for social parameters
+            var herdSpeciesDef = SpeciesRegistry.GetById(species.SpeciesId);
+            float socialRadius = herdSpeciesDef.SocialRadius;
+            float leaderInfluenceRadius = herdSpeciesDef.LeaderInfluenceRadius;
+            float maxJoinDistance = herdSpeciesDef.MaxJoinDistance;
+            float groupSizeTolerance = herdSpeciesDef.GroupSizeTolerance;
+            int leaderLostThreshold = herdSpeciesDef.LeaderLostThreshold;
+
             // Update leadership score based on age (do this first so it's current)
             if (em.HasComponents(entity, ComponentFlags.Age))
             {
@@ -2254,7 +2228,7 @@ public sealed class HerdingSystem : ISystem
 
             // === SOCIAL BEHAVIOR ===
 
-            _spatialHash.QueryRadius(pos.X, pos.Y, _socialRadius, _nearbyEntities);
+            _spatialHash.QueryRadius(pos.X, pos.Y, socialRadius, _nearbyEntities);
 
             int currentGroupId = social.GroupId;
             int currentGroupSize = currentGroupId >= 0 && _groupSizes.TryGetValue(currentGroupId, out int sz) ? sz : 0;
@@ -2271,7 +2245,7 @@ public sealed class HerdingSystem : ISystem
                 ref var leaderPos = ref em.Positions[recognizedLeader];
                 float distToLeader = MathF.Sqrt(MathUtils.DistanceSquared(pos.X, pos.Y, leaderPos.X, leaderPos.Y));
 
-                if (distToLeader <= _leaderInfluenceRadius)
+                if (distToLeader <= leaderInfluenceRadius)
                 {
                     // Leader is in range
                     leaderX = leaderPos.X;
@@ -2292,11 +2266,11 @@ public sealed class HerdingSystem : ISystem
             {
                 // Leader died
                 social.RecognizedLeader = -1;
-                social.LeaderLostTicks = _leaderLostThreshold;  // Immediately seek new leader
+                social.LeaderLostTicks = leaderLostThreshold;  // Immediately seek new leader
             }
 
             // Seek new leader if we've lost ours or don't have one
-            if (!hasVisibleLeader && (social.LeaderLostTicks >= _leaderLostThreshold || recognizedLeader < 0))
+            if (!hasVisibleLeader && (social.LeaderLostTicks >= leaderLostThreshold || recognizedLeader < 0))
             {
                 // Find best leader candidate in range
                 float bestLeaderScore = social.LeadershipScore;  // Must be better than self
@@ -2323,7 +2297,7 @@ public sealed class HerdingSystem : ISystem
                     ref var otherPos = ref em.Positions[other];
                     float dist = MathF.Sqrt(MathUtils.DistanceSquared(pos.X, pos.Y, otherPos.X, otherPos.Y));
 
-                    if (dist <= _leaderInfluenceRadius && otherSocial.LeadershipScore > bestLeaderScore)
+                    if (dist <= leaderInfluenceRadius && otherSocial.LeadershipScore > bestLeaderScore)
                     {
                         bestLeaderScore = otherSocial.LeadershipScore;
                         bestLeader = other;
@@ -2352,7 +2326,7 @@ public sealed class HerdingSystem : ISystem
             float localCenterX = 0f, localCenterY = 0f;
             int localNeighborCount = 0;
             int bestGroupToJoin = -1;
-            float bestJoinDistance = _maxJoinDistance;
+            float bestJoinDistance = maxJoinDistance;
 
             foreach (int other in _nearbyEntities)
             {
@@ -2383,7 +2357,7 @@ public sealed class HerdingSystem : ISystem
                     if (otherGroupId >= 0)
                     {
                         int otherGroupSize = _groupSizes.TryGetValue(otherGroupId, out int gsz) ? gsz : 1;
-                        float maxSize = otherSocial.PreferredGroupSize * _groupSizeTolerance;
+                        float maxSize = otherSocial.PreferredGroupSize * groupSizeTolerance;
 
                         if (otherGroupSize < maxSize)
                         {
@@ -2423,7 +2397,7 @@ public sealed class HerdingSystem : ISystem
                         ref var otherPos = ref em.Positions[other];
                         float dist = MathF.Sqrt(MathUtils.DistanceSquared(pos.X, pos.Y, otherPos.X, otherPos.Y));
 
-                        if (dist < _socialRadius * 0.5f && otherSocial.GroupId < 0)
+                        if (dist < socialRadius * 0.5f && otherSocial.GroupId < 0)
                         {
                             int newGroupId = _nextGroupId++;
                             social.GroupId = newGroupId;
@@ -2435,7 +2409,7 @@ public sealed class HerdingSystem : ISystem
             }
 
             // Check if we should leave an oversized group
-            if (currentGroupId >= 0 && currentGroupSize > social.PreferredGroupSize * _groupSizeTolerance * 1.2f)
+            if (currentGroupId >= 0 && currentGroupSize > social.PreferredGroupSize * groupSizeTolerance * 1.2f)
             {
                 if (social.LeadershipScore < 0.3f)
                 {
@@ -2455,7 +2429,7 @@ public sealed class HerdingSystem : ISystem
 
                 // Distance-based following: maintain spacing, don't crowd leader
                 float idealFollowDist = social.Type == SocialType.Pack ? 1.5f : 2f;
-                float distanceFactor = MathF.Max(0, 1f - (distToLeader / _leaderInfluenceRadius));
+                float distanceFactor = MathF.Max(0, 1f - (distToLeader / leaderInfluenceRadius));
 
                 // Size factor (reduce pull in large groups)
                 float sizeFactor = 1f;
@@ -2495,7 +2469,7 @@ public sealed class HerdingSystem : ISystem
                 localCenterY /= localNeighborCount;
 
                 float distToCenter = MathF.Sqrt(MathUtils.DistanceSquared(pos.X, pos.Y, localCenterX, localCenterY));
-                float distanceFactor = MathF.Max(0, 1f - (distToCenter / (_socialRadius * 0.8f)));
+                float distanceFactor = MathF.Max(0, 1f - (distToCenter / (socialRadius * 0.8f)));
 
                 float sizeFactor = 1f;
                 if (currentGroupSize >= social.PreferredGroupSize)

@@ -29,12 +29,6 @@ public sealed class NestSystem : ISystem
     private readonly Random _rng = new();
     private readonly List<int> _nearbyBuffer = new(64);
 
-    // Colony tracking
-    private readonly float _colonyRadius = 40f;       // Nests within this radius form a colony
-    private readonly int _nestsForExpedition = 5;      // Nests in colony to trigger expedition
-    private readonly float _newNestRadius = 15f;       // Search radius for new nest placement
-    private readonly float _expeditionDistance = 80f;   // Distance for expedition founding
-
     // Spawn tracking
     private readonly List<(float x, float y, int colonyId)> _pendingSpawns = new(16);
     private readonly List<(float x, float y, int colonyId)> _pendingNests = new(4);
@@ -50,6 +44,9 @@ public sealed class NestSystem : ISystem
     {
         _pendingSpawns.Clear();
         _pendingNests.Clear();
+
+        // Get Sectid species def for nest parameters
+        var sectidDef = SpeciesRegistry.Get("Sectid");
 
         const ComponentFlags nestRequired = ComponentFlags.Position | ComponentFlags.Nest |
                                             ComponentFlags.Energy | ComponentFlags.Renderable;
@@ -91,17 +88,17 @@ public sealed class NestSystem : ISystem
             if (nest.IsMaxStage && nest.FoodStored >= nest.FoodPerSpawn * 2f)
             {
                 // Count nearby nests for colony check
-                int nearbyNests = CountNearbyNests(em, pos.X, pos.Y, _colonyRadius, entity);
+                int nearbyNests = CountNearbyNests(em, pos.X, pos.Y, sectidDef.NestColonyRadius, entity);
 
-                if (nearbyNests < _nestsForExpedition)
+                if (nearbyNests < sectidDef.NestsForExpedition)
                 {
                     // Found new nest nearby
-                    TryFoundNest(pos.X, pos.Y, _newNestRadius, nest.ColonyId);
+                    TryFoundNest(pos.X, pos.Y, sectidDef.NestSearchRadius, nest.ColonyId);
                 }
                 else
                 {
                     // Colony full — expedition to found distant colony
-                    TryFoundNest(pos.X, pos.Y, _expeditionDistance, _nextColonyId++);
+                    TryFoundNest(pos.X, pos.Y, sectidDef.ExpeditionDistance, _nextColonyId++);
                 }
 
                 if (_pendingNests.Count > 0)
@@ -192,6 +189,7 @@ public sealed class NestSystem : ISystem
 
     private void ProcessFoodCarriers(EntityManager em)
     {
+        var carrierSpeciesDef = SpeciesRegistry.Get("Sectid");
         const ComponentFlags carrierRequired = ComponentFlags.Position | ComponentFlags.Velocity |
                                                 ComponentFlags.FoodCarrier | ComponentFlags.Species;
 
@@ -217,7 +215,8 @@ public sealed class NestSystem : ISystem
             float distSq = dx * dx + dy * dy;
 
             // Arrived at nest — deliver food
-            if (distSq < 4f) // Within 2 tiles
+            float deliveryRange = carrierSpeciesDef.FoodDeliveryRange;
+            if (distSq < deliveryRange * deliveryRange)
             {
                 ref var nest = ref em.Nests[carrier.TargetNest];
                 nest.FoodStored += carrier.FoodCarried;
@@ -235,7 +234,7 @@ public sealed class NestSystem : ISystem
             {
                 // Move toward nest (override wander velocity)
                 float dist = MathF.Sqrt(distSq);
-                float speed = 0.08f; // Carrying speed
+                float speed = carrierSpeciesDef.CarryingSpeed;
                 vel.Dx = (dx / dist) * speed;
                 vel.Dy = (dy / dist) * speed;
             }
@@ -288,10 +287,11 @@ public sealed class NestSystem : ISystem
         em.Ages[entity] = new Age(0, speciesDef.MaxLifespan, speciesDef.MaturityAge);
         em.AddComponent(entity, ComponentFlags.Age);
 
-        em.Energies[entity] = new Energy(80f);
+        em.Energies[entity] = new Energy(speciesDef.MaxEnergy, speciesDef.MaxEnergy);
         em.AddComponent(entity, ComponentFlags.Energy);
 
-        em.Hungers[entity] = new Hunger(speciesDef.MaxHunger * 0.7f, speciesDef.MaxHunger, speciesDef.HungerDecayRate);
+        em.Hungers[entity] = new Hunger(speciesDef.MaxHunger * 0.7f, speciesDef.MaxHunger, speciesDef.HungerDecayRate,
+            speciesDef.StarvationDamage);
         em.AddComponent(entity, ComponentFlags.Hunger);
 
         em.Wanders[entity] = new Wander(speciesDef.BaseWanderSpeed, speciesDef.DirectionChangeChance);
@@ -337,6 +337,7 @@ public sealed class NestSystem : ISystem
 
     public int SpawnNest(EntityManager em, float x, float y, int colonyId)
     {
+        var nestDef = SpeciesRegistry.Get("Sectid");
         int entity = em.CreateEntity();
 
         em.Positions[entity] = new Position(x, y);
@@ -349,11 +350,12 @@ public sealed class NestSystem : ISystem
         em.ChunkPositions[entity] = new ChunkPosition();
         em.AddComponent(entity, ComponentFlags.ChunkPosition);
 
-        em.Nests[entity] = new Nest(colonyId);
+        em.Nests[entity] = new Nest(colonyId, foodPerSpawn: nestDef.NestFoodPerSpawn,
+            spawnDuration: nestDef.NestSpawnDuration);
         em.AddComponent(entity, ComponentFlags.Nest);
 
         // Nests have energy (health) — can be destroyed if unattended
-        em.Energies[entity] = new Energy(200f, 200f);
+        em.Energies[entity] = new Energy(nestDef.NestEnergy, nestDef.NestEnergy);
         em.AddComponent(entity, ComponentFlags.Energy);
 
         // Visual: small brown square that grows with stage

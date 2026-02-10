@@ -29,10 +29,6 @@ public sealed class SporeSystem : ISystem
     private readonly WorldManager _worldManager;
     private readonly SpatialHash _spatialHash;
     private readonly Random _rng = new();
-    private readonly float _sporeMoistureThreshold = 0.6f; // Tile moisture level that counts as "wet"
-    private readonly float _sporeSpreadRadius = 8f;        // How far spores are thrown from parent
-    private readonly float _sporeSpreadChance = 0.0003f;   // Per-tick chance (~1 spread per 3300 ticks per Shroomer)
-    private readonly int _sporesPerSpread = 2;             // Number of spores per spread event
 
     private readonly List<(float x, float y, int speciesId)> _pendingSpores = new(16);
     private readonly List<(float x, float y, int speciesId)> _pendingTransforms = new(8);
@@ -63,7 +59,11 @@ public sealed class SporeSystem : ISystem
             var tile = _worldManager.GetTile(pos.X, pos.Y);
             float tileMoisture = GetTileMoisture(tile);
 
-            if (tileMoisture >= _sporeMoistureThreshold)
+            // Get species definition for spore parameters
+            var sporeDef = GetSpeciesDef(em, entity);
+            float moistureThreshold = sporeDef?.SporeMoistureThreshold ?? 0.6f;
+
+            if (tileMoisture >= moistureThreshold)
             {
                 // Wet tile: accumulate moisture
                 spore.MoistureAccumulated += spore.MoistureGainRate * tileMoisture;
@@ -104,20 +104,23 @@ public sealed class SporeSystem : ISystem
             ref var hunger = ref em.Hungers[entity];
             if (hunger.Percent < 0.5f) continue; // Need decent food to spread
 
+            // Get species definition for spore parameters
+            var shroomDef = SpeciesRegistry.GetById(species.SpeciesId);
+
             // Check moisture of current tile
             ref var pos = ref em.Positions[entity];
             var tile = _worldManager.GetTile(pos.X, pos.Y);
-            if (GetTileMoisture(tile) < _sporeMoistureThreshold) continue;
+            if (GetTileMoisture(tile) < shroomDef.SporeMoistureThreshold) continue;
 
             // Random chance to spread
-            if (_rng.NextDouble() >= _sporeSpreadChance) continue;
+            if (_rng.NextDouble() >= shroomDef.SporeSpreadChance) continue;
 
             // Spread spores
-            hunger.Current -= hunger.Max * 0.15f; // Costs some hunger
-            for (int i = 0; i < _sporesPerSpread; i++)
+            hunger.Current -= hunger.Max * shroomDef.SporeSpreadHungerCost;
+            for (int i = 0; i < shroomDef.SporesPerSpread; i++)
             {
                 float angle = (float)(_rng.NextDouble() * Math.PI * 2);
-                float dist = (float)(_rng.NextDouble() * _sporeSpreadRadius) + 2f;
+                float dist = (float)(_rng.NextDouble() * shroomDef.SporeSpreadRadius) + 2f;
                 float sx = pos.X + MathF.Cos(angle) * dist;
                 float sy = pos.Y + MathF.Sin(angle) * dist;
 
@@ -180,6 +183,7 @@ public sealed class SporeSystem : ISystem
 
     private void SpawnSpore(EntityManager em, float x, float y, int parentSpeciesId)
     {
+        var parentDef = SpeciesRegistry.GetById(parentSpeciesId);
         int entity = em.CreateEntity();
 
         em.Positions[entity] = new Position(x, y);
@@ -193,14 +197,14 @@ public sealed class SporeSystem : ISystem
         em.AddComponent(entity, ComponentFlags.ChunkPosition);
 
         em.Spores[entity] = new Spore(
-            transformThreshold: 60f,
-            witherRate: 2f,
-            moistureGainRate: 0.5f,
+            transformThreshold: parentDef.SporeTransformThreshold,
+            witherRate: parentDef.SporeWitherRate,
+            moistureGainRate: parentDef.SporeMoistureGainRate,
             parentSpeciesId: parentSpeciesId);
         em.AddComponent(entity, ComponentFlags.Spore);
 
         // Spores have low energy (die easily)
-        em.Energies[entity] = new Energy(40f, 40f);
+        em.Energies[entity] = new Energy(parentDef.SporeEnergy, parentDef.SporeEnergy);
         em.AddComponent(entity, ComponentFlags.Energy);
 
         // Spores are edible (prey for Sectids and herbivores)
@@ -242,10 +246,11 @@ public sealed class SporeSystem : ISystem
         em.Ages[entity] = new Age(0, speciesDef.MaxLifespan, speciesDef.MaturityAge);
         em.AddComponent(entity, ComponentFlags.Age);
 
-        em.Energies[entity] = new Energy(80f);
+        em.Energies[entity] = new Energy(speciesDef.MaxEnergy, speciesDef.MaxEnergy);
         em.AddComponent(entity, ComponentFlags.Energy);
 
-        em.Hungers[entity] = new Hunger(speciesDef.MaxHunger * 0.5f, speciesDef.MaxHunger, speciesDef.HungerDecayRate);
+        em.Hungers[entity] = new Hunger(speciesDef.MaxHunger * 0.5f, speciesDef.MaxHunger, speciesDef.HungerDecayRate,
+            speciesDef.StarvationDamage);
         em.AddComponent(entity, ComponentFlags.Hunger);
 
         em.Wanders[entity] = new Wander(speciesDef.BaseWanderSpeed, speciesDef.DirectionChangeChance);
@@ -256,8 +261,8 @@ public sealed class SporeSystem : ISystem
         em.AddComponent(entity, ComponentFlags.Renderable);
 
         // Growth — Shroomers grow to become the largest entities on the map
-        em.Growths[entity] = new Growth(maxScale: 4f, growthRate: 0.00008f);
-        em.Growths[entity].CurrentScale = 0.5f; // Start small
+        em.Growths[entity] = new Growth(maxScale: speciesDef.GrowthMaxScale, growthRate: speciesDef.GrowthRate);
+        em.Growths[entity].CurrentScale = speciesDef.InitialScale; // Start small
         em.AddComponent(entity, ComponentFlags.Growth);
 
         // Shroomers are prey
@@ -304,7 +309,7 @@ public sealed class SporeSystem : ISystem
             if (!speciesDef.HasAoEAttack) continue;
 
             ref var growth = ref em.Growths[entity];
-            if (growth.CurrentScale < 1.5f) continue; // Only mature shroomers attack
+            if (growth.CurrentScale < speciesDef.AoEMinScale) continue; // Only mature shroomers attack
 
             ref var terraform = ref em.Terraforms[entity];
             // Reuse terraform cooldown timer as AoE attack timer

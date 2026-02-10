@@ -87,12 +87,11 @@ public partial class GameManager : Node2D
         _systems.Add(new TerrainDiscomfortSystem(_worldManager));  // Process discomfort early
         _systems.Add(new HungerSystem());
         _systems.Add(new GrazingSystem(_worldManager));
-        _systems.Add(new WanderSystem(_worldManager, spatialHash: spatialHash));
-        _systems.Add(new HerdingSystem(spatialHash, socialRadius: 10f));
-        _systems.Add(new SeparationSystem(spatialHash, separationRadius: 2.5f, separationStrength: 0.03f));
+        _systems.Add(new WanderSystem(_worldManager, spatialHash: spatialHash));  // Roaming params from species
+        _systems.Add(new HerdingSystem(spatialHash));
+        _systems.Add(new SeparationSystem(spatialHash));
         _systems.Add(new CollisionSystem(spatialHash, collisionRadiusScale: 0.5f, tileSize: TileSize));
-        _systems.Add(new HuntingSystem(spatialHash, _worldManager,
-            huntThreshold: 0.75f));  // Hunt when below 75% hunger
+        _systems.Add(new HuntingSystem(spatialHash, _worldManager));
         _systems.Add(new FleeingSystem(spatialHash, _worldManager));
         _systems.Add(new AgingSystem());
         _systems.Add(new ReproductionSystem(_worldManager, MaxPopulation));
@@ -461,14 +460,18 @@ public partial class GameManager : Node2D
         );
         _entityManager.AddComponent(entity, ComponentFlags.Age);
 
-        _entityManager.Energies[entity] = new Energy(100f);
+        _entityManager.Energies[entity] = new Energy(species.MaxEnergy, species.MaxEnergy);
         _entityManager.AddComponent(entity, ComponentFlags.Energy);
 
-        // Reproduction from species
+        // Reproduction from species (all costs and parameters from species definition)
         _entityManager.Reproductions[entity] = new Reproduction(
             hungerThreshold: Vary(species.ReproHungerThreshold, variation),
             energyThreshold: Vary(species.ReproEnergyThreshold, variation),
-            cooldown: (int)Vary(species.ReproCooldown, variation)
+            hungerCost: Vary(species.ReproHungerCost, variation),
+            energyCost: Vary(species.ReproEnergyCost, variation),
+            cooldown: (int)Vary(species.ReproCooldown, variation),
+            offspringCount: species.OffspringCount,
+            spawnRadius: Vary(species.SpawnRadius, variation)
         );
         _entityManager.AddComponent(entity, ComponentFlags.Reproduction);
 
@@ -497,7 +500,8 @@ public partial class GameManager : Node2D
         _entityManager.Hungers[entity] = new Hunger(
             current: Vary(species.MaxHunger * 0.8f, variation),
             max: Vary(species.MaxHunger, variation),
-            decayRate: Vary(species.HungerDecayRate, variation)
+            decayRate: Vary(species.HungerDecayRate, variation),
+            starvationDamage: species.StarvationDamage
         );
         _entityManager.AddComponent(entity, ComponentFlags.Hunger);
 
@@ -609,9 +613,11 @@ public partial class GameManager : Node2D
         }
 
         // Shroomers: add Growth component (they grow over their lifetime)
-        if (species.SporeReproducer)
+        if (species.HasGrowth)
         {
-            _entityManager.Growths[entity] = new Growth(maxScale: 4f, growthRate: 0.00008f);
+            _entityManager.Growths[entity] = new Growth(
+                maxScale: species.GrowthMaxScale,
+                growthRate: species.GrowthRate);
             _entityManager.AddComponent(entity, ComponentFlags.Growth);
         }
 

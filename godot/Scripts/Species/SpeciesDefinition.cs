@@ -18,7 +18,8 @@ public enum DietType : byte
 
 /// <summary>
 /// Comprehensive species definition containing all stats and behaviors.
-/// This allows easy addition of new species without code changes.
+/// All behavioral parameters are species-configurable. Systems read these
+/// values per-entity rather than using global defaults.
 /// </summary>
 public sealed class SpeciesDefinition
 {
@@ -31,6 +32,11 @@ public sealed class SpeciesDefinition
     public float BaseWanderSpeed { get; init; } = 0.03f;
     public float DirectionChangeChance { get; init; } = 0.005f;
 
+    // === ROAMING (long-distance directed travel) ===
+    public float RoamDistance { get; init; } = 60f;
+    public int RoamCooldown { get; init; } = 500;
+    public float RoamSpeedMultiplier { get; init; } = 1.5f;
+
     // === COMBAT (Predators) ===
     public float HuntRange { get; init; } = 12f;
     public float AttackRange { get; init; } = 0.8f;
@@ -38,57 +44,106 @@ public sealed class SpeciesDefinition
     public int AttackCooldown { get; init; } = 20;
     public float BaseHuntSpeed { get; init; } = 0.10f;
 
+    /// <summary>Hunger ratio (0-1) above which predator stops hunting.</summary>
+    public float HuntThreshold { get; init; } = 0.75f;
+
+    /// <summary>Hunger ratio below which predator tracks prey at long range.</summary>
+    public float TrackingHungerThreshold { get; init; } = 0.5f;
+
+    /// <summary>Maximum range for hunger-driven prey tracking.</summary>
+    public float TrackingRange { get; init; } = 80f;
+
+    /// <summary>Radius to coordinate with pack members during hunts.</summary>
+    public float PackCoordinationRadius { get; init; } = 8f;
+
+    /// <summary>Radius within which pack members share food from kills.</summary>
+    public float PackShareRadius { get; init; } = 10f;
+
+    /// <summary>Fraction of nutrition that goes to the killer (rest split among pack).</summary>
+    public float KillerShareRatio { get; init; } = 0.5f;
+
+    /// <summary>Ticks spent positioning before a pack rush.</summary>
+    public int PositioningDuration { get; init; } = 40;
+
+    /// <summary>Ticks spent rushing during a pack attack.</summary>
+    public int RushDuration { get; init; } = 30;
+
+    /// <summary>Ticks spent retreating after a pack attack pass.</summary>
+    public int RetreatDuration { get; init; } = 20;
+
     // === FLEEING (Prey) ===
     public float FleeRange { get; init; } = 6f;
     public float FleeSpeedMultiplier { get; init; } = 2f;
 
     // === FEAR RESPONSE ===
-    public float FearThreshold { get; init; } = 50f;         // Fear level that triggers response
-    public float FearMax { get; init; } = 100f;              // Max fear (panic level)
-    public float FearAccumulationRate { get; init; } = 5f;   // How fast fear builds up per tick near threat
-    public float FearDecayRate { get; init; } = 1f;          // How fast fear decays when safe
-    public float FearVigilanceDecay { get; init; } = 0.3f;   // Slower decay when recently threatened
-    public int FearVigilanceDuration { get; init; } = 100;   // Ticks to stay vigilant after threat
+    public float FearThreshold { get; init; } = 50f;
+    public float FearMax { get; init; } = 100f;
+    public float FearAccumulationRate { get; init; } = 5f;
+    public float FearDecayRate { get; init; } = 1f;
+    public float FearVigilanceDecay { get; init; } = 0.3f;
+    public int FearVigilanceDuration { get; init; } = 100;
     public FearResponse DefaultFearResponse { get; init; } = FearResponse.Flee;
 
     // === SURVIVAL ===
     public float MaxHunger { get; init; } = 240f;
     public float HungerDecayRate { get; init; } = 0.05f;
+    public float StarvationDamage { get; init; } = 1f;
+    public float MaxEnergy { get; init; } = 100f;
     public int MaxLifespan { get; init; } = 30000;
     public int MaturityAge { get; init; } = 2000;
 
     // === REPRODUCTION ===
     public float ReproHungerThreshold { get; init; } = 210f;
     public float ReproEnergyThreshold { get; init; } = 80f;
+    public float ReproHungerCost { get; init; } = 40f;
+    public float ReproEnergyCost { get; init; } = 30f;
     public int ReproCooldown { get; init; } = 600;
+    public int OffspringCount { get; init; } = 1;
+    public float SpawnRadius { get; init; } = 3f;
 
     // === SOCIAL ===
     public float GroupAffinity { get; init; } = 0.5f;
     public float PreferredGroupSize { get; init; } = 5f;
     public float CohesionStrength { get; init; } = 0.02f;
     public float AlignmentStrength { get; init; } = 0.01f;
-    public float PackHunterChance { get; init; } = 0.6f;  // Chance to be pack vs solitary (predators)
+    public float PackHunterChance { get; init; } = 0.6f;
+
+    /// <summary>Max radius to look for group members.</summary>
+    public float SocialRadius { get; init; } = 8f;
+
+    /// <summary>Max distance to recognize/follow a leader.</summary>
+    public float LeaderInfluenceRadius { get; init; } = 6f;
+
+    /// <summary>Max distance to join a new group.</summary>
+    public float MaxJoinDistance { get; init; } = 12f;
+
+    /// <summary>Allow groups to exceed preferred size by this factor before splitting.</summary>
+    public float GroupSizeTolerance { get; init; } = 1.3f;
+
+    /// <summary>Ticks before seeking new leader after losing current one.</summary>
+    public int LeaderLostThreshold { get; init; } = 40;
 
     // === PACK ROLE MODIFIERS (speed multipliers per role) ===
     public float LeaderSpeedMult { get; init; } = 1.0f;
-    public float FlankerSpeedMult { get; init; } = 1.1f;   // Flankers slightly faster to get in position
-    public float ChaserSpeedMult { get; init; } = 1.15f;   // Chasers fastest to cut off escape
+    public float FlankerSpeedMult { get; init; } = 1.1f;
+    public float ChaserSpeedMult { get; init; } = 1.15f;
+
+    // === SEPARATION ===
+    public float SeparationRadius { get; init; } = 2f;
+    public float SeparationStrength { get; init; } = 0.02f;
 
     // === TERRAIN ===
     public float DiscomfortThreshold { get; init; } = 50f;
     public float DiscomfortDecayRate { get; init; } = 2f;
-    public float GrazingPressure { get; init; } = 0f;      // Extra discomfort when hungry on non-grazeable
+    public float GrazingPressure { get; init; } = 0f;
 
     /// <summary>
-    /// Per-terrain speed modifiers. If not specified, uses default terrain speeds.
-    /// Values multiply the base terrain speed (1.0 = normal, >1 = faster, <1 = slower).
-    /// Example: A fish might have Water = 2.0f (fast in water), Grass = 0.3f (slow on land).
+    /// Per-terrain speed modifiers. Values multiply the base terrain speed.
     /// </summary>
     public Dictionary<TileType, float>? TerrainSpeedModifiers { get; init; }
 
     /// <summary>
     /// Per-terrain comfort overrides. Negative = comfortable, Positive = uncomfortable.
-    /// Example: A hippo might have ShallowWater = -1f (likes water).
     /// </summary>
     public Dictionary<TileType, float>? TerrainComfortModifiers { get; init; }
 
@@ -97,62 +152,32 @@ public sealed class SpeciesDefinition
     /// </summary>
     public List<BiomeType>? PreferredBiomes { get; init; }
 
-    /// <summary>
-    /// Whether this species is aquatic (spawns in water instead of on land).
-    /// </summary>
     public bool IsAquatic { get; init; } = false;
 
     /// <summary>
-    /// Specific tile types where this species can spawn. If null, uses default logic
-    /// (aquatic = water tiles, land = non-water spawnable tiles).
+    /// Specific tile types where this species can spawn. If null, uses default logic.
     /// </summary>
     public List<TileType>? AllowedSpawnTiles { get; init; }
 
-    /// <summary>
-    /// Check if this species can spawn in the given biome.
-    /// </summary>
     public bool CanSpawnInBiome(BiomeType biome)
     {
         if (PreferredBiomes == null || PreferredBiomes.Count == 0)
-            return true;  // No preference = spawn anywhere
+            return true;
         return PreferredBiomes.Contains(biome);
     }
 
-    /// <summary>
-    /// Check if this species can spawn on the given tile type.
-    /// </summary>
     public bool CanSpawnOnTile(TileType tile)
     {
-        // If specific tiles are defined, use those
         if (AllowedSpawnTiles != null && AllowedSpawnTiles.Count > 0)
             return AllowedSpawnTiles.Contains(tile);
-
-        // Otherwise use default logic based on aquatic flag
         if (IsAquatic)
             return tile.IsWater();
-
-        // Land creatures use the spawnable check (excludes water, cliffs, etc)
         return tile.IsSpawnable();
     }
 
     // === TROPHIC INTERACTIONS ===
-    /// <summary>
-    /// Relative body mass for size-based hunting eligibility.
-    /// Predators can only solo-hunt prey with BodyMass &lt;= own BodyMass * SoloHuntMaxRatio.
-    /// Pack effective mass = leader BodyMass * packSize^PackHuntMassExponent.
-    /// </summary>
     public float BodyMass { get; init; } = 1.0f;
-
-    /// <summary>
-    /// Maximum prey-to-predator mass ratio for solo hunting.
-    /// E.g. 1.2 means a solo predator can hunt prey up to 1.2x its own mass.
-    /// </summary>
     public float SoloHuntMaxRatio { get; init; } = 1.2f;
-
-    /// <summary>
-    /// Exponent for pack effective mass: effectiveMass = leaderMass * packSize^exponent.
-    /// Sub-linear (0.7) means diminishing returns from larger packs.
-    /// </summary>
     public float PackHuntMassExponent { get; init; } = 0.7f;
 
     /// <summary>
@@ -164,18 +189,7 @@ public sealed class SpeciesDefinition
     /// <summary>Resolved nutrition: explicit value or BodyMass * 20.</summary>
     public float EffectiveNutrition => NutritionValue >= 0 ? NutritionValue : BodyMass * 20f;
 
-    /// <summary>
-    /// List of species names this predator prefers to hunt (soft bias, not a hard gate).
-    /// Preferred prey get a scoring bonus during target selection.
-    /// Empty = no preference bias.
-    /// </summary>
     public List<string>? PreferredPrey { get; init; }
-
-    /// <summary>
-    /// Scoring bonus multiplier for preferred prey (lower = more preferred).
-    /// Applied as: score *= PreferredPreyBias for preferred species.
-    /// E.g. 0.5 means preferred prey scores 50% better (closer effective distance).
-    /// </summary>
     public float PreferredPreyBias { get; init; } = 0.5f;
 
     // === GRAZING ===
@@ -188,66 +202,59 @@ public sealed class SpeciesDefinition
     public float TerraformStrength { get; init; } = 0.02f;
     public int TerraformCooldown { get; init; } = 10;
 
-    /// <summary>
-    /// Tile types that this species feeds from (faction species).
-    /// If null or empty, uses standard grazing logic.
-    /// </summary>
     public List<TileType>? FeedTiles { get; init; }
     public float FeedNutrition { get; init; } = 0.4f;
 
     // === FACTION-SPECIFIC ===
-    /// <summary>
-    /// Max food a single Sectid can carry to a nest.
-    /// </summary>
     public float MaxCarryFood { get; init; } = 5f;
-
-    /// <summary>
-    /// Whether this species reproduces only via nests (Sectids).
-    /// Disables normal ReproductionSystem for this species.
-    /// </summary>
     public bool NestBreeder { get; init; } = false;
-
-    /// <summary>
-    /// Whether this species reproduces via spores (Shroomers).
-    /// Disables normal ReproductionSystem for this species.
-    /// </summary>
     public bool SporeReproducer { get; init; } = false;
-
-    /// <summary>
-    /// Whether this species spawns from crystals (Faelings).
-    /// Disables normal ReproductionSystem for this species.
-    /// </summary>
     public bool CrystalSpawned { get; init; } = false;
-
-    /// <summary>
-    /// Whether this species never starves (hunger decay = 0).
-    /// </summary>
     public bool ImmuneToStarvation { get; init; } = false;
-
-    /// <summary>
-    /// Whether this species cannot be hunted by normal predators.
-    /// </summary>
     public bool UnhuntableByPredators { get; init; } = false;
 
-    /// <summary>
-    /// Whether this species has AoE attack that scales with growth.
-    /// </summary>
+    // === AOE ATTACK (Shroomers) ===
     public bool HasAoEAttack { get; init; } = false;
-
-    /// <summary>
-    /// Base AoE attack radius (scales with Growth.CurrentScale).
-    /// </summary>
     public float AoEAttackRadius { get; init; } = 3f;
-
-    /// <summary>
-    /// Base AoE attack damage (scales with Growth.CurrentScale).
-    /// </summary>
     public float AoEAttackDamage { get; init; } = 8f;
-
-    /// <summary>
-    /// AoE attack cooldown in ticks.
-    /// </summary>
     public int AoEAttackCooldown { get; init; } = 40;
+
+    // === GROWTH (Shroomers, Faelings) ===
+    /// <summary>Max growth scale multiplier. 0 or negative = no growth component.</summary>
+    public float GrowthMaxScale { get; init; } = 0f;
+    public float GrowthRate { get; init; } = 0f;
+    /// <summary>Initial growth scale at spawn (e.g. 0.5 for small start).</summary>
+    public float InitialScale { get; init; } = 1f;
+    /// <summary>Growth scale threshold before AoE becomes active.</summary>
+    public float AoEMinScale { get; init; } = 1.5f;
+
+    // === SPORE REPRODUCTION (Shroomers) ===
+    public float SporeSpreadChance { get; init; } = 0f;
+    public float SporeSpreadRadius { get; init; } = 8f;
+    public int SporesPerSpread { get; init; } = 2;
+    public float SporeMoistureThreshold { get; init; } = 0.6f;
+    public float SporeSpreadHungerCost { get; init; } = 0.15f;
+    public float SporeTransformThreshold { get; init; } = 60f;
+    public float SporeWitherRate { get; init; } = 2f;
+    public float SporeMoistureGainRate { get; init; } = 0.5f;
+    public float SporeEnergy { get; init; } = 40f;
+
+    // === NEST BREEDING (Sectids) ===
+    public float NestColonyRadius { get; init; } = 40f;
+    public int NestsForExpedition { get; init; } = 5;
+    public float NestSearchRadius { get; init; } = 15f;
+    public float ExpeditionDistance { get; init; } = 80f;
+    public float NestFoodPerSpawn { get; init; } = 30f;
+    public float NestSpawnDuration { get; init; } = 200f;
+    public float NestEnergy { get; init; } = 200f;
+    public float FoodDeliveryRange { get; init; } = 4f;
+    public float CarryingSpeed { get; init; } = 0.08f;
+
+    // === CRYSTAL SPAWNING (Faelings) ===
+    public int CrystalSpawnDelay { get; init; } = 500;
+    public float RangedAttackRange { get; init; } = 8f;
+    public float RangedAttackDamage { get; init; } = 10f;
+    public int RangedAttackCooldown { get; init; } = 30;
 
     // === VISUALS ===
     public Color BaseColor { get; init; } = new(0.5f, 0.5f, 0.5f);
@@ -255,38 +262,25 @@ public sealed class SpeciesDefinition
     public ShapeType Shape { get; init; } = ShapeType.Circle;
 
     // === STAT VARIATION ===
-    /// <summary>
-    /// How much stats vary between individuals (0.0 = identical, 0.3 = ±30%).
-    /// </summary>
     public float StatVariation { get; init; } = 0.2f;
 
-    /// <summary>
-    /// Get speed modifier for a specific terrain type.
-    /// </summary>
+    // === COMPUTED PROPERTIES ===
+
     public float GetTerrainSpeedModifier(TileType tile)
     {
         if (TerrainSpeedModifiers != null && TerrainSpeedModifiers.TryGetValue(tile, out float mod))
             return mod;
-        return 1.0f;  // Default: no modification
+        return 1.0f;
     }
 
-    /// <summary>
-    /// Get comfort modifier for a specific terrain type.
-    /// </summary>
     public float GetTerrainComfortModifier(TileType tile)
     {
         if (TerrainComfortModifiers != null && TerrainComfortModifiers.TryGetValue(tile, out float mod))
             return mod;
-        return 0f;  // Default: no modification
+        return 0f;
     }
 
-    /// <summary>
-    /// Check if this species is a predator (hunts other creatures).
-    /// </summary>
     public bool IsPredator => Diet == DietType.Carnivore || Diet == DietType.Omnivore;
-
-    /// <summary>
-    /// Check if this species can be prey (can be hunted).
-    /// </summary>
     public bool IsPrey => Diet == DietType.Herbivore || Diet == DietType.Omnivore || Diet == DietType.Terraformer;
+    public bool HasGrowth => GrowthMaxScale > 0f;
 }

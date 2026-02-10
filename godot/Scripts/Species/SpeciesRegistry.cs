@@ -158,6 +158,18 @@ public static class SpeciesRegistry
             CanGraze = true,
             GrazeNutrition = 0.5f,
 
+            // Separation
+            SeparationRadius = 2.5f,
+            SeparationStrength = 0.03f,
+
+            // Social - herding params
+            SocialRadius = 10f,
+            LeaderInfluenceRadius = 7f,
+
+            // Reproduction costs
+            ReproHungerCost = 50f,
+            ReproEnergyCost = 30f,
+
             // Trophic - medium herbivore
             BodyMass = 4.0f,
 
@@ -223,6 +235,20 @@ public static class SpeciesRegistry
             CanGraze = true,
             GrazeNutrition = 0.3f,
 
+            // Roaming - smaller territory, more frequent moves
+            RoamDistance = 40f,
+            RoamCooldown = 300,
+
+            // Separation - small, cluster tighter
+            SeparationRadius = 1.5f,
+            SeparationStrength = 0.02f,
+
+            // Reproduction costs - small, breeds fast
+            ReproHungerCost = 25f,
+            ReproEnergyCost = 20f,
+            OffspringCount = 2,
+            SpawnRadius = 2f,
+
             // Trophic - small herbivore
             BodyMass = 1.0f,
 
@@ -266,6 +292,17 @@ public static class SpeciesRegistry
             ReproEnergyThreshold = 75f,
             ReproCooldown = 1000,  // Longer cooldown
 
+            // Hunting behavior
+            HuntThreshold = 0.75f,
+            TrackingHungerThreshold = 0.5f,
+            TrackingRange = 80f,
+            PackCoordinationRadius = 10f,
+            PackShareRadius = 12f,
+
+            // Reproduction costs
+            ReproHungerCost = 60f,
+            ReproEnergyCost = 40f,
+
             // Social - tight pack hunters
             GroupAffinity = 0.7f,
             PreferredGroupSize = 3f,
@@ -273,10 +310,19 @@ public static class SpeciesRegistry
             AlignmentStrength = 0.03f,
             PackHunterChance = 0.7f,
 
+            // Social params
+            SocialRadius = 12f,
+            LeaderInfluenceRadius = 8f,
+            MaxJoinDistance = 15f,
+
             // Pack role speeds
             LeaderSpeedMult = 1.0f,
             FlankerSpeedMult = 1.1f,
             ChaserSpeedMult = 1.15f,
+
+            // Separation
+            SeparationRadius = 2.5f,
+            SeparationStrength = 0.03f,
 
             // Terrain
             DiscomfortThreshold = 60f,
@@ -339,6 +385,18 @@ public static class SpeciesRegistry
             ReproHungerThreshold = 180f,
             ReproEnergyThreshold = 70f,
             ReproCooldown = 800,
+
+            // Hunting behavior
+            HuntThreshold = 0.75f,
+            TrackingHungerThreshold = 0.5f,
+            TrackingRange = 60f,
+
+            // Roaming - foxes roam wide
+            RoamDistance = 80f,
+
+            // Reproduction costs
+            ReproHungerCost = 35f,
+            ReproEnergyCost = 25f,
 
             // Social - mostly solitary
             GroupAffinity = 0.2f,
@@ -406,10 +464,24 @@ public static class SpeciesRegistry
             MaxLifespan = 50000,
             MaturityAge = 4000,
 
+            // Hunting behavior - ambush hunter
+            HuntThreshold = 0.75f,
+            TrackingHungerThreshold = 0.6f,
+            TrackingRange = 40f,
+
+            // Roaming - stays near water
+            RoamDistance = 30f,
+            RoamCooldown = 800,
+
             // Reproduction
             ReproHungerThreshold = 240f,
             ReproEnergyThreshold = 90f,
             ReproCooldown = 1500,
+            ReproHungerCost = 80f,
+            ReproEnergyCost = 50f,
+
+            // Survival - tough
+            MaxEnergy = 150f,
 
             // Social - territorial loners
             GroupAffinity = 0f,
@@ -489,9 +561,38 @@ public static class SpeciesRegistry
             MaxLifespan = 50000,   // Very long lived — old shroomers become huge
             MaturityAge = 2500,
 
+            // Survival extras
+            MaxEnergy = 120f,
+            StarvationDamage = 0.5f,
+
             // Reproduction — via spores only (SporeSystem handles this)
             SporeReproducer = true,
             ReproCooldown = 9999, // Effectively disabled in ReproductionSystem
+
+            // Growth — Shroomers grow from tiny to hulking
+            GrowthMaxScale = 4f,
+            GrowthRate = 0.00008f,
+            InitialScale = 1f,
+            AoEMinScale = 1.5f,
+
+            // Spore reproduction parameters
+            SporeSpreadChance = 0.0003f,
+            SporeSpreadRadius = 8f,
+            SporesPerSpread = 2,
+            SporeMoistureThreshold = 0.6f,
+            SporeSpreadHungerCost = 0.15f,
+            SporeTransformThreshold = 60f,
+            SporeWitherRate = 2f,
+            SporeMoistureGainRate = 0.5f,
+            SporeEnergy = 40f,
+
+            // Roaming - sedentary
+            RoamDistance = 20f,
+            RoamCooldown = 800,
+
+            // Separation - larger for growing fungi
+            SeparationRadius = 3f,
+            SeparationStrength = 0.02f,
 
             // Social - loose clusters
             GroupAffinity = 0.4f,
@@ -589,16 +690,46 @@ public static class SpeciesRegistry
             MaxLifespan = 20000,
             MaturityAge = 800,   // Mature quickly
 
+            // Survival - fragile individually
+            MaxEnergy = 60f,
+
+            // Hunting behavior
+            HuntThreshold = 0.75f,
+            TrackingHungerThreshold = 0.5f,
+            TrackingRange = 80f,
+            PackCoordinationRadius = 8f,
+            PackShareRadius = 10f,
+
             // Reproduction — via nests only (NestSystem handles this)
             NestBreeder = true,
             MaxCarryFood = 5f,    // How much food one Sectid can carry to nest
             ReproCooldown = 9999, // Effectively disabled in ReproductionSystem
+
+            // Nest breeding parameters
+            NestColonyRadius = 40f,
+            NestsForExpedition = 5,
+            NestSearchRadius = 15f,
+            ExpeditionDistance = 80f,
+            NestFoodPerSpawn = 30f,
+            NestSpawnDuration = 200f,
+            NestEnergy = 200f,
+            FoodDeliveryRange = 4f,
+            CarryingSpeed = 0.08f,
+
+            // Separation - tiny, cluster tight
+            SeparationRadius = 1.5f,
+            SeparationStrength = 0.015f,
 
             // Social - tight swarm, large groups
             GroupAffinity = 0.8f,
             PreferredGroupSize = 8f,  // Larger swarms
             CohesionStrength = 0.035f,
             AlignmentStrength = 0.025f,
+
+            // Social params
+            SocialRadius = 10f,
+            LeaderInfluenceRadius = 7f,
+            MaxJoinDistance = 14f,
 
             // Pack role speeds
             LeaderSpeedMult = 1.0f,
@@ -679,11 +810,32 @@ public static class SpeciesRegistry
             ImmuneToStarvation = true,
             MaxLifespan = 60000,  // Very long lived
             MaturityAge = 1000,
+            MaxEnergy = 150f,
+            StarvationDamage = 0f,
 
             // Reproduction — via crystals only (CrystalSystem handles this)
             CrystalSpawned = true,
             UnhuntableByPredators = true, // Predators don't hunt Faelings
             ReproCooldown = 9999, // Effectively disabled
+
+            // Crystal spawning parameters
+            CrystalSpawnDelay = 500,
+            RangedAttackRange = 8f,
+            RangedAttackDamage = 10f,
+            RangedAttackCooldown = 30,
+
+            // Growth — slow power-based growth
+            GrowthMaxScale = 2.5f,
+            GrowthRate = 0.00003f,
+            InitialScale = 1f,
+
+            // Roaming - vast territory to find terraformed tiles
+            RoamDistance = 120f,
+            RoamCooldown = 300,
+
+            // Separation
+            SeparationRadius = 3f,
+            SeparationStrength = 0.02f,
 
             // Social - solitary guardians
             GroupAffinity = 0f,

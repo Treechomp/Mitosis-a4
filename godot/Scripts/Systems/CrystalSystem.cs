@@ -83,18 +83,24 @@ public sealed class CrystalSystem : ISystem
             ref var growth = ref em.Growths[entity];
 
             // Power-based growth boost
-            if (em.HasComponents(entity, ComponentFlags.Growth))
+            if (em.HasComponents(entity, ComponentFlags.Growth) &&
+                em.HasComponents(entity, ComponentFlags.Species))
             {
+                ref var faeSpecies = ref em.Species[entity];
+                var faeDef = SpeciesRegistry.GetById(faeSpecies.SpeciesId);
                 // Faelings grow faster with more power
                 float powerBoost = 1f + power.Power * 0.01f;
-                growth.GrowthRate = 0.00003f * powerBoost;
+                growth.GrowthRate = faeDef.GrowthRate * powerBoost;
             }
 
             // Power affects ranged attack damage
-            if (em.HasComponents(entity, ComponentFlags.RangedAttack))
+            if (em.HasComponents(entity, ComponentFlags.RangedAttack) &&
+                em.HasComponents(entity, ComponentFlags.Species))
             {
+                ref var faeSpecies = ref em.Species[entity];
+                var faeDef = SpeciesRegistry.GetById(faeSpecies.SpeciesId);
                 ref var ranged = ref em.RangedAttacks[entity];
-                ranged.BaseDamage = 10f + power.Power * 0.5f;
+                ranged.BaseDamage = faeDef.RangedAttackDamage + power.Power * 0.5f;
             }
         }
 
@@ -220,11 +226,12 @@ public sealed class CrystalSystem : ISystem
         em.Ages[entity] = new Age(0, speciesDef.MaxLifespan, speciesDef.MaturityAge);
         em.AddComponent(entity, ComponentFlags.Age);
 
-        em.Energies[entity] = new Energy(150f, 150f);
+        em.Energies[entity] = new Energy(speciesDef.MaxEnergy, speciesDef.MaxEnergy);
         em.AddComponent(entity, ComponentFlags.Energy);
 
         // Faelings don't starve — keep hunger always high
-        em.Hungers[entity] = new Hunger(speciesDef.MaxHunger, speciesDef.MaxHunger, 0f); // 0 decay = never hungry
+        em.Hungers[entity] = new Hunger(speciesDef.MaxHunger, speciesDef.MaxHunger, speciesDef.HungerDecayRate,
+            speciesDef.StarvationDamage);
         em.AddComponent(entity, ComponentFlags.Hunger);
 
         em.Wanders[entity] = new Wander(speciesDef.BaseWanderSpeed, speciesDef.DirectionChangeChance);
@@ -242,7 +249,7 @@ public sealed class CrystalSystem : ISystem
         em.AddComponent(entity, ComponentFlags.Terraform);
 
         // Growth — slow, power-boosted
-        em.Growths[entity] = new Growth(maxScale: 2.5f, growthRate: 0.00003f);
+        em.Growths[entity] = new Growth(maxScale: speciesDef.GrowthMaxScale, growthRate: speciesDef.GrowthRate);
         em.AddComponent(entity, ComponentFlags.Growth);
 
         // Power system
@@ -251,7 +258,10 @@ public sealed class CrystalSystem : ISystem
         em.AddComponent(entity, ComponentFlags.FaelingPower);
 
         // Ranged attack
-        em.RangedAttacks[entity] = new RangedAttack(range: 8f, baseDamage: 10f + inheritedPower * 0.5f, cooldown: 30);
+        em.RangedAttacks[entity] = new RangedAttack(
+            range: speciesDef.RangedAttackRange,
+            baseDamage: speciesDef.RangedAttackDamage + inheritedPower * 0.5f,
+            cooldown: speciesDef.RangedAttackCooldown);
         em.AddComponent(entity, ComponentFlags.RangedAttack);
 
         // Social — solitary guardians
@@ -278,7 +288,8 @@ public sealed class CrystalSystem : ISystem
         em.ChunkPositions[entity] = new ChunkPosition();
         em.AddComponent(entity, ComponentFlags.ChunkPosition);
 
-        em.Crystals[entity] = new Crystal(spawnDelay: 500);
+        var faelingDef = SpeciesRegistry.Get("Faeling");
+        em.Crystals[entity] = new Crystal(spawnDelay: faelingDef.CrystalSpawnDelay);
         em.AddComponent(entity, ComponentFlags.Crystal);
 
         // Indestructible — very high energy, no aging
