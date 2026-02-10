@@ -520,14 +520,16 @@ public sealed class HuntingSystem : ISystem
             _spatialHash.Update(entity, pos.X, pos.Y);
         }
 
-        // First pass: Leaders select targets for pack
+        // First pass: Any pack member with a target shares it with the group
+        // Leaders take priority, but any member can trigger a group hunt
         const ComponentFlags predatorRequired = ComponentFlags.Position | ComponentFlags.Predator | ComponentFlags.Hunger;
         foreach (int entity in em.Query(predatorRequired))
         {
             ref var predator = ref em.Predators[entity];
-            ref var hunger = ref em.Hungers[entity];
 
-            // Only process pack leaders for target selection
+            if (!predator.HasTarget || !em.IsAlive(predator.TargetEntity))
+                continue;
+
             if (!em.HasComponents(entity, ComponentFlags.Social))
                 continue;
 
@@ -535,16 +537,9 @@ public sealed class HuntingSystem : ISystem
             if (social.Type != SocialType.Pack || social.GroupId < 0)
                 continue;
 
-            // Check if this predator is the leader (highest leadership in pack)
-            if (social.RecognizedLeader >= 0 && social.RecognizedLeader != entity)
-                continue;  // Not the leader
-
-            float hungerRatio = hunger.Current / hunger.Max;
-            if (hungerRatio >= _huntThreshold)
-                continue;
-
-            // Leader selects target for pack
-            if (predator.HasTarget && em.IsAlive(predator.TargetEntity))
+            // Leaders always set the group target; non-leaders only if no target set yet
+            bool isLeader = social.RecognizedLeader < 0 || social.RecognizedLeader == entity;
+            if (isLeader || !_groupTargets.ContainsKey(social.GroupId))
             {
                 _groupTargets[social.GroupId] = predator.TargetEntity;
             }
@@ -645,13 +640,12 @@ public sealed class HuntingSystem : ISystem
                     }
                 }
 
-                // Adopt pack target if leader has one and we're actually in a pack
-                if (isPack && !predator.HasTarget && _groupTargets.TryGetValue(groupId, out int packTarget))
+                // Adopt pack target — any member's chase triggers group hunt
+                if (isPack && _groupTargets.TryGetValue(groupId, out int packTarget) && em.IsAlive(packTarget))
                 {
-                    if (em.IsAlive(packTarget))
+                    if (!predator.HasTarget || predator.TargetEntity != packTarget)
                     {
                         predator.TargetEntity = packTarget;
-                        // Assign role based on position relative to others
                         AssignPackRole(entity, packTarget, em, ref predator, ref social);
                     }
                 }
@@ -825,18 +819,8 @@ public sealed class HuntingSystem : ISystem
                         {
                             _entitiesToKill.Add(predator.TargetEntity);
 
-                            // Calculate nutrition from prey body mass
-                            float nutrition = _fallbackNutrition;
-                            if (em.HasComponents(predator.TargetEntity, ComponentFlags.Spore))
-                            {
-                                nutrition = _sporeBodyMass * 20f;  // Spores are tiny
-                            }
-                            else if (em.HasComponents(predator.TargetEntity, ComponentFlags.Species))
-                            {
-                                ref var preySpecies = ref em.Species[predator.TargetEntity];
-                                var preyDef = SpeciesRegistry.GetById(preySpecies.SpeciesId);
-                                nutrition = preyDef.EffectiveNutrition;
-                            }
+                            // Nutrition scales with prey mass (and growth for Shroomers)
+                            float nutrition = GetPreyNutrition(predator.TargetEntity, em);
 
                             // Pack food sharing: killer gets half, rest split among nearby pack
                             if (isPack)
@@ -1235,7 +1219,7 @@ public sealed class HuntingSystem : ISystem
 
     /// <summary>
     /// Get the effective body mass of a prey entity for hunting eligibility.
-    /// Spores use a small fixed mass instead of the parent Shroomer's mass.
+    /// Spores use a small fixed mass. Growing creatures scale mass with CurrentScale.
     /// </summary>
     private float GetPreyBodyMass(int preyEntity, EntityManager em)
     {
@@ -1246,10 +1230,45 @@ public sealed class HuntingSystem : ISystem
         {
             ref var preySpecies = ref em.Species[preyEntity];
             var preyDef = SpeciesRegistry.GetById(preySpecies.SpeciesId);
-            return preyDef.BodyMass;
+            float mass = preyDef.BodyMass;
+
+            // Growing creatures (Shroomers) scale mass with current size
+            if (em.HasComponents(preyEntity, ComponentFlags.Growth))
+            {
+                ref var growth = ref em.Growths[preyEntity];
+                mass *= growth.CurrentScale;
+            }
+
+            return mass;
         }
 
         return 1f;
+    }
+
+    /// <summary>
+    /// Get the nutrition value of a prey entity. Scales with growth for growing creatures.
+    /// </summary>
+    private float GetPreyNutrition(int preyEntity, EntityManager em)
+    {
+        if (em.HasComponents(preyEntity, ComponentFlags.Spore))
+            return _sporeBodyMass * 20f;
+
+        if (em.HasComponents(preyEntity, ComponentFlags.Species))
+        {
+            ref var preySpecies = ref em.Species[preyEntity];
+            var preyDef = SpeciesRegistry.GetById(preySpecies.SpeciesId);
+            float nutrition = preyDef.EffectiveNutrition;
+
+            if (em.HasComponents(preyEntity, ComponentFlags.Growth))
+            {
+                ref var growth = ref em.Growths[preyEntity];
+                nutrition *= growth.CurrentScale;
+            }
+
+            return nutrition;
+        }
+
+        return _fallbackNutrition;
     }
 }
 
@@ -2212,7 +2231,8 @@ public sealed class HerdingSystem : ISystem
                     continue;
             }
 
-            // Priority 3: Actively hunting (hungry predator with target)
+            // Priority 3: Actively hunting — herds skip, packs still get cohesion
+            bool isPackHunting = false;
             if (em.HasComponents(entity, ComponentFlags.Predator | ComponentFlags.Hunger))
             {
                 ref var predator = ref em.Predators[entity];
@@ -2220,9 +2240,15 @@ public sealed class HerdingSystem : ISystem
                 float hungerRatio = hunger.Current / hunger.Max;
 
                 if (predator.HasTarget && hungerRatio < 0.6f)
-                    continue;
+                {
+                    // Pack members keep cohesion while hunting — they need to stick together
+                    if (social.Type == SocialType.Pack)
+                        isPackHunting = true;
+                    else
+                        continue;
+                }
 
-                if (hungerRatio < 0.4f)
+                if (hungerRatio < 0.4f && social.Type != SocialType.Pack)
                     continue;
             }
 
@@ -2428,7 +2454,7 @@ public sealed class HerdingSystem : ISystem
                 float distToLeader = MathF.Sqrt(MathUtils.DistanceSquared(pos.X, pos.Y, leaderX, leaderY));
 
                 // Distance-based following: maintain spacing, don't crowd leader
-                float idealFollowDist = 2f;  // Don't get too close to leader
+                float idealFollowDist = social.Type == SocialType.Pack ? 1.5f : 2f;
                 float distanceFactor = MathF.Max(0, 1f - (distToLeader / _leaderInfluenceRadius));
 
                 // Size factor (reduce pull in large groups)
@@ -2439,8 +2465,13 @@ public sealed class HerdingSystem : ISystem
                                                       (social.PreferredGroupSize * 0.5f));
                 }
 
-                float effectiveCohesion = social.CohesionStrength * social.GroupAffinity * distanceFactor * sizeFactor;
-                float effectiveAlignment = social.AlignmentStrength * social.GroupAffinity * 1.5f;  // Stronger alignment to leader
+                // Packs get much stronger cohesion and alignment than herds
+                float packBoost = social.Type == SocialType.Pack ? 3f : 1f;
+                // During active pack hunt, cohesion is even stronger to keep the group together
+                if (isPackHunting) packBoost *= 2f;
+
+                float effectiveCohesion = social.CohesionStrength * social.GroupAffinity * distanceFactor * sizeFactor * packBoost;
+                float effectiveAlignment = social.AlignmentStrength * social.GroupAffinity * 1.5f * packBoost;
 
                 // Cohesion: move toward leader (but maintain minimum distance)
                 float cohesionX = 0f, cohesionY = 0f;

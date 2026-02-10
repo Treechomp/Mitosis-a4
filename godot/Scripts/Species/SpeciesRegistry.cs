@@ -266,11 +266,11 @@ public static class SpeciesRegistry
             ReproEnergyThreshold = 75f,
             ReproCooldown = 1000,  // Longer cooldown
 
-            // Social - pack hunters
-            GroupAffinity = 0.5f,
+            // Social - tight pack hunters
+            GroupAffinity = 0.7f,
             PreferredGroupSize = 3f,
-            CohesionStrength = 0.015f,
-            AlignmentStrength = 0.01f,
+            CohesionStrength = 0.04f,
+            AlignmentStrength = 0.03f,
             PackHunterChance = 0.7f,
 
             // Pack role speeds
@@ -594,11 +594,11 @@ public static class SpeciesRegistry
             MaxCarryFood = 5f,    // How much food one Sectid can carry to nest
             ReproCooldown = 9999, // Effectively disabled in ReproductionSystem
 
-            // Social - pack swarms, large groups
-            GroupAffinity = 0.7f,
+            // Social - tight swarm, large groups
+            GroupAffinity = 0.8f,
             PreferredGroupSize = 8f,  // Larger swarms
-            CohesionStrength = 0.015f,
-            AlignmentStrength = 0.01f,
+            CohesionStrength = 0.035f,
+            AlignmentStrength = 0.025f,
 
             // Pack role speeds
             LeaderSpeedMult = 1.0f,
@@ -639,11 +639,10 @@ public static class SpeciesRegistry
             TerraformCooldown = 6,
 
             // Trophic - tiny insects, hunt in packs — eat anything that moves
+            // No PreferredPrey: Sectids are pure opportunists, targeting nearest viable prey
             BodyMass = 0.5f,
             SoloHuntMaxRatio = 1.0f,       // Solo Sectid can hunt spores
             PackHuntMassExponent = 0.7f,    // Sub-linear pack scaling
-            PreferredPrey = new List<string> { "Shroomer", "Rabbit", "Faeling" },
-            PreferredPreyBias = 0.4f,
 
             // Visuals - orange insects
             BaseColor = new Color(0.86f, 0.55f, 0.16f),
