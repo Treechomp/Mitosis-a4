@@ -128,13 +128,13 @@ public static class SpeciesRegistry
             DefaultFearResponse = FearResponse.Flee,
 
             // Survival
-            MaxHunger = 80f,
+            MaxHunger = 240f,
             HungerDecayRate = 0.05f,
             MaxLifespan = 30000,
             MaturityAge = 2000,
 
             // Reproduction
-            ReproHungerThreshold = 70f,
+            ReproHungerThreshold = 210f,
             ReproEnergyThreshold = 80f,
             ReproCooldown = 600,
 
@@ -193,13 +193,13 @@ public static class SpeciesRegistry
             DefaultFearResponse = FearResponse.Panic,  // Erratic when scared
 
             // Survival - shorter lifespan, faster metabolism
-            MaxHunger = 60f,
+            MaxHunger = 180f,
             HungerDecayRate = 0.08f,
             MaxLifespan = 15000,
             MaturityAge = 1000,
 
             // Reproduction - breeds quickly
-            ReproHungerThreshold = 60f,
+            ReproHungerThreshold = 180f,
             ReproEnergyThreshold = 70f,
             ReproCooldown = 300,
 
@@ -256,13 +256,13 @@ public static class SpeciesRegistry
             BaseHuntSpeed = 0.12f,
 
             // Survival - predators need lower decay to survive between hunts
-            MaxHunger = 70f,
+            MaxHunger = 210f,
             HungerDecayRate = 0.04f,  // Half of previous (0.08) - gives ~1750 ticks to find food
             MaxLifespan = 24000,
             MaturityAge = 1500,
 
             // Reproduction - lower thresholds since hunts are risky
-            ReproHungerThreshold = 65f,
+            ReproHungerThreshold = 195f,
             ReproEnergyThreshold = 75f,
             ReproCooldown = 1000,  // Longer cooldown
 
@@ -330,13 +330,13 @@ public static class SpeciesRegistry
             BaseHuntSpeed = 0.11f,
 
             // Survival - solitary hunter, needs to sustain longer between kills
-            MaxHunger = 60f,
+            MaxHunger = 180f,
             HungerDecayRate = 0.035f,  // Half of previous - gives ~1700 ticks
             MaxLifespan = 20000,
             MaturityAge = 1200,
 
             // Reproduction
-            ReproHungerThreshold = 60f,
+            ReproHungerThreshold = 180f,
             ReproEnergyThreshold = 70f,
             ReproCooldown = 800,
 
@@ -401,13 +401,13 @@ public static class SpeciesRegistry
             BaseHuntSpeed = 0.08f,
 
             // Survival - long lived
-            MaxHunger = 100f,
+            MaxHunger = 300f,
             HungerDecayRate = 0.03f,  // Slow metabolism
             MaxLifespan = 50000,
             MaturityAge = 4000,
 
             // Reproduction
-            ReproHungerThreshold = 80f,
+            ReproHungerThreshold = 240f,
             ReproEnergyThreshold = 90f,
             ReproCooldown = 1500,
 
@@ -484,7 +484,7 @@ public static class SpeciesRegistry
             DefaultFearResponse = FearResponse.Freeze,
 
             // Survival - long-lived, effectively can't starve near water
-            MaxHunger = 70f,
+            MaxHunger = 210f,
             HungerDecayRate = 0.04f,
             MaxLifespan = 50000,   // Very long lived — old shroomers become huge
             MaturityAge = 2500,
@@ -584,7 +584,7 @@ public static class SpeciesRegistry
             DefaultFearResponse = FearResponse.Panic,
 
             // Survival - short-lived, fast metabolism
-            MaxHunger = 55f,
+            MaxHunger = 165f,
             HungerDecayRate = 0.07f,
             MaxLifespan = 20000,
             MaturityAge = 800,   // Mature quickly
@@ -658,9 +658,9 @@ public static class SpeciesRegistry
             Diet = DietType.Terraformer,
             DefaultSocialType = SocialType.Solitary,  // Lone guardians spawned from crystals
 
-            // Movement - moderate pace, roams to find terraformed tiles
-            BaseWanderSpeed = 0.035f,
-            DirectionChangeChance = 0.008f,
+            // Movement - fast roamer, covers large territory seeking terraformed tiles
+            BaseWanderSpeed = 0.07f,
+            DirectionChangeChance = 0.003f,
 
             // No fleeing — Faelings fight, not flee (ranged attack)
             FleeRange = 0f,
@@ -674,7 +674,7 @@ public static class SpeciesRegistry
             DefaultFearResponse = FearResponse.Defensive,
 
             // Survival - very long-lived, doesn't starve
-            MaxHunger = 65f,
+            MaxHunger = 195f,
             HungerDecayRate = 0f,  // Never decays — Faelings don't starve
             ImmuneToStarvation = true,
             MaxLifespan = 60000,  // Very long lived

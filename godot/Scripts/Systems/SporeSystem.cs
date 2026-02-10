@@ -31,8 +31,8 @@ public sealed class SporeSystem : ISystem
     private readonly Random _rng = new();
     private readonly float _sporeMoistureThreshold = 0.6f; // Tile moisture level that counts as "wet"
     private readonly float _sporeSpreadRadius = 8f;        // How far spores are thrown from parent
-    private readonly float _sporeSpreadChance = 0.002f;    // Per-tick chance of mature Shroomer spreading spores
-    private readonly int _sporesPerSpread = 3;             // Number of spores per spread event
+    private readonly float _sporeSpreadChance = 0.0003f;   // Per-tick chance (~1 spread per 3300 ticks per Shroomer)
+    private readonly int _sporesPerSpread = 2;             // Number of spores per spread event
 
     private readonly List<(float x, float y, int speciesId)> _pendingSpores = new(16);
     private readonly List<(float x, float y, int speciesId)> _pendingTransforms = new(8);

@@ -52,13 +52,13 @@ public sealed class SpeciesDefinition
     public FearResponse DefaultFearResponse { get; init; } = FearResponse.Flee;
 
     // === SURVIVAL ===
-    public float MaxHunger { get; init; } = 80f;
+    public float MaxHunger { get; init; } = 240f;
     public float HungerDecayRate { get; init; } = 0.05f;
     public int MaxLifespan { get; init; } = 30000;
     public int MaturityAge { get; init; } = 2000;
 
     // === REPRODUCTION ===
-    public float ReproHungerThreshold { get; init; } = 70f;
+    public float ReproHungerThreshold { get; init; } = 210f;
     public float ReproEnergyThreshold { get; init; } = 80f;
     public int ReproCooldown { get; init; } = 600;
 

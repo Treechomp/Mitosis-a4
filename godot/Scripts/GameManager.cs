@@ -21,8 +21,8 @@ public partial class GameManager : Node2D
     [Export] public int WorldSeed = 42;
     [Export] public int TileSize = 16;
     [Export] public int TargetTPS = 20;
-    [Export] public int MaxPopulation = 500;
-    [Export] public int InitialPopulation = 200;  // Starting population (separate from max)
+    [Export] public int MaxPopulation = 15000;
+    [Export] public int InitialPopulation = 1500;  // Starting population (separate from max)
     [Export] public float HerbivoreRatio = 0.85f;
     [Export] public float CreaturesPerChunk = 2f;
 
@@ -238,7 +238,7 @@ public partial class GameManager : Node2D
                 int speciesSpawned = 0;
 
                 // Round-robin: one group/solo per chunk per pass
-                const int maxPasses = 10;
+                const int maxPasses = 20;
                 for (int pass = 0; pass < maxPasses && speciesSpawned < target; pass++)
                 {
                     ShuffleList(predatorCandidateChunks);
@@ -310,7 +310,7 @@ public partial class GameManager : Node2D
             var preyChunkSet = new HashSet<(int, int)>();
 
             // Round-robin: keep cycling through shuffled chunks, one group per chunk per pass
-            const int maxPasses = 10;  // Safety limit
+            const int maxPasses = 20;  // Safety limit
             for (int pass = 0; pass < maxPasses && speciesSpawned < target; pass++)
             {
                 ShuffleList(chunks);
