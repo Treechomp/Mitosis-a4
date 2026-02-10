@@ -1,6 +1,9 @@
 # Mitosis Godot 4.6 Development Roadmap
 
-## Current State Summary (v0.2 - Ecosystem Foundations)
+> For comprehensive documentation of all implemented features, systems, and species,
+> see **[FEATURES_AND_DESIGN.md](FEATURES_AND_DESIGN.md)**.
+
+## Current State Summary (v0.3 - Full Ecosystem with Factions)
 
 ### Architecture Overview
 ```
@@ -35,18 +38,23 @@
 #### Core ECS (100% Complete)
 - [x] EntityManager with SoA layout (16,384 entities)
 - [x] Flag-based component queries
-- [x] 15 component types (Position, Velocity, Hunger, Energy, Age, Species, etc.)
+- [x] 22+ component types (Position, Velocity, Hunger, Energy, Age, Species, Fear,
+      Wander, Predator, Prey, Social, Terraform, Nest, FoodCarrier, Spore, Growth,
+      Crystal, FaelingPower, RangedAttack, Renderable, TerrainDiscomfort, SimulationLOD)
 
-#### Species System (90% Complete)
-- [x] SpeciesDefinition - comprehensive data class with 40+ configurable properties
+#### Species System (100% Complete)
+- [x] SpeciesDefinition - comprehensive data class with 80+ configurable properties
 - [x] SpeciesRegistry - lookup by name or ID (hash)
-- [x] 5 species defined: Deer, Rabbit, Wolf, Fox, Crocodile
-- [x] Diet types: Herbivore, Carnivore (Omnivore prepared)
+- [x] 8 species defined: Deer, Rabbit, Wolf, Fox, Crocodile, Shroomer, Sectid, Faeling
+- [x] Diet types: Herbivore, Carnivore, Terraformer (Omnivore prepared)
 - [x] Social types: Herd, Pack, Solitary
 - [x] Biome preferences per species
 - [x] Spawn tile preferences (IsAquatic, AllowedSpawnTiles, CanSpawnOnTile)
 - [x] Terrain speed/comfort modifiers per species
-- [ ] Missing: Faction species (Shroomer, Sectid, Faeling)
+- [x] Faction species (Shroomer, Sectid, Faeling) with full definitions
+- [x] Mass-based hunting system (solo/pack hunt ratios)
+- [x] Preferred prey system with bias scoring
+- [x] Faction-specific fields: spore, nest, crystal, terraform, AoE, growth, ranged attack
 
 #### Terrain & World (85% Complete)
 - [x] Chunk-based storage (32x32 tiles)
@@ -59,19 +67,24 @@
 - [ ] Missing: Rivers, advanced hydrology
 - [ ] Missing: Tile depletion/regrowth
 
-#### Behavior Systems (80% Complete)
-- [x] MovementSystem - terrain speed modifiers, panic boost
+#### Behavior Systems (95% Complete)
+- [x] MovementSystem - terrain speed modifiers, panic boost, wall sliding
 - [x] TerrainDiscomfortSystem - accumulating discomfort on bad terrain
-- [x] HungerSystem - decay, starvation damage
-- [x] GrazingSystem - herbivores feed on grass/forest
-- [x] WanderSystem - random exploration with terrain awareness
-- [x] HerdingSystem - flocking, cohesion, alignment
-- [x] SeparationSystem - collision avoidance
-- [x] HuntingSystem - predator behavior with pack roles
-- [x] FleeingSystem - prey escape with fear integration
+- [x] HungerSystem - decay, starvation damage, faction immunity
+- [x] GrazingSystem - herbivores feed on grass/forest, factions on FeedTiles
+- [x] WanderSystem - random exploration, roaming, terrain avoidance, discomfort escape
+- [x] HerdingSystem - flocking, cohesion, alignment, leader election, group management
+- [x] SeparationSystem - same-species collision avoidance
+- [x] CollisionSystem - physical overlap resolution (all entities)
+- [x] HuntingSystem - pack coordination, mass-based targeting, pack tactics, food sharing
+- [x] FleeingSystem - prey escape with fear integration, 4 response types
 - [x] AgingSystem - maturity, natural death
-- [x] ReproductionSystem - species-aware offspring spawning
-- [x] LODSystem - distance-based simulation detail
+- [x] ReproductionSystem - species-aware offspring spawning with population cap
+- [x] LODSystem - 4-tier distance-based simulation detail
+- [x] TerraformSystem - faction tile modification (wetter/drier/balanced)
+- [x] NestSystem - Sectid nest breeding, food delivery, colony expansion
+- [x] SporeSystem - Shroomer spore lifecycle, growth, AoE attacks
+- [x] CrystalSystem - Faeling crystal management, ranged attacks, power inheritance
 - [ ] Missing: TerritorySystem
 - [ ] Missing: StatisticalSimSystem (chunk-level populations)
 
@@ -245,65 +258,45 @@ Tasks:
 
 ---
 
-## Phase 4: Faction Species (Priority: MEDIUM)
+## Phase 4: Faction Species (Priority: MEDIUM) - COMPLETE
 
 **Goal**: Three unique faction species with emergent dynamics
 
-### 4.1 Shroomer (Fungi Faction)
-Design:
-- Reproduction: Spore-based, spreads to adjacent tiles
-- Behavior: Passive, doesn't hunt or flee
-- Resource: Absorbs nutrients from dead entities (decomposer)
-- Social: Network formation (connected shroomers share resources)
+### 4.1 Shroomer (Fungi Faction) - COMPLETE
+- [x] Added Shroomer to SpeciesRegistry (Terraformer diet, Herd social)
+- [x] SporeSystem: Mature shroomers spread spores on wet terrain
+- [x] Spore lifecycle: moisture accumulation on wet tiles, withering on dry, transformation
+- [x] Growth system: continuous scale increase up to 4x, affects AoE
+- [x] AoE attack: periodic splash damage scaling with growth, targets Sectids/Faelings
+- [x] Terraform: Wetter direction (shifts tiles toward Wetland)
+- [x] Feeds on Wetland/Forest tiles
+- [x] Freeze fear response (plays dead when threatened)
 
-Tasks:
-- [ ] Add Shroomer to SpeciesRegistry
-- [ ] Create SporeReproductionSystem
-  - [ ] Check for adjacent valid tiles
-  - [ ] Spawn probability based on local shroomer density
-  - [ ] Resource sharing in network
-- [ ] Create DecomposerSystem
-  - [ ] Detect death events
-  - [ ] Shroomers near corpses gain hunger
-- [ ] Add ShroomerNetwork component for resource sharing
+### 4.2 Sectid (Insect Faction) - COMPLETE
+- [x] Added Sectid to SpeciesRegistry (Terraformer diet, Pack social)
+- [x] NestSystem: 3-stage nests convert food into larvae
+- [x] Food delivery: FoodCarrier component, Sectids carry kills to nests
+- [x] Colony expansion: nests found new nests nearby or distant colonies
+- [x] Pack hunting: Sectids hunt spores and small prey in packs
+- [x] Terraform: Drier direction (shifts tiles toward Arid)
+- [x] Feeds on Arid/Sand tiles
 
-### 4.2 Sectid (Insect Faction)
-Design:
-- Reproduction: Queen spawns workers
-- Behavior: Hive-based, workers gather food, soldiers defend
-- Structure: Queen + Workers + Soldiers (role differentiation)
+### 4.3 Faeling (Crystal Faction) - COMPLETE
+- [x] Added Faeling to SpeciesRegistry (Terraformer diet, Solitary)
+- [x] CrystalSystem: crystals spawn/respawn linked Faelings
+- [x] Power system: gains power from kills and tile restoration
+- [x] Power inheritance: 50% passes to crystal on death, then to next Faeling
+- [x] Ranged attack: targets Sectids/Shroomers at 8 tile range
+- [x] Immune to starvation and predator hunting
+- [x] Terraform: Balanced direction (shifts extremes toward Grass)
+- [x] Growth system: up to 2.5x scale, boosted by power
 
-Tasks:
-- [ ] Add Sectid roles (Queen, Worker, Soldier) to components
-- [ ] Create HiveSystem
-  - [ ] Queens spawn workers periodically
-  - [ ] Workers bring food to queen
-  - [ ] Soldiers patrol hive perimeter
-- [ ] Add SwarmBehavior for defense
-- [ ] Hive territory marking
-
-### 4.3 Faeling (Crystal Faction)
-Design:
-- Reproduction: Budding (crystal growth)
-- Behavior: Territorial, defends crystal formations
-- Resource: Energy absorption from environment
-- Movement: Slow but durable
-
-Tasks:
-- [ ] Add Faeling to SpeciesRegistry
-- [ ] Create BuddingReproductionSystem
-  - [ ] Requires high energy threshold
-  - [ ] Creates adjacent crystal (slower than spores)
-- [ ] Create CrystalFormationSystem
-  - [ ] Track connected crystals
-  - [ ] Formation size affects defense bonus
-- [ ] Add territory defense behavior
-
-### 4.4 Faction Interactions
-- [ ] Shroomer decomposes Sectid/Faeling corpses
-- [ ] Sectid raids Shroomer networks
-- [ ] Faeling crystals block Sectid expansion
-- [ ] Territory conflict system
+### 4.4 Faction Interactions - COMPLETE
+- [x] Faeling ranged attacks target Sectids and Shroomers
+- [x] Shroomer AoE attacks target Sectids and Faelings
+- [x] Sectids hunt spores (Shroomer offspring)
+- [x] Competing terraforming: wet vs dry vs balanced creates dynamic terrain conflict
+- [ ] Not implemented: DecomposerSystem, formal territory conflict system
 
 ---
 
@@ -426,6 +419,7 @@ Structure:
 |---------|------|---------|
 | v0.1 | Jan 2026 | Core ECS, basic rendering |
 | v0.2 | Feb 2026 | Species system, reproduction, fear, terrain discomfort, biome spawning |
+| v0.3 | Feb 2026 | Faction species (Shroomer/Sectid/Faeling), terraform system, nest/spore/crystal systems, pack tactics, mass-based hunting, AoE/ranged attacks, growth system, power inheritance |
 
 ---
 

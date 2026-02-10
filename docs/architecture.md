@@ -1,347 +1,152 @@
-# Mitosis - Project Documentation
+# Mitosis - Architecture Overview
 
-## Project Overview
-
-**Mitosis** is a top-down, real-time RPG/strategy game featuring procedurally generated worlds and dynamic ecosystem simulation. Players explore vast landscapes populated by various entities that interact with each other and the environment in complex ways.
-
-### Core Vision
-- Procedurally generated worlds with diverse biomes and terrain features
-- Dynamic ecosystem simulation with entity interactions
-- Real-time strategy elements with RPG progression
-- Environmental storytelling through ecosystem dynamics
+> **NOTE**: This project has been migrated from Python/Arcade to **Godot 4.6 with C#**.
+> The Python version is preserved in `archived/` for reference only.
+>
+> For comprehensive documentation of all current features, systems, mechanics, and
+> species, see **[FEATURES_AND_DESIGN.md](FEATURES_AND_DESIGN.md)**.
 
 ---
 
-## Technical Architecture
+## Current Architecture (Godot 4.6 + C#)
 
-### Core Systems Architecture
+### Core Design: Entity-Component-System (ECS)
+
+Mitosis uses a custom **Structure of Arrays (SoA)** ECS architecture, not Godot's
+built-in scene tree, for maximum cache efficiency with thousands of entities.
+
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                        Main Game Loop                        │
-│  (main.py → game.py)                                        │
-└─────────────────┬───────────────────────────────────────────┘
-                  │
-         ┌────────▼────────┐
-         │   Game Manager   │
-         │    (game.py)     │
-         └─┬─────────────┬─┘
-           │             │
-    ┌──────▼──────┐   ┌──▼──────────┐
-    │   World     │   │   Player    │
-    │ (world.py)  │   │ (player.py) │
-    └──────┬──────┘   └─────────────┘
-           │
-    ┌──────▼──────┐
-    │  Entities   │
-    │ (entity.py) │
-    └─────────────┘
+┌──────────────────────────────────────────────────────────────┐
+│                    SPECIES DEFINITION LAYER                    │
+│  SpeciesDefinition (80+ properties per species)               │
+│  SpeciesRegistry (8 species: Deer, Rabbit, Wolf, Fox,         │
+│                   Crocodile, Shroomer, Sectid, Faeling)       │
+└──────────────────────────┬───────────────────────────────────┘
+                           │
+                           ▼
+┌──────────────────────────────────────────────────────────────┐
+│                    ECS SIMULATION LAYER                        │
+│  EntityManager: 16,384 entity capacity, SoA layout            │
+│  Components: Position, Velocity, Hunger, Energy, Age, Fear,   │
+│              Species, Wander, Predator, Prey, Social,         │
+│              Terraform, Nest, Spore, Crystal, FaelingPower... │
+│  Systems: 17 systems running at 20 TPS fixed timestep         │
+│  SpatialHash: O(1) grid-based neighbor queries                │
+└──────────────────────────┬───────────────────────────────────┘
+                           │
+                           ▼
+┌──────────────────────────────────────────────────────────────┐
+│                    WORLD LAYER                                 │
+│  WorldManager: 16x16 chunks (512x512 tiles)                   │
+│  TerrainGenerator: OpenSimplex noise-based generation          │
+│  9 tile types with walkability, grazeability, moisture values  │
+│  Terraformable: tiles shift along moisture axis                │
+└──────────────────────────┬───────────────────────────────────┘
+                           │
+                           ▼
+┌──────────────────────────────────────────────────────────────┐
+│                    RENDERING LAYER                             │
+│  Godot _Draw() calls: DrawRect, DrawCircle, DrawTriangle      │
+│  Chunk-based frustum culling                                   │
+│  Debug overlay: FPS, entity counts                             │
+│  Camera: WASD movement, zoom controls                          │
+└──────────────────────────────────────────────────────────────┘
+```
 
-         Graphics Layer
-    ┌─────────────────────┐
-    │  Graphics System    │
-    │   (graphics.py)     │
-    └─────────┬───────────┘
-              │
-    ┌─────────▼───────────┐
-    │   Renderer System   │
-    │   (renderer.py)     │
-    └─────────────────────┘
+### Key Design Decisions
+
+1. **Custom SoA ECS** over Godot scene tree: Cache-efficient iteration over 15,000+
+   entities. Each component type is a flat array indexed by entity ID. ComponentFlags
+   bitmask enables fast entity filtering.
+
+2. **Spatial hashing** over quadtrees: O(1) insert/remove for moving entities.
+   Uniform distribution better suited to ecosystem simulation. Used by 8+ systems.
+
+3. **Fixed timestep simulation** (20 TPS): Decoupled from rendering frame rate.
+   Ensures reproducible, deterministic behavior.
+
+4. **Level of Detail (LOD)**: Full AI within 50 tiles, reduced at 100, statistical
+   at 200, aggregate at 200+. Enables large worlds without performance collapse.
+
+5. **Data-driven species**: All behavior configured through SpeciesDefinition.
+   No species-specific logic hardcoded in systems.
+
+6. **Simulation-first**: Rendering is a pure visualization layer. All game logic
+   lives in ECS systems that process every entity (LOD-modulated).
+
+### System Execution Order
+
+Systems run in this order each tick (order matters for data dependencies):
+
+```
+ 1. LODSystem              - Set up distance-based fidelity
+ 2. MovementSystem         - Apply velocity with terrain modifiers
+ 3. TerrainDiscomfort      - Track terrain comfort/discomfort
+ 4. HungerSystem           - Hunger decay, starvation
+ 5. GrazingSystem          - Feeding on appropriate tiles
+ 6. WanderSystem           - Random movement, roaming
+ 7. HerdingSystem          - Social cohesion, leadership
+ 8. SeparationSystem       - Prevent same-species overlap
+ 9. CollisionSystem        - Physical overlap resolution
+10. HuntingSystem          - Predator pursuit and attack
+11. FleeingSystem          - Prey threat detection and escape
+12. AgingSystem            - Age increment, natural death
+13. ReproductionSystem     - Standard offspring spawning
+14. TerraformSystem        - Faction tile modification
+15. NestSystem             - Sectid nest breeding
+16. SporeSystem            - Shroomer spore lifecycle
+17. CrystalSystem          - Faeling crystal management
 ```
 
 ### File Structure
-- **main.py**: Entry point, initializes game
-- **game.py**: Main game loop, central coordination, entity management
-- **world.py**: World generation, terrain management, tile systems
-- **player.py**: Player character logic and movement
-- **entity.py**: All entity classes, behaviors, and AI systems
-- **graphics.py**: Graphics resource management and caching
-- **renderer.py**: Rendering pipeline and camera management
 
----
-
-## Currently Implemented Features
-
-### 🌍 World Generation System
-
-#### **Noise-Based Terrain Generation**
-- **Multiple Noise Layers**: Elevation, moisture, and temperature maps
-- **Biome Classification**: 24 different tile types based on environmental parameters
-- **Terrain Types**:
-  - Water: Deep Water, Shallow Water, Ice, Reef
-  - Ground: Beach, Dune, Dirt, Rocky Grass, Grass, Savanna, Tundra, Sand, Gravel
-  - Wetlands: Swamp, Bog, Marsh
-  - Forests: Deciduous, Coniferous, Dense Forest
-  - Mountains: Rock, Scree, Snow, Glacier
-
-#### **River Generation System**
-- Water source detection in high elevation areas
-- Downhill flow pathfinding following elevation gradients
-- River carving with variable width based on flow distance
-- Moisture influence around river systems
-- Automatic termination at water bodies
-
-#### **Terrain Processing**
-- Multi-threaded world generation for large maps (1024x1024 tiles)
-- Terrain smoothing with cliff preservation
-- Moisture adjustment based on water proximity
-- Progress tracking for generation process
-
-### 🎮 Entity System
-
-#### **Entity Types**
-1. **Passive Static Entities**
-   - Trees, rocks, and other harvestable resources
-   - Don't move, provide resources when harvested
-   - Health system with destruction mechanics
-
-2. **Passive Moving Entities**
-   - Animals that wander and flee from threats
-   - Biome preferences and natural behaviors
-   - Threat detection and escape responses
-
-3. **Active Entities**
-   - **Shroomers**: Splash damage attackers, moisture gatherers, spore spreaders
-   - **Sectids**: Fast attackers, resource gatherers, multiplication mechanics
-   - **Faelings**: Long-range attackers, tree planters, crystal spawners
-
-#### **AI Behavior System**
-- **State Machine**: Idle, Wander, Chase, Attack, Flee, Gather, Replant
-- **Detection Systems**: Configurable perception ranges for each entity type
-- **Combat Mechanics**: Health, damage, attack ranges, cooldowns
-- **Special Abilities**:
-  - Shroomer spore spreading and splash attacks
-  - Sectid resource gathering and multiplication
-  - Faeling replanting and crystal mechanics
-
-#### **Entity Management**
-- Chunk-based spawning/despawning system
-- Entity density control based on biome types
-- Performance optimization through active chunk management
-- Entity pooling and lifecycle management
-
-### 🎯 Player System
-
-#### **Movement and Controls**
-- Smooth 8-directional movement with diagonal normalization
-- Terrain-based movement costs (water slows, mountains harder to traverse)
-- Collision detection with world boundaries and obstacles
-- Keyboard input handling (Arrow keys for movement, Z for zoom)
-
-#### **Camera System**
-- Smooth camera following player position
-- Configurable zoom levels (normal and zoomed-out world view)
-- Viewport culling for rendering optimization
-- World boundary constraints
-
-### 🎨 Graphics and Rendering
-
-#### **Graphics Management**
-- Centralized graphics resource system
-- Color-coded tile and entity representation
-- Health bar rendering for damaged entities
-- Cached surface generation for performance
-
-#### **Rendering Pipeline**
-- Frustum culling (only render visible tiles/entities)
-- Layered rendering: Tiles → Entities → Player → UI
-- Debug information display (FPS, position, tile type)
-- Efficient viewport calculations
-
-#### **Performance Monitoring**
-- Timing decorators for performance profiling
-- Frame time tracking and FPS calculation
-- Update time breakdowns (world, entities, player, camera)
-- Entity count monitoring
-
-### 🔧 Technical Features
-
-#### **Chunk Management System**
-- 32x32 tile chunks for entity management
-- Active chunk tracking based on player position
-- Configurable spawn/despawn radius
-- Entity density balancing per chunk
-
-#### **Inventory and Progression**
-- Entity inventory systems with capacity limits
-- Experience and leveling mechanics
-- Attribute progression (Strength, Speed, Intelligence)
-- Item dropping on entity death
-
-#### **Game Settings**
-- Configurable time scale for game speed
-- FPS limiting and performance controls
-- Entity population limits
-- Biome-specific entity spawn rates
-
----
-
-## Planned Features (Not Yet Implemented)
-
-### 🚀 Phase 1: Performance Optimization
-
-#### **Spatial Partitioning**
-- Quadtree or spatial hash grid for entity queries
-- Efficient nearby entity detection
-- Reduced computational complexity for large entity counts
-
-#### **Advanced Entity Management**
-- Level of Detail (LOD) system for distant entities
-- Entity pooling for common types
-- Component-based architecture
-- State-based update optimization
-
-#### **Rendering Enhancements**
-- Sprite batching system
-- Dirty rectangle tracking
-- Chunk surface caching
-- Tile atlasing for GPU optimization
-
-### 🗺️ Phase 2: Advanced World Generation
-
-#### **Terrain Features**
-- Ridge and valley generation algorithms
-- Hydraulic erosion simulation
-- Mountain range connectivity
-- Realistic geological formations
-
-#### **Landmark Generation**
-- Unique geological features (canyons, mesas, volcanic regions)
-- Connected mountain ranges with realistic elevation patterns
-- Enhanced river systems with tributaries and deltas
-- Lakes and inland seas with proper watersheds
-
-#### **Biome Improvements**
-- Gradient-based biome transitions
-- Sub-biome and microclimate systems
-- Seasonal variations
-- Climate-based weather patterns
-
-### 🎲 Phase 3: Gameplay Enhancement
-
-#### **Complete Ecosystem**
-- Full Shroomer lifecycle (spore spreading, growth, environmental adaptation)
-- Sectid colony behaviors and resource competition
-- Advanced Faeling abilities (possession, environmental manipulation)
-- Predator-prey relationships and food webs
-
-#### **Player Progression**
-- Interactive inventory UI
-- Crafting system with resource gathering
-- Skill trees and character development
-- Combat mechanics and equipment system
-
-#### **User Interface**
-- Comprehensive HUD with health, resources, and status
-- Interactive minimap with fog of war
-- Context-sensitive tooltips and information panels
-- Settings and pause menu systems
-
-#### **Save/Load System**
-- World state serialization
-- Player progress persistence
-- Save file management interface
-- Auto-save functionality
-
-### 🎨 Phase 4: Visual Polish
-
-#### **Sprite System**
-- Pixel art assets for tiles and entities
-- Animation framework with state machines
-- Particle effects for combat and environmental interactions
-- Visual feedback for all player actions
-
-#### **Environmental Effects**
-- Day/night cycle with lighting changes
-- Weather systems (rain, snow, wind effects)
-- Water animations and environmental ambiance
-- Screen effects for combat and interactions
-
----
-
-## Technical Specifications
-
-### **World Parameters**
-- **World Size**: 1024x1024 tiles (configurable)
-- **Tile Size**: 32x32 pixels
-- **Chunk Size**: 32x32 tiles
-- **Entity Limit**: 200 (configurable)
-- **Generation**: Multi-threaded using noise functions
-
-### **Performance Targets**
-- **Target FPS**: 60
-- **Maximum Entities**: 1000+ (with optimization)
-- **Memory Usage**: < 500MB
-- **Load Time**: < 10 seconds
-
-### **Dependencies**
-- **pygame**: Graphics and input handling
-- **noise**: Perlin noise generation
-- **numpy**: Mathematical operations and array processing
-- **multiprocessing**: Parallel world generation
-
-### **System Requirements**
-- **Python**: 3.8+
-- **RAM**: 4GB minimum
-- **CPU**: Multi-core recommended for world generation
-- **Graphics**: Hardware acceleration supported
-
----
-
-## Development Status
-
-### **Completion Status**
-- ✅ **Core Architecture**: Complete
-- ✅ **Basic World Generation**: Complete
-- ✅ **Entity System**: Core implementation complete
-- ✅ **Player Movement**: Complete
-- ✅ **Basic Rendering**: Complete
-- 🔄 **Performance Optimization**: In progress
-- ❌ **Advanced AI**: Planned
-- ❌ **Visual Polish**: Planned
-- ❌ **Save/Load System**: Planned
-
-### **Known Issues**
-1. Performance degradation with high entity counts
-2. World generation lacks interesting terrain features
-3. Entity behaviors are basic and need ecosystem completion
-4. Visual feedback is minimal (placeholder graphics)
-5. No save/load functionality
-
-### **Immediate Priorities**
-1. Implement spatial partitioning for entity performance
-2. Move EntityManager to separate module
-3. Add basic terrain features (ridges, valleys)
-4. Optimize rendering pipeline
-
----
-
-## Getting Started
-
-### **Installation**
-```bash
-# Clone the repository
-cd mitosis-project
-
-# Install dependencies
-pip install pygame noise numpy
-
-# Run the game
-python main.py
+```
+godot/Scripts/
+├── ECS/EntityManager.cs              # SoA entity storage (16,384 capacity)
+├── Components/
+│   ├── CoreComponents.cs             # Position, Velocity, ChunkPosition
+│   ├── CreatureComponents.cs         # Species, Hunger, Energy, Age, etc.
+│   ├── BehaviorComponents.cs         # Wander, Predator, Prey, Social, etc.
+│   └── FactionComponents.cs          # Nest, Spore, Crystal, FaelingPower, etc.
+├── Systems/
+│   ├── BehaviorSystems.cs            # 12 systems consolidated
+│   ├── MovementSystem.cs             # Position updates
+│   ├── LODSystem.cs                  # Simulation fidelity levels
+│   ├── CrystalSystem.cs             # Faeling mechanics
+│   ├── NestSystem.cs                # Sectid mechanics
+│   └── SporeSystem.cs              # Shroomer mechanics
+├── World/
+│   ├── TerrainGenerator.cs          # Noise-based generation
+│   ├── WorldManager.cs              # Chunk loading, tile queries
+│   └── Chunk.cs                     # Tile storage
+├── Species/
+│   ├── SpeciesDefinition.cs         # 80+ configurable properties
+│   └── SpeciesRegistry.cs           # All 8 species defined
+├── Utils/
+│   ├── SpatialHash.cs               # Grid-based neighbor queries
+│   └── MathUtils.cs                 # Distance, normalization
+└── GameManager.cs                   # Main loop, initialization
 ```
 
-### **Controls**
-- **Arrow Keys**: Move player
-- **Z Key**: Toggle zoom (normal/world view)
-- **ESC**: Exit game (via window close)
+### Adding New Features
 
-### **Development Setup**
-1. Ensure Python 3.8+ is installed
-2. Install required dependencies
-3. Run `python main.py` to start the game
-4. Use timing decorators to profile performance
-5. Refer to roadmap document for development priorities
+See the checklists in [FEATURES_AND_DESIGN.md](FEATURES_AND_DESIGN.md#9-file-map)
+for step-by-step guides on adding new components and systems.
 
 ---
 
-*Last Updated: January 2025*
-*For technical issues or contributions, refer to the project roadmap and technical documentation.*
+## Legacy Architecture (Python/Arcade - Archived)
+
+The original Python implementation in `archived/` used:
+- **Esper ECS** library for entity management
+- **Arcade** library for GPU-accelerated 2D rendering
+- **NumPy + Numba** for optimized math
+- **OpenSimplex** for terrain generation
+
+It was limited to ~500 entities and was migrated to Godot for scalability.
+See `migration evaluation report.md` for the decision rationale and
+`development-plan.md` for the original architecture design.
+
+---
+
+*Last Updated: February 2026*
