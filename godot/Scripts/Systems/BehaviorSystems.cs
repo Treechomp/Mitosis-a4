@@ -1002,19 +1002,13 @@ public sealed class HuntingSystem : ISystem
         float dy = targetY - pos.Y;
 
         // Get role-specific speed modifier from species definition
-        float roleSpeedMult = 1.0f;
-        if (em.HasComponents(entity, ComponentFlags.Species))
+        float roleSpeedMult = predator.Role switch
         {
-            ref var species = ref em.Species[entity];
-            var speciesDef = SpeciesRegistry.GetById(species.SpeciesId);
-            roleSpeedMult = predator.Role switch
-            {
-                PackRole.Leader => speciesDef.LeaderSpeedMult,
-                PackRole.Flanker => speciesDef.FlankerSpeedMult,
-                PackRole.Chaser => speciesDef.ChaserSpeedMult,
-                _ => 1.0f
-            };
-        }
+            PackRole.Leader => speciesDef.LeaderSpeedMult,
+            PackRole.Flanker => speciesDef.FlankerSpeedMult,
+            PackRole.Chaser => speciesDef.ChaserSpeedMult,
+            _ => 1.0f
+        };
 
         // Apply role modifier to hunt speed
         float effectiveSpeed = huntSpeed * roleSpeedMult;
