@@ -533,11 +533,12 @@ public sealed class HuntingSystem : ISystem
         // Second pass: All predators hunt
         foreach (int entity in em.Query(predatorRequired))
         {
-            // LOD gate: skip hunting for distant entities (Statistical+)
+            // LOD gate: skip hunting only for very distant entities (Aggregate)
+            // Hunting feeds Sectids and predators — gating too early causes starvation
             if (em.HasComponents(entity, ComponentFlags.SimulationLOD))
             {
                 ref var lod = ref em.SimulationLODs[entity];
-                if (lod.Level >= LODLevel.Statistical)
+                if (lod.Level >= LODLevel.Aggregate)
                     continue;
             }
 
@@ -1313,11 +1314,12 @@ public sealed class FleeingSystem : ISystem
 
         foreach (int entity in em.Query(preyRequired))
         {
-            // LOD gate: skip fleeing for distant entities (Statistical+)
+            // LOD gate: skip fleeing only for very distant entities (Aggregate)
+            // Must match hunting gate — prey needs to flee from active predators
             if (em.HasComponents(entity, ComponentFlags.SimulationLOD))
             {
                 ref var lod = ref em.SimulationLODs[entity];
-                if (lod.Level >= LODLevel.Statistical)
+                if (lod.Level >= LODLevel.Aggregate)
                     continue;
             }
 
@@ -1673,14 +1675,6 @@ public sealed class GrazingSystem : ISystem
 
         foreach (int entity in em.Query(required))
         {
-            // LOD gate: skip grazing for distant entities (Statistical+)
-            if (em.HasComponents(entity, ComponentFlags.SimulationLOD))
-            {
-                ref var lod = ref em.SimulationLODs[entity];
-                if (lod.Level >= LODLevel.Statistical)
-                    continue;
-            }
-
             ref var species = ref em.Species[entity];
             ref var pos = ref em.Positions[entity];
             ref var hunger = ref em.Hungers[entity];
@@ -1989,11 +1983,12 @@ public sealed class ReproductionSystem : ISystem
 
         foreach (int entity in em.Query(required))
         {
-            // LOD gate: skip reproduction for distant entities (Statistical+)
+            // LOD gate: skip reproduction only for very distant entities (Aggregate)
+            // Aging kills at all distances — reproduction must also run to maintain balance
             if (em.HasComponents(entity, ComponentFlags.SimulationLOD))
             {
                 ref var lod = ref em.SimulationLODs[entity];
-                if (lod.Level >= LODLevel.Statistical)
+                if (lod.Level >= LODLevel.Aggregate)
                     continue;
             }
 
