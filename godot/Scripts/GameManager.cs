@@ -1073,8 +1073,12 @@ public partial class GameManager : Node2D
 
     private ImageTexture RenderChunkTexture(Chunk chunk)
     {
-        // Create an Image with one pixel per tile, then let Godot scale it up
-        var image = Image.CreateEmpty(chunk.Size, chunk.Size, false, Image.Format.Rgba8);
+        // Render at 4x resolution (4 pixels per tile) for a smooth but clear look.
+        // At 1x the bilinear filtering makes tiles too blurry; at 4x the tile
+        // boundaries are visible but edges still blend pleasantly.
+        const int pixelsPerTile = 4;
+        int texSize = chunk.Size * pixelsPerTile;
+        var image = Image.CreateEmpty(texSize, texSize, false, Image.Format.Rgba8);
 
         for (int ly = 0; ly < chunk.Size; ly++)
         {
@@ -1082,7 +1086,12 @@ public partial class GameManager : Node2D
             {
                 var tileType = chunk.GetTile(lx, ly);
                 var color = Chunk.GetTileColor(tileType);
-                image.SetPixel(lx, ly, color);
+
+                int px = lx * pixelsPerTile;
+                int py = ly * pixelsPerTile;
+                for (int dy = 0; dy < pixelsPerTile; dy++)
+                    for (int dx = 0; dx < pixelsPerTile; dx++)
+                        image.SetPixel(px + dx, py + dy, color);
             }
         }
 
