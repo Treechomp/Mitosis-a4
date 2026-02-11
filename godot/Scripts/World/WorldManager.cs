@@ -89,6 +89,11 @@ public sealed class WorldManager
     /// <summary>
     /// Set a tile type at world coordinates. Returns true if successful.
     /// </summary>
+    /// <summary>
+    /// Tracks which chunks have been modified since last render.
+    /// </summary>
+    public readonly HashSet<(int, int)> DirtyChunks = new();
+
     public bool SetTile(float worldX, float worldY, TileType type)
     {
         int chunkX = (int)(worldX / ChunkSize);
@@ -101,6 +106,7 @@ public sealed class WorldManager
         int localX = (int)worldX % ChunkSize;
         int localY = (int)worldY % ChunkSize;
         chunk.SetTile(localX, localY, type);
+        DirtyChunks.Add((chunkX, chunkY));
         return true;
     }
 

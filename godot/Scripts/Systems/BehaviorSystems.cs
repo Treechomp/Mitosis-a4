@@ -29,6 +29,14 @@ public sealed class TerrainDiscomfortSystem : ISystem
 
         foreach (int entity in em.Query(required))
         {
+            // LOD gate: skip discomfort for distant entities (Reduced+)
+            if (em.HasComponents(entity, ComponentFlags.SimulationLOD))
+            {
+                ref var lod = ref em.SimulationLODs[entity];
+                if (lod.Level >= LODLevel.Reduced)
+                    continue;
+            }
+
             ref var pos = ref em.Positions[entity];
             ref var discomfort = ref em.TerrainDiscomforts[entity];
 
@@ -525,6 +533,14 @@ public sealed class HuntingSystem : ISystem
         // Second pass: All predators hunt
         foreach (int entity in em.Query(predatorRequired))
         {
+            // LOD gate: skip hunting for distant entities (Statistical+)
+            if (em.HasComponents(entity, ComponentFlags.SimulationLOD))
+            {
+                ref var lod = ref em.SimulationLODs[entity];
+                if (lod.Level >= LODLevel.Statistical)
+                    continue;
+            }
+
             ref var pos = ref em.Positions[entity];
             ref var predator = ref em.Predators[entity];
             ref var hunger = ref em.Hungers[entity];
@@ -1297,6 +1313,14 @@ public sealed class FleeingSystem : ISystem
 
         foreach (int entity in em.Query(preyRequired))
         {
+            // LOD gate: skip fleeing for distant entities (Statistical+)
+            if (em.HasComponents(entity, ComponentFlags.SimulationLOD))
+            {
+                ref var lod = ref em.SimulationLODs[entity];
+                if (lod.Level >= LODLevel.Statistical)
+                    continue;
+            }
+
             ref var pos = ref em.Positions[entity];
             ref var prey = ref em.Preys[entity];
             ref var vel = ref em.Velocities[entity];
@@ -1649,6 +1673,14 @@ public sealed class GrazingSystem : ISystem
 
         foreach (int entity in em.Query(required))
         {
+            // LOD gate: skip grazing for distant entities (Statistical+)
+            if (em.HasComponents(entity, ComponentFlags.SimulationLOD))
+            {
+                ref var lod = ref em.SimulationLODs[entity];
+                if (lod.Level >= LODLevel.Statistical)
+                    continue;
+            }
+
             ref var species = ref em.Species[entity];
             ref var pos = ref em.Positions[entity];
             ref var hunger = ref em.Hungers[entity];
@@ -1698,6 +1730,14 @@ public sealed class TerraformSystem : ISystem
 
         foreach (int entity in em.Query(required))
         {
+            // LOD gate: skip terraform for distant entities (Statistical+)
+            if (em.HasComponents(entity, ComponentFlags.SimulationLOD))
+            {
+                ref var lod = ref em.SimulationLODs[entity];
+                if (lod.Level >= LODLevel.Statistical)
+                    continue;
+            }
+
             ref var terraform = ref em.Terraforms[entity];
 
             // Cooldown
@@ -1859,6 +1899,14 @@ public sealed class CollisionSystem : ISystem
         {
             foreach (int entity in em.Query(required))
             {
+                // LOD gate: skip collision for distant entities (Reduced+)
+                if (em.HasComponents(entity, ComponentFlags.SimulationLOD))
+                {
+                    ref var lod = ref em.SimulationLODs[entity];
+                    if (lod.Level >= LODLevel.Reduced)
+                        continue;
+                }
+
                 ref var pos = ref em.Positions[entity];
                 ref var rend = ref em.Renderables[entity];
                 // Convert pixel size to tile units
@@ -1941,6 +1989,14 @@ public sealed class ReproductionSystem : ISystem
 
         foreach (int entity in em.Query(required))
         {
+            // LOD gate: skip reproduction for distant entities (Statistical+)
+            if (em.HasComponents(entity, ComponentFlags.SimulationLOD))
+            {
+                ref var lod = ref em.SimulationLODs[entity];
+                if (lod.Level >= LODLevel.Statistical)
+                    continue;
+            }
+
             ref var reproduction = ref em.Reproductions[entity];
 
             // Reduce cooldown

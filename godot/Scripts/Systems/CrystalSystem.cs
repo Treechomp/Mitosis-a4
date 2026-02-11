@@ -128,6 +128,14 @@ public sealed class CrystalSystem : ISystem
 
         foreach (int entity in em.Query(required))
         {
+            // LOD gate: skip ranged attacks for distant Faelings (Reduced+)
+            if (em.HasComponents(entity, ComponentFlags.SimulationLOD))
+            {
+                ref var lod = ref em.SimulationLODs[entity];
+                if (lod.Level >= LODLevel.Reduced)
+                    continue;
+            }
+
             ref var ranged = ref em.RangedAttacks[entity];
             ref var pos = ref em.Positions[entity];
 

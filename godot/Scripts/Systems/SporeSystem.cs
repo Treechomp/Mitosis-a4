@@ -302,6 +302,14 @@ public sealed class SporeSystem : ISystem
 
         foreach (int entity in em.Query(required))
         {
+            // LOD gate: skip AoE for distant Shroomers (Reduced+)
+            if (em.HasComponents(entity, ComponentFlags.SimulationLOD))
+            {
+                ref var lod = ref em.SimulationLODs[entity];
+                if (lod.Level >= LODLevel.Reduced)
+                    continue;
+            }
+
             ref var species = ref em.Species[entity];
             if (species.Type != SpeciesType.Shroomer) continue;
 

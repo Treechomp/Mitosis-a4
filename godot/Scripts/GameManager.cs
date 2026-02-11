@@ -73,6 +73,16 @@ public partial class GameManager : Node2D
     private Camera2D? _camera;
     private Label? _debugLabel;
 
+    // Chunk texture cache: key is (chunkX, chunkY), value is cached texture
+    private readonly Dictionary<(int, int), ImageTexture> _chunkTextures = new();
+    private readonly HashSet<(int, int)> _dirtyChunks = new();
+
+    // MultiMesh entity rendering
+    private MultiMeshInstance2D _circleMMI = null!;
+    private MultiMeshInstance2D _triangleMMI = null!;
+    private MultiMeshInstance2D _squareMMI = null!;
+    private const int MultiMeshInitialCapacity = 4096;
+
     public override void _Ready()
     {
         _entityManager = new EntityManager();
@@ -134,6 +144,9 @@ public partial class GameManager : Node2D
         // Set player entity for LOD system
         _lodSystem?.SetPlayerEntity(_playerEntity);
 
+        // Setup entity rendering via MultiMesh
+        SetupMultiMeshRendering();
+
         // Setup debug UI
         SetupDebugUI();
 
@@ -153,6 +166,96 @@ public partial class GameManager : Node2D
         _debugLabel.AddThemeConstantOverride("shadow_offset_x", 1);
         _debugLabel.AddThemeConstantOverride("shadow_offset_y", 1);
         canvasLayer.AddChild(_debugLabel);
+    }
+
+    private void SetupMultiMeshRendering()
+    {
+        _circleMMI = CreateMultiMeshInstance(CreateCircleMesh(16));
+        _triangleMMI = CreateMultiMeshInstance(CreateTriangleMesh());
+        _squareMMI = CreateMultiMeshInstance(CreateSquareMesh());
+
+        AddChild(_circleMMI);
+        AddChild(_triangleMMI);
+        AddChild(_squareMMI);
+    }
+
+    private static MultiMeshInstance2D CreateMultiMeshInstance(Mesh mesh)
+    {
+        var mm = new MultiMesh();
+        mm.TransformFormat = MultiMesh.TransformFormatEnum.Transform2D;
+        mm.UseColors = true;
+        mm.Mesh = mesh;
+        mm.InstanceCount = MultiMeshInitialCapacity;
+        mm.VisibleInstanceCount = 0;
+
+        return new MultiMeshInstance2D { Multimesh = mm };
+    }
+
+    private static ArrayMesh CreateCircleMesh(int segments)
+    {
+        var mesh = new ArrayMesh();
+        var vertices = new Vector3[segments + 1];
+        var indices = new int[segments * 3];
+
+        vertices[0] = Vector3.Zero; // center
+        for (int i = 0; i < segments; i++)
+        {
+            float angle = i * (MathF.PI * 2f / segments);
+            vertices[i + 1] = new Vector3(MathF.Cos(angle), MathF.Sin(angle), 0f);
+        }
+
+        for (int i = 0; i < segments; i++)
+        {
+            indices[i * 3] = 0;
+            indices[i * 3 + 1] = i + 1;
+            indices[i * 3 + 2] = (i + 1) % segments + 1;
+        }
+
+        var arrays = new Godot.Collections.Array();
+        arrays.Resize((int)Mesh.ArrayType.Max);
+        arrays[(int)Mesh.ArrayType.Vertex] = vertices;
+        arrays[(int)Mesh.ArrayType.Index] = indices;
+        mesh.AddSurfaceFromArrays(Mesh.PrimitiveType.Triangles, arrays);
+        return mesh;
+    }
+
+    private static ArrayMesh CreateTriangleMesh()
+    {
+        var mesh = new ArrayMesh();
+        var vertices = new Vector3[]
+        {
+            new(0f, -1f, 0f),
+            new(-0.866f, 0.5f, 0f),
+            new(0.866f, 0.5f, 0f)
+        };
+        var indices = new int[] { 0, 1, 2 };
+
+        var arrays = new Godot.Collections.Array();
+        arrays.Resize((int)Mesh.ArrayType.Max);
+        arrays[(int)Mesh.ArrayType.Vertex] = vertices;
+        arrays[(int)Mesh.ArrayType.Index] = indices;
+        mesh.AddSurfaceFromArrays(Mesh.PrimitiveType.Triangles, arrays);
+        return mesh;
+    }
+
+    private static ArrayMesh CreateSquareMesh()
+    {
+        var mesh = new ArrayMesh();
+        var vertices = new Vector3[]
+        {
+            new(-0.5f, -0.5f, 0f),
+            new(0.5f, -0.5f, 0f),
+            new(0.5f, 0.5f, 0f),
+            new(-0.5f, 0.5f, 0f)
+        };
+        var indices = new int[] { 0, 1, 2, 0, 2, 3 };
+
+        var arrays = new Godot.Collections.Array();
+        arrays.Resize((int)Mesh.ArrayType.Max);
+        arrays[(int)Mesh.ArrayType.Vertex] = vertices;
+        arrays[(int)Mesh.ArrayType.Index] = indices;
+        mesh.AddSurfaceFromArrays(Mesh.PrimitiveType.Triangles, arrays);
+        return mesh;
     }
 
     // Group ID counter for spawning groups together
@@ -775,7 +878,10 @@ public partial class GameManager : Node2D
         // Update stats periodically
         UpdateStats(delta);
 
-        // Request redraw
+        // Update entity MultiMesh buffers for rendering
+        UpdateEntityMultiMeshes();
+
+        // Request redraw (for terrain and debug overlay)
         QueueRedraw();
     }
 
@@ -933,8 +1039,7 @@ public partial class GameManager : Node2D
             }
         }
 
-        // Draw entities
-        DrawEntities();
+        // Entities are rendered via MultiMeshInstance2D children (updated in _Process)
 
         // Draw debug info (in screen space)
         DrawDebugInfo();
@@ -942,8 +1047,34 @@ public partial class GameManager : Node2D
 
     private void DrawChunk(Chunk chunk)
     {
+        var key = (chunk.ChunkX, chunk.ChunkY);
+
+        // Check if we need to rebuild this chunk's texture
+        bool needsRebuild = !_chunkTextures.ContainsKey(key) ||
+                            _worldManager.DirtyChunks.Contains(key) ||
+                            _dirtyChunks.Contains(key);
+
+        if (needsRebuild)
+        {
+            _chunkTextures[key] = RenderChunkTexture(chunk);
+            _worldManager.DirtyChunks.Remove(key);
+            _dirtyChunks.Remove(key);
+        }
+
+        // Draw the cached texture as a single rect
         float chunkWorldX = chunk.ChunkX * ChunkSize * TileSize;
         float chunkWorldY = chunk.ChunkY * ChunkSize * TileSize;
+        float chunkPixelSize = ChunkSize * TileSize;
+
+        DrawTextureRect(_chunkTextures[key],
+            new Rect2(chunkWorldX, chunkWorldY, chunkPixelSize, chunkPixelSize),
+            false);
+    }
+
+    private ImageTexture RenderChunkTexture(Chunk chunk)
+    {
+        // Create an Image with one pixel per tile, then let Godot scale it up
+        var image = Image.CreateEmpty(chunk.Size, chunk.Size, false, Image.Format.Rgba8);
 
         for (int ly = 0; ly < chunk.Size; ly++)
         {
@@ -951,18 +1082,46 @@ public partial class GameManager : Node2D
             {
                 var tileType = chunk.GetTile(lx, ly);
                 var color = Chunk.GetTileColor(tileType);
-
-                float x = chunkWorldX + lx * TileSize;
-                float y = chunkWorldY + ly * TileSize;
-
-                DrawRect(new Rect2(x, y, TileSize, TileSize), color);
+                image.SetPixel(lx, ly, color);
             }
         }
+
+        var texture = ImageTexture.CreateFromImage(image);
+        return texture;
     }
 
-    private void DrawEntities()
+    private void UpdateEntityMultiMeshes()
     {
+        if (_camera == null) return;
+
         const ComponentFlags required = ComponentFlags.Position | ComponentFlags.Renderable;
+
+        // Compute visible world bounds for frustum culling
+        var viewportSize = GetViewportRect().Size;
+        var cameraPos = _camera.Position;
+        var zoom = _camera.Zoom;
+        float halfW = viewportSize.X / (2 * zoom.X);
+        float halfH = viewportSize.Y / (2 * zoom.Y);
+        float cullMinX = cameraPos.X - halfW;
+        float cullMaxX = cameraPos.X + halfW;
+        float cullMinY = cameraPos.Y - halfH;
+        float cullMaxY = cameraPos.Y + halfH;
+
+        var circleMM = _circleMMI.Multimesh;
+        var triMM = _triangleMMI.Multimesh;
+        var squareMM = _squareMMI.Multimesh;
+
+        // Pre-grow capacity if total entity count exceeds current buffers
+        // (avoids mid-loop resize which clears instance data)
+        int totalEntities = _entityManager.EntityCount;
+        if (circleMM.InstanceCount < totalEntities)
+            circleMM.InstanceCount = totalEntities;
+        if (triMM.InstanceCount < totalEntities)
+            triMM.InstanceCount = totalEntities;
+        if (squareMM.InstanceCount < totalEntities)
+            squareMM.InstanceCount = totalEntities;
+
+        int circleIdx = 0, triIdx = 0, squareIdx = 0;
 
         foreach (int entity in _entityManager.Query(required))
         {
@@ -972,30 +1131,38 @@ public partial class GameManager : Node2D
             float screenX = pos.X * TileSize;
             float screenY = pos.Y * TileSize;
 
+            // Frustum cull: skip entities outside the visible viewport
+            float margin = rend.Size * 2f;
+            if (screenX < cullMinX - margin || screenX > cullMaxX + margin ||
+                screenY < cullMinY - margin || screenY > cullMaxY + margin)
+                continue;
+
+            var transform = new Transform2D(0f, new Vector2(rend.Size, rend.Size), 0f,
+                new Vector2(screenX, screenY));
+
             switch (rend.Shape)
             {
                 case ShapeType.Circle:
-                    DrawCircle(new Vector2(screenX, screenY), rend.Size, rend.Color);
+                    circleMM.SetInstanceTransform2D(circleIdx, transform);
+                    circleMM.SetInstanceColor(circleIdx, rend.Color);
+                    circleIdx++;
                     break;
                 case ShapeType.Triangle:
-                    DrawTriangle(new Vector2(screenX, screenY), rend.Size, rend.Color);
+                    triMM.SetInstanceTransform2D(triIdx, transform);
+                    triMM.SetInstanceColor(triIdx, rend.Color);
+                    triIdx++;
                     break;
                 case ShapeType.Square:
-                    DrawRect(new Rect2(screenX - rend.Size / 2, screenY - rend.Size / 2, rend.Size, rend.Size), rend.Color);
+                    squareMM.SetInstanceTransform2D(squareIdx, transform);
+                    squareMM.SetInstanceColor(squareIdx, rend.Color);
+                    squareIdx++;
                     break;
             }
         }
-    }
 
-    private void DrawTriangle(Vector2 center, float size, Color color)
-    {
-        var points = new Vector2[]
-        {
-            center + new Vector2(0, -size),
-            center + new Vector2(-size * 0.866f, size * 0.5f),
-            center + new Vector2(size * 0.866f, size * 0.5f)
-        };
-        DrawPolygon(points, new Color[] { color, color, color });
+        circleMM.VisibleInstanceCount = circleIdx;
+        triMM.VisibleInstanceCount = triIdx;
+        squareMM.VisibleInstanceCount = squareIdx;
     }
 
     private void DrawDebugInfo()
