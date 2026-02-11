@@ -758,10 +758,9 @@ public static class SpeciesRegistry
             },
             AllowedSpawnTiles = new List<TileType> { TileType.Arid, TileType.Sand },
 
-            // Feeding - feeds from dry tiles
+            // Feeding — Sectids do NOT graze; they must hunt to survive
+            // (ravenous swarming opportunists that eat anything that moves)
             CanGraze = false,
-            FeedTiles = new List<TileType> { TileType.Arid, TileType.Sand },
-            FeedNutrition = 0.35f,
 
             // Terraform - decreases moisture
             TerraformDir = TerraformDirection.Drier,
@@ -772,8 +771,10 @@ public static class SpeciesRegistry
             // Trophic - tiny insects, hunt in packs — eat anything that moves
             // No PreferredPrey: Sectids are pure opportunists, targeting nearest viable prey
             BodyMass = 0.5f,
-            SoloHuntMaxRatio = 1.0f,       // Solo Sectid can hunt spores
+            SoloHuntMaxRatio = 2.0f,       // Solo Sectid can hunt prey up to mass 1.0 (rabbits)
             PackHuntMassExponent = 0.7f,    // Sub-linear pack scaling
+            // Pack of 3: effective 1.08 × 2.0 = 2.16 → rabbits easily
+            // Pack of 8: effective 2.38 × 2.0 = 4.76 → deer, shroomers
 
             // Visuals - orange insects
             BaseColor = new Color(0.86f, 0.55f, 0.16f),

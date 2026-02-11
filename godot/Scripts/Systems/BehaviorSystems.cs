@@ -497,12 +497,24 @@ public sealed class HuntingSystem : ISystem
         _entitiesToKill.Clear();
         _groupTargets.Clear();
 
-        // Update spatial hash for all prey
+        // Update spatial hash for all prey (targets for hunting)
         const ComponentFlags preyRequired = ComponentFlags.Position | ComponentFlags.Prey;
         foreach (int entity in em.Query(preyRequired))
         {
             ref var pos = ref em.Positions[entity];
             _spatialHash.Update(entity, pos.X, pos.Y);
+        }
+
+        // Also update predator-only entities for pack coordination detection
+        // (prey-predators like Sectids are already updated above)
+        const ComponentFlags predPosRequired = ComponentFlags.Position | ComponentFlags.Predator | ComponentFlags.Hunger;
+        foreach (int entity in em.Query(predPosRequired))
+        {
+            if (!em.HasComponents(entity, ComponentFlags.Prey))
+            {
+                ref var pos = ref em.Positions[entity];
+                _spatialHash.Update(entity, pos.X, pos.Y);
+            }
         }
 
         // First pass: Any pack member with a target shares it with the group
@@ -638,11 +650,20 @@ public sealed class HuntingSystem : ISystem
 
                     isPack = nearbyPackCount > 0;
 
-                    // If alone, reset pack state to hunt solo
+                    // If alone and not already committed to a pack hunt, reset to solo
                     if (!isPack)
                     {
-                        predator.Role = PackRole.None;
-                        predator.Phase = PackPhase.Idle;
+                        if (predator.HasTarget && predator.Role != PackRole.None)
+                        {
+                            // Already committed to a pack hunt — maintain pack state
+                            // even if temporarily out of coordination range (e.g., flanking)
+                            isPack = true;
+                        }
+                        else
+                        {
+                            predator.Role = PackRole.None;
+                            predator.Phase = PackPhase.Idle;
+                        }
                     }
                 }
 
@@ -699,11 +720,20 @@ public sealed class HuntingSystem : ISystem
                     if (preyMass > maxPreyMass)
                         continue;  // Too large to hunt
 
-                    // Skip species marked as unhuntable by predators (e.g. Faelings)
+                    // Skip same-species targets (no cannibalism) and unhuntable species
                     if (em.HasComponents(preyEntity, ComponentFlags.Species))
                     {
                         ref var preySpecies = ref em.Species[preyEntity];
                         var preyDef = SpeciesRegistry.GetById(preySpecies.SpeciesId);
+
+                        // Don't hunt your own kind
+                        if (em.HasComponents(entity, ComponentFlags.Species))
+                        {
+                            ref var mySpecies = ref em.Species[entity];
+                            if (preySpecies.SpeciesId == mySpecies.SpeciesId)
+                                continue;
+                        }
+
                         if (preyDef.UnhuntableByPredators
                             && speciesDef.Diet == DietType.Carnivore)
                             continue;  // Faelings can't be hunted by carnivores
@@ -770,6 +800,14 @@ public sealed class HuntingSystem : ISystem
                 {
                     if (!em.IsAlive(preyEntity) || !em.HasComponents(preyEntity, ComponentFlags.Prey))
                         continue;
+
+                    // Don't track your own species
+                    if (em.HasComponents(entity, ComponentFlags.Species) &&
+                        em.HasComponents(preyEntity, ComponentFlags.Species))
+                    {
+                        if (em.Species[entity].SpeciesId == em.Species[preyEntity].SpeciesId)
+                            continue;
+                    }
 
                     ref var preyPos2 = ref em.Positions[preyEntity];
                     float trackDistSq = MathUtils.DistanceSquared(pos.X, pos.Y, preyPos2.X, preyPos2.Y);
