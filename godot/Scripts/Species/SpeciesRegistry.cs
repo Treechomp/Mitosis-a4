@@ -697,7 +697,7 @@ public static class SpeciesRegistry
             HuntThreshold = 0.75f,
             TrackingHungerThreshold = 0.5f,
             TrackingRange = 80f,
-            PackCoordinationRadius = 8f,
+            PackCoordinationRadius = 12f,  // Wide swarm coordination
             PackShareRadius = 10f,
 
             // Reproduction — via nests only (NestSystem handles this)
@@ -774,7 +774,6 @@ public static class SpeciesRegistry
             BodyMass = 0.5f,
             SoloHuntMaxRatio = 2.5f,       // Solo: prey up to mass 1.25 (rabbits)
             PackHuntMassExponent = 0.8f,    // Stronger pack scaling (colony bravery)
-            PackCoordinationRadius = 12f,   // Wider swarm coordination
             // Swarm of 3: 0.5 × 3^0.8 × 2.5 = 3.0  → foxes
             // Swarm of 5: 0.5 × 5^0.8 × 2.5 = 4.5  → wolves (3.5), deer (4.0)
             // Swarm of 8: 0.5 × 8^0.8 × 2.5 = 6.6  → wolves comfortably

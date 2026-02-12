@@ -723,7 +723,8 @@ public sealed class HuntingSystem : ISystem
                         {
                             // Swarm: count ALL nearby same-species (colony-wide bravery)
                             if (em.HasComponents(other, ComponentFlags.Species) &&
-                                em.Species[other].SpeciesId == species.SpeciesId)
+                                em.HasComponents(entity, ComponentFlags.Species) &&
+                                em.Species[other].SpeciesId == em.Species[entity].SpeciesId)
                                 packSize++;
                         }
                         else
