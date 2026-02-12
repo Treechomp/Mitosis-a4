@@ -136,13 +136,26 @@ public sealed class SporeSystem : ISystem
             ref var growth = ref em.Growths[entity];
             if (growth.CurrentScale >= growth.MaxScale) continue;
 
+            float prevScale = growth.CurrentScale;
             growth.CurrentScale = MathF.Min(growth.MaxScale, growth.CurrentScale + growth.GrowthRate);
 
-            // Update visual size
+            // Update visual size and scale HP with growth
             ref var rend = ref em.Renderables[entity];
             var speciesDef = GetSpeciesDef(em, entity);
             if (speciesDef != null)
+            {
                 rend.Size = speciesDef.BaseSize * growth.CurrentScale;
+
+                // Scale max HP with growth — growing adds HP but doesn't heal damage
+                if (em.HasComponents(entity, ComponentFlags.Energy))
+                {
+                    ref var energy = ref em.Energies[entity];
+                    float newMax = speciesDef.MaxEnergy * growth.CurrentScale;
+                    float maxDelta = newMax - energy.Max;
+                    energy.Max = newMax;
+                    energy.Current += maxDelta; // Add new HP capacity, preserve damage taken
+                }
+            }
         }
 
         // === SHROOMER AOE ATTACK (scales with growth) ===
