@@ -210,10 +210,10 @@ public static class SpeciesRegistry
             MaxLifespan = 15000,
             MaturityAge = 1000,
 
-            // Reproduction - breeds quickly
+            // Reproduction - breeds moderately (controlled by predation pressure)
             ReproHungerThreshold = 180f,
             ReproEnergyThreshold = 70f,
-            ReproCooldown = 300,
+            ReproCooldown = 600,   // 10 sec (was 5 sec — halved breeding rate)
 
             // Social - loose groups
             GroupAffinity = 0.4f,
@@ -243,9 +243,9 @@ public static class SpeciesRegistry
             SeparationRadius = 1.5f,
             SeparationStrength = 0.02f,
 
-            // Reproduction costs - small, breeds fast
-            ReproHungerCost = 25f,
-            ReproEnergyCost = 20f,
+            // Reproduction costs - meaningful investment per litter
+            ReproHungerCost = 45f,
+            ReproEnergyCost = 30f,
             OffspringCount = 2,
             SpawnRadius = 2f,
 
@@ -666,9 +666,9 @@ public static class SpeciesRegistry
             // Pack of 15: 0.5 * 15^0.7 = 3.52 — can threaten Shroomers
             HuntRange = 8f,
             AttackRange = 0.5f,
-            AttackPower = 8f,     // Weak individually
+            AttackPower = 12f,    // Swarm overwhelms through numbers
             AttackCooldown = 12,
-            BaseHuntSpeed = 0.09f,
+            BaseHuntSpeed = 0.11f,  // Fast closing speed for swarm
             PackHunterChance = 0.9f,  // Almost always hunt in groups
 
             // Fleeing - fast
@@ -684,9 +684,9 @@ public static class SpeciesRegistry
             FearVigilanceDuration = 80,
             DefaultFearResponse = FearResponse.Panic,
 
-            // Survival - fast metabolism, moderate lifespan
+            // Survival - moderate metabolism, moderate lifespan
             MaxHunger = 165f,
-            HungerDecayRate = 0.07f,
+            HungerDecayRate = 0.05f,  // Slower starvation (no tile feeding backup)
             MaxLifespan = 25000,
             MaturityAge = 800,   // Mature quickly
 

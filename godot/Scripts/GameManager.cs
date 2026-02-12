@@ -104,7 +104,7 @@ public partial class GameManager : Node2D
         _systems.Add(new HuntingSystem(spatialHash, _worldManager));
         _systems.Add(new FleeingSystem(spatialHash, _worldManager));
         _systems.Add(new AgingSystem());
-        _systems.Add(new ReproductionSystem(_worldManager, MaxPopulation));
+        _systems.Add(new ReproductionSystem(_worldManager, MaxPopulation, spatialHash));
         _systems.Add(new TerraformSystem(_worldManager));
 
         // Faction systems

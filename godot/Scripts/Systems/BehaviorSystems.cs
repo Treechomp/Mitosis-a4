@@ -956,9 +956,22 @@ public sealed class HuntingSystem : ISystem
                     // Pack tactics based on role and phase
                     if (isPack && predator.Role != PackRole.None)
                     {
-                        // Check if prey is isolated from herd
-                        bool preyIsolated = IsPreyIsolated(predator.TargetEntity, em);
-                        ApplyPackTactics(entity, ref pos, ref vel, ref predator, preyPos.X, preyPos.Y, dist, huntSpeed, em, preyIsolated, speciesDef);
+                        // Swarm hunters (small body mass) skip positioning/retreat tactics
+                        // and just rush directly — prey doesn't flee from them anyway
+                        if (speciesDef.BodyMass < 1.0f)
+                        {
+                            // Direct swarm chase — all rush together
+                            var dir = MathUtils.Normalize(dx, dy);
+                            float swarmSpeed = huntSpeed * 1.2f;
+                            vel.Dx = dir.X * swarmSpeed;
+                            vel.Dy = dir.Y * swarmSpeed;
+                        }
+                        else
+                        {
+                            // Check if prey is isolated from herd
+                            bool preyIsolated = IsPreyIsolated(predator.TargetEntity, em);
+                            ApplyPackTactics(entity, ref pos, ref vel, ref predator, preyPos.X, preyPos.Y, dist, huntSpeed, em, preyIsolated, speciesDef);
+                        }
                     }
                     else
                     {
@@ -1253,8 +1266,8 @@ public sealed class HuntingSystem : ISystem
             ref var carrier = ref em.FoodCarriers[entity];
             float foodGain = MathF.Min(nutrition, carrier.MaxCarry - carrier.FoodCarried);
             carrier.FoodCarried += foodGain;
-            // Sectids eat a small portion themselves
-            hunger.Current = MathF.Min(hunger.Max, hunger.Current + nutrition * 0.3f);
+            // Sectids eat half themselves (need sustenance since they can't graze)
+            hunger.Current = MathF.Min(hunger.Max, hunger.Current + nutrition * 0.5f);
         }
         else
         {
@@ -2046,14 +2059,18 @@ public sealed class CollisionSystem : ISystem
 public sealed class ReproductionSystem : ISystem
 {
     private readonly World.WorldManager _worldManager;
+    private readonly SpatialHash _spatialHash;
     private readonly int _maxPopulation;
     private readonly Random _rng = new();
     private readonly List<(float x, float y, SpeciesType speciesType, int speciesId)> _toSpawn = new(32);
+    private readonly List<int> _nearbyBuffer = new(64);
 
-    public ReproductionSystem(World.WorldManager worldManager, int maxPopulation = 500)
+    public ReproductionSystem(World.WorldManager worldManager, int maxPopulation = 500,
+                               SpatialHash? spatialHash = null)
     {
         _worldManager = worldManager;
         _maxPopulation = maxPopulation;
+        _spatialHash = spatialHash!;
     }
 
     public void Process(EntityManager em)
@@ -2114,6 +2131,28 @@ public sealed class ReproductionSystem : ISystem
                 break;
 
             ref var pos = ref em.Positions[entity];
+
+            // Local density suppression — skip if too many same-species nearby
+            // Prevents exponential population explosions in well-fed areas
+            if (_spatialHash != null)
+            {
+                var speciesDef = SpeciesRegistry.GetById(species.SpeciesId);
+                float densityRadius = speciesDef.SocialRadius > 0 ? speciesDef.SocialRadius * 1.5f : 15f;
+                _nearbyBuffer.Clear();
+                _spatialHash.QueryRadius(pos.X, pos.Y, densityRadius, _nearbyBuffer);
+                int sameSpeciesCount = 0;
+                foreach (int other in _nearbyBuffer)
+                {
+                    if (other == entity || !em.IsAlive(other)) continue;
+                    if (!em.HasComponents(other, ComponentFlags.Species)) continue;
+                    if (em.Species[other].SpeciesId == species.SpeciesId)
+                        sameSpeciesCount++;
+                }
+                // Suppress reproduction when local density exceeds 2× preferred group size
+                float maxLocal = MathF.Max(6f, speciesDef.PreferredGroupSize * 2f);
+                if (sameSpeciesCount >= (int)maxLocal)
+                    continue;
+            }
 
             // Find spawn position
             float spawnX = pos.X + ((float)_rng.NextDouble() * 2 - 1) * reproduction.SpawnRadius;
