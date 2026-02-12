@@ -1306,10 +1306,11 @@ public sealed class FleeingSystem : ISystem
     private readonly WorldManager? _worldManager;
     private readonly Random _rng = new();
 
-    // Pre-allocated arrays for predator positions
+    // Pre-allocated arrays for predator positions and species
     private float[] _predatorXs = new float[128];
     private float[] _predatorYs = new float[128];
     private float[] _predatorDistSq = new float[128];  // Store squared distances
+    private int[] _predatorSpeciesIds = new int[128];   // Species ID per predator (for same-species filtering)
     private int _predatorCount;
 
     public FleeingSystem(SpatialHash spatialHash, WorldManager? worldManager = null)
@@ -1320,7 +1321,7 @@ public sealed class FleeingSystem : ISystem
 
     public void Process(EntityManager em)
     {
-        // Collect predator positions
+        // Collect predator positions with species info
         const ComponentFlags predatorRequired = ComponentFlags.Position | ComponentFlags.Predator;
         _predatorCount = 0;
 
@@ -1333,11 +1334,14 @@ public sealed class FleeingSystem : ISystem
                 Array.Resize(ref _predatorXs, newSize);
                 Array.Resize(ref _predatorYs, newSize);
                 Array.Resize(ref _predatorDistSq, newSize);
+                Array.Resize(ref _predatorSpeciesIds, newSize);
             }
 
             ref var pos = ref em.Positions[entity];
             _predatorXs[_predatorCount] = pos.X;
             _predatorYs[_predatorCount] = pos.Y;
+            _predatorSpeciesIds[_predatorCount] = em.HasComponents(entity, ComponentFlags.Species)
+                ? em.Species[entity].SpeciesId : 0;
             _predatorCount++;
 
             // Update spatial hash for predators
@@ -1349,6 +1353,7 @@ public sealed class FleeingSystem : ISystem
 
         var predXSpan = _predatorXs.AsSpan(0, _predatorCount);
         var predYSpan = _predatorYs.AsSpan(0, _predatorCount);
+        var predSpeciesSpan = _predatorSpeciesIds.AsSpan(0, _predatorCount);
 
         foreach (int entity in em.Query(preyRequired))
         {
@@ -1366,13 +1371,30 @@ public sealed class FleeingSystem : ISystem
             ref var vel = ref em.Velocities[entity];
             ref var wander = ref em.Wanders[entity];
 
+            // Skip flee processing for entities actively hunting (e.g., Sectids chasing prey)
+            // HuntingSystem already set their velocity — don't override with fleeing
+            if (em.HasComponents(entity, ComponentFlags.Predator))
+            {
+                ref var predator = ref em.Predators[entity];
+                if (predator.HasTarget)
+                {
+                    prey.IsFleeing = false;
+                    continue;
+                }
+            }
+
             float fleeRangeSq = prey.FleeRange * prey.FleeRange;
+
+            // Get this prey's species ID to filter out same-species "threats"
+            // (e.g., Sectids shouldn't flee from other Sectids)
+            int mySpeciesId = em.HasComponents(entity, ComponentFlags.Species)
+                ? em.Species[entity].SpeciesId : 0;
 
             // Calculate flee direction and find closest threat distance
             var (fleeDir, hasThreat, closestDistSq) = CalculateFleeVectorWithDistance(
                 pos.X, pos.Y,
-                predXSpan, predYSpan,
-                fleeRangeSq);
+                predXSpan, predYSpan, predSpeciesSpan,
+                fleeRangeSq, mySpeciesId);
 
             // Update fear state if entity has Fear component
             bool hasFear = em.HasComponents(entity, ComponentFlags.Fear);
@@ -1461,11 +1483,12 @@ public sealed class FleeingSystem : ISystem
 
     /// <summary>
     /// Calculate flee vector and return closest threat distance squared.
+    /// Filters out predators of the same species (e.g., Sectids don't flee from Sectids).
     /// </summary>
     private (Vector2 dir, bool hasThreat, float closestDistSq) CalculateFleeVectorWithDistance(
         float x, float y,
-        ReadOnlySpan<float> predX, ReadOnlySpan<float> predY,
-        float maxDistSq)
+        ReadOnlySpan<float> predX, ReadOnlySpan<float> predY, ReadOnlySpan<int> predSpecies,
+        float maxDistSq, int mySpeciesId)
     {
         float fleeX = 0, fleeY = 0;
         float closestDistSq = float.MaxValue;
@@ -1473,6 +1496,10 @@ public sealed class FleeingSystem : ISystem
 
         for (int i = 0; i < predX.Length; i++)
         {
+            // Skip same-species predators (swarm mates are not threats)
+            if (mySpeciesId != 0 && predSpecies[i] == mySpeciesId)
+                continue;
+
             float dx = x - predX[i];
             float dy = y - predY[i];
             float distSq = dx * dx + dy * dy;
