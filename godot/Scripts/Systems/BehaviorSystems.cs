@@ -584,6 +584,21 @@ public sealed class HuntingSystem : ISystem
                 predator.Role = PackRole.None;
             }
 
+            // Abandon target if it's too far away (3× hunt range)
+            // Prevents cross-map chases when prey roams/flees far from predator
+            if (predator.HasTarget && em.IsAlive(predator.TargetEntity))
+            {
+                float abandonRange = predator.HuntRange * 3f;
+                ref var targetPos = ref em.Positions[predator.TargetEntity];
+                float abandonDistSq = MathUtils.DistanceSquared(pos.X, pos.Y, targetPos.X, targetPos.Y);
+                if (abandonDistSq > abandonRange * abandonRange)
+                {
+                    predator.TargetEntity = -1;
+                    predator.Phase = PackPhase.Idle;
+                    predator.Role = PackRole.None;
+                }
+            }
+
             float hungerRatio = hunger.Current / hunger.Max;
 
             // Stop hunting if full
@@ -668,12 +683,19 @@ public sealed class HuntingSystem : ISystem
                 }
 
                 // Adopt pack target — any member's chase triggers group hunt
+                // But only if the target is within reasonable range (3× hunt range)
                 if (isPack && _groupTargets.TryGetValue(groupId, out int packTarget) && em.IsAlive(packTarget))
                 {
                     if (!predator.HasTarget || predator.TargetEntity != packTarget)
                     {
-                        predator.TargetEntity = packTarget;
-                        AssignPackRole(entity, packTarget, em, ref predator, ref social, speciesDef);
+                        ref var ptPos = ref em.Positions[packTarget];
+                        float packTargetDistSq = MathUtils.DistanceSquared(pos.X, pos.Y, ptPos.X, ptPos.Y);
+                        float adoptRange = predator.HuntRange * 3f;
+                        if (packTargetDistSq <= adoptRange * adoptRange)
+                        {
+                            predator.TargetEntity = packTarget;
+                            AssignPackRole(entity, packTarget, em, ref predator, ref social, speciesDef);
+                        }
                     }
                 }
             }

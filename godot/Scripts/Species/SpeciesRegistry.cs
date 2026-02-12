@@ -684,10 +684,10 @@ public static class SpeciesRegistry
             FearVigilanceDuration = 80,
             DefaultFearResponse = FearResponse.Panic,
 
-            // Survival - short-lived, fast metabolism
+            // Survival - fast metabolism, moderate lifespan
             MaxHunger = 165f,
             HungerDecayRate = 0.07f,
-            MaxLifespan = 20000,
+            MaxLifespan = 25000,
             MaturityAge = 800,   // Mature quickly
 
             // Survival - fragile individually
@@ -714,7 +714,7 @@ public static class SpeciesRegistry
             NestSpawnDuration = 200f,
             NestEnergy = 200f,
             FoodDeliveryRange = 4f,
-            CarryingSpeed = 0.08f,
+            CarryingSpeed = 0.11f,  // Faster than hunt speed — motivated to deliver
 
             // Separation - tiny, cluster tight
             SeparationRadius = 1.5f,

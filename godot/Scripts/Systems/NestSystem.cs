@@ -195,12 +195,12 @@ public sealed class NestSystem : ISystem
 
         foreach (int entity in em.Query(carrierRequired))
         {
-            // LOD gate: skip food carrier AI for distant Sectids (Statistical+)
-            // Nest economy needs food delivery to produce new Sectids
+            // LOD gate: skip food carrier AI only at Aggregate distance
+            // Must match HuntingSystem gate — if Sectids can hunt, they must deliver food
             if (em.HasComponents(entity, ComponentFlags.SimulationLOD))
             {
                 ref var lod = ref em.SimulationLODs[entity];
-                if (lod.Level >= LODLevel.Statistical)
+                if (lod.Level >= LODLevel.Aggregate)
                     continue;
             }
 
