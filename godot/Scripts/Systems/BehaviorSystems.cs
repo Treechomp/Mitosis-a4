@@ -710,19 +710,31 @@ public sealed class HuntingSystem : ISystem
                 // Calculate effective hunting mass (solo or pack)
                 float effectiveMass = speciesDef.BodyMass;
                 float maxHuntRatio = speciesDef.SoloHuntMaxRatio;
+                bool isSwarm = speciesDef.SwarmHunter;
                 if (isPack)
                 {
-                    // Count nearby pack members for effective mass
+                    // Count nearby pack/swarm members for effective mass
                     int packSize = 1;
                     foreach (int other in _nearbyEntities)
                     {
                         if (other == entity || !em.IsAlive(other))
                             continue;
-                        if (!em.HasComponents(other, ComponentFlags.Predator | ComponentFlags.Social))
-                            continue;
-                        ref var otherSocial = ref em.Socials[other];
-                        if (otherSocial.GroupId == groupId)
-                            packSize++;
+                        if (isSwarm)
+                        {
+                            // Swarm: count ALL nearby same-species (colony-wide bravery)
+                            if (em.HasComponents(other, ComponentFlags.Species) &&
+                                em.Species[other].SpeciesId == species.SpeciesId)
+                                packSize++;
+                        }
+                        else
+                        {
+                            // Traditional pack: same-group members only
+                            if (!em.HasComponents(other, ComponentFlags.Predator | ComponentFlags.Social))
+                                continue;
+                            ref var otherSocial = ref em.Socials[other];
+                            if (otherSocial.GroupId == groupId)
+                                packSize++;
+                        }
                     }
                     float exponent = speciesDef.PackHuntMassExponent;
                     effectiveMass *= MathF.Pow(packSize, exponent);
@@ -734,7 +746,15 @@ public sealed class HuntingSystem : ISystem
 
                 foreach (int preyEntity in _nearbyEntities)
                 {
-                    if (!em.IsAlive(preyEntity) || !em.HasComponents(preyEntity, ComponentFlags.Prey))
+                    if (!em.IsAlive(preyEntity))
+                        continue;
+
+                    // Swarm hunters can target any living creature (including predators)
+                    // Normal hunters can only target entities with the Prey flag
+                    bool isValidTarget = em.HasComponents(preyEntity, ComponentFlags.Prey);
+                    if (!isValidTarget && isSwarm)
+                        isValidTarget = em.HasComponents(preyEntity, ComponentFlags.Energy | ComponentFlags.Species);
+                    if (!isValidTarget)
                         continue;
 
                     // Size-based eligibility: prey must not be too large
@@ -820,7 +840,14 @@ public sealed class HuntingSystem : ISystem
 
                 foreach (int preyEntity in _nearbyEntities)
                 {
-                    if (!em.IsAlive(preyEntity) || !em.HasComponents(preyEntity, ComponentFlags.Prey))
+                    if (!em.IsAlive(preyEntity))
+                        continue;
+
+                    // Swarm hunters can track any living creature
+                    bool isTrackable = em.HasComponents(preyEntity, ComponentFlags.Prey);
+                    if (!isTrackable && speciesDef.SwarmHunter)
+                        isTrackable = em.HasComponents(preyEntity, ComponentFlags.Energy | ComponentFlags.Species);
+                    if (!isTrackable)
                         continue;
 
                     // Don't track your own species
@@ -935,7 +962,8 @@ public sealed class HuntingSystem : ISystem
                     predator.CurrentCooldown = predator.AttackCooldown;
 
                     // After attacking, retreat only if prey still in herd (pack tactic to disperse)
-                    if (isPack && predator.Phase == PackPhase.Rushing)
+                    // Swarm hunters never retreat — they just keep biting
+                    if (isPack && !speciesDef.SwarmHunter && predator.Phase == PackPhase.Rushing)
                     {
                         bool preyIsolated = IsPreyIsolated(predator.TargetEntity, em);
                         if (!preyIsolated)

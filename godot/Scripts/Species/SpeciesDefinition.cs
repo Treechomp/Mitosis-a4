@@ -71,6 +71,10 @@ public sealed class SpeciesDefinition
     /// <summary>Ticks spent retreating after a pack attack pass.</summary>
     public int RetreatDuration { get; init; } = 20;
 
+    /// <summary>Swarm hunter: counts all nearby same-species for effective mass (not just same group),
+    /// can target any living creature (including predators), and never retreats mid-hunt.</summary>
+    public bool SwarmHunter { get; init; } = false;
+
     // === FLEEING (Prey) ===
     public float FleeRange { get; init; } = 6f;
     public float FleeSpeedMultiplier { get; init; } = 2f;

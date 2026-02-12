@@ -770,11 +770,15 @@ public static class SpeciesRegistry
 
             // Trophic - tiny insects, hunt in packs — eat anything that moves
             // No PreferredPrey: Sectids are pure opportunists, targeting nearest viable prey
+            SwarmHunter = true,            // Colony-wide bravery, can target predators
             BodyMass = 0.5f,
-            SoloHuntMaxRatio = 2.0f,       // Solo Sectid can hunt prey up to mass 1.0 (rabbits)
-            PackHuntMassExponent = 0.7f,    // Sub-linear pack scaling
-            // Pack of 3: effective 1.08 × 2.0 = 2.16 → rabbits easily
-            // Pack of 8: effective 2.38 × 2.0 = 4.76 → deer, shroomers
+            SoloHuntMaxRatio = 2.5f,       // Solo: prey up to mass 1.25 (rabbits)
+            PackHuntMassExponent = 0.8f,    // Stronger pack scaling (colony bravery)
+            PackCoordinationRadius = 12f,   // Wider swarm coordination
+            // Swarm of 3: 0.5 × 3^0.8 × 2.5 = 3.0  → foxes
+            // Swarm of 5: 0.5 × 5^0.8 × 2.5 = 4.5  → wolves (3.5), deer (4.0)
+            // Swarm of 8: 0.5 × 8^0.8 × 2.5 = 6.6  → wolves comfortably
+            // Swarm of 12: 0.5 × 12^0.8 × 2.5 = 9.2 → crocodiles (8.0)!
 
             // Visuals - orange insects
             BaseColor = new Color(0.86f, 0.55f, 0.16f),
