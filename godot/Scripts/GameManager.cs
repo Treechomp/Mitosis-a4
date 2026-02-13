@@ -784,7 +784,19 @@ public partial class GameManager : Node2D
                     chunk, 4, _rng, sectidDef);
                 if (positions.Count == 0) continue;
 
-                var (x, y, _, _) = positions[0];
+                // Find a position away from water (no beach nests)
+                int posIdx = -1;
+                for (int p = 0; p < positions.Count; p++)
+                {
+                    if (!_worldManager.HasWaterNearby(positions[p].x, positions[p].y, 3))
+                    {
+                        posIdx = p;
+                        break;
+                    }
+                }
+                if (posIdx < 0) continue; // All positions too close to water
+
+                var (x, y, _, _) = positions[posIdx];
                 int nestEntity = _nestSystem.SpawnNest(_entityManager, x, y, colonyId);
                 nestsThisColony++;
                 totalNests++;

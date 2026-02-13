@@ -119,6 +119,54 @@ public sealed class WorldManager
     }
 
     /// <summary>
+    /// Check if any water tiles exist within the given radius of a position.
+    /// </summary>
+    public bool HasWaterNearby(float worldX, float worldY, int radius)
+    {
+        int cx = (int)worldX;
+        int cy = (int)worldY;
+        for (int dx = -radius; dx <= radius; dx++)
+        {
+            for (int dy = -radius; dy <= radius; dy++)
+            {
+                if (GetTile(cx + dx, cy + dy).IsWater())
+                    return true;
+            }
+        }
+        return false;
+    }
+
+    /// <summary>
+    /// Count water tiles along a line from (x1,y1) to (x2,y2).
+    /// Returns the fraction of sampled tiles that are water (0.0 to 1.0).
+    /// Samples one tile per unit distance for efficiency.
+    /// </summary>
+    public float GetWaterFractionOnPath(float x1, float y1, float x2, float y2)
+    {
+        float dx = x2 - x1;
+        float dy = y2 - y1;
+        float dist = MathF.Sqrt(dx * dx + dy * dy);
+        if (dist < 1f) return 0f;
+
+        int steps = (int)dist; // Sample every ~1 tile
+        if (steps < 1) steps = 1;
+
+        float stepX = dx / steps;
+        float stepY = dy / steps;
+        int waterCount = 0;
+
+        for (int i = 0; i <= steps; i++)
+        {
+            float sx = x1 + stepX * i;
+            float sy = y1 + stepY * i;
+            if (GetTile(sx, sy).IsWater())
+                waterCount++;
+        }
+
+        return (float)waterCount / (steps + 1);
+    }
+
+    /// <summary>
     /// Convert world coordinates to chunk coordinates.
     /// </summary>
     public (int chunkX, int chunkY) WorldToChunk(float worldX, float worldY)

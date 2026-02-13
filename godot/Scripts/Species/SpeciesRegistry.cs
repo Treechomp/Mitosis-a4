@@ -448,6 +448,7 @@ public static class SpeciesRegistry
             Name = "Crocodile",
             Diet = DietType.Carnivore,
             DefaultSocialType = SocialType.Solitary,
+            SemiAquatic = true, // Crocs hunt through water freely
 
             // Movement - slow on land, ambush predator
             BaseWanderSpeed = 0.02f,

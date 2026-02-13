@@ -75,6 +75,10 @@ public sealed class SpeciesDefinition
     /// can target any living creature (including predators), and never retreats mid-hunt.</summary>
     public bool SwarmHunter { get; init; } = false;
 
+    /// <summary>Semi-aquatic predator: doesn't avoid water when hunting. Land predators
+    /// will reject prey targets with too much water on the path.</summary>
+    public bool SemiAquatic { get; init; } = false;
+
     // === FLEEING (Prey) ===
     public float FleeRange { get; init; } = 6f;
     public float FleeSpeedMultiplier { get; init; } = 2f;

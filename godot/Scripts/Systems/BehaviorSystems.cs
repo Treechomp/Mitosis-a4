@@ -797,6 +797,15 @@ public sealed class HuntingSystem : ISystem
                         float terrainPenalty = preyTile.GetAvoidanceWeight() * 50f;
                         terrainPenalty *= (1f - urgency * 0.7f);
                         score += terrainPenalty;
+
+                        // Land predators reject targets across water
+                        if (!speciesDef.SemiAquatic)
+                        {
+                            float waterFrac = _worldManager.GetWaterFractionOnPath(
+                                pos.X, pos.Y, preyPos.X, preyPos.Y);
+                            if (waterFrac > 0.15f)
+                                continue; // Too much water between us and prey
+                        }
                     }
 
                     // Preferred prey bias: familiar prey scores better (lower)
@@ -860,6 +869,16 @@ public sealed class HuntingSystem : ISystem
                     }
 
                     ref var preyPos2 = ref em.Positions[preyEntity];
+
+                    // Land predators skip tracking targets across water
+                    if (!speciesDef.SemiAquatic && _worldManager != null)
+                    {
+                        float waterFrac = _worldManager.GetWaterFractionOnPath(
+                            pos.X, pos.Y, preyPos2.X, preyPos2.Y);
+                        if (waterFrac > 0.15f)
+                            continue;
+                    }
+
                     float trackDistSq = MathUtils.DistanceSquared(pos.X, pos.Y, preyPos2.X, preyPos2.Y);
                     if (trackDistSq < bestTrackDistSq)
                     {
@@ -879,6 +898,10 @@ public sealed class HuntingSystem : ISystem
                     float trackSpeed = speciesDef.BaseHuntSpeed * 0.8f;
                     vel.Dx = trackDir.X * trackSpeed;
                     vel.Dy = trackDir.Y * trackSpeed;
+
+                    if (!speciesDef.SemiAquatic)
+                        SteerAroundWater(ref vel, pos.X, pos.Y);
+
                     continue;  // Skip normal hunt movement — we're just tracking
                 }
             }
@@ -1010,6 +1033,10 @@ public sealed class HuntingSystem : ISystem
                         vel.Dx = dir.X * huntSpeed;
                         vel.Dy = dir.Y * huntSpeed;
                     }
+
+                    // Land predators steer around water during pursuit
+                    if (!speciesDef.SemiAquatic)
+                        SteerAroundWater(ref vel, pos.X, pos.Y);
                 }
             }
         }
@@ -1302,6 +1329,70 @@ public sealed class HuntingSystem : ISystem
         else
         {
             hunger.Current = MathF.Min(hunger.Max, hunger.Current + nutrition);
+        }
+    }
+
+    /// <summary>
+    /// Steer velocity away from water tiles ahead. Checks 2 tiles in the movement
+    /// direction; if water is found, tries ±45° and ±90° offsets and picks the clearest.
+    /// </summary>
+    private void SteerAroundWater(ref Velocity vel, float posX, float posY)
+    {
+        if (_worldManager == null || (vel.Dx == 0 && vel.Dy == 0)) return;
+
+        float speed = MathF.Sqrt(vel.Dx * vel.Dx + vel.Dy * vel.Dy);
+        float nx = vel.Dx / speed;
+        float ny = vel.Dy / speed;
+
+        // Look ahead 2 tiles for water
+        bool waterAhead = false;
+        for (float d = 1f; d <= 2f; d += 1f)
+        {
+            if (_worldManager.GetTile(posX + nx * d, posY + ny * d).IsWater())
+            {
+                waterAhead = true;
+                break;
+            }
+        }
+        if (!waterAhead) return;
+
+        // Try offset angles and pick the clearest path
+        int bestWater = 3;
+        float bestAngle = 0f;
+        ReadOnlySpan<float> offsets = stackalloc float[]
+        {
+            MathF.PI / 4, -MathF.PI / 4,
+            MathF.PI / 2, -MathF.PI / 2
+        };
+
+        foreach (float angle in offsets)
+        {
+            float cos = MathF.Cos(angle);
+            float sin = MathF.Sin(angle);
+            float rnx = nx * cos - ny * sin;
+            float rny = nx * sin + ny * cos;
+
+            int waterCount = 0;
+            for (float d = 1f; d <= 2f; d += 1f)
+            {
+                if (_worldManager.GetTile(posX + rnx * d, posY + rny * d).IsWater())
+                    waterCount++;
+            }
+
+            if (waterCount < bestWater)
+            {
+                bestWater = waterCount;
+                bestAngle = angle;
+                if (waterCount == 0) break; // Clear path found
+            }
+        }
+
+        if (bestAngle != 0f)
+        {
+            float cos = MathF.Cos(bestAngle);
+            float sin = MathF.Sin(bestAngle);
+            vel.Dx = (nx * cos - ny * sin) * speed;
+            vel.Dy = (nx * sin + ny * cos) * speed;
         }
     }
 

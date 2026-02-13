@@ -178,9 +178,11 @@ public sealed class NestSystem : ISystem
             float y = originY + MathF.Sin(angle) * dist;
 
             var tile = _worldManager.GetTile(x, y);
-            // Nests only on dry tiles
+            // Nests only on dry tiles, away from water (no beach nests)
             if (tile == TileType.Arid || tile == TileType.Sand || tile == TileType.Grass)
             {
+                if (_worldManager.HasWaterNearby(x, y, 3))
+                    continue; // Too close to water — likely a beach
                 _pendingNests.Add((x, y, colonyId));
                 return;
             }
