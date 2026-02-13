@@ -210,6 +210,7 @@ public struct TerrainDiscomfort
     public float Threshold;         // Discomfort level that triggers behavior change
     public float DecayRate;         // How fast discomfort decays on comfortable terrain
     public float GrazingPressure;   // Extra discomfort when hungry and not on grazeable terrain (herbivores)
+    public bool IsEscaping;         // Hysteresis flag: true while actively escaping discomfort
 
     public TerrainDiscomfort(
         float threshold = 50f,
@@ -220,6 +221,7 @@ public struct TerrainDiscomfort
         Threshold = threshold;
         DecayRate = decayRate;
         GrazingPressure = grazingPressure;
+        IsEscaping = false;
     }
 
     public readonly bool IsUncomfortable => Current > 0;

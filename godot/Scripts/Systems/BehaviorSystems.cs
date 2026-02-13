@@ -216,11 +216,19 @@ public sealed class WanderSystem : ISystem
             // === Normal wander logic ===
 
             // Check if entity has high discomfort - prioritize escaping
+            // Uses hysteresis: enter escape at ratio > 0.5, exit at ratio < 0.2
             bool needsEscape = false;
             if (em.HasComponents(entity, ComponentFlags.TerrainDiscomfort))
             {
                 ref var discomfort = ref em.TerrainDiscomforts[entity];
-                if (discomfort.Ratio > 0.5f)  // More than half way to threshold
+
+                // Hysteresis: different thresholds for entering vs. exiting escape
+                if (!discomfort.IsEscaping && discomfort.Ratio > 0.5f)
+                    discomfort.IsEscaping = true;
+                else if (discomfort.IsEscaping && discomfort.Ratio < 0.2f)
+                    discomfort.IsEscaping = false;
+
+                if (discomfort.IsEscaping)
                 {
                     needsEscape = true;
                     // Find direction to escape (toward lowest avoidance terrain)
@@ -228,7 +236,7 @@ public sealed class WanderSystem : ISystem
                     if (escapeDir.LengthSquared() > 0.01f)
                     {
                         // Blend escape direction strongly with current direction
-                        float escapeUrgency = discomfort.Ratio;  // 0.5 to 1+
+                        float escapeUrgency = discomfort.Ratio;  // 0.2 to 1+
                         wander.CurrentDirection = (wander.CurrentDirection * (1 - escapeUrgency) +
                                                    escapeDir * escapeUrgency).Normalized();
                     }
@@ -1527,22 +1535,9 @@ public sealed class FleeingSystem : ISystem
             ref var vel = ref em.Velocities[entity];
             ref var wander = ref em.Wanders[entity];
 
-            // Skip flee processing for entities actively hunting (e.g., Sectids chasing prey)
-            // HuntingSystem already set their velocity — don't override with fleeing
-            if (em.HasComponents(entity, ComponentFlags.Predator))
-            {
-                ref var predator = ref em.Predators[entity];
-                if (predator.HasTarget)
-                {
-                    prey.IsFleeing = false;
-                    continue;
-                }
-            }
-
             float fleeRangeSq = prey.FleeRange * prey.FleeRange;
 
             // Get this prey's species ID to filter out same-species "threats"
-            // (e.g., Sectids shouldn't flee from other Sectids)
             int mySpeciesId = em.HasComponents(entity, ComponentFlags.Species)
                 ? em.Species[entity].SpeciesId : 0;
 
@@ -1552,7 +1547,7 @@ public sealed class FleeingSystem : ISystem
                 predXSpan, predYSpan, predSpeciesSpan,
                 fleeRangeSq, mySpeciesId);
 
-            // Update fear state if entity has Fear component
+            // Always update fear state — even while hunting
             bool hasFear = em.HasComponents(entity, ComponentFlags.Fear);
             FearResponse fearResponse = FearResponse.Flee;
             float fearRatio = 0f;
@@ -1564,22 +1559,15 @@ public sealed class FleeingSystem : ISystem
 
                 if (hasThreat)
                 {
-                    // Accumulate fear based on threat proximity
-                    // Closer = more fear accumulation
                     float proximityFactor = 1f - (closestDistSq / fleeRangeSq);
                     float fearIncrease = fear.AccumulationRate * proximityFactor;
                     fear.Current = MathF.Min(fear.Max, fear.Current + fearIncrease);
-
-                    // Enter vigilant state
-                    fear.VigilanceTicks = 100;  // Will stay alert after threat leaves
+                    fear.VigilanceTicks = 100;
                 }
                 else
                 {
-                    // Decay fear when safe
                     float decayRate = fear.IsVigilant ? fear.VigilanceDecay : fear.DecayRate;
                     fear.Current = MathF.Max(0, fear.Current - decayRate);
-
-                    // Decrement vigilance
                     if (fear.VigilanceTicks > 0)
                         fear.VigilanceTicks--;
                 }
@@ -1587,8 +1575,30 @@ public sealed class FleeingSystem : ISystem
                 fearRatio = fear.Ratio;
             }
 
+            // Hunting entities: skip flee action unless fear is extreme
+            if (em.HasComponents(entity, ComponentFlags.Predator))
+            {
+                ref var predator = ref em.Predators[entity];
+                if (predator.HasTarget)
+                {
+                    // Extreme fear overrides hunting — abandon hunt to flee
+                    if (hasFear && fearRatio > 0.8f)
+                    {
+                        predator.TargetEntity = -1;
+                        predator.Phase = PackPhase.Idle;
+                        predator.Role = PackRole.None;
+                        // Fall through to flee response below
+                    }
+                    else
+                    {
+                        prey.IsFleeing = false;
+                        continue; // Not scared enough — keep hunting
+                    }
+                }
+            }
+
             // Determine behavior based on fear level and response type
-            if (hasThreat || (hasFear && fearRatio > 0.5f))  // React to threats or if still scared
+            if (hasThreat || (hasFear && fearRatio > 0.5f))
             {
                 // Check discomfort level - extreme discomfort may override flee behavior
                 float discomfortRatio = 0f;
