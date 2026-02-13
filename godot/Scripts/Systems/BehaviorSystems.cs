@@ -40,9 +40,19 @@ public sealed class TerrainDiscomfortSystem : ISystem
             ref var pos = ref em.Positions[entity];
             ref var discomfort = ref em.TerrainDiscomforts[entity];
 
-            // Get current tile
+            // Get current tile and apply species-specific comfort modifier
             var tile = _worldManager.GetTile(pos.X, pos.Y);
             float tileDiscomfort = tile.GetDiscomfortRate();
+
+            if (em.HasComponents(entity, ComponentFlags.Species))
+            {
+                var speciesDef = SpeciesRegistry.GetById(em.Species[entity].SpeciesId);
+                if (speciesDef != null)
+                    tileDiscomfort += speciesDef.GetTerrainComfortModifier(tile);
+            }
+
+            // Clamp so negative comfort can't cause negative discomfort accumulation
+            tileDiscomfort = MathF.Max(0, tileDiscomfort);
 
             // Add grazing pressure for hungry herbivores on non-grazeable terrain
             if (discomfort.GrazingPressure > 0 && !tile.IsGrazeable())

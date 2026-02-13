@@ -36,14 +36,18 @@ public sealed class MovementSystem : ISystem
             if (vel.Dx == 0 && vel.Dy == 0)
                 continue;
 
-            // Clamp velocity to prevent unbounded accumulation from additive systems
-            const float maxSpeed = 0.25f;
-            float speedSq = vel.Dx * vel.Dx + vel.Dy * vel.Dy;
-            if (speedSq > maxSpeed * maxSpeed)
+            // Clamp creature velocity to prevent unbounded accumulation from additive systems
+            // Only applies to creatures (entities with Species) — not the player
+            if (em.HasComponents(entity, ComponentFlags.Species))
             {
-                float scale = maxSpeed / MathF.Sqrt(speedSq);
-                vel.Dx *= scale;
-                vel.Dy *= scale;
+                const float maxSpeed = 0.25f;
+                float speedSq = vel.Dx * vel.Dx + vel.Dy * vel.Dy;
+                if (speedSq > maxSpeed * maxSpeed)
+                {
+                    float scale = maxSpeed / MathF.Sqrt(speedSq);
+                    vel.Dx *= scale;
+                    vel.Dy *= scale;
+                }
             }
 
             // Get current tile for speed modifier

@@ -743,8 +743,8 @@ public static class SpeciesRegistry
             ChaserSpeedMult = 1.1f,
 
             // Terrain - thrives in dry areas
-            DiscomfortThreshold = 55f,
-            DiscomfortDecayRate = 2.5f,
+            DiscomfortThreshold = 70f,
+            DiscomfortDecayRate = 4f,
             GrazingPressure = 0f,
             TerrainSpeedModifiers = new Dictionary<TileType, float>
             {
@@ -756,11 +756,13 @@ public static class SpeciesRegistry
             },
             TerrainComfortModifiers = new Dictionary<TileType, float>
             {
-                { TileType.Arid, -3f },     // Loves dry terrain
+                { TileType.Arid, -3f },           // Loves dry terrain
                 { TileType.Sand, -1f },
                 { TileType.Grass, 0f },
-                { TileType.Forest, 3f },     // Uncomfortable in wet
-                { TileType.Wetland, 6f },    // Very uncomfortable in wetland
+                { TileType.Forest, 3f },           // Uncomfortable in wet
+                { TileType.Wetland, 6f },          // Very uncomfortable in wetland
+                { TileType.River, -6f },           // Tolerates small creeks (net 2f/tick)
+                { TileType.ShallowWater, -2f },    // Slightly less bothered than default
             },
             AllowedSpawnTiles = new List<TileType> { TileType.Arid, TileType.Sand },
 
