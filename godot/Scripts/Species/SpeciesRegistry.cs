@@ -302,6 +302,7 @@ public static class SpeciesRegistry
             // Reproduction costs
             ReproHungerCost = 60f,
             ReproEnergyCost = 40f,
+            EnergyRegenRate = 0.15f, // Predators regen slower
 
             // Social - tight pack hunters
             GroupAffinity = 0.7f,
@@ -397,6 +398,7 @@ public static class SpeciesRegistry
             // Reproduction costs
             ReproHungerCost = 35f,
             ReproEnergyCost = 25f,
+            EnergyRegenRate = 0.15f, // Predators regen slower
 
             // Social - mostly solitary
             GroupAffinity = 0.2f,
@@ -482,6 +484,7 @@ public static class SpeciesRegistry
 
             // Survival - tough
             MaxEnergy = 150f,
+            EnergyRegenRate = 0.1f, // Already very tanky
 
             // Social - territorial loners
             GroupAffinity = 0f,
@@ -563,6 +566,7 @@ public static class SpeciesRegistry
 
             // Survival extras
             MaxEnergy = 120f,
+            EnergyRegenRate = 0.2f, // Passive defender
             StarvationDamage = 0.5f,
 
             // Reproduction — via spores only (SporeSystem handles this)
@@ -692,6 +696,7 @@ public static class SpeciesRegistry
 
             // Survival - fragile individually
             MaxEnergy = 60f,
+            EnergyRegenRate = 0.4f, // Fragile but fast recovery
 
             // Hunting behavior
             HuntThreshold = 0.75f,
@@ -815,6 +820,7 @@ public static class SpeciesRegistry
             MaxLifespan = 60000,  // Very long lived
             MaturityAge = 1000,
             MaxEnergy = 150f,
+            EnergyRegenRate = 0.1f, // Already immortal via crystals
             StarvationDamage = 0f,
 
             // Reproduction — via crystals only (CrystalSystem handles this)

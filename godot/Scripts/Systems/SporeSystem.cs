@@ -363,6 +363,7 @@ public sealed class SporeSystem : ISystem
 
                 ref var otherEnergy = ref em.Energies[other];
                 otherEnergy.Current -= aoeDamage;
+                otherEnergy.RegenCooldown = 60; // 3s combat cooldown at 20 TPS
 
                 if (otherEnergy.IsDead)
                 {

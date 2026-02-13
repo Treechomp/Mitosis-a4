@@ -93,6 +93,7 @@ public sealed class SpeciesDefinition
     public float HungerDecayRate { get; init; } = 0.05f;
     public float StarvationDamage { get; init; } = 1f;
     public float MaxEnergy { get; init; } = 100f;
+    public float EnergyRegenRate { get; init; } = 0.25f; // HP/tick when out of combat and not starving
     public int MaxLifespan { get; init; } = 30000;
     public int MaturityAge { get; init; } = 2000;
 

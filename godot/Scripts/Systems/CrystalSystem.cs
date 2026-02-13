@@ -179,6 +179,7 @@ public sealed class CrystalSystem : ISystem
                 // Attack!
                 ref var targetEnergy = ref em.Energies[bestTarget];
                 targetEnergy.Current -= ranged.BaseDamage;
+                targetEnergy.RegenCooldown = 60; // 3s combat cooldown at 20 TPS
                 ranged.CurrentCooldown = ranged.Cooldown;
                 ranged.TargetEntity = bestTarget;
 

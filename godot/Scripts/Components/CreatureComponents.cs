@@ -68,11 +68,13 @@ public struct Energy
 {
     public float Current;
     public float Max;
+    public int RegenCooldown; // Ticks until regen resumes after taking damage
 
     public Energy(float current, float max = 100f)
     {
         Current = current;
         Max = max;
+        RegenCooldown = 0;
     }
 
     public readonly float Percent => Current / Max;

@@ -900,6 +900,7 @@ public sealed class HuntingSystem : ISystem
                     {
                         ref var preyEnergy = ref em.Energies[predator.TargetEntity];
                         preyEnergy.Current -= predator.AttackPower;
+                        preyEnergy.RegenCooldown = 60; // 3s combat cooldown at 20 TPS
 
                         if (preyEnergy.IsDead)
                         {
@@ -1713,6 +1714,22 @@ public sealed class HungerSystem : ISystem
 
                 if (energy.IsDead)
                     _toKill.Add(entity);
+            }
+
+            // Conditional energy regen: only when not starving and out of combat
+            if (!hunger.IsStarving && em.HasComponents(entity, ComponentFlags.Energy | ComponentFlags.Species))
+            {
+                ref var energy = ref em.Energies[entity];
+                if (energy.RegenCooldown > 0)
+                {
+                    energy.RegenCooldown--;
+                }
+                else if (energy.Current < energy.Max)
+                {
+                    ref var species = ref em.Species[entity];
+                    var speciesDef = SpeciesRegistry.GetById(species.SpeciesId);
+                    energy.Current = MathF.Min(energy.Max, energy.Current + speciesDef.EnergyRegenRate);
+                }
             }
         }
 
