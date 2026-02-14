@@ -99,11 +99,12 @@ public sealed class HerdingSystem : ISystem
 
             // === PRIORITY CHECK: Survival needs override social behavior ===
 
-            // Priority 1: High terrain discomfort - need to escape
+            // Priority 1: Terrain escape — herding toward a leader near water
+            // would fight the escape direction and cause jitter
             if (em.HasComponents(entity, ComponentFlags.TerrainDiscomfort))
             {
                 ref var discomfort = ref em.TerrainDiscomforts[entity];
-                if (discomfort.Ratio > 0.6f)
+                if (discomfort.IsEscaping)
                     continue;
             }
 

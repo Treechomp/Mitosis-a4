@@ -440,8 +440,10 @@ public sealed class HuntingSystem : ISystem
                     float tdy = trackPreyPos.Y - pos.Y;
                     var trackDir = MathUtils.Normalize(tdx, tdy);
                     float trackSpeed = speciesDef.BaseHuntSpeed * 0.8f;
-                    vel.Dx = trackDir.X * trackSpeed;
-                    vel.Dy = trackDir.Y * trackSpeed;
+                    // Blend toward tracking direction — heavier predators commit more
+                    float trackAgility = MathF.Clamp(1.5f / speciesDef.BodyMass, 0.25f, 1f);
+                    vel.Dx += (trackDir.X * trackSpeed - vel.Dx) * trackAgility;
+                    vel.Dy += (trackDir.Y * trackSpeed - vel.Dy) * trackAgility;
 
                     if (!speciesDef.SemiAquatic)
                         SteerAroundWater(ref vel, pos.X, pos.Y);
@@ -458,6 +460,9 @@ public sealed class HuntingSystem : ISystem
                 float dy = preyPos.Y - pos.Y;
                 float dist = MathF.Sqrt(dx * dx + dy * dy);
                 float distSq = dx * dx + dy * dy;
+
+                // Mass-based agility for direction blending during pursuit
+                float huntAgility = MathF.Clamp(1.5f / speciesDef.BodyMass, 0.25f, 1f);
 
                 // Attack if in range
                 float attackRangeSq = predator.AttackRange * predator.AttackRange;
@@ -560,22 +565,20 @@ public sealed class HuntingSystem : ISystem
                             // Direct swarm chase — all rush together
                             var dir = MathUtils.Normalize(dx, dy);
                             float swarmSpeed = huntSpeed * 1.2f;
-                            vel.Dx = dir.X * swarmSpeed;
-                            vel.Dy = dir.Y * swarmSpeed;
+                            BlendVelocity(ref vel, dir.X * swarmSpeed, dir.Y * swarmSpeed, huntAgility);
                         }
                         else
                         {
                             // Check if prey is isolated from herd
                             bool preyIsolated = IsPreyIsolated(predator.TargetEntity, em);
-                            ApplyPackTactics(entity, ref pos, ref vel, ref predator, preyPos.X, preyPos.Y, dist, huntSpeed, em, preyIsolated, speciesDef);
+                            ApplyPackTactics(entity, ref pos, ref vel, ref predator, preyPos.X, preyPos.Y, dist, huntSpeed, em, preyIsolated, speciesDef, huntAgility);
                         }
                     }
                     else
                     {
                         // Solo hunting - direct chase
                         var dir = MathUtils.Normalize(dx, dy);
-                        vel.Dx = dir.X * huntSpeed;
-                        vel.Dy = dir.Y * huntSpeed;
+                        BlendVelocity(ref vel, dir.X * huntSpeed, dir.Y * huntSpeed, huntAgility);
                     }
 
                     // Land predators steer around water during pursuit
@@ -687,7 +690,7 @@ public sealed class HuntingSystem : ISystem
 
     private void ApplyPackTactics(int entity, ref Position pos, ref Velocity vel, ref Predator predator,
                                    float targetX, float targetY, float dist, float huntSpeed, EntityManager em,
-                                   bool preyIsolated, SpeciesDefinition speciesDef)
+                                   bool preyIsolated, SpeciesDefinition speciesDef, float agility)
     {
         float dx = targetX - pos.X;
         float dy = targetY - pos.Y;
@@ -709,8 +712,7 @@ public sealed class HuntingSystem : ISystem
         {
             // Direct chase - prey is separated from herd, go for the kill
             var chaseDir = MathUtils.Normalize(dx, dy);
-            vel.Dx = chaseDir.X * effectiveSpeed * 1.2f;  // Slightly faster in chase mode
-            vel.Dy = chaseDir.Y * effectiveSpeed * 1.2f;
+            BlendVelocity(ref vel, chaseDir.X * effectiveSpeed * 1.2f, chaseDir.Y * effectiveSpeed * 1.2f, agility);
 
             // Reset phase to rushing (continuous attack)
             if (predator.Phase != PackPhase.Rushing)
@@ -746,14 +748,13 @@ public sealed class HuntingSystem : ISystem
         {
             case PackPhase.Positioning:
                 // Fan out to surround
-                ApplyPositioningMovement(ref pos, ref vel, predator.Role, dx, dy, dist, effectiveSpeed * 0.7f);
+                ApplyPositioningMovement(ref pos, ref vel, predator.Role, dx, dy, dist, effectiveSpeed * 0.7f, agility);
                 break;
 
             case PackPhase.Rushing:
                 // All rush in together to scatter the herd
                 var rushDir = MathUtils.Normalize(dx, dy);
-                vel.Dx = rushDir.X * effectiveSpeed * 1.3f;
-                vel.Dy = rushDir.Y * effectiveSpeed * 1.3f;
+                BlendVelocity(ref vel, rushDir.X * effectiveSpeed * 1.3f, rushDir.Y * effectiveSpeed * 1.3f, agility);
                 break;
 
             case PackPhase.Retreating:
@@ -762,8 +763,7 @@ public sealed class HuntingSystem : ISystem
                 if (dist < retreatDist)
                 {
                     var retreatDir = MathUtils.Normalize(-dx, -dy);
-                    vel.Dx = retreatDir.X * effectiveSpeed * 0.8f;
-                    vel.Dy = retreatDir.Y * effectiveSpeed * 0.8f;
+                    BlendVelocity(ref vel, retreatDir.X * effectiveSpeed * 0.8f, retreatDir.Y * effectiveSpeed * 0.8f, agility);
                 }
                 else
                 {
@@ -776,14 +776,13 @@ public sealed class HuntingSystem : ISystem
             default:
                 // Direct approach
                 var dir = MathUtils.Normalize(dx, dy);
-                vel.Dx = dir.X * effectiveSpeed;
-                vel.Dy = dir.Y * effectiveSpeed;
+                BlendVelocity(ref vel, dir.X * effectiveSpeed, dir.Y * effectiveSpeed, agility);
                 break;
         }
     }
 
     private void ApplyPositioningMovement(ref Position pos, ref Velocity vel, PackRole role,
-                                          float dx, float dy, float dist, float speed)
+                                          float dx, float dy, float dist, float speed, float agility)
     {
         float targetDist = 5f;  // Ideal distance from prey during positioning
 
@@ -794,14 +793,12 @@ public sealed class HuntingSystem : ISystem
                 if (dist > targetDist)
                 {
                     var dir = MathUtils.Normalize(dx, dy);
-                    vel.Dx = dir.X * speed;
-                    vel.Dy = dir.Y * speed;
+                    BlendVelocity(ref vel, dir.X * speed, dir.Y * speed, agility);
                 }
                 else
                 {
                     // Hold position, circle slowly
-                    vel.Dx = -dy * 0.01f;  // Perpendicular movement
-                    vel.Dy = dx * 0.01f;
+                    BlendVelocity(ref vel, -dy * 0.01f, dx * 0.01f, agility);
                 }
                 break;
 
@@ -828,8 +825,7 @@ public sealed class HuntingSystem : ISystem
                 float toFlankX = flankX - pos.X;
                 float toFlankY = flankY - pos.Y;
                 var flankDir = MathUtils.Normalize(toFlankX, toFlankY);
-                vel.Dx = flankDir.X * speed;
-                vel.Dy = flankDir.Y * speed;
+                BlendVelocity(ref vel, flankDir.X * speed, flankDir.Y * speed, agility);
                 break;
 
             case PackRole.Chaser:
@@ -837,24 +833,31 @@ public sealed class HuntingSystem : ISystem
                 if (dist > targetDist * 1.5f)
                 {
                     var dir = MathUtils.Normalize(dx, dy);
-                    vel.Dx = dir.X * speed * 0.9f;
-                    vel.Dy = dir.Y * speed * 0.9f;
+                    BlendVelocity(ref vel, dir.X * speed * 0.9f, dir.Y * speed * 0.9f, agility);
                 }
                 else
                 {
                     // Stay back a bit
                     var dir = MathUtils.Normalize(-dx, -dy);
-                    vel.Dx = dir.X * speed * 0.3f;
-                    vel.Dy = dir.Y * speed * 0.3f;
+                    BlendVelocity(ref vel, dir.X * speed * 0.3f, dir.Y * speed * 0.3f, agility);
                 }
                 break;
 
             default:
                 var defaultDir = MathUtils.Normalize(dx, dy);
-                vel.Dx = defaultDir.X * speed;
-                vel.Dy = defaultDir.Y * speed;
+                BlendVelocity(ref vel, defaultDir.X * speed, defaultDir.Y * speed, agility);
                 break;
         }
+    }
+
+    /// <summary>
+    /// Blend velocity toward a target using mass-based agility.
+    /// Smaller creatures (high agility) snap quickly; heavier ones turn gradually.
+    /// </summary>
+    private static void BlendVelocity(ref Velocity vel, float targetDx, float targetDy, float agility)
+    {
+        vel.Dx += (targetDx - vel.Dx) * agility;
+        vel.Dy += (targetDy - vel.Dy) * agility;
     }
 
     /// <summary>

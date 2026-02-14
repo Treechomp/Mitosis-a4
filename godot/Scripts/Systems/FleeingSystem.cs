@@ -168,6 +168,17 @@ public sealed class FleeingSystem : ISystem
 
                 prey.IsFleeing = true;
 
+                // Mass-based agility: smaller creatures change direction faster,
+                // allowing rabbits to juke while deer commit to a direction.
+                float bodyMass = 1f;
+                if (em.HasComponents(entity, ComponentFlags.Species))
+                {
+                    var speciesDef = SpeciesRegistry.GetById(em.Species[entity].SpeciesId);
+                    if (speciesDef != null)
+                        bodyMass = speciesDef.BodyMass;
+                }
+                float agility = MathF.Clamp(1.5f / bodyMass, 0.25f, 1f);
+
                 // Apply fear response behavior
                 switch (fearResponse)
                 {
@@ -176,18 +187,18 @@ public sealed class FleeingSystem : ISystem
                         break;
 
                     case FearResponse.Panic:
-                        ApplyPanicResponse(ref pos, ref vel, ref wander, ref prey, fleeDir, fearRatio, discomfortRatio);
+                        ApplyPanicResponse(ref pos, ref vel, ref wander, ref prey, fleeDir, fearRatio, discomfortRatio, agility);
                         break;
 
                     case FearResponse.Defensive:
                         // TODO: Implement defensive grouping behavior
                         // For now, fall through to normal flee
-                        ApplyFleeResponse(ref pos, ref vel, ref wander, ref prey, fleeDir, fearRatio, discomfortRatio);
+                        ApplyFleeResponse(ref pos, ref vel, ref wander, ref prey, fleeDir, fearRatio, discomfortRatio, agility);
                         break;
 
                     case FearResponse.Flee:
                     default:
-                        ApplyFleeResponse(ref pos, ref vel, ref wander, ref prey, fleeDir, fearRatio, discomfortRatio);
+                        ApplyFleeResponse(ref pos, ref vel, ref wander, ref prey, fleeDir, fearRatio, discomfortRatio, agility);
                         break;
                 }
             }
@@ -260,7 +271,8 @@ public sealed class FleeingSystem : ISystem
     /// Speed increases with fear, direction becomes random.
     /// </summary>
     private void ApplyPanicResponse(ref Position pos, ref Velocity vel, ref Wander wander,
-                                     ref Prey prey, Vector2 fleeDir, float fearRatio, float discomfortRatio)
+                                     ref Prey prey, Vector2 fleeDir, float fearRatio, float discomfortRatio,
+                                     float agility)
     {
         float panicSpeed = wander.Speed * prey.FleeSpeedMultiplier * (1f + fearRatio * 0.5f);
 
@@ -274,16 +286,19 @@ public sealed class FleeingSystem : ISystem
             fleeDir.X * sin + fleeDir.Y * cos
         );
 
-        // At high panic, ignore terrain completely
-        vel.Dx = panicDir.X * panicSpeed;
-        vel.Dy = panicDir.Y * panicSpeed;
+        // Blend toward panic direction — heavier creatures turn slower even in panic
+        float targetDx = panicDir.X * panicSpeed;
+        float targetDy = panicDir.Y * panicSpeed;
+        vel.Dx += (targetDx - vel.Dx) * agility;
+        vel.Dy += (targetDy - vel.Dy) * agility;
     }
 
     /// <summary>
     /// Normal flee response - run away, considering terrain.
     /// </summary>
     private void ApplyFleeResponse(ref Position pos, ref Velocity vel, ref Wander wander,
-                                    ref Prey prey, Vector2 fleeDir, float fearRatio, float discomfortRatio)
+                                    ref Prey prey, Vector2 fleeDir, float fearRatio, float discomfortRatio,
+                                    float agility)
     {
         float fleeSpeed = wander.Speed * prey.FleeSpeedMultiplier;
 
@@ -329,7 +344,10 @@ public sealed class FleeingSystem : ISystem
             }
         }
 
-        vel.Dx = fleeDir.X * fleeSpeed;
-        vel.Dy = fleeDir.Y * fleeSpeed;
+        // Blend toward flee velocity — smaller creatures change direction faster
+        float targetDx = fleeDir.X * fleeSpeed;
+        float targetDy = fleeDir.Y * fleeSpeed;
+        vel.Dx += (targetDx - vel.Dx) * agility;
+        vel.Dy += (targetDy - vel.Dy) * agility;
     }
 }

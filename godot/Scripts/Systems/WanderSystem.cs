@@ -160,10 +160,12 @@ public sealed class WanderSystem : ISystem
             {
                 ref var discomfort = ref em.TerrainDiscomforts[entity];
 
-                // Hysteresis: different thresholds for entering vs. exiting escape
-                if (!discomfort.IsEscaping && discomfort.Ratio > 0.5f)
+                // Hysteresis: wide gap prevents oscillation at terrain edges.
+                // Enter escape late (0.6) so minor discomfort doesn't trigger;
+                // exit early (0.1) so entity commits to reaching safe terrain.
+                if (!discomfort.IsEscaping && discomfort.Ratio > 0.6f)
                     discomfort.IsEscaping = true;
-                else if (discomfort.IsEscaping && discomfort.Ratio < 0.2f)
+                else if (discomfort.IsEscaping && discomfort.Ratio < 0.1f)
                     discomfort.IsEscaping = false;
 
                 if (discomfort.IsEscaping)

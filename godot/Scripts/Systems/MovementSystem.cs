@@ -104,6 +104,22 @@ public sealed class MovementSystem : ISystem
             {
                 em.ChunkPositions[entity].Update(in pos, _chunkSize);
             }
+
+            // Dampen creature velocity each frame so stale forces decay naturally.
+            // When a behavior system actively sets velocity, it refreshes above this decay.
+            // When no system is commanding movement, velocity fades to zero over ~10 frames.
+            if (em.HasComponents(entity, ComponentFlags.Species))
+            {
+                const float damping = 0.85f;
+                vel.Dx *= damping;
+                vel.Dy *= damping;
+                // Zero out near-zero velocities to avoid perpetual micro-drift
+                if (vel.Dx * vel.Dx + vel.Dy * vel.Dy < 0.0001f)
+                {
+                    vel.Dx = 0;
+                    vel.Dy = 0;
+                }
+            }
         }
     }
 
