@@ -441,7 +441,7 @@ public sealed class HuntingSystem : ISystem
                     var trackDir = MathUtils.Normalize(tdx, tdy);
                     float trackSpeed = speciesDef.BaseHuntSpeed * 0.8f;
                     // Blend toward tracking direction — heavier predators commit more
-                    float trackAgility = MathF.Clamp(1.5f / speciesDef.BodyMass, 0.25f, 1f);
+                    float trackAgility = Math.Clamp(1.5f / speciesDef.BodyMass, 0.25f, 1f);
                     vel.Dx += (trackDir.X * trackSpeed - vel.Dx) * trackAgility;
                     vel.Dy += (trackDir.Y * trackSpeed - vel.Dy) * trackAgility;
 
@@ -462,7 +462,7 @@ public sealed class HuntingSystem : ISystem
                 float distSq = dx * dx + dy * dy;
 
                 // Mass-based agility for direction blending during pursuit
-                float huntAgility = MathF.Clamp(1.5f / speciesDef.BodyMass, 0.25f, 1f);
+                float huntAgility = Math.Clamp(1.5f / speciesDef.BodyMass, 0.25f, 1f);
 
                 // Attack if in range
                 float attackRangeSq = predator.AttackRange * predator.AttackRange;

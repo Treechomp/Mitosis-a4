@@ -177,7 +177,7 @@ public sealed class FleeingSystem : ISystem
                     if (speciesDef != null)
                         bodyMass = speciesDef.BodyMass;
                 }
-                float agility = MathF.Clamp(1.5f / bodyMass, 0.25f, 1f);
+                float agility = Math.Clamp(1.5f / bodyMass, 0.25f, 1f);
 
                 // Apply fear response behavior
                 switch (fearResponse)
