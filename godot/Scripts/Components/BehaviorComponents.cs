@@ -9,9 +9,9 @@ namespace Mitosis.Components;
 public enum PackRole : byte
 {
     None = 0,       // Not in a hunting pack or solitary
-    Leader = 1,     // Selects target, initiates attacks
-    Flanker = 2,    // Positions to sides to surround
-    Chaser = 3      // Follows directly behind leader
+    Leader = 1,     // Monitors positioning, triggers convergence
+    Flanker = 2,    // Circles behind prey to cut off escape routes
+    Disruptor = 3   // Rush/retreat to scatter the herd (max 1-2 per pack)
 }
 
 /// <summary>
@@ -19,10 +19,11 @@ public enum PackRole : byte
 /// </summary>
 public enum PackPhase : byte
 {
-    Idle = 0,       // Not actively hunting as pack
+    Idle = 0,        // Not actively hunting as pack
     Positioning = 1, // Moving to surround positions
-    Rushing = 2,    // Attacking/closing in
-    Retreating = 3  // Backing off after attack
+    Disrupting = 2,  // Disruptors rush in; flankers tighten encirclement
+    Converging = 3,  // All-in kill rush — triggered by leader
+    Retreating = 4   // Disruptors backing off between rushes
 }
 
 /// <summary>

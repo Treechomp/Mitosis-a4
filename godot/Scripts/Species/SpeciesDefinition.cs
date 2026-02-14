@@ -71,6 +71,10 @@ public sealed class SpeciesDefinition
     /// <summary>Ticks spent retreating after a pack attack pass.</summary>
     public int RetreatDuration { get; init; } = 20;
 
+    /// <summary>Leader auto-triggers convergence (all-in kill rush) after this many ticks
+    /// if flankers haven't reached position. Higher = more patient pack.</summary>
+    public int ConvergenceTimeout { get; init; } = 120;
+
     /// <summary>Swarm hunter: counts all nearby same-species for effective mass (not just same group),
     /// can target any living creature (including predators), and never retreats mid-hunt.</summary>
     public bool SwarmHunter { get; init; } = false;

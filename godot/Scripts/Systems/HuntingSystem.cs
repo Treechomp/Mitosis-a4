@@ -27,6 +27,8 @@ public sealed class HuntingSystem : ISystem
     private readonly List<int> _shareBuffer = new(16);
     private readonly List<int> _entitiesToKill = new(16);
     private readonly Dictionary<int, int> _groupTargets = new(16);  // groupId -> target entity
+    private readonly Dictionary<int, (float x, float y)> _groupLeaderPositions = new(16);  // groupId -> leader pos
+    private readonly Dictionary<int, bool> _groupConverging = new(16);  // groupId -> leader triggered convergence
     private const float SporeBodyMass = 0.2f;
     private const float FallbackNutrition = 40f;
 
@@ -61,21 +63,33 @@ public sealed class HuntingSystem : ISystem
             }
         }
 
-        // First pass: Any pack member with a target shares it with the group
-        // Leaders take priority, but any member can trigger a group hunt
+        // First pass: Share targets, leader positions, and convergence state within packs
         const ComponentFlags predatorRequired = ComponentFlags.Position | ComponentFlags.Predator | ComponentFlags.Hunger;
+        _groupLeaderPositions.Clear();
+        _groupConverging.Clear();
+
         foreach (int entity in em.Query(predatorRequired))
         {
             ref var predator = ref em.Predators[entity];
-
-            if (!predator.HasTarget || !em.IsAlive(predator.TargetEntity))
-                continue;
 
             if (!em.HasComponents(entity, ComponentFlags.Social))
                 continue;
 
             ref var social = ref em.Socials[entity];
             if (social.Type != SocialType.Pack || social.GroupId < 0)
+                continue;
+
+            // Track leader positions and convergence triggers
+            if (predator.Role == PackRole.Leader)
+            {
+                ref var ldrPos = ref em.Positions[entity];
+                _groupLeaderPositions[social.GroupId] = (ldrPos.X, ldrPos.Y);
+
+                if (predator.Phase == PackPhase.Converging)
+                    _groupConverging[social.GroupId] = true;
+            }
+
+            if (!predator.HasTarget || !em.IsAlive(predator.TargetEntity))
                 continue;
 
             // Leaders always set the group target; non-leaders only if no target set yet
@@ -242,6 +256,12 @@ public sealed class HuntingSystem : ISystem
                         }
                     }
                 }
+
+                // Propagate convergence: if leader triggered all-in, everyone follows
+                if (isPack && _groupConverging.ContainsKey(groupId))
+                {
+                    predator.Phase = PackPhase.Converging;
+                }
             }
 
             // Find target if we don't have one
@@ -376,7 +396,7 @@ public sealed class HuntingSystem : ISystem
                         _groupTargets[groupId] = bestPrey;
                         predator.Role = PackRole.Leader;
                         predator.Phase = PackPhase.Positioning;
-                        predator.PhaseTimer = speciesDef.PositioningDuration;
+                        predator.PhaseTimer = speciesDef.ConvergenceTimeout;
                     }
                 }
             }
@@ -535,18 +555,18 @@ public sealed class HuntingSystem : ISystem
                     }
                     predator.CurrentCooldown = predator.AttackCooldown;
 
-                    // After attacking, retreat only if prey still in herd (pack tactic to disperse)
+                    // After attacking, only disruptors retreat (to continue harassment cycle)
                     // Swarm hunters never retreat — they just keep biting
-                    if (isPack && !speciesDef.SwarmHunter && predator.Phase == PackPhase.Rushing)
+                    if (isPack && !speciesDef.SwarmHunter
+                        && predator.Role == PackRole.Disruptor
+                        && predator.Phase == PackPhase.Disrupting)
                     {
                         bool preyIsolated = IsPreyIsolated(predator.TargetEntity, em);
                         if (!preyIsolated)
                         {
-                            // Still in herd - retreat to continue harassment
                             predator.Phase = PackPhase.Retreating;
                             predator.PhaseTimer = speciesDef.RetreatDuration;
                         }
-                        // If isolated, stay in rushing/chase mode
                     }
                 }
                 else if (em.HasComponents(entity, ComponentFlags.Velocity))
@@ -644,12 +664,12 @@ public sealed class HuntingSystem : ISystem
     private void AssignPackRole(int entity, int target, EntityManager em, ref Predator predator, ref Social social,
                                 SpeciesDefinition speciesDef)
     {
-        // Find other pack members
+        // Find other pack members and count existing roles
         ref var pos = ref em.Positions[entity];
-        ref var targetPos = ref em.Positions[target];
         _spatialHash.QueryRadius(pos.X, pos.Y, speciesDef.PackCoordinationRadius, _packMembers);
 
-        int flankersCount = 0;
+        int disruptorCount = 0;
+        int flankerCount = 0;
         bool hasLeader = false;
 
         foreach (int other in _packMembers)
@@ -667,25 +687,42 @@ public sealed class HuntingSystem : ISystem
             if (otherPredator.Role == PackRole.Leader)
                 hasLeader = true;
             else if (otherPredator.Role == PackRole.Flanker)
-                flankersCount++;
+                flankerCount++;
+            else if (otherPredator.Role == PackRole.Disruptor)
+                disruptorCount++;
         }
 
-        // Assign role
+        // Assign role:
+        // 1 leader, 1 disruptor first, then fill flankers, then 2nd disruptor if pack is large
         if (!hasLeader && social.LeadershipScore > 0.5f)
         {
             predator.Role = PackRole.Leader;
         }
-        else if (flankersCount < 2)
+        else if (disruptorCount < 1)
         {
-            predator.Role = PackRole.Flanker;
+            predator.Role = PackRole.Disruptor;  // Always need at least 1 disruptor
+        }
+        else if (flankerCount < 2)
+        {
+            predator.Role = PackRole.Flanker;    // Fill flanker positions
+        }
+        else if (disruptorCount < 2)
+        {
+            predator.Role = PackRole.Disruptor;  // 2nd disruptor in larger packs
         }
         else
         {
-            predator.Role = PackRole.Chaser;
+            predator.Role = PackRole.Flanker;    // Extra members flank
         }
 
+        // Set initial phase and timer based on role
         predator.Phase = PackPhase.Positioning;
-        predator.PhaseTimer = speciesDef.PositioningDuration;
+        predator.PhaseTimer = predator.Role switch
+        {
+            PackRole.Leader => speciesDef.ConvergenceTimeout,
+            PackRole.Disruptor => speciesDef.PositioningDuration,
+            _ => 0  // Flankers don't use timer
+        };
     }
 
     private void ApplyPackTactics(int entity, ref Position pos, ref Velocity vel, ref Predator predator,
@@ -695,159 +732,251 @@ public sealed class HuntingSystem : ISystem
         float dx = targetX - pos.X;
         float dy = targetY - pos.Y;
 
-        // Get role-specific speed modifier from species definition
         float roleSpeedMult = predator.Role switch
         {
             PackRole.Leader => speciesDef.LeaderSpeedMult,
             PackRole.Flanker => speciesDef.FlankerSpeedMult,
-            PackRole.Chaser => speciesDef.ChaserSpeedMult,
+            PackRole.Disruptor => speciesDef.ChaserSpeedMult,
             _ => 1.0f
         };
-
-        // Apply role modifier to hunt speed
         float effectiveSpeed = huntSpeed * roleSpeedMult;
 
-        // If prey is isolated, switch to full chase mode - no more retreat/positioning
-        if (preyIsolated)
+        // === CONVERGENCE: all-in kill rush ===
+        // Triggered by leader, prey isolation, or phase propagation from first pass
+        if (predator.Phase == PackPhase.Converging || preyIsolated)
         {
-            // Direct chase - prey is separated from herd, go for the kill
+            predator.Phase = PackPhase.Converging;
             var chaseDir = MathUtils.Normalize(dx, dy);
-            BlendVelocity(ref vel, chaseDir.X * effectiveSpeed * 1.2f, chaseDir.Y * effectiveSpeed * 1.2f, agility);
-
-            // Reset phase to rushing (continuous attack)
-            if (predator.Phase != PackPhase.Rushing)
-            {
-                predator.Phase = PackPhase.Rushing;
-                predator.PhaseTimer = speciesDef.RushDuration;
-            }
+            BlendVelocity(ref vel, chaseDir.X * effectiveSpeed * 1.3f, chaseDir.Y * effectiveSpeed * 1.3f, agility);
             return;
         }
 
-        // Prey still in herd - use rush/retreat tactics to disperse
-        // Handle phase transitions
-        if (predator.PhaseTimer <= 0)
+        // === Per-role behavior ===
+        switch (predator.Role)
         {
-            switch (predator.Phase)
-            {
-                case PackPhase.Positioning:
-                    predator.Phase = PackPhase.Rushing;
-                    predator.PhaseTimer = speciesDef.RushDuration;
-                    break;
-                case PackPhase.Rushing:
-                    predator.Phase = PackPhase.Retreating;
-                    predator.PhaseTimer = speciesDef.RetreatDuration;
-                    break;
-                case PackPhase.Retreating:
-                    predator.Phase = PackPhase.Positioning;
-                    predator.PhaseTimer = speciesDef.PositioningDuration;
-                    break;
-            }
-        }
-
-        switch (predator.Phase)
-        {
-            case PackPhase.Positioning:
-                // Fan out to surround
-                ApplyPositioningMovement(ref pos, ref vel, predator.Role, dx, dy, dist, effectiveSpeed * 0.7f, agility);
+            case PackRole.Leader:
+                ApplyLeaderBehavior(entity, ref pos, ref vel, ref predator, targetX, targetY, dx, dy, dist, effectiveSpeed, em, speciesDef, agility);
                 break;
 
-            case PackPhase.Rushing:
-                // All rush in together to scatter the herd
-                var rushDir = MathUtils.Normalize(dx, dy);
-                BlendVelocity(ref vel, rushDir.X * effectiveSpeed * 1.3f, rushDir.Y * effectiveSpeed * 1.3f, agility);
+            case PackRole.Flanker:
+                ApplyFlankerBehavior(entity, ref pos, ref vel, targetX, targetY, effectiveSpeed, em, agility);
                 break;
 
-            case PackPhase.Retreating:
-                // Back off after harassment - this gives herd time to scatter
-                float retreatDist = 5f;
-                if (dist < retreatDist)
-                {
-                    var retreatDir = MathUtils.Normalize(-dx, -dy);
-                    BlendVelocity(ref vel, retreatDir.X * effectiveSpeed * 0.8f, retreatDir.Y * effectiveSpeed * 0.8f, agility);
-                }
-                else
-                {
-                    // Far enough, go back to positioning for next rush
-                    predator.Phase = PackPhase.Positioning;
-                    predator.PhaseTimer = speciesDef.PositioningDuration;
-                }
+            case PackRole.Disruptor:
+                ApplyDisruptorBehavior(ref pos, ref vel, ref predator, dx, dy, dist, effectiveSpeed, speciesDef, agility);
                 break;
 
             default:
-                // Direct approach
                 var dir = MathUtils.Normalize(dx, dy);
                 BlendVelocity(ref vel, dir.X * effectiveSpeed, dir.Y * effectiveSpeed, agility);
                 break;
         }
     }
 
-    private void ApplyPositioningMovement(ref Position pos, ref Velocity vel, PackRole role,
-                                          float dx, float dy, float dist, float speed, float agility)
+    /// <summary>
+    /// Leader holds at observation distance while monitoring flanker positions.
+    /// Triggers convergence when flankers are in position or timeout expires.
+    /// </summary>
+    private void ApplyLeaderBehavior(int entity, ref Position pos, ref Velocity vel, ref Predator predator,
+                                      float targetX, float targetY, float dx, float dy, float dist,
+                                      float speed, EntityManager em, SpeciesDefinition speciesDef, float agility)
     {
-        float targetDist = 5f;  // Ideal distance from prey during positioning
+        float holdDist = 6f;
 
-        switch (role)
+        if (dist > holdDist)
         {
-            case PackRole.Leader:
-                // Leader approaches from front, maintains distance
-                if (dist > targetDist)
+            // Approach to observation distance
+            var dir = MathUtils.Normalize(dx, dy);
+            BlendVelocity(ref vel, dir.X * speed * 0.7f, dir.Y * speed * 0.7f, agility);
+        }
+        else
+        {
+            // Hold position, circle slowly to maintain pressure
+            float normDist = MathF.Sqrt(dx * dx + dy * dy);
+            if (normDist > 0.01f)
+                BlendVelocity(ref vel, -dy / normDist * 0.02f, dx / normDist * 0.02f, agility);
+        }
+
+        // Decrement convergence timer
+        predator.PhaseTimer--;
+
+        // Check convergence triggers:
+        // 1. Timer expired — enough disruption, commit to kill
+        // 2. Flanker reached opposite side of prey — escape cut off
+        if (predator.PhaseTimer <= 0)
+        {
+            predator.Phase = PackPhase.Converging;
+        }
+        else
+        {
+            int groupId = em.HasComponents(entity, ComponentFlags.Social) ? em.Socials[entity].GroupId : -1;
+            if (groupId >= 0 && CheckFlankersInPosition(entity, em, targetX, targetY, pos.X, pos.Y, groupId))
+            {
+                predator.Phase = PackPhase.Converging;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Flankers circle around to the OPPOSITE side of prey from the leader,
+    /// cutting off escape routes. Two flankers spread to form a V behind the prey.
+    /// </summary>
+    private void ApplyFlankerBehavior(int entity, ref Position pos, ref Velocity vel,
+                                       float preyX, float preyY, float speed,
+                                       EntityManager em, float agility)
+    {
+        // Find leader position for this pack
+        int groupId = em.HasComponents(entity, ComponentFlags.Social) ? em.Socials[entity].GroupId : -1;
+
+        if (groupId < 0 || !_groupLeaderPositions.TryGetValue(groupId, out var leaderPos))
+        {
+            // No leader info — direct approach as fallback
+            float fdx = preyX - pos.X;
+            float fdy = preyY - pos.Y;
+            var dir = MathUtils.Normalize(fdx, fdy);
+            BlendVelocity(ref vel, dir.X * speed, dir.Y * speed, agility);
+            return;
+        }
+
+        // Direction from leader to prey (the "front" of the attack)
+        float frontDx = preyX - leaderPos.x;
+        float frontDy = preyY - leaderPos.y;
+        float frontLen = MathF.Sqrt(frontDx * frontDx + frontDy * frontDy);
+        if (frontLen < 0.01f)
+        {
+            BlendVelocity(ref vel, 0, 0, agility);
+            return;
+        }
+        frontDx /= frontLen;
+        frontDy /= frontLen;
+
+        // Target position: BEHIND the prey (past it from leader's perspective)
+        float behindDist = 4f;
+        float idealX = preyX + frontDx * behindDist;
+        float idealY = preyY + frontDy * behindDist;
+
+        // Spread flankers to opposite sides using perpendicular offset
+        float perpX = -frontDy;
+        float perpY = frontDx;
+
+        // Determine which side based on current position relative to attack axis
+        float relX = pos.X - preyX;
+        float relY = pos.Y - preyY;
+        float cross = relX * perpY - relY * perpX;
+        float sideSign = cross >= 0 ? 1f : -1f;
+
+        float spreadDist = 3f;
+        idealX += perpX * sideSign * spreadDist;
+        idealY += perpY * sideSign * spreadDist;
+
+        // Move toward ideal flank position
+        float toIdealDx = idealX - pos.X;
+        float toIdealDy = idealY - pos.Y;
+        var flankerDir = MathUtils.Normalize(toIdealDx, toIdealDy);
+        BlendVelocity(ref vel, flankerDir.X * speed, flankerDir.Y * speed, agility);
+    }
+
+    /// <summary>
+    /// Disruptors cycle between rushing toward prey and retreating.
+    /// Their job is to scatter the herd so flankers can cut off isolated prey.
+    /// Limited to 1-2 per pack.
+    /// </summary>
+    private void ApplyDisruptorBehavior(ref Position pos, ref Velocity vel, ref Predator predator,
+                                         float dx, float dy, float dist, float speed,
+                                         SpeciesDefinition speciesDef, float agility)
+    {
+        switch (predator.Phase)
+        {
+            case PackPhase.Positioning:
+                // Initial approach before first rush
+                if (dist > 5f)
                 {
                     var dir = MathUtils.Normalize(dx, dy);
-                    BlendVelocity(ref vel, dir.X * speed, dir.Y * speed, agility);
+                    BlendVelocity(ref vel, dir.X * speed * 0.8f, dir.Y * speed * 0.8f, agility);
                 }
-                else
+                predator.PhaseTimer--;
+                if (predator.PhaseTimer <= 0)
                 {
-                    // Hold position, circle slowly
-                    BlendVelocity(ref vel, -dy * 0.01f, dx * 0.01f, agility);
+                    predator.Phase = PackPhase.Disrupting;
+                    predator.PhaseTimer = speciesDef.RushDuration;
                 }
                 break;
 
-            case PackRole.Flanker:
-                // Flankers move to the sides
-                // Calculate perpendicular position
-                float perpX = -dy;
-                float perpY = dx;
-                float perpLen = MathF.Sqrt(perpX * perpX + perpY * perpY);
-                if (perpLen > 0.01f)
+            case PackPhase.Disrupting:
+                // Rush toward prey to scatter herd
+                var rushDir = MathUtils.Normalize(dx, dy);
+                BlendVelocity(ref vel, rushDir.X * speed * 1.3f, rushDir.Y * speed * 1.3f, agility);
+                predator.PhaseTimer--;
+                if (predator.PhaseTimer <= 0)
                 {
-                    perpX /= perpLen;
-                    perpY /= perpLen;
+                    predator.Phase = PackPhase.Retreating;
+                    predator.PhaseTimer = speciesDef.RetreatDuration;
                 }
-
-                // Determine which side (based on current position)
-                float side = (pos.X - (pos.X + dx)) * perpY - (pos.Y - (pos.Y + dy)) * perpX;
-                float sideSign = side >= 0 ? 1f : -1f;
-
-                // Target position: to the side and at target distance
-                float flankX = (pos.X + dx) + perpX * targetDist * sideSign * 0.8f - dx * 0.3f;
-                float flankY = (pos.Y + dy) + perpY * targetDist * sideSign * 0.8f - dy * 0.3f;
-
-                float toFlankX = flankX - pos.X;
-                float toFlankY = flankY - pos.Y;
-                var flankDir = MathUtils.Normalize(toFlankX, toFlankY);
-                BlendVelocity(ref vel, flankDir.X * speed, flankDir.Y * speed, agility);
                 break;
 
-            case PackRole.Chaser:
-                // Chasers follow behind, ready to cut off escape
-                if (dist > targetDist * 1.5f)
+            case PackPhase.Retreating:
+                // Back off to let herd scatter
+                if (dist < 5f)
                 {
-                    var dir = MathUtils.Normalize(dx, dy);
-                    BlendVelocity(ref vel, dir.X * speed * 0.9f, dir.Y * speed * 0.9f, agility);
+                    var retreatDir = MathUtils.Normalize(-dx, -dy);
+                    BlendVelocity(ref vel, retreatDir.X * speed * 0.8f, retreatDir.Y * speed * 0.8f, agility);
                 }
-                else
+                predator.PhaseTimer--;
+                if (predator.PhaseTimer <= 0)
                 {
-                    // Stay back a bit
-                    var dir = MathUtils.Normalize(-dx, -dy);
-                    BlendVelocity(ref vel, dir.X * speed * 0.3f, dir.Y * speed * 0.3f, agility);
+                    // Next rush cycle
+                    predator.Phase = PackPhase.Disrupting;
+                    predator.PhaseTimer = speciesDef.RushDuration;
                 }
                 break;
 
             default:
-                var defaultDir = MathUtils.Normalize(dx, dy);
-                BlendVelocity(ref vel, defaultDir.X * speed, defaultDir.Y * speed, agility);
+                // Fallback: approach
+                var defDir = MathUtils.Normalize(dx, dy);
+                BlendVelocity(ref vel, defDir.X * speed, defDir.Y * speed, agility);
                 break;
         }
+    }
+
+    /// <summary>
+    /// Check if any flanker has reached the opposite side of the prey from the leader.
+    /// Uses dot product: negative means the flanker is behind the prey relative to the leader.
+    /// </summary>
+    private bool CheckFlankersInPosition(int leaderEntity, EntityManager em,
+                                          float preyX, float preyY, float leaderX, float leaderY, int groupId)
+    {
+        // Direction from prey toward leader
+        float pToLdx = leaderX - preyX;
+        float pToLdy = leaderY - preyY;
+        float pToLLen = MathF.Sqrt(pToLdx * pToLdx + pToLdy * pToLdy);
+        if (pToLLen < 0.01f) return false;
+        pToLdx /= pToLLen;
+        pToLdy /= pToLLen;
+
+        // Check pack members around the prey
+        _packMembers.Clear();
+        _spatialHash.QueryRadius(preyX, preyY, 15f, _packMembers);
+
+        foreach (int other in _packMembers)
+        {
+            if (other == leaderEntity || !em.IsAlive(other)) continue;
+            if (!em.HasComponents(other, ComponentFlags.Predator | ComponentFlags.Social)) continue;
+            ref var otherSocial = ref em.Socials[other];
+            if (otherSocial.GroupId != groupId) continue;
+            ref var otherPred = ref em.Predators[other];
+            if (otherPred.Role != PackRole.Flanker) continue;
+
+            // Dot product of (prey→leader) and (prey→flanker)
+            // Negative = flanker is on opposite side = escape route blocked
+            ref var flankerPos = ref em.Positions[other];
+            float pToFdx = flankerPos.X - preyX;
+            float pToFdy = flankerPos.Y - preyY;
+            float dot = pToLdx * pToFdx + pToLdy * pToFdy;
+            if (dot < 0)
+                return true;
+        }
+
+        return false;
     }
 
     /// <summary>
