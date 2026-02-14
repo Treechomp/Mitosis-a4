@@ -85,7 +85,7 @@ EntityManager (SoA)          Systems                    SpeciesRegistry
 | Visual | `Renderable` (Color, Size, Shape) |
 | Faction | `Nest`, `FoodCarrier`, `Spore`, `Growth`, `Crystal`, `FaelingPower`, `RangedAttack` |
 
-**System Interface**: All systems implement `ISystem` with an `Update(EntityManager, WorldManager, ...)` method. They iterate over entities matching required component flags.
+**System Interface**: All systems implement `ISystem` with a `Process(EntityManager em)` method. They iterate over entities matching required component flags. Systems that need additional dependencies (WorldManager, SpatialHash) receive them via constructor injection.
 
 ### Spatial Hash
 
@@ -105,7 +105,7 @@ Each Tick (0.05 seconds):
   2.  MovementSystem      - Apply velocity, terrain speed, velocity damping (0.85/frame)
   3.  TerrainDiscomfort   - Accumulate/decay terrain discomfort     [TerrainSystems.cs]
   4.  HungerSystem        - Decay hunger, apply starvation damage   [SurvivalSystems.cs]
-  5.  GrazingSystem       - Herbivores/factions feed on tiles       [TerrainSystems.cs]
+  5.  GrazingSystem       - Herbivores/factions feed on tiles       [SurvivalSystems.cs]
   6.  WanderSystem        - Random movement, roaming, terrain escape (hysteresis)
   7.  HerdingSystem       - Social cohesion, alignment, leader following
   8.  SeparationSystem    - Prevent creature overlap within species  [SpatialSystems.cs]
@@ -132,17 +132,19 @@ before fleeing (predator positions needed for flee calculations).
 
 | Tile | Walkable | Spawnable | Grazeable | Speed Modifier |
 |------|----------|-----------|-----------|----------------|
-| DeepWater | No* | No | No | 0.3x |
-| ShallowWater | No* | No | No | 0.5x |
-| Sand | Yes | Yes | No | 0.9x |
+| DeepWater | Yes* | No | No | 0.25x |
+| ShallowWater | Yes* | No | No | 0.4x |
+| River | Yes* | No | No | 0.35x |
+| Sand | Yes | Yes | No | 0.7x |
 | Grass | Yes | Yes | Yes | 1.0x |
-| Forest | Yes | Yes | Yes | 0.8x |
-| Wetland | Yes | Yes | No | 0.7x |
-| Arid | Yes | Yes | No | 0.95x |
-| Mountain | No | No | No | 0.4x |
-| Snow | No | No | No | 0.5x |
+| Forest | Yes | Yes | Yes | 0.85x |
+| Wetland | Yes | Yes | No | 0.75x |
+| Arid | Yes | Yes | No | 0.8x |
+| Mountain | No | No | No | 0.05x |
 
-*Aquatic species (Crocodile) treat water as walkable with speed bonuses.
+*Water tiles are walkable by all species but very slow and uncomfortable
+(high discomfort rates drive creatures away). Crocodiles get species-specific
+speed bonuses on water via `TerrainSpeedModifiers`.
 
 ### Tile Moisture Scale (for Spore System)
 
@@ -152,9 +154,9 @@ before fleeing (predator positions needed for flee calculations).
 | ShallowWater / DeepWater | 1.0 |
 | Forest | 0.7 |
 | Grass | 0.4 |
+| River / Mountain | 0.2 (default) |
 | Sand | 0.1 |
 | Arid | 0.0 |
-| Other | 0.2 |
 
 ### Terraform Shifts
 
@@ -168,20 +170,27 @@ Balanced:         Extremes shift toward Grass (center)
 
 ### Generation Algorithm
 
-1. **Noise layers** (OpenSimplex, 4 octaves each):
-   - Elevation noise: defines height map
-   - Moisture noise: defines biome moisture
-   - Detail noise: adds variation
-   - River noise: carves waterways
+1. **Noise layers** (Godot FastNoiseLite, SimplexSmooth):
+   - Elevation noise: defines height map (frequency 0.02, 4 octaves FBM)
+   - Moisture noise: defines biome moisture (frequency 0.03, 3 octaves FBM, seed offset +1000)
+   - River noise: carves waterways (frequency 0.012, 2 octaves FBM, seed offset +3000)
 
 2. **Tile classification** (elevation + moisture thresholds):
-   - Elevation >= 0.85 → Snow
-   - Elevation 0.70-0.85 → Mountain
-   - Elevation < 0.30 → Water (deep if < 0.20)
-   - Remaining: moisture determines Grass/Forest/Wetland/Sand/Arid
+   - Elevation < 0.30 → DeepWater
+   - Elevation 0.30-0.40 → ShallowWater
+   - Elevation 0.40-0.45 → Sand (beach/coast)
+   - Elevation > 0.80 → Mountain
+   - Remaining land: moisture determines type:
+     - Moisture > 0.75 → Wetland
+     - Moisture > 0.55 → Forest
+     - Moisture > 0.35 → Grass
+     - Moisture > 0.20 → Sand
+     - Moisture <= 0.20 → Arid
 
-3. **Rivers**: Zero-crossing detection on river noise, variable width (wider in valleys),
-   wetland banks alongside rivers.
+3. **Rivers**: On spawnable land tiles, river noise absolute value is tested against a
+   variable-width threshold (wider in valleys: `0.018 + (0.7 - elevation) * 0.02`,
+   clamped to 0.01-0.04). Tiles within the threshold become River; tiles within 2.5x
+   the threshold become Wetland (riverbank fringe).
 
 ### World Parameters
 
@@ -235,7 +244,7 @@ is hardcoded.
 - **Survival**: 180 max hunger, 0.08 decay/tick (high metabolism), 15000 lifespan, mature at 1000
 - **Social**: Loose herds of ~4, low cohesion (0.015), low affinity (0.4)
 - **Fear**: Very skittish - threshold 30, accumulation 10/tick, **panic** response, long vigilance (200 ticks)
-- **Reproduction**: Fast breeder - 300 tick cooldown, **2 offspring**, low cost (25 hunger + 20 energy)
+- **Reproduction**: Breeds in pairs - **600 tick cooldown**, **2 offspring**, costs 45 hunger + 30 energy
 - **Terrain**: Faster in forest (1.2x), roams shorter distances (40), high grazing pressure (2.0)
 - **Body mass**: 1.0 (huntable by all predators)
 - **Visual**: Brown circle, size 5
@@ -303,14 +312,14 @@ is hardcoded.
 #### Sectid (Insect Faction)
 - **Role**: Fast swarming terraformer, dries terrain toward Arid
 - **Speed**: 0.06 wander (fastest faction), 0.11 hunt speed
-- **Combat**: 8 range, 0.5 attack range, 8 damage, 12 tick cooldown
-- **Survival**: 165 max hunger, 0.07 decay/tick (high metabolism), 20000 lifespan, mature at 800
+- **Combat**: 8 range, 0.5 attack range, **12 damage**, 12 tick cooldown
+- **Survival**: 165 max hunger, **0.05 decay/tick**, **25000 lifespan**, mature at 800
 - **Fear**: Threshold 40, fast accumulation (8/tick), **panic** response
 - **Social**: Packs of ~8, high cohesion (0.035), high affinity (0.8), 90% pack hunter chance
 - **Terraforming**: Drier direction, radius 1.5, strength 0.04, cooldown 6 ticks
 - **Nest reproduction**: NestBreeder flag. Cannot reproduce normally. Carries food to nests.
-  Max carry 5 food, delivery range 4 tiles, carrying speed 0.08.
-- **Feeding**: On Arid and Sand tiles, 0.35 nutrition
+  Max carry 5 food, delivery range 4 tiles, **carrying speed 0.11** (faster than hunt speed).
+- **Feeding**: **No tile feeding** (`CanGraze = false`, no `FeedTiles`). Sectids must hunt to survive.
 - **Spawns on**: Arid, Sand tiles only
 - **Terrain**: Fast on arid (1.2x), very slow on wetland (0.4x)
 - **Body mass**: 0.5 (individually weak, strong in packs)
@@ -382,8 +391,19 @@ Other systems check `ShouldUpdate()` to skip distant entities.
 | 100 - 200 | Statistical | Every 30 ticks | Statistical updates only |
 | 200+ | Aggregate | Every 60 ticks | Population-level only |
 
-**LOD-aware systems**: WanderSystem, SeparationSystem, HerdingSystem.
-All other systems process every entity every tick regardless of LOD.
+**LOD-aware systems** (checked via `ShouldUpdate()` or explicit level gate):
+
+| System | LOD Gate | Source |
+|--------|----------|--------|
+| WanderSystem | ShouldUpdate() | WanderSystem.cs |
+| SeparationSystem | ShouldUpdate() | SpatialSystems.cs |
+| HerdingSystem | ShouldUpdate() | HerdingSystem.cs |
+| CollisionSystem | Reduced+ | SpatialSystems.cs |
+| TerrainDiscomfortSystem | Reduced+ | TerrainSystems.cs |
+| TerraformSystem | Statistical+ | TerrainSystems.cs |
+| ReproductionSystem | Aggregate+ | ReproductionSystem.cs |
+
+Systems that must NOT be LOD-gated: MovementSystem, HungerSystem, AgingSystem, LODSystem.
 
 ### 5.2 Movement System
 
@@ -391,12 +411,15 @@ All other systems process every entity every tick regardless of LOD.
 **Components**: Position, Velocity
 
 Applies velocity to position each tick:
-1. Multiplies velocity by terrain speed modifier for current tile
-2. Attempts diagonal move; if blocked, tries axis-aligned sliding
-3. If still blocked, attempts perpendicular nudges (0.05 tiles) to escape corners
-4. Clamps to world bounds
-5. Updates `ChunkPosition` if entity has one
-6. **Velocity damping**: After position update, species entities get `vel *= 0.85`
+1. **Velocity clamping**: Creature velocity is hard-capped at **0.25 tiles/tick**
+   to prevent unbounded accumulation from additive systems (hunting, fleeing,
+   herding). Player entities are excluded from the cap.
+2. Multiplies velocity by terrain speed modifier for current tile
+3. Attempts diagonal move; if blocked, tries axis-aligned sliding
+4. If still blocked, attempts perpendicular nudges (0.05 tiles) to escape corners
+5. Clamps to world bounds
+6. Updates `ChunkPosition` if entity has one
+7. **Velocity damping**: After position update, species entities get `vel *= 0.85`
    per frame. Prevents stale velocity forces from persisting. Micro-drift cleanup
    zeroes velocity below 0.01 magnitude. Player entities are excluded.
 
@@ -424,6 +447,9 @@ Each tick:
 3. If starving (hunger <= 0): `energy.Current -= StarvationDamage`
 4. If energy <= 0: entity dies (queued for destruction)
 5. Faeling death: passes 50% power to linked crystal
+6. **Energy regeneration**: When not starving and `RegenCooldown == 0`,
+   regenerates energy at `EnergyRegenRate` per tick (species-configurable).
+   `RegenCooldown` is set by combat systems to prevent instant regen after taking damage.
 
 ### 5.5 Grazing System
 
@@ -685,7 +711,7 @@ Elderly threshold: 80% of MaxLifespan (available for future mechanics).
 
 ### 5.13 Reproduction System
 
-**File**: `Scripts/Systems/SurvivalSystems.cs`
+**File**: `Scripts/Systems/ReproductionSystem.cs`
 **Components**: Position, Species, Hunger, Energy, Age, Reproduction
 
 Standard reproduction for non-faction species:
@@ -697,9 +723,12 @@ Standard reproduction for non-faction species:
 4. NOT a faction reproducer (NestBreeder, SporeReproducer, CrystalSpawned skip)
 5. `hunger.Current >= HungerThreshold`
 6. `energy.Current >= EnergyThreshold`
+7. **Local density check**: Nearby same-species count (within `1.5× SocialRadius`)
+   must be below `2× PreferredGroupSize`. This prevents exponential population
+   explosions in well-fed areas.
 
 **Process**:
-1. Find walkable spawn location within `SpawnRadius` (up to 10 attempts)
+1. Find walkable spawn location within `SpawnRadius` of parent
 2. Deduct `HungerCost` and `EnergyCost` from parent
 3. Reset `CurrentCooldown`
 4. Spawn `OffspringCount` offspring at location
@@ -754,7 +783,7 @@ Sectids reproduce through nests that convert food into larvae.
 
 **Food delivery**:
 - Sectids with `FoodCarrier` component carry food from kills to nearest nest
-- While carrying: move at `CarryingSpeed` (0.08, slower than normal)
+- While carrying: move at `CarryingSpeed` (0.11, faster than hunt speed)
 - On delivery within `FoodDeliveryRange` (4 tiles): add food to nest, self-feed 30%
 
 **Nest mechanics**:
@@ -833,10 +862,14 @@ The three factions create a dynamic terraforming conflict:
 
 ### Rendering
 
-- Godot `_Draw()` calls using DrawRect, DrawCircle, DrawTriangle
-- Chunk-based rendering: only visible chunks are drawn
-- Tile rendering: solid color per tile type
-- Entity rendering: shape + color per species (Circle/Triangle/Square)
+- **Terrain**: Each chunk is rendered to a cached `ImageTexture` (4 pixels per tile).
+  Textures are rebuilt only when terraform modifies a tile (`WorldManager.DirtyChunks`).
+  One `DrawTextureRect()` call per visible chunk instead of 1,024 individual draw calls.
+- **Entities**: Three `MultiMeshInstance2D` nodes batch-render all entities by shape
+  (Circle, Triangle, Square). Per-entity frustum culling skips off-screen entities.
+  Instance transforms and colors are updated each frame. This reduces entity draw calls
+  from N to 3 regardless of entity count.
+- **Chunk-based frustum culling**: Only visible chunks are drawn (camera viewport bounds)
 - Entity size: `renderable.Size` pixels (scaled by zoom), modified by Growth component
 
 ### Entity Visuals
@@ -854,6 +887,7 @@ The three factions create a dynamic terraforming conflict:
 | Crystal | Teal (0.1, 1, 0.9) | Diamond | Special |
 | Nest | Brown (0.6, 0.4, 0.2) | Square | 9-15 (by stage) |
 | Spore | Purple (0.7, 0.3, 0.9) | Circle | 3 |
+| Player | Yellow (1, 1, 0) | Circle | 12 |
 
 ### Player Controls
 
@@ -887,6 +921,7 @@ Faelings, Nests, Spores, Crystals), total population. Updated every 0.5 seconds.
 | CrystalCount | 5 | Number of Faeling crystals |
 | InitialSectidColonies | 3 | Starting Sectid colony count |
 | InitialNestsPerColony | 2 | Nests per starting colony |
+| CreaturesPerChunk | 2.0 | Creatures per chunk for spawning density |
 | PlayerSpeed | 1.0 | Base camera movement speed |
 | PlayerSprintMultiplier | 3.0 | Sprint speed multiplier |
 
@@ -926,8 +961,8 @@ godot/
 │   │   ├── ISystem.cs               # System interface
 │   │   ├── LODSystem.cs             # Distance-based simulation LOD
 │   │   ├── MovementSystem.cs        # Position + velocity damping (0.85/frame)
-│   │   ├── TerrainSystems.cs        # TerrainDiscomfort + TerraformSystem + GrazingSystem
-│   │   ├── SurvivalSystems.cs       # HungerSystem + AgingSystem
+│   │   ├── TerrainSystems.cs        # TerrainDiscomfort + TerraformSystem
+│   │   ├── SurvivalSystems.cs       # HungerSystem + AgingSystem + GrazingSystem
 │   │   ├── WanderSystem.cs          # Random movement, roaming, terrain escape (hysteresis)
 │   │   ├── HerdingSystem.cs         # Social cohesion, alignment, leader following
 │   │   ├── SpatialSystems.cs        # SeparationSystem + CollisionSystem
@@ -943,7 +978,7 @@ godot/
 │   │   ├── Chunk.cs                 # Tile storage and access
 │   │   └── TileType.cs             # Tile enum, extensions (IsWater, IsWalkable, etc.)
 │   ├── Species/
-│   │   ├── SpeciesDefinition.cs     # 80+ property data class for species config
+│   │   ├── SpeciesDefinition.cs     # 90+ property data class for species config
 │   │   └── SpeciesRegistry.cs       # All 8 species registered with full parameters
 │   ├── Rendering/
 │   │   └── RenderingManager.cs      # Chunk-based entity/tile rendering

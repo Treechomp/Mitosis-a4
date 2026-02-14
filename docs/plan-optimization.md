@@ -5,95 +5,51 @@ Scale from ~1,500 entities at acceptable FPS to 10,000+ entities at 60 FPS.
 
 ## Current Bottlenecks
 
-**Rendering** (~15,000+ draw calls/frame):
-- Terrain: Individual `DrawRect()` per tile in visible chunks (~1,000-4,000/frame)
-- Entities: Individual `DrawCircle()`/`DrawPolygon()`/`DrawRect()` per entity with NO
-  frustum culling - all entities drawn every frame even when off-screen
-- No batching, no shaders, no MultiMesh
+**Rendering** — RESOLVED (steps A1-A3 all implemented):
+- ~~Terrain: Individual `DrawRect()` per tile~~ → Chunk texture caching (A2)
+- ~~Entities: Individual draw calls with no frustum culling~~ → MultiMesh batching + frustum culling (A1+A3)
+- Current: 3 draw calls for entities + 4-16 for terrain chunks
 
-**Simulation** (LOD partially implemented):
-- HuntingSystem (~1100 lines with flanking+ambush), FleeingSystem, NestSystem,
-  CrystalSystem, SporeSystem have LOD gates at Aggregate level
-- WanderSystem, SeparationSystem, HerdingSystem check LOD at Reduced level
-- CollisionSystem, TerraformSystem, GrazingSystem, ReproductionSystem,
-  TerrainDiscomfort still process every entity every tick
+**Simulation** (LOD mostly implemented):
+- HuntingSystem, FleeingSystem, NestSystem, CrystalSystem, SporeSystem: LOD gates at Aggregate
+- WanderSystem, SeparationSystem, HerdingSystem: LOD gates via ShouldUpdate()
+- CollisionSystem, TerrainDiscomfortSystem: LOD gates at Reduced
+- TerraformSystem: LOD gate at Statistical
+- ReproductionSystem: LOD gate at Aggregate
+- Remaining bottleneck: spatial hash queries in HuntingSystem/FleeingSystem at scale
 
 ---
 
 ## Track A: Rendering Optimization
 
-### A1. Entity Frustum Culling (Quick Win)
+### A1. Entity Frustum Culling — DONE
 
-**What**: Skip drawing entities outside the camera viewport.
-**Where**: `GameManager.DrawEntities()`
-**How**: Before drawing each entity, check if its screen position is within the
-visible viewport bounds (already computed in `_Draw()` for chunk culling). Skip
-the draw call if outside.
+**Implemented in**: `RenderingManager.UpdateEntityMultiMeshes()`
 
-```
-// Pseudocode - add to DrawEntities loop:
-if (pos.X < minWorldX - margin || pos.X > maxWorldX + margin ||
-    pos.Y < minWorldY - margin || pos.Y > maxWorldY + margin)
-    continue;
-```
+Per-entity viewport bounds check skips off-screen entities before populating
+MultiMesh buffers. Uses camera position, zoom, and a size-based margin.
 
-**Impact**: At default zoom, maybe ~4 chunks visible out of 256 total. Roughly
-95%+ of entities are off-screen and currently drawn for nothing. This alone
-could cut entity draw calls from 1,500 to ~75-100.
+### A2. Chunk Texture Caching — DONE
 
-**Risk**: None. Pure rendering optimization, no simulation impact.
+**Implemented in**: `RenderingManager.DrawTerrain()` + `RenderChunkTexture()`
 
-### A2. Chunk Texture Caching
+Each chunk is rendered to a cached `ImageTexture` at 4 pixels per tile. Textures
+are rebuilt only when `WorldManager.DirtyChunks` flags a terraform modification.
+One `DrawTextureRect()` per visible chunk. Terrain draw calls: ~4-16 per frame.
 
-**What**: Pre-render each chunk's terrain to an `ImageTexture`, draw one textured
-rect per visible chunk instead of 1,024 individual `DrawRect()` calls (32x32 tiles).
-**Where**: New `ChunkRenderer` helper or inline in `GameManager`
-**How**:
-1. When a chunk is first loaded (or after terraform modifies it), render its 32x32
-   tiles into an `Image` (CPU-side pixel buffer)
-2. Upload to `ImageTexture`
-3. In `_Draw()`: one `DrawTextureRect()` per visible chunk instead of 1,024 `DrawRect()`
-4. Mark chunks dirty when TerraformSystem modifies a tile; re-render on next frame
+### A3. Entity Batching with MultiMesh2D — DONE
 
-**Impact**: Terrain draw calls drop from ~1,000-4,000 to ~4-16 (one per visible chunk).
-Terraform changes are infrequent so re-rendering is rare.
+**Implemented in**: `RenderingManager.UpdateEntityMultiMeshes()` + `CreateMultiMeshInstances()`
 
-**Risk**: Low. Small memory overhead for textures (~16 chunks visible * 32*32*4 bytes =
-negligible). Need to invalidate on terraform.
+Three `MultiMeshInstance2D` nodes (circle, triangle, square) batch-render all
+entities. Per-frame: iterate visible entities, set instance transforms (position,
+scale) and colors, set `VisibleInstanceCount`. Buffers pre-grow to entity count.
+Entity draw calls: 3 total regardless of count.
 
-### A3. Entity Batching with MultiMesh2D
+### Rendering Summary
 
-**What**: Replace per-entity draw calls with Godot's `MultiMesh2D` instanced rendering.
-One MultiMesh per shape type (circle, triangle, square), updated each frame.
-**Where**: New rendering nodes added as children of GameManager or a RenderLayer node
-**How**:
-1. Create 3 `MultiMeshInstance2D` nodes (one per ShapeType), each with a small
-   base mesh (unit circle, unit triangle, unit square)
-2. Each frame, iterate visible entities (using A1 frustum culling), populate instance
-   transforms (position, scale from Size) and colors
-3. Set `InstanceCount` and update `MultiMesh` buffers
-4. Godot draws all instances in one draw call per shape type
-
-**Impact**: Entity rendering drops from N draw calls to 3 draw calls total (one per
-shape type), regardless of entity count. This is the single biggest rendering win.
-
-**Risk**: Medium. Requires restructuring the rendering approach. MultiMesh color
-requires `UseColors = true` on the MultiMesh resource. Need to handle the case where
-visible entity count changes frame-to-frame (resize buffers or pre-allocate to max).
-
-**Alternative**: If MultiMesh proves awkward, a simpler approach is to collect all
-same-shape entities and issue one `DrawPolygon()` with concatenated vertex arrays
-(manual batching). Less efficient than MultiMesh but simpler to implement.
-
-### Rendering Implementation Order
-
-```
-A1 (frustum culling) → A2 (chunk textures) → A3 (entity MultiMesh)
-```
-
-A1 is a 10-line change with immediate impact. A2 is moderate effort with big
-terrain savings. A3 is the largest change but provides the scaling solution.
-Each step is independently valuable - we can stop after any step and have improvement.
+All three rendering optimizations (A1, A2, A3) are implemented in
+`RenderingManager.cs`. The rendering pipeline is no longer a bottleneck.
 
 ---
 
@@ -116,7 +72,7 @@ Each step is independently valuable - we can stop after any step and have improv
 |--------|----------|-----------|
 | HuntingSystem | ~~Skip at Statistical+~~ **Done: Aggregate** | Spatial queries are the most expensive per-entity operation. Currently gated at Aggregate; could tighten to Statistical. |
 | FleeingSystem | ~~Skip at Statistical+~~ **Done: Aggregate** | Currently gated at Aggregate; could tighten to Statistical. |
-| CollisionSystem | Skip at Reduced+ | Off-screen overlaps are invisible. When entities come on-screen, one tick of collision resolution fixes any overlap. |
+| CollisionSystem | ~~Skip at Reduced+~~ **DONE: Reduced** | Off-screen overlaps are invisible. When entities come on-screen, one tick of collision resolution fixes any overlap. |
 | CrystalSystem (ranged attack) | Skip at Reduced+ | Ranged target scanning is expensive. Crystal spawning/death still works (checked in HungerSystem/AgingSystem). Only skip the attack loop. |
 | NestSystem (spawning loop) | Skip larvae at Reduced+ | Nest food storage and Sectid food delivery still work. Only throttle the larvae spawn timer processing. |
 | SporeSystem (AoE attack) | Skip AoE at Reduced+ | Shroomer growth still works (simple increment). Only skip the expensive AoE spatial query. Spore moisture still accumulates. |
@@ -125,10 +81,10 @@ Each step is independently valuable - we can stop after any step and have improv
 
 | System | LOD Gate | Rationale |
 |--------|----------|-----------|
-| TerraformSystem | Skip at Statistical+ | Terraforming is probabilistic and slow. Skipping distant terraform is unnoticeable. |
+| TerraformSystem | ~~Skip at Statistical+~~ **DONE: Statistical** | Terraforming is probabilistic and slow. Skipping distant terraform is unnoticeable. |
 | GrazingSystem | Skip at Statistical+ | Distant entities won't feed but also won't starve instantly (hunger decay is slow). Resume on LOD upgrade. |
-| ReproductionSystem | Skip at Statistical+ | Distant entities won't reproduce. Population pressure still maintained by nearby entities. |
-| TerrainDiscomfort | Skip at Reduced+ | Accumulation is cosmetic for distant entities. Resets naturally via decay. |
+| ReproductionSystem | ~~Skip at Statistical+~~ **DONE: Aggregate** | Distant entities won't reproduce. Population pressure still maintained by nearby entities. |
+| TerrainDiscomfort | ~~Skip at Reduced+~~ **DONE: Reduced** | Accumulation is cosmetic for distant entities. Resets naturally via decay. |
 
 **Systems that MUST NOT be LOD-gated**:
 
@@ -177,34 +133,32 @@ When systems skip ticks for distant entities, some values drift. To compensate:
 
 ### LOD Implementation Order
 
+Most LOD gates are now implemented. Remaining:
 ```
-~~B1 (HuntingSystem)~~ DONE → ~~B1 (FleeingSystem)~~ DONE → B1 (CollisionSystem)
-→ B1 (faction systems) → B1 (low-cost systems)
+B1 (GrazingSystem) → B1 (faction system attacks)
 ```
-
-Start with the three highest-CPU systems. Each is an independent change.
 
 ---
 
 ## Combined Implementation Order
 
-| Step | Track | Change | Effort | Expected Impact |
-|------|-------|--------|--------|-----------------|
-| 1 | A1 | Entity frustum culling | Small (~10 lines) | ~95% fewer entity draw calls |
-| 2 | B1 | ~~LOD-gate HuntingSystem~~ | ~~Small~~ | **DONE** — gated at Aggregate level |
-| 3 | B1 | ~~LOD-gate FleeingSystem~~ | ~~Small~~ | **DONE** — gated at Aggregate level |
-| 4 | B1 | LOD-gate CollisionSystem | Small (~5 lines) | Skip 2-pass collision for distant entities |
-| 5 | A2 | Chunk texture caching | Medium (~60-80 lines) | Terrain draw calls: ~4,000 → ~4-16 |
-| 6 | B1 | LOD-gate faction systems (Crystal, Nest, Spore attacks) | Small (~15 lines total) | Throttle faction spatial queries |
-| 7 | B1 | LOD-gate remaining (Terraform, Grazing, Reproduction, Discomfort) | Small (~20 lines total) | Cumulative CPU savings |
-| 8 | A3 | Entity MultiMesh batching | Large (~150-200 lines) | Entity draw calls: N → 3 regardless of count |
+| Step | Track | Change | Status |
+|------|-------|--------|--------|
+| 1 | A1 | Entity frustum culling | **DONE** — in RenderingManager |
+| 2 | B1 | LOD-gate HuntingSystem | **DONE** — Aggregate |
+| 3 | B1 | LOD-gate FleeingSystem | **DONE** — Aggregate |
+| 4 | B1 | LOD-gate CollisionSystem | **DONE** — Reduced |
+| 5 | A2 | Chunk texture caching | **DONE** — in RenderingManager |
+| 6 | B1 | LOD-gate TerraformSystem | **DONE** — Statistical |
+| 7 | B1 | LOD-gate TerrainDiscomfort | **DONE** — Reduced |
+| 8 | B1 | LOD-gate ReproductionSystem | **DONE** — Aggregate |
+| 9 | A3 | Entity MultiMesh batching | **DONE** — in RenderingManager |
+| 10 | B1 | LOD-gate GrazingSystem | Pending |
+| 11 | B1 | LOD-gate faction systems (Crystal, Nest, Spore attacks) | Pending |
 
-Steps 1-4 are quick wins that should immediately improve the 1,500-entity experience.
-Step 5 handles terrain. Steps 6-7 round out LOD coverage. Step 8 is the big rendering
-rewrite that enables 10,000+ entities.
-
-**After steps 1-4**, we should profile again to see where the remaining bottlenecks are
-before committing to steps 5-8. The actual bottleneck distribution may surprise us.
+**Remaining work**: LOD-gate GrazingSystem and faction system attack loops. Profile
+at higher entity counts (5K, 10K) to identify remaining bottlenecks (likely spatial
+hash queries in HuntingSystem/FleeingSystem).
 
 ---
 

@@ -57,15 +57,15 @@
 - [x] Preferred prey system with bias scoring
 - [x] Faction-specific fields: spore, nest, crystal, terraform, AoE, growth, ranged attack
 
-#### Terrain & World (85% Complete)
+#### Terrain & World (90% Complete)
 - [x] Chunk-based storage (32x32 tiles)
 - [x] Simplex noise terrain generation
 - [x] 9 tile types with walkability/speed rules
-- [x] 6 biome types (Arctic, Temperate, Tropical, Desert, Highland, Wetland)
+- [x] 8 biome types (Ocean, Coast, Grassland, Forest, Desert, Mountain, Wetland, River)
 - [x] IsSpawnable(), IsWater(), IsGrazeable() tile queries
 - [x] BiomeType calculation from temperature/moisture
 - [x] Species-specific spawn filtering (biome + tile)
-- [ ] Missing: Rivers, advanced hydrology
+- [x] River generation (noise-based zero-crossing with variable width and wetland banks)
 - [ ] Missing: Tile depletion/regrowth
 
 #### Behavior Systems (97% Complete)
@@ -189,21 +189,15 @@ Tasks:
 
 **Goal**: Diverse, interesting terrain with ecosystem implications
 
-### 2.1 River System
-Design:
-- Rivers flow from high elevation to low
-- River tiles: RiverSource, River, RiverDelta
-- Rivers block land movement but some species can swim
+### 2.1 River System — COMPLETE
+Rivers implemented via noise-based zero-crossing (not flow-based pathfinding).
 
-Tasks:
-- [ ] Add river tile types to TileType enum
-- [ ] Implement river generation in TerrainGenerator
-  - [ ] Find high elevation points as sources
-  - [ ] Path downhill using A* or gradient descent
-  - [ ] Join rivers at confluences
-  - [ ] End at ocean/lake
-- [ ] Add river speed/walkability rules
-- [ ] Add river spawnable rules (fish species later)
+- [x] River tile type added to TileType enum
+- [x] River generation in TerrainGenerator (noise zero-crossing with variable width)
+- [x] Wetland fringe banks alongside rivers
+- [x] River speed (0.35x), discomfort (8.0), avoidance (0.8) rules
+- [x] Rivers are walkable but very uncomfortable (drives creatures away naturally)
+- [ ] Future: Flow-based rivers (A* from peaks to ocean), fish species
 
 ### 2.2 Tile Depletion & Regrowth
 Design:
@@ -280,7 +274,7 @@ Tasks:
 - [x] Colony expansion: nests found new nests nearby or distant colonies
 - [x] Pack hunting: Sectids hunt spores and small prey in packs
 - [x] Terraform: Drier direction (shifts tiles toward Arid)
-- [x] Feeds on Arid/Sand tiles
+- [x] Hunts for food (no tile feeding — must hunt to survive)
 
 ### 4.3 Faeling (Crystal Faction) - COMPLETE
 - [x] Added Faeling to SpeciesRegistry (Terraformer diet, Solitary)

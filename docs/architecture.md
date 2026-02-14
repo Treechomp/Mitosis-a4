@@ -38,7 +38,7 @@ built-in scene tree, for maximum cache efficiency with thousands of entities.
 ┌──────────────────────────────────────────────────────────────┐
 │                    WORLD LAYER                                 │
 │  WorldManager: 16x16 chunks (512x512 tiles)                   │
-│  TerrainGenerator: OpenSimplex noise-based generation          │
+│  TerrainGenerator: FastNoiseLite (SimplexSmooth) generation     │
 │  9 tile types with walkability, grazeability, moisture values  │
 │  Terraformable: tiles shift along moisture axis                │
 └──────────────────────────┬───────────────────────────────────┘
@@ -46,8 +46,9 @@ built-in scene tree, for maximum cache efficiency with thousands of entities.
                            ▼
 ┌──────────────────────────────────────────────────────────────┐
 │                    RENDERING LAYER                             │
-│  Godot _Draw() calls: DrawRect, DrawCircle, DrawTriangle      │
-│  Chunk-based frustum culling                                   │
+│  Terrain: Chunk texture caching (ImageTexture per chunk)       │
+│  Entities: MultiMeshInstance2D batching (3 shape types)        │
+│  Per-entity frustum culling, chunk-based terrain culling       │
 │  Debug overlay: FPS, entity counts                             │
 │  Camera: WASD movement, zoom controls                          │
 └──────────────────────────────────────────────────────────────┘
@@ -83,7 +84,7 @@ Systems run in this order each tick (order matters for data dependencies):
  2. MovementSystem         - Apply velocity + damping (0.85/frame)
  3. TerrainDiscomfort      - Track terrain comfort/discomfort        [TerrainSystems.cs]
  4. HungerSystem           - Hunger decay, starvation                [SurvivalSystems.cs]
- 5. GrazingSystem          - Feeding on appropriate tiles            [TerrainSystems.cs]
+ 5. GrazingSystem          - Feeding on appropriate tiles            [SurvivalSystems.cs]
  6. WanderSystem           - Random movement, roaming, terrain escape
  7. HerdingSystem          - Social cohesion, leadership
  8. SeparationSystem       - Prevent same-species overlap            [SpatialSystems.cs]
@@ -113,8 +114,8 @@ godot/Scripts/
 │   ├── ISystem.cs                    # System interface
 │   ├── LODSystem.cs                  # Distance-based simulation fidelity
 │   ├── MovementSystem.cs             # Position updates + velocity damping
-│   ├── TerrainSystems.cs             # TerrainDiscomfort + Terraform + Grazing
-│   ├── SurvivalSystems.cs            # Hunger + Aging
+│   ├── TerrainSystems.cs             # TerrainDiscomfort + Terraform
+│   ├── SurvivalSystems.cs            # Hunger + Aging + Grazing
 │   ├── WanderSystem.cs               # Random movement, roaming, terrain escape
 │   ├── HerdingSystem.cs              # Social cohesion, alignment, leadership
 │   ├── SpatialSystems.cs             # Separation + Collision
