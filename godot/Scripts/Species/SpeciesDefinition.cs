@@ -83,6 +83,36 @@ public sealed class SpeciesDefinition
     /// will reject prey targets with too much water on the path.</summary>
     public bool SemiAquatic { get; init; } = false;
 
+    // === AMBUSH HUNTING ===
+
+    /// <summary>Stealth gain per tick when moving slowly or standing still.
+    /// 0 = not an ambush predator. Stealth accumulates toward 1.0.</summary>
+    public float AmbushStealthGain { get; init; } = 0f;
+
+    /// <summary>Stealth decay per tick when moving fast (chasing openly).</summary>
+    public float AmbushStealthDecay { get; init; } = 0.05f;
+
+    /// <summary>Speed threshold below which stealth accumulates (fraction of BaseHuntSpeed).</summary>
+    public float AmbushSpeedThreshold { get; init; } = 0.5f;
+
+    /// <summary>Distance within which a pounce can be triggered.</summary>
+    public float PounceRange { get; init; } = 3f;
+
+    /// <summary>Speed multiplier during pounce burst.</summary>
+    public float PounceSpeedMult { get; init; } = 3f;
+
+    /// <summary>Attack power multiplier during pounce burst.</summary>
+    public float PounceAttackMult { get; init; } = 2f;
+
+    /// <summary>Duration of pounce burst in ticks.</summary>
+    public int PounceDuration { get; init; } = 12;
+
+    /// <summary>Minimum stealth level to trigger a pounce (0-1).</summary>
+    public float PounceStealthThreshold { get; init; } = 0.7f;
+
+    /// <summary>Bonus stealth gain when on water tiles (for semi-aquatic ambushers like crocs).</summary>
+    public float WaterStealthBonus { get; init; } = 0f;
+
     // === FLEEING (Prey) ===
     public float FleeRange { get; init; } = 6f;
     public float FleeSpeedMultiplier { get; init; } = 2f;
@@ -296,4 +326,5 @@ public sealed class SpeciesDefinition
     public bool IsPredator => Diet == DietType.Carnivore || Diet == DietType.Omnivore;
     public bool IsPrey => Diet == DietType.Herbivore || Diet == DietType.Omnivore || Diet == DietType.Terraformer;
     public bool HasGrowth => GrowthMaxScale > 0f;
+    public bool IsAmbushPredator => AmbushStealthGain > 0f;
 }

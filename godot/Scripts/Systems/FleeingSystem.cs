@@ -26,6 +26,7 @@ public sealed class FleeingSystem : ISystem
     private float[] _predatorYs = new float[128];
     private float[] _predatorDistSq = new float[128];  // Store squared distances
     private int[] _predatorSpeciesIds = new int[128];   // Species ID per predator (for same-species filtering)
+    private float[] _predatorStealth = new float[128];  // Stealth level per predator (ambush detection reduction)
     private int _predatorCount;
 
     public FleeingSystem(SpatialHash spatialHash, WorldManager? worldManager = null)
@@ -50,6 +51,7 @@ public sealed class FleeingSystem : ISystem
                 Array.Resize(ref _predatorYs, newSize);
                 Array.Resize(ref _predatorDistSq, newSize);
                 Array.Resize(ref _predatorSpeciesIds, newSize);
+                Array.Resize(ref _predatorStealth, newSize);
             }
 
             ref var pos = ref em.Positions[entity];
@@ -57,6 +59,9 @@ public sealed class FleeingSystem : ISystem
             _predatorYs[_predatorCount] = pos.Y;
             _predatorSpeciesIds[_predatorCount] = em.HasComponents(entity, ComponentFlags.Species)
                 ? em.Species[entity].SpeciesId : 0;
+            // Track predator stealth for ambush detection reduction
+            ref var pred = ref em.Predators[entity];
+            _predatorStealth[_predatorCount] = pred.Stealth;
             _predatorCount++;
 
             // Update spatial hash for predators
@@ -69,6 +74,7 @@ public sealed class FleeingSystem : ISystem
         var predXSpan = _predatorXs.AsSpan(0, _predatorCount);
         var predYSpan = _predatorYs.AsSpan(0, _predatorCount);
         var predSpeciesSpan = _predatorSpeciesIds.AsSpan(0, _predatorCount);
+        var predStealthSpan = _predatorStealth.AsSpan(0, _predatorCount);
 
         foreach (int entity in em.Query(preyRequired))
         {
@@ -93,9 +99,10 @@ public sealed class FleeingSystem : ISystem
                 ? em.Species[entity].SpeciesId : 0;
 
             // Calculate flee direction and find closest threat distance
+            // Stealth-aware: stealthed predators reduce effective detection range
             var (fleeDir, hasThreat, closestDistSq) = CalculateFleeVectorWithDistance(
                 pos.X, pos.Y,
-                predXSpan, predYSpan, predSpeciesSpan,
+                predXSpan, predYSpan, predSpeciesSpan, predStealthSpan,
                 fleeRangeSq, mySpeciesId);
 
             // Always update fear state — even while hunting
@@ -212,10 +219,12 @@ public sealed class FleeingSystem : ISystem
     /// <summary>
     /// Calculate flee vector and return closest threat distance squared.
     /// Filters out predators of the same species (e.g., Sectids don't flee from Sectids).
+    /// Stealth-aware: stealthed predators have reduced effective detection range.
     /// </summary>
     private (Vector2 dir, bool hasThreat, float closestDistSq) CalculateFleeVectorWithDistance(
         float x, float y,
         ReadOnlySpan<float> predX, ReadOnlySpan<float> predY, ReadOnlySpan<int> predSpecies,
+        ReadOnlySpan<float> predStealth,
         float maxDistSq, int mySpeciesId)
     {
         float fleeX = 0, fleeY = 0;
@@ -232,7 +241,18 @@ public sealed class FleeingSystem : ISystem
             float dy = y - predY[i];
             float distSq = dx * dx + dy * dy;
 
-            if (distSq < maxDistSq && distSq > 0.001f)
+            // Stealth reduces effective detection range:
+            // At stealth 0 → full range, at stealth 1 → 10% range (nearly invisible)
+            // Pouncing predators (stealth reset to 0) are fully visible again
+            float stealth = predStealth[i];
+            float effectiveMaxDistSq = maxDistSq;
+            if (stealth > 0f)
+            {
+                float detectionMult = 1f - stealth * 0.9f; // 0.1 at full stealth
+                effectiveMaxDistSq = maxDistSq * detectionMult;
+            }
+
+            if (distSq < effectiveMaxDistSq && distSq > 0.001f)
             {
                 hasThreat = true;
                 float weight = 1f / distSq;  // Closer predators have more influence

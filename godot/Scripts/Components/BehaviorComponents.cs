@@ -41,6 +41,8 @@ public struct Predator
     public PackRole Role;        // Role in pack hunting
     public PackPhase Phase;      // Current phase of pack attack
     public int PhaseTimer;       // Ticks remaining in current phase
+    public float Stealth;        // 0-1: accumulated stealth level (ambush predators)
+    public int PounceTimer;      // Ticks remaining in pounce burst (0 = not pouncing)
 
     public Predator(
         float huntRange = 5f,
@@ -57,6 +59,8 @@ public struct Predator
         Role = PackRole.None;
         Phase = PackPhase.Idle;
         PhaseTimer = 0;
+        Stealth = 0f;
+        PounceTimer = 0;
     }
 
     public readonly bool HasTarget => TargetEntity >= 0;

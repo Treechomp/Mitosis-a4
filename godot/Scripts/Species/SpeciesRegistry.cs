@@ -472,6 +472,17 @@ public static class SpeciesRegistry
             TrackingHungerThreshold = 0.6f,
             TrackingRange = 40f,
 
+            // Ambush tactics — lurk in water, build stealth, pounce with burst speed
+            AmbushStealthGain = 0.008f,    // ~125 ticks (6s) to full stealth when still
+            AmbushStealthDecay = 0.04f,    // Stealth drops fast when chasing openly
+            AmbushSpeedThreshold = 0.5f,   // Stealth builds when moving at ≤50% hunt speed
+            PounceRange = 2.5f,            // Must be close — short explosive lunge
+            PounceSpeedMult = 3.5f,        // Massive burst — 0.08 × 3.5 = 0.28 (faster than any prey flee)
+            PounceAttackMult = 2.5f,       // 50 × 2.5 = 125 damage on pounce hit
+            PounceDuration = 15,           // ~0.75s burst — prey can escape if it reacts fast
+            PounceStealthThreshold = 0.65f, // Doesn't need perfect stealth to strike
+            WaterStealthBonus = 0.012f,    // Extra stealth on water tiles (total 0.02/tick on water)
+
             // Roaming - stays near water
             RoamDistance = 30f,
             RoamCooldown = 800,

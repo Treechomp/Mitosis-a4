@@ -134,6 +134,33 @@ public sealed class HuntingSystem : ISystem
             if (predator.PhaseTimer > 0)
                 predator.PhaseTimer--;
 
+            // Passive stealth accumulation for ambush predators (builds while idle/wandering)
+            if (speciesDef.IsAmbushPredator && !predator.HasTarget && predator.PounceTimer <= 0)
+            {
+                float currentSpd = 0f;
+                if (em.HasComponents(entity, ComponentFlags.Velocity))
+                {
+                    ref var v = ref em.Velocities[entity];
+                    currentSpd = MathF.Sqrt(v.Dx * v.Dx + v.Dy * v.Dy);
+                }
+                float stealthLimit = speciesDef.BaseHuntSpeed * speciesDef.AmbushSpeedThreshold;
+                if (currentSpd <= stealthLimit)
+                {
+                    float gain = speciesDef.AmbushStealthGain;
+                    if (speciesDef.WaterStealthBonus > 0f && _worldManager != null)
+                    {
+                        var tile = _worldManager.GetTile(pos.X, pos.Y);
+                        if (tile.IsWater())
+                            gain += speciesDef.WaterStealthBonus;
+                    }
+                    predator.Stealth = MathF.Min(1f, predator.Stealth + gain);
+                }
+                else
+                {
+                    predator.Stealth = MathF.Max(0f, predator.Stealth - speciesDef.AmbushStealthDecay);
+                }
+            }
+
             // Clear target if dead
             if (predator.HasTarget && !em.IsAlive(predator.TargetEntity))
             {
@@ -165,6 +192,7 @@ public sealed class HuntingSystem : ISystem
                 predator.TargetEntity = -1;
                 predator.Phase = PackPhase.Idle;
                 predator.Role = PackRole.None;
+                // Keep building stealth while idle (ambush predators lurk passively)
                 continue;
             }
 
@@ -484,14 +512,58 @@ public sealed class HuntingSystem : ISystem
                 // Mass-based agility for direction blending during pursuit
                 float huntAgility = Math.Clamp(1.5f / speciesDef.BodyMass, 0.25f, 1f);
 
+                // === AMBUSH STEALTH UPDATE ===
+                bool isAmbush = speciesDef.IsAmbushPredator;
+                if (isAmbush)
+                {
+                    // Tick down pounce timer
+                    if (predator.PounceTimer > 0)
+                        predator.PounceTimer--;
+
+                    // Update stealth based on movement speed
+                    if (predator.PounceTimer <= 0) // No stealth gain during pounce
+                    {
+                        float currentSpeed = MathF.Sqrt(
+                            em.HasComponents(entity, ComponentFlags.Velocity)
+                                ? em.Velocities[entity].Dx * em.Velocities[entity].Dx +
+                                  em.Velocities[entity].Dy * em.Velocities[entity].Dy
+                                : 0f);
+                        float stealthSpeedLimit = speciesDef.BaseHuntSpeed * speciesDef.AmbushSpeedThreshold;
+
+                        if (currentSpeed <= stealthSpeedLimit)
+                        {
+                            // Gain stealth when slow/still
+                            float gain = speciesDef.AmbushStealthGain;
+
+                            // Water tile bonus for semi-aquatic ambushers
+                            if (speciesDef.WaterStealthBonus > 0f && _worldManager != null)
+                            {
+                                var currentTile = _worldManager.GetTile(pos.X, pos.Y);
+                                if (currentTile.IsWater())
+                                    gain += speciesDef.WaterStealthBonus;
+                            }
+
+                            predator.Stealth = MathF.Min(1f, predator.Stealth + gain);
+                        }
+                        else
+                        {
+                            // Lose stealth when moving fast
+                            predator.Stealth = MathF.Max(0f, predator.Stealth - speciesDef.AmbushStealthDecay);
+                        }
+                    }
+                }
+
                 // Attack if in range
                 float attackRangeSq = predator.AttackRange * predator.AttackRange;
+                // Pounce attack multiplier: amplified damage during pounce burst
+                float attackMult = (isAmbush && predator.PounceTimer > 0) ? speciesDef.PounceAttackMult : 1f;
+
                 if (distSq < attackRangeSq && predator.CurrentCooldown == 0)
                 {
                     if (em.HasComponents(predator.TargetEntity, ComponentFlags.Energy))
                     {
                         ref var preyEnergy = ref em.Energies[predator.TargetEntity];
-                        preyEnergy.Current -= predator.AttackPower;
+                        preyEnergy.Current -= predator.AttackPower * attackMult;
                         preyEnergy.RegenCooldown = 60; // 3s combat cooldown at 20 TPS
 
                         if (preyEnergy.IsDead)
@@ -575,8 +647,45 @@ public sealed class HuntingSystem : ISystem
 
                     float huntSpeed = speciesDef.BaseHuntSpeed * speedMultiplier;
 
+                    // === AMBUSH HUNTING MOVEMENT ===
+                    if (isAmbush && !isPack)
+                    {
+                        float pounceRangeSq = speciesDef.PounceRange * speciesDef.PounceRange;
+
+                        if (predator.PounceTimer > 0)
+                        {
+                            // POUNCING: explosive burst toward prey
+                            var dir = MathUtils.Normalize(dx, dy);
+                            float pounceSpeed = speciesDef.BaseHuntSpeed * speciesDef.PounceSpeedMult * speedMultiplier;
+                            // During pounce, snap hard toward target (high agility override)
+                            BlendVelocity(ref vel, dir.X * pounceSpeed, dir.Y * pounceSpeed, 0.8f);
+                        }
+                        else if (predator.Stealth >= speciesDef.PounceStealthThreshold && distSq <= pounceRangeSq)
+                        {
+                            // TRIGGER POUNCE: within range and stealthed enough
+                            predator.PounceTimer = speciesDef.PounceDuration;
+                            predator.Stealth = 0f; // Stealth breaks on pounce
+
+                            var dir = MathUtils.Normalize(dx, dy);
+                            float pounceSpeed = speciesDef.BaseHuntSpeed * speciesDef.PounceSpeedMult * speedMultiplier;
+                            BlendVelocity(ref vel, dir.X * pounceSpeed, dir.Y * pounceSpeed, 0.8f);
+                        }
+                        else if (predator.Stealth > 0.1f)
+                        {
+                            // STALKING: approach slowly to maintain/build stealth
+                            var dir = MathUtils.Normalize(dx, dy);
+                            float stalkSpeed = speciesDef.BaseHuntSpeed * speciesDef.AmbushSpeedThreshold * 0.9f;
+                            BlendVelocity(ref vel, dir.X * stalkSpeed, dir.Y * stalkSpeed, huntAgility * 0.5f);
+                        }
+                        else
+                        {
+                            // NO STEALTH: chase openly (post-pounce or stealth broke)
+                            var dir = MathUtils.Normalize(dx, dy);
+                            BlendVelocity(ref vel, dir.X * huntSpeed, dir.Y * huntSpeed, huntAgility);
+                        }
+                    }
                     // Pack tactics based on role and phase
-                    if (isPack && predator.Role != PackRole.None)
+                    else if (isPack && predator.Role != PackRole.None)
                     {
                         // Swarm hunters (small body mass) skip positioning/retreat tactics
                         // and just rush directly — prey doesn't flee from them anyway
@@ -602,7 +711,8 @@ public sealed class HuntingSystem : ISystem
                     }
 
                     // Land predators steer around water during pursuit
-                    if (!speciesDef.SemiAquatic)
+                    // Ambush predators skip water avoidance when stalking or pouncing
+                    if (!speciesDef.SemiAquatic && !(isAmbush && (predator.Stealth > 0.1f || predator.PounceTimer > 0)))
                         SteerAroundWater(ref vel, pos.X, pos.Y);
                 }
             }
