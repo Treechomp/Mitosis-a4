@@ -11,10 +11,12 @@ Scale from ~1,500 entities at acceptable FPS to 10,000+ entities at 60 FPS.
   frustum culling - all entities drawn every frame even when off-screen
 - No batching, no shaders, no MultiMesh
 
-**Simulation** (14 of 17 systems ignore LOD):
-- HuntingSystem (670+ lines, spatial queries), FleeingSystem, CollisionSystem,
-  NestSystem, CrystalSystem, SporeSystem all process every entity every tick
-- Only WanderSystem, SeparationSystem, HerdingSystem check LOD
+**Simulation** (LOD partially implemented):
+- HuntingSystem (~1100 lines with flanking+ambush), FleeingSystem, NestSystem,
+  CrystalSystem, SporeSystem have LOD gates at Aggregate level
+- WanderSystem, SeparationSystem, HerdingSystem check LOD at Reduced level
+- CollisionSystem, TerraformSystem, GrazingSystem, ReproductionSystem,
+  TerrainDiscomfort still process every entity every tick
 
 ---
 
@@ -112,8 +114,8 @@ Each step is independently valuable - we can stop after any step and have improv
 
 | System | LOD Gate | Rationale |
 |--------|----------|-----------|
-| HuntingSystem | Skip at Statistical+ | Spatial queries are the most expensive per-entity operation. Distant predators still move (wander) and starve (hunger) but don't actively hunt. |
-| FleeingSystem | Skip at Statistical+ | Distant prey don't need fear updates. They still move via wander. If a predator approaches, LOD will upgrade them to Full before they're in danger. |
+| HuntingSystem | ~~Skip at Statistical+~~ **Done: Aggregate** | Spatial queries are the most expensive per-entity operation. Currently gated at Aggregate; could tighten to Statistical. |
+| FleeingSystem | ~~Skip at Statistical+~~ **Done: Aggregate** | Currently gated at Aggregate; could tighten to Statistical. |
 | CollisionSystem | Skip at Reduced+ | Off-screen overlaps are invisible. When entities come on-screen, one tick of collision resolution fixes any overlap. |
 | CrystalSystem (ranged attack) | Skip at Reduced+ | Ranged target scanning is expensive. Crystal spawning/death still works (checked in HungerSystem/AgingSystem). Only skip the attack loop. |
 | NestSystem (spawning loop) | Skip larvae at Reduced+ | Nest food storage and Sectid food delivery still work. Only throttle the larvae spawn timer processing. |
@@ -176,7 +178,7 @@ When systems skip ticks for distant entities, some values drift. To compensate:
 ### LOD Implementation Order
 
 ```
-B1 (HuntingSystem) → B1 (FleeingSystem) → B1 (CollisionSystem)
+~~B1 (HuntingSystem)~~ DONE → ~~B1 (FleeingSystem)~~ DONE → B1 (CollisionSystem)
 → B1 (faction systems) → B1 (low-cost systems)
 ```
 
@@ -189,8 +191,8 @@ Start with the three highest-CPU systems. Each is an independent change.
 | Step | Track | Change | Effort | Expected Impact |
 |------|-------|--------|--------|-----------------|
 | 1 | A1 | Entity frustum culling | Small (~10 lines) | ~95% fewer entity draw calls |
-| 2 | B1 | LOD-gate HuntingSystem | Small (~5 lines) | Skip expensive spatial queries for distant predators |
-| 3 | B1 | LOD-gate FleeingSystem | Small (~5 lines) | Skip predator scanning for distant prey |
+| 2 | B1 | ~~LOD-gate HuntingSystem~~ | ~~Small~~ | **DONE** — gated at Aggregate level |
+| 3 | B1 | ~~LOD-gate FleeingSystem~~ | ~~Small~~ | **DONE** — gated at Aggregate level |
 | 4 | B1 | LOD-gate CollisionSystem | Small (~5 lines) | Skip 2-pass collision for distant entities |
 | 5 | A2 | Chunk texture caching | Medium (~60-80 lines) | Terrain draw calls: ~4,000 → ~4-16 |
 | 6 | B1 | LOD-gate faction systems (Crystal, Nest, Spore attacks) | Small (~15 lines total) | Throttle faction spatial queries |

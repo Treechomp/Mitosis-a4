@@ -1,5 +1,17 @@
 # Mitosis Development Plan: Ecosystem Simulation Architecture
 
+> **SUPERSEDED**: This document was the original Python/Arcade + Esper ECS design plan
+> (January 2026). The project has since been migrated to **Godot 4.6 with C#**.
+>
+> For current documentation, see:
+> - **[architecture.md](architecture.md)** — Current Godot ECS architecture
+> - **[FEATURES_AND_DESIGN.md](FEATURES_AND_DESIGN.md)** — All implemented features and systems
+> - **[godot-roadmap.md](godot-roadmap.md)** — Active development roadmap
+>
+> This document is preserved as historical reference for the original design rationale.
+> The core architectural concepts (ECS, simulation-first, LOD, spatial hashing) still
+> apply but the implementation details (Python, Arcade, Esper, NumPy) do not.
+
 ## Executive Summary
 
 This document outlines a **complete restart strategy** for Mitosis, optimized for:

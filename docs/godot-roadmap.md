@@ -19,8 +19,9 @@
 │                    ECS SIMULATION LAYER                      │
 │  (Structure of Arrays for cache efficiency)                  │
 │  • EntityManager - 16,384 entity capacity                   │
-│  • Components - Position, Velocity, Hunger, Fear, etc.      │
-│  • Systems - Movement, Hunting, Fleeing, Reproduction       │
+│  • Components - Position, Velocity, Hunger, Fear,           │
+│                 Predator (Stealth, Pounce), Social, etc.    │
+│  • Systems - 17 systems across 15 files (20 TPS)           │
 └─────────────────────────────────────────────────────────────┘
                               │
                               ▼
@@ -43,7 +44,7 @@
       Crystal, FaelingPower, RangedAttack, Renderable, TerrainDiscomfort, SimulationLOD)
 
 #### Species System (100% Complete)
-- [x] SpeciesDefinition - comprehensive data class with 80+ configurable properties
+- [x] SpeciesDefinition - comprehensive data class with 90+ configurable properties
 - [x] SpeciesRegistry - lookup by name or ID (hash)
 - [x] 8 species defined: Deer, Rabbit, Wolf, Fox, Crocodile, Shroomer, Sectid, Faeling
 - [x] Diet types: Herbivore, Carnivore, Terraformer (Omnivore prepared)
@@ -67,17 +68,17 @@
 - [ ] Missing: Rivers, advanced hydrology
 - [ ] Missing: Tile depletion/regrowth
 
-#### Behavior Systems (95% Complete)
-- [x] MovementSystem - terrain speed modifiers, panic boost, wall sliding
+#### Behavior Systems (97% Complete)
+- [x] MovementSystem - terrain speed modifiers, wall sliding, **velocity damping (0.85/frame)**
 - [x] TerrainDiscomfortSystem - accumulating discomfort on bad terrain
 - [x] HungerSystem - decay, starvation damage, faction immunity
 - [x] GrazingSystem - herbivores feed on grass/forest, factions on FeedTiles
-- [x] WanderSystem - random exploration, roaming, terrain avoidance, discomfort escape
-- [x] HerdingSystem - flocking, cohesion, alignment, leader election, group management
+- [x] WanderSystem - random exploration, roaming, terrain avoidance, **hysteresis escape (enter 0.6, exit 0.1)**
+- [x] HerdingSystem - flocking, cohesion, alignment, leader election, group management, **skip when IsEscaping**
 - [x] SeparationSystem - same-species collision avoidance
 - [x] CollisionSystem - physical overlap resolution (all entities)
-- [x] HuntingSystem - pack coordination, mass-based targeting, pack tactics, food sharing
-- [x] FleeingSystem - prey escape with fear integration, 4 response types
+- [x] HuntingSystem - **mass-based agility**, pack coordination, **coordinated flanking (Leader/Flanker/Disruptor roles, convergence triggers)**, **ambush hunting (stealth, stalking, pounce burst)**, food sharing
+- [x] FleeingSystem - prey escape with fear integration, 4 response types, **mass-based agility**, **stealth-aware detection (stealthed predators reduce effective flee range by up to 90%)**
 - [x] AgingSystem - maturity, natural death
 - [x] ReproductionSystem - species-aware offspring spawning with population cap
 - [x] LODSystem - 4-tier distance-based simulation detail
@@ -252,8 +253,8 @@ Tasks:
 - [ ] Add fish-specific behaviors (schooling)
 
 ### 3.3 Shore Interactions
-- [ ] Crocodile hunts prey at water's edge
-- [ ] Prey avoid water edges when predators present
+- [x] Crocodile hunts prey at water's edge via ambush hunting (stealth + pounce)
+- [x] Prey detection reduced by crocodile stealth (up to 90% range reduction)
 - [ ] Amphibian species concept (later)
 
 ---
@@ -403,8 +404,10 @@ Structure:
 
 ### Known Issues
 - [ ] Creatures can still spawn in valid tiles but isolated positions
-- [ ] Pack hunting coordination could be tighter
+- [x] ~~Pack hunting coordination could be tighter~~ → Flanking system with roles
 - [ ] Fear decay might be too slow for some species
+- [ ] Sectid population balance — starve out despite hunting; will worsen once Shroomers fight back
+- [ ] TerrainSpeedModifiers not yet wired into MovementSystem (uses tile defaults only)
 
 ### Code Quality
 - [ ] Add XML documentation to all public methods
@@ -420,6 +423,7 @@ Structure:
 | v0.1 | Jan 2026 | Core ECS, basic rendering |
 | v0.2 | Feb 2026 | Species system, reproduction, fear, terrain discomfort, biome spawning |
 | v0.3 | Feb 2026 | Faction species (Shroomer/Sectid/Faeling), terraform system, nest/spore/crystal systems, pack tactics, mass-based hunting, AoE/ranged attacks, growth system, power inheritance |
+| v0.4 | Feb 2026 | Code reorganization (BehaviorSystems.cs split into 8 files, GameManager split into 4), entity jitter fixes (velocity damping, mass-based direction blending, hysteresis terrain escape, herding/escape priority), coordinated wolf flanking (Leader/Flanker/Disruptor roles, convergence triggers), crocodile ambush hunting (stealth mechanics, stalking, pounce burst), stealth-aware prey detection |
 
 ---
 
