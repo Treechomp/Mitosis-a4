@@ -102,19 +102,19 @@ GameManager runs a fixed-timestep loop at **20 TPS** (ticks per second):
 ```
 Each Tick (0.05 seconds):
   1.  LODSystem           - Update distance-based fidelity levels
-  2.  MovementSystem      - Apply velocity to position with terrain modifiers
-  3.  TerrainDiscomfort   - Accumulate/decay terrain discomfort
-  4.  HungerSystem        - Decay hunger, apply starvation damage
-  5.  GrazingSystem       - Herbivores/factions feed on appropriate tiles
-  6.  WanderSystem        - Random movement, roaming, terrain avoidance
+  2.  MovementSystem      - Apply velocity, terrain speed, velocity damping (0.85/frame)
+  3.  TerrainDiscomfort   - Accumulate/decay terrain discomfort     [TerrainSystems.cs]
+  4.  HungerSystem        - Decay hunger, apply starvation damage   [SurvivalSystems.cs]
+  5.  GrazingSystem       - Herbivores/factions feed on tiles       [TerrainSystems.cs]
+  6.  WanderSystem        - Random movement, roaming, terrain escape (hysteresis)
   7.  HerdingSystem       - Social cohesion, alignment, leader following
-  8.  SeparationSystem    - Prevent creature overlap within species
-  9.  CollisionSystem     - Physical overlap resolution (all entities)
-  10. HuntingSystem       - Predator target selection, pursuit, attack
-  11. FleeingSystem       - Prey threat detection, fear, escape
-  12. AgingSystem          - Increment age, natural death
+  8.  SeparationSystem    - Prevent creature overlap within species  [SpatialSystems.cs]
+  9.  CollisionSystem     - Physical overlap resolution (all)        [SpatialSystems.cs]
+  10. HuntingSystem       - Solo/pack/ambush hunting, flanking, stealth, pounce
+  11. FleeingSystem       - Stealth-aware threat detection, fear, escape
+  12. AgingSystem          - Increment age, natural death            [SurvivalSystems.cs]
   13. ReproductionSystem  - Spawn offspring when thresholds met
-  14. TerraformSystem     - Faction tile modification
+  14. TerraformSystem     - Faction tile modification                [TerrainSystems.cs]
   15. NestSystem           - Sectid nest breeding & food delivery
   16. SporeSystem          - Shroomer spore lifecycle & AoE attacks
   17. CrystalSystem        - Faeling crystal management & ranged attacks
@@ -198,7 +198,7 @@ Balanced:         Extremes shift toward Grass (center)
 
 ### Overview
 
-All creature behavior is driven by `SpeciesDefinition` - a data class with 80+
+All creature behavior is driven by `SpeciesDefinition` - a data class with 90+
 configurable properties. Species are registered in `SpeciesRegistry` and looked up
 by name hash. Systems read species parameters at runtime; no species-specific logic
 is hardcoded.
@@ -247,7 +247,10 @@ is hardcoded.
 - **Survival**: 210 max hunger, 0.04 decay/tick, 24000 lifespan, mature at 1500
 - **Hunting**: Threshold 75% (hunts when below 75% hunger), tracks at 50% hunger over 80 tile range
 - **Pack**: Coordination radius 10, share radius 12, killer gets 50%, 70% pack hunter chance
-- **Pack roles**: Leader 1.0x speed, flankers 1.1x, chasers 1.15x
+- **Pack roles**: Leader 1.0x speed, flankers 1.1x, disruptors 1.15x
+- **Flanking tactics**: Leader holds at distance, flankers circle behind prey,
+  disruptors scatter the herd, leader triggers convergence (all-in kill rush).
+  Convergence timeout 120 ticks.
 - **Social**: Packs of ~3, high cohesion (0.04), high alignment (0.03), affinity 0.7
 - **Reproduction**: 1000 tick cooldown, costs 60 hunger + 40 energy
 - **Preferred prey**: Deer, Rabbit (0.5 bias)
@@ -267,9 +270,13 @@ is hardcoded.
 - **Visual**: Orange triangle, size 7
 
 #### Crocodile
-- **Role**: Aquatic ambush predator
+- **Role**: Aquatic ambush predator with stealth and pounce mechanics
 - **Speed**: 0.02 wander (very slow on land), 0.08 hunt speed
 - **Combat**: 6 range, 1.2 attack range (large bite), **50 damage** (highest), 40 tick cooldown
+- **Ambush hunting**: Lurks in water building stealth (0.008/tick + 0.012 water bonus).
+  When stealthed (≥0.65) and within 2.5 tiles: explosive pounce at 3.5x speed (0.28!)
+  with 2.5x damage (125 per hit) for 15 ticks. Prey detection reduced by up to 90%
+  while stealthed. After pounce, slow land chase — prey escapes if it survives the burst.
 - **Survival**: 300 max hunger, 0.03 decay/tick (slow metabolism), **50000 lifespan**, mature at 4000
 - **Terrain**: Fast in water (shallow 1.5x, deep 1.8x), very slow on land (grass 0.4x, forest 0.3x)
 - **Social**: Completely solitary (all social values 0)
@@ -295,7 +302,7 @@ is hardcoded.
 
 #### Sectid (Insect Faction)
 - **Role**: Fast swarming terraformer, dries terrain toward Arid
-- **Speed**: 0.06 wander (fastest faction), 0.09 hunt speed
+- **Speed**: 0.06 wander (fastest faction), 0.11 hunt speed
 - **Combat**: 8 range, 0.5 attack range, 8 damage, 12 tick cooldown
 - **Survival**: 165 max hunger, 0.07 decay/tick (high metabolism), 20000 lifespan, mature at 800
 - **Fear**: Threshold 40, fast accumulation (8/tick), **panic** response
@@ -389,10 +396,13 @@ Applies velocity to position each tick:
 3. If still blocked, attempts perpendicular nudges (0.05 tiles) to escape corners
 4. Clamps to world bounds
 5. Updates `ChunkPosition` if entity has one
+6. **Velocity damping**: After position update, species entities get `vel *= 0.85`
+   per frame. Prevents stale velocity forces from persisting. Micro-drift cleanup
+   zeroes velocity below 0.01 magnitude. Player entities are excluded.
 
 ### 5.3 Terrain Discomfort System
 
-**File**: `Scripts/Systems/BehaviorSystems.cs`
+**File**: `Scripts/Systems/TerrainSystems.cs`
 **Components**: Position, TerrainDiscomfort
 
 Tracks how uncomfortable a creature is on its current terrain:
@@ -405,7 +415,7 @@ Tracks how uncomfortable a creature is on its current terrain:
 
 ### 5.4 Hunger System
 
-**File**: `Scripts/Systems/BehaviorSystems.cs`
+**File**: `Scripts/Systems/SurvivalSystems.cs`
 **Components**: Hunger (+ Energy for starvation)
 
 Each tick:
@@ -417,7 +427,7 @@ Each tick:
 
 ### 5.5 Grazing System
 
-**File**: `Scripts/Systems/BehaviorSystems.cs`
+**File**: `Scripts/Systems/SurvivalSystems.cs`
 **Components**: Position, Species, Hunger
 
 - **Herbivores**: If on grazeable tile (Grass/Forest), gain `GrazeNutrition` per tick
@@ -426,7 +436,7 @@ Each tick:
 
 ### 5.6 Wander System
 
-**File**: `Scripts/Systems/BehaviorSystems.cs`
+**File**: `Scripts/Systems/WanderSystem.cs`
 **Components**: Wander, Velocity, Position (LOD-aware)
 
 The primary movement behavior for creatures not actively hunting or fleeing:
@@ -445,17 +455,27 @@ The primary movement behavior for creatures not actively hunting or fleeing:
 - Arrival threshold: 5 tiles from target
 - Cooldown after arrival: ~500 ticks (reduced when hungry)
 
-**Discomfort-driven escape**: When discomfort > 50% of threshold, prioritizes moving away
-from uncomfortable terrain. Direction change chance reduced by 0.3x to maintain escape heading.
+**Discomfort-driven escape**: Uses hysteresis to prevent edge-oscillation jitter:
+- **Enter escape mode**: When `discomfort.Ratio > 0.6` → sets `IsEscaping = true`
+- **Exit escape mode**: When `discomfort.Ratio < 0.1` → sets `IsEscaping = false`
+- While escaping: prioritizes moving away from uncomfortable terrain, direction change
+  chance reduced by 0.3x to maintain escape heading. Other systems (herding) check
+  `IsEscaping` to avoid conflicting forces.
 
 **Skips**: Entities currently fleeing (Prey.IsFleeing) or actively hunting (Predator.TargetEntity >= 0).
 
 ### 5.7 Hunting System
 
-**File**: `Scripts/Systems/BehaviorSystems.cs`
+**File**: `Scripts/Systems/HuntingSystem.cs`
 **Components**: Position, Predator, Hunger
 
-The most complex system. Handles solo hunting, pack coordination, and kill nutrition.
+The most complex system. Handles solo hunting, pack coordination with flanking tactics,
+ambush hunting with stealth mechanics, and kill nutrition distribution.
+
+**Mass-based direction blending**: All velocity changes in hunting use
+`agility = Clamp(1.5 / bodyMass, 0.25, 1.0)`. Lighter creatures snap to new directions
+instantly while heavy predators (crocs) commit to their trajectory. Implemented via
+`BlendVelocity(ref vel, targetDx, targetDy, agility)`.
 
 **Hunt activation**: Only when `hunger.Current / hunger.Max < HuntThreshold` (default 0.75).
 Higher urgency = longer effective range and faster movement.
@@ -464,13 +484,15 @@ Higher urgency = longer effective range and faster movement.
 1. Spatial hash query within effective hunt range
 2. Filter: must have Prey component, mass within huntable ratio, not unhuntable
 3. Score: distance (closer = better) + terrain penalty + preferred prey bias
-4. Pack members share targets via group target dict
+4. Land predators reject targets across water (>15% water fraction on path)
+5. Pack members share targets via group target dict
 
 **Pursuit**:
 - Speed: `BaseHuntSpeed * (1 + urgency * 0.5)`
 - Range modifier: `HuntRange * (1 + urgency * 0.5) * (1 - discomfortRatio * 0.5)`
 
-**Attack**: When within AttackRange and cooldown is 0, deal AttackPower damage.
+**Attack**: When within AttackRange and cooldown is 0, deal AttackPower damage
+(multiplied by PounceAttackMult during ambush pounce burst).
 On kill:
 - Nutrition = `prey.NutritionValue` (or `prey.BodyMass * 20` if unset)
 - Solo: hunter gets all nutrition
@@ -478,25 +500,106 @@ On kill:
 - Sectids: food carriers get portion as cargo (for nest delivery), rest as hunger
 
 **Hunger-driven tracking**: When hungry (< `TrackingHungerThreshold`) with no target,
-scans `TrackingRange` at 0.8x wander speed (slow search mode).
+scans `TrackingRange` at 0.8x hunt speed (slow search mode). Uses mass-based agility
+for tracking direction blending.
 
-**Pack tactics** (activated when target has herd protection):
-- **Positioning phase** (~40 ticks): Flankers move to sides, leader maintains distance
-- **Rushing phase** (~30 ticks): All rush at 1.3x speed to scatter herd
-- **Retreating phase** (~20 ticks): Back off at 0.8x to harass
-- If target becomes isolated (< 2 herd members within 6 tiles): switch to direct chase at 1.2x
+#### 5.7.1 Pack Flanking Tactics (Wolves)
+
+Pack roles are assigned when a pack member acquires a target. Roles determine
+behavior during the positioning phase before the all-in convergence kill rush.
+
+**Roles** (`PackRole` enum):
+| Role | Count | Behavior |
+|------|-------|----------|
+| Leader | 1 | Holds at 6-tile observation distance, circles slowly, monitors flanker positions, triggers convergence |
+| Flanker | 2+ | Circles to OPPOSITE side of prey from leader (behind prey), forms V-formation with perpendicular spread |
+| Disruptor | 1-2 | Positioning → Disrupting (rush at 1.3x) → Retreating cycle to scatter the herd |
+
+**Assignment priority**: 1 leader (highest leadership score) → 1 disruptor → fill flankers → 2nd disruptor in larger packs.
+
+**Phases** (`PackPhase` enum):
+| Phase | Description |
+|-------|-------------|
+| Positioning | All roles move to starting positions |
+| Disrupting | Disruptors rush prey herd to scatter it |
+| Retreating | Disruptors back off between rushes |
+| Converging | **ALL-IN kill rush** — all roles abandon tactics and charge at 1.3x speed |
+
+**Convergence triggers** (any one triggers the all-in):
+1. Leader's `ConvergenceTimeout` expires (default 120 ticks / 6 seconds)
+2. A flanker reaches opposite side of prey (dot product of prey→leader · prey→flanker < 0)
+3. Prey becomes isolated from herd (< 2 nearby herd members within 6 tiles)
+
+**Convergence propagation**: Leader sets `PackPhase.Converging`, which propagates to
+all group members via `_groupConverging` dictionary in the first pass.
+
+**Flanker positioning geometry**:
+- Direction from leader to prey = "front" of attack
+- Flanker target = behind prey (past it from leader's perspective) at 4-tile distance
+- Two flankers spread to opposite sides using perpendicular offset (3-tile spread)
+- Side determination: cross product of relative position vs attack axis
+
+**Swarm exception**: Species with BodyMass < 1.0 (Sectids) skip tactical positioning
+and use direct swarm rush at 1.2x speed instead.
+
+#### 5.7.2 Ambush Hunting (Crocodiles)
+
+Ambush predators use a stealth mechanic to approach prey undetected, then trigger
+a devastating pounce burst. Activated for any species with `AmbushStealthGain > 0`.
+
+**Stealth accumulation** (`Predator.Stealth`, 0.0 to 1.0):
+- **Gain**: When moving at or below `AmbushSpeedThreshold` fraction of BaseHuntSpeed.
+  Rate = `AmbushStealthGain` per tick (0.008 for crocs).
+- **Water bonus**: Semi-aquatic ambushers gain extra `WaterStealthBonus` on water tiles
+  (0.012 for crocs, total 0.02/tick on water — full stealth in ~50 ticks / 2.5s).
+- **Decay**: When moving faster than speed threshold, stealth drops at
+  `AmbushStealthDecay` per tick (0.04 for crocs — fast loss).
+- **Passive**: Stealth builds while idle (no target) too — crocs lurk in water.
+
+**Three movement phases**:
+
+| Phase | Condition | Movement | Agility |
+|-------|-----------|----------|---------|
+| Stalking | Stealth > 0.1, no pounce | Slow approach at `BaseHuntSpeed × AmbushSpeedThreshold × 0.9` | 0.5× normal |
+| Pounce | Stealth ≥ threshold AND dist ≤ PounceRange | Burst at `BaseHuntSpeed × PounceSpeedMult` | 0.8 (snap to target) |
+| Open chase | Stealth ≤ 0.1 or post-pounce | Normal `BaseHuntSpeed × urgency` | Normal mass-based |
+
+**Pounce mechanics**:
+- Trigger: `Stealth >= PounceStealthThreshold` AND distance ≤ `PounceRange`
+- On trigger: `PounceTimer = PounceDuration`, `Stealth = 0` (breaks cover)
+- During pounce: speed × PounceSpeedMult, damage × PounceAttackMult
+- Duration: `PounceDuration` ticks (15 for crocs = 0.75 seconds)
+
+**Crocodile pounce numbers**:
+- Pounce speed: 0.08 × 3.5 = 0.28 (faster than any prey's flee speed)
+- Pounce damage: 50 × 2.5 = 125 per hit (often one-shot on small prey)
+- After pounce: slow open chase at 0.08 — prey escapes if it survives initial burst
+
+**Water avoidance**: Ambush predators skip water-avoidance steering while stalking or
+pouncing (they deliberately hunt from water).
 
 ### 5.8 Fleeing System
 
-**File**: `Scripts/Systems/BehaviorSystems.cs`
+**File**: `Scripts/Systems/FleeingSystem.cs`
 **Components**: Position, Prey, Velocity, Wander (+ optional Fear)
 
 Two phases:
-1. **Predator scan**: Collects all predator positions and squared distances
-2. **Per-prey processing**: Calculates flee direction and applies fear
+1. **Predator scan**: Collects all predator positions, species IDs, and stealth levels
+2. **Per-prey processing**: Calculates flee direction (stealth-aware) and applies fear
 
-**Flee direction**: Weighted sum away from nearby predators. Weight = `1 / distanceSquared`
-(closer predators are far more influential).
+**Mass-based direction blending**: Like hunting, flee velocity uses mass-based agility:
+`agility = Clamp(1.5 / bodyMass, 0.25, 1.0)`. Rabbits (mass 1.0) juke instantly while
+deer (mass 4.0) commit to escape routes. Applies to both normal flee and panic responses.
+
+**Stealth-aware detection**: Each predator's stealth level reduces the effective flee
+range for prey detecting that predator:
+- `effectiveRange = fleeRange × (1 - stealth × 0.9)`
+- At stealth 0: full detection range
+- At stealth 1.0: only 10% of normal range (nearly invisible)
+- Pounce resets stealth to 0 → prey sees predator at full range again and can flee
+
+**Flee direction**: Weighted sum away from *detected* nearby predators.
+Weight = `1 / distanceSquared` (closer predators are far more influential).
 
 **Fear accumulation**:
 - When predator within FleeRange: `fear += AccumulationRate * proximityFactor`
@@ -518,13 +621,13 @@ stops fleeing to escape bad terrain instead (survival priority over predator avo
 
 ### 5.9 Herding System
 
-**File**: `Scripts/Systems/BehaviorSystems.cs`
+**File**: `Scripts/Systems/HerdingSystem.cs`
 **Components**: Position, Velocity, Species, Social (LOD-aware)
 
 Manages social grouping, leader selection, and cohesion/alignment forces.
 
 **Priority system** (higher priorities override social behavior):
-1. High terrain discomfort (ratio > 0.6) → escape instead
+1. Terrain `IsEscaping` flag set → skip herding entirely (prevents tug-of-war jitter)
 2. Actively fleeing from predator → suspend social
 3. Actively hunting (non-pack) → suspend social
 4. **Exception**: Packs maintain cohesion during hunt (with 3-6x boost)
@@ -552,7 +655,7 @@ at reduced radius (0.8x) and strength (0.5x).
 
 ### 5.10 Separation System
 
-**File**: `Scripts/Systems/BehaviorSystems.cs`
+**File**: `Scripts/Systems/SpatialSystems.cs`
 **Components**: Position, Velocity, Species (LOD-aware)
 
 Prevents same-species creatures from overlapping:
@@ -562,7 +665,7 @@ Prevents same-species creatures from overlapping:
 
 ### 5.11 Collision System
 
-**File**: `Scripts/Systems/BehaviorSystems.cs`
+**File**: `Scripts/Systems/SpatialSystems.cs`
 **Components**: Position, Renderable
 
 Physical overlap resolution for all entities (regardless of species):
@@ -572,7 +675,7 @@ Physical overlap resolution for all entities (regardless of species):
 
 ### 5.12 Aging System
 
-**File**: `Scripts/Systems/BehaviorSystems.cs`
+**File**: `Scripts/Systems/SurvivalSystems.cs`
 **Components**: Age
 
 Each tick: `age.Current++`. When `age.Current >= MaxLifespan`: entity dies.
@@ -582,7 +685,7 @@ Elderly threshold: 80% of MaxLifespan (available for future mechanics).
 
 ### 5.13 Reproduction System
 
-**File**: `Scripts/Systems/BehaviorSystems.cs`
+**File**: `Scripts/Systems/SurvivalSystems.cs`
 **Components**: Position, Species, Hunger, Energy, Age, Reproduction
 
 Standard reproduction for non-faction species:
@@ -820,25 +923,37 @@ godot/
 │   │   └── FactionComponents.cs     # Nest, FoodCarrier, Spore, Growth, Crystal,
 │   │                                # FaelingPower, RangedAttack
 │   ├── Systems/
-│   │   ├── BehaviorSystems.cs       # Most systems: Wander, Hunting, Fleeing, Herding,
-│   │   │                            # Separation, Collision, Hunger, Grazing, Aging,
-│   │   │                            # Reproduction, Terraform, TerrainDiscomfort
-│   │   ├── MovementSystem.cs        # Position updates from velocity
+│   │   ├── ISystem.cs               # System interface
 │   │   ├── LODSystem.cs             # Distance-based simulation LOD
+│   │   ├── MovementSystem.cs        # Position + velocity damping (0.85/frame)
+│   │   ├── TerrainSystems.cs        # TerrainDiscomfort + TerraformSystem + GrazingSystem
+│   │   ├── SurvivalSystems.cs       # HungerSystem + AgingSystem
+│   │   ├── WanderSystem.cs          # Random movement, roaming, terrain escape (hysteresis)
+│   │   ├── HerdingSystem.cs         # Social cohesion, alignment, leader following
+│   │   ├── SpatialSystems.cs        # SeparationSystem + CollisionSystem
+│   │   ├── HuntingSystem.cs         # Solo/pack/ambush hunting, flanking tactics, stealth
+│   │   ├── FleeingSystem.cs         # Threat detection (stealth-aware), fear, escape
+│   │   ├── ReproductionSystem.cs    # Standard offspring spawning
 │   │   ├── CrystalSystem.cs         # Faeling crystal management & ranged attacks
 │   │   ├── NestSystem.cs            # Sectid nest breeding & food delivery
 │   │   └── SporeSystem.cs           # Shroomer spore lifecycle & AoE attacks
 │   ├── World/
 │   │   ├── TerrainGenerator.cs      # Noise-based terrain generation
 │   │   ├── WorldManager.cs          # Chunk loading, tile queries, walkability
-│   │   └── Chunk.cs                 # Tile storage and access
+│   │   ├── Chunk.cs                 # Tile storage and access
+│   │   └── TileType.cs             # Tile enum, extensions (IsWater, IsWalkable, etc.)
 │   ├── Species/
 │   │   ├── SpeciesDefinition.cs     # 80+ property data class for species config
 │   │   └── SpeciesRegistry.cs       # All 8 species registered with full parameters
+│   ├── Rendering/
+│   │   └── RenderingManager.cs      # Chunk-based entity/tile rendering
 │   ├── Utils/
 │   │   ├── SpatialHash.cs           # Grid-based spatial queries
 │   │   └── MathUtils.cs             # Distance, normalization helpers
-│   └── GameManager.cs               # Main loop, initialization, system registration
+│   ├── GameManager.cs               # Main loop, initialization, system registration
+│   ├── EntityFactory.cs             # Entity creation from SpeciesDefinition
+│   ├── WorldSpawner.cs              # Initial population spawning
+│   └── PlayerController.cs          # Camera movement and controls
 ├── Scenes/
 │   └── Main.tscn                    # Main Godot scene
 └── project.godot                    # Godot project configuration

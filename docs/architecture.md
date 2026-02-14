@@ -18,19 +18,19 @@ built-in scene tree, for maximum cache efficiency with thousands of entities.
 ```
 ┌──────────────────────────────────────────────────────────────┐
 │                    SPECIES DEFINITION LAYER                    │
-│  SpeciesDefinition (80+ properties per species)               │
-│  SpeciesRegistry (8 species: Deer, Rabbit, Wolf, Fox,         │
-│                   Crocodile, Shroomer, Sectid, Faeling)       │
+│  SpeciesDefinition (90+ properties per species)               │
+│  SpeciesRegistry (8 species: Deer, Rabbit, Wolf, Fox,            │
+│                   Crocodile, Shroomer, Sectid, Faeling)          │
 └──────────────────────────┬───────────────────────────────────┘
                            │
                            ▼
 ┌──────────────────────────────────────────────────────────────┐
 │                    ECS SIMULATION LAYER                        │
 │  EntityManager: 16,384 entity capacity, SoA layout            │
-│  Components: Position, Velocity, Hunger, Energy, Age, Fear,   │
-│              Species, Wander, Predator, Prey, Social,         │
-│              Terraform, Nest, Spore, Crystal, FaelingPower... │
-│  Systems: 17 systems running at 20 TPS fixed timestep         │
+│  Components: Position, Velocity, Hunger, Energy, Age, Fear,      │
+│              Species, Wander, Predator (with Stealth/Pounce),    │
+│              Prey, Social, Terraform, Nest, Spore, Crystal...    │
+│  Systems: 17 systems across 15 files, 20 TPS fixed timestep     │
 │  SpatialHash: O(1) grid-based neighbor queries                │
 └──────────────────────────┬───────────────────────────────────┘
                            │
@@ -55,7 +55,7 @@ built-in scene tree, for maximum cache efficiency with thousands of entities.
 
 ### Key Design Decisions
 
-1. **Custom SoA ECS** over Godot scene tree: Cache-efficient iteration over 15,000+
+1. **Custom SoA ECS** over Godot scene tree: Cache-efficient iteration over 16,000+
    entities. Each component type is a flat array indexed by entity ID. ComponentFlags
    bitmask enables fast entity filtering.
 
@@ -80,19 +80,19 @@ Systems run in this order each tick (order matters for data dependencies):
 
 ```
  1. LODSystem              - Set up distance-based fidelity
- 2. MovementSystem         - Apply velocity with terrain modifiers
- 3. TerrainDiscomfort      - Track terrain comfort/discomfort
- 4. HungerSystem           - Hunger decay, starvation
- 5. GrazingSystem          - Feeding on appropriate tiles
- 6. WanderSystem           - Random movement, roaming
+ 2. MovementSystem         - Apply velocity + damping (0.85/frame)
+ 3. TerrainDiscomfort      - Track terrain comfort/discomfort        [TerrainSystems.cs]
+ 4. HungerSystem           - Hunger decay, starvation                [SurvivalSystems.cs]
+ 5. GrazingSystem          - Feeding on appropriate tiles            [TerrainSystems.cs]
+ 6. WanderSystem           - Random movement, roaming, terrain escape
  7. HerdingSystem          - Social cohesion, leadership
- 8. SeparationSystem       - Prevent same-species overlap
- 9. CollisionSystem        - Physical overlap resolution
-10. HuntingSystem          - Predator pursuit and attack
-11. FleeingSystem          - Prey threat detection and escape
-12. AgingSystem            - Age increment, natural death
+ 8. SeparationSystem       - Prevent same-species overlap            [SpatialSystems.cs]
+ 9. CollisionSystem        - Physical overlap resolution             [SpatialSystems.cs]
+10. HuntingSystem          - Solo/pack/ambush hunting, flanking, stealth
+11. FleeingSystem          - Stealth-aware threat detection, fear, escape
+12. AgingSystem            - Age increment, natural death            [SurvivalSystems.cs]
 13. ReproductionSystem     - Standard offspring spawning
-14. TerraformSystem        - Faction tile modification
+14. TerraformSystem        - Faction tile modification               [TerrainSystems.cs]
 15. NestSystem             - Sectid nest breeding
 16. SporeSystem            - Shroomer spore lifecycle
 17. CrystalSystem          - Faeling crystal management
@@ -105,27 +105,42 @@ godot/Scripts/
 ├── ECS/EntityManager.cs              # SoA entity storage (16,384 capacity)
 ├── Components/
 │   ├── CoreComponents.cs             # Position, Velocity, ChunkPosition
-│   ├── CreatureComponents.cs         # Species, Hunger, Energy, Age, etc.
-│   ├── BehaviorComponents.cs         # Wander, Predator, Prey, Social, etc.
+│   ├── CreatureComponents.cs         # Species, Hunger, Energy, Age, Fear, etc.
+│   ├── BehaviorComponents.cs         # Wander, Predator (Stealth, Pounce),
+│   │                                 # Prey, Social, Renderable + enums
 │   └── FactionComponents.cs          # Nest, Spore, Crystal, FaelingPower, etc.
 ├── Systems/
-│   ├── BehaviorSystems.cs            # 12 systems consolidated
-│   ├── MovementSystem.cs             # Position updates
-│   ├── LODSystem.cs                  # Simulation fidelity levels
-│   ├── CrystalSystem.cs             # Faeling mechanics
-│   ├── NestSystem.cs                # Sectid mechanics
-│   └── SporeSystem.cs              # Shroomer mechanics
+│   ├── ISystem.cs                    # System interface
+│   ├── LODSystem.cs                  # Distance-based simulation fidelity
+│   ├── MovementSystem.cs             # Position updates + velocity damping
+│   ├── TerrainSystems.cs             # TerrainDiscomfort + Terraform + Grazing
+│   ├── SurvivalSystems.cs            # Hunger + Aging
+│   ├── WanderSystem.cs               # Random movement, roaming, terrain escape
+│   ├── HerdingSystem.cs              # Social cohesion, alignment, leadership
+│   ├── SpatialSystems.cs             # Separation + Collision
+│   ├── HuntingSystem.cs              # Solo/pack/ambush hunting, flanking, stealth
+│   ├── FleeingSystem.cs              # Threat detection (stealth-aware), fear, escape
+│   ├── ReproductionSystem.cs         # Standard offspring spawning
+│   ├── CrystalSystem.cs              # Faeling crystal management & ranged attacks
+│   ├── NestSystem.cs                 # Sectid nest breeding & food delivery
+│   └── SporeSystem.cs                # Shroomer spore lifecycle & AoE attacks
+├── Rendering/
+│   └── RenderingManager.cs           # Chunk-based entity/tile rendering
 ├── World/
-│   ├── TerrainGenerator.cs          # Noise-based generation
-│   ├── WorldManager.cs              # Chunk loading, tile queries
-│   └── Chunk.cs                     # Tile storage
+│   ├── TerrainGenerator.cs           # Noise-based terrain generation
+│   ├── WorldManager.cs               # Chunk loading, tile queries
+│   ├── Chunk.cs                      # Tile storage
+│   └── TileType.cs                   # Tile enum + extensions
 ├── Species/
-│   ├── SpeciesDefinition.cs         # 80+ configurable properties
-│   └── SpeciesRegistry.cs           # All 8 species defined
+│   ├── SpeciesDefinition.cs          # 90+ configurable properties
+│   └── SpeciesRegistry.cs            # All 8 species defined
 ├── Utils/
-│   ├── SpatialHash.cs               # Grid-based neighbor queries
-│   └── MathUtils.cs                 # Distance, normalization
-└── GameManager.cs                   # Main loop, initialization
+│   ├── SpatialHash.cs                # Grid-based neighbor queries
+│   └── MathUtils.cs                  # Distance, normalization
+├── GameManager.cs                    # Main loop, initialization, system registration
+├── EntityFactory.cs                  # Entity creation from SpeciesDefinition
+├── WorldSpawner.cs                   # Initial population spawning
+└── PlayerController.cs               # Camera movement and controls
 ```
 
 ### Adding New Features
