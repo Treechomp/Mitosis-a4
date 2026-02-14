@@ -1,0 +1,179 @@
+using System;
+using System.Collections.Generic;
+using Godot;
+using Mitosis.Components;
+using Mitosis.ECS;
+using Mitosis.SpeciesData;
+using Mitosis.Utils;
+using Mitosis.World;
+using static Mitosis.ECS.EntityManager;
+
+namespace Mitosis.Systems;
+
+/// <summary>
+/// Processes hunger decay and starvation damage.
+/// </summary>
+public sealed class HungerSystem : ISystem
+{
+    private readonly List<int> _toKill = new(32);
+
+    public void Process(EntityManager em)
+    {
+        _toKill.Clear();
+        const ComponentFlags required = ComponentFlags.Hunger;
+
+        foreach (int entity in em.Query(required))
+        {
+            // Skip structures (nests, crystals) — they don't eat
+            if (em.HasComponents(entity, ComponentFlags.Nest) ||
+                em.HasComponents(entity, ComponentFlags.Crystal))
+                continue;
+
+            ref var hunger = ref em.Hungers[entity];
+
+            // Decay hunger
+            hunger.Current -= hunger.DecayRate;
+
+            // Starvation damage
+            if (hunger.IsStarving && em.HasComponents(entity, ComponentFlags.Energy))
+            {
+                ref var energy = ref em.Energies[entity];
+                energy.Current -= hunger.StarvationDamage;
+
+                if (energy.IsDead)
+                    _toKill.Add(entity);
+            }
+
+            // Conditional energy regen: only when not starving and out of combat
+            if (!hunger.IsStarving && em.HasComponents(entity, ComponentFlags.Energy | ComponentFlags.Species))
+            {
+                ref var energy = ref em.Energies[entity];
+                if (energy.RegenCooldown > 0)
+                {
+                    energy.RegenCooldown--;
+                }
+                else if (energy.Current < energy.Max)
+                {
+                    ref var species = ref em.Species[entity];
+                    var speciesDef = SpeciesRegistry.GetById(species.SpeciesId);
+                    energy.Current = MathF.Min(energy.Max, energy.Current + speciesDef.EnergyRegenRate);
+                }
+            }
+        }
+
+        foreach (int entity in _toKill)
+        {
+            // Faeling death from starvation: pass power to crystal
+            if (em.HasComponents(entity, ComponentFlags.FaelingPower))
+            {
+                ref var power = ref em.FaelingPowers[entity];
+                int crystalId = power.LinkedCrystal;
+                if (crystalId >= 0 && em.IsAlive(crystalId) && em.HasComponents(crystalId, ComponentFlags.Crystal))
+                {
+                    ref var crystal = ref em.Crystals[crystalId];
+                    crystal.InheritedPower = power.Power * 0.5f;
+                    crystal.LinkedFaeling = -1;
+                    crystal.SpawnTimer = crystal.SpawnDelay;
+                }
+            }
+
+            em.DestroyEntity(entity);
+        }
+    }
+}
+
+/// <summary>
+/// Processes aging and natural death.
+/// </summary>
+public sealed class AgingSystem : ISystem
+{
+    private readonly List<int> _toKill = new(32);
+
+    public void Process(EntityManager em)
+    {
+        _toKill.Clear();
+        const ComponentFlags required = ComponentFlags.Age;
+
+        foreach (int entity in em.Query(required))
+        {
+            // Skip structures (nests, crystals don't age)
+            if (em.HasComponents(entity, ComponentFlags.Nest) ||
+                em.HasComponents(entity, ComponentFlags.Crystal))
+                continue;
+
+            ref var age = ref em.Ages[entity];
+            age.Current++;
+
+            // Natural death from old age
+            if (age.Current >= age.MaxLifespan)
+                _toKill.Add(entity);
+        }
+
+        foreach (int entity in _toKill)
+        {
+            // Faeling death: pass power to crystal for next spawn
+            if (em.HasComponents(entity, ComponentFlags.FaelingPower))
+            {
+                ref var power = ref em.FaelingPowers[entity];
+                int crystalId = power.LinkedCrystal;
+                if (crystalId >= 0 && em.IsAlive(crystalId) && em.HasComponents(crystalId, ComponentFlags.Crystal))
+                {
+                    ref var crystal = ref em.Crystals[crystalId];
+                    crystal.InheritedPower = power.Power * 0.5f; // Half power inheritance
+                    crystal.LinkedFaeling = -1;
+                    crystal.SpawnTimer = crystal.SpawnDelay;
+                }
+            }
+
+            em.DestroyEntity(entity);
+        }
+    }
+}
+
+/// <summary>
+/// Herbivores graze on grass/forest tiles to restore hunger.
+/// Faction species (Shroomer, Sectid, Faeling) feed from their preferred tile types.
+/// </summary>
+public sealed class GrazingSystem : ISystem
+{
+    private readonly World.WorldManager _worldManager;
+
+    public GrazingSystem(World.WorldManager worldManager)
+    {
+        _worldManager = worldManager;
+    }
+
+    public void Process(EntityManager em)
+    {
+        const ComponentFlags required = ComponentFlags.Position | ComponentFlags.Species | ComponentFlags.Hunger;
+
+        foreach (int entity in em.Query(required))
+        {
+            ref var species = ref em.Species[entity];
+            ref var pos = ref em.Positions[entity];
+            ref var hunger = ref em.Hungers[entity];
+            var tile = _worldManager.GetTile(pos.X, pos.Y);
+
+            // Standard herbivore grazing
+            if (species.Type == SpeciesType.Herbivore)
+            {
+                var herbDef = SpeciesRegistry.GetById(species.SpeciesId);
+                if (tile.IsGrazeable())
+                    hunger.Current = MathF.Min(hunger.Max, hunger.Current + herbDef.GrazeNutrition);
+                continue;
+            }
+
+            // Faction species: feed from their preferred tiles
+            if (species.Type == SpeciesType.Shroomer ||
+                species.Type == SpeciesType.Sectid ||
+                species.Type == SpeciesType.Faeling)
+            {
+                var speciesDef = SpeciesRegistry.GetById(species.SpeciesId);
+                if (speciesDef.FeedTiles != null && speciesDef.FeedTiles.Contains(tile))
+                {
+                    hunger.Current = MathF.Min(hunger.Max, hunger.Current + speciesDef.FeedNutrition);
+                }
+            }
+        }
+    }
+}
