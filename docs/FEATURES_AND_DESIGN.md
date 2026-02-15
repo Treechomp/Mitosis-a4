@@ -200,7 +200,6 @@ Balanced:         Extremes shift toward Grass (center)
 1. **Noise layers** (Godot FastNoiseLite, SimplexSmooth):
    - Elevation noise: defines height map (frequency 0.02, 4 octaves FBM)
    - Moisture noise: defines biome moisture (frequency 0.03, 3 octaves FBM, seed offset +1000)
-   - River noise: carves waterways (frequency 0.012, 2 octaves FBM, seed offset +3000)
    - Temperature noise: regional climate zones (frequency 0.008, 3 octaves FBM, seed offset +5000)
    - Domain warp X/Y: organic biome boundaries (frequency 0.015, 2 octaves FBM, amplitude 12 tiles)
    - Landmark noise: feature placement (frequency 0.04, 2 octaves FBM, seed offset +9000)
@@ -224,13 +223,18 @@ Balanced:         Extremes shift toward Grass (center)
    - Warm (temp 0.6-0.75): Jungle/Forest/Savanna/Grass/Sand/Arid (moisture-based)
    - Temperate (temp 0.35-0.6): Wetland/Forest/Grass/Sand/Arid (moisture-based)
 
-5. **Rivers**: On spawnable land tiles, river noise absolute value is tested against a
-   variable-width threshold (wider in valleys: `0.018 + (0.7 - elevation) * 0.02`,
-   clamped to 0.01-0.04). Tiles within the threshold become River; tiles within 2.5x
-   the threshold become Wetland (riverbank fringe).
+5. **Rivers** (flow-based, global pre-pass via `RiverMapper`):
+   - Pre-computes a 512x512 elevation map using the same noise + domain warping
+   - Selects up to 80 river sources from high-elevation tiles (> 0.68, spaced 12+ apart)
+   - Traces each river downhill using steepest descent among 8 neighbors
+   - Flow accumulation: each tile counts how many river paths pass through it
+   - Tiles with flow >= 3 become River; flow >= 12 widens to adjacent tiles
+   - Depressions (no lower neighbor) are flood-filled to form lakes (ShallowWater)
+   - Lakes can overflow and continue the river downstream
+   - Land tiles adjacent to rivers/lakes become Wetland banks
+   - Pre-computation runs once in WorldManager constructor before chunk generation
 
 6. **Landmarks** (post-processing pass per chunk):
-   - Lakes: Grass/Wetland at low elevation + high moisture + high landmark noise → ShallowWater
    - Oases: Arid/Sand + high landmark noise + moderate moisture → Grass
    - Forest Clearings: Forest + low landmark noise → Grass
    - Jungle Clearings: Jungle + very low landmark noise → Savanna
@@ -1020,7 +1024,8 @@ godot/
 │   │   ├── TerrainGenerator.cs      # Noise-based terrain generation
 │   │   ├── WorldManager.cs          # Chunk loading, tile queries, walkability
 │   │   ├── Chunk.cs                 # Tile storage and access
-│   │   └── TileType.cs             # Tile enum, extensions (IsWater, IsWalkable, etc.)
+│   │   ├── TileType.cs             # Tile enum, extensions (IsWater, IsWalkable, etc.)
+│   │   └── RiverMapper.cs          # Flow-based river pre-computation
 │   ├── Species/
 │   │   ├── SpeciesDefinition.cs     # 90+ property data class for species config
 │   │   └── SpeciesRegistry.cs       # All 8 species registered with full parameters

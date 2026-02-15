@@ -28,6 +28,9 @@ public sealed class WorldManager
         _chunks = new Dictionary<(int, int), Chunk>(worldSizeChunks * worldSizeChunks);
         _generator = new TerrainGenerator(seed);
         SpatialHash = new SpatialHash(chunkSize);
+
+        // Pre-compute flow-based rivers before any chunks are generated
+        _generator.PrecomputeRivers(WorldSizeTiles);
     }
 
     /// <summary>

@@ -68,7 +68,7 @@
 - [x] BiomeType calculation from elevation/moisture/temperature
 - [x] Temperature noise + latitude gradient for regional biome distribution
 - [x] Species-specific spawn filtering (biome + tile)
-- [x] River generation (noise-based zero-crossing with variable width and wetland banks)
+- [x] Flow-based river generation (RiverMapper: elevation tracing, flow accumulation, depression lakes, wetland banks)
 - [x] Per-tile nutrition with depletion and regrowth (migration-driving mechanic)
 - [x] Landmark post-processing (lakes, oases, clearings, caves)
 - [x] Terraform chains extended for new biome tiles (Tundra, Savanna, Jungle)
@@ -194,15 +194,22 @@ Tasks:
 
 **Goal**: Diverse, biome-rich terrain with ecological variety and landmarks
 
-### 2.1 River System — COMPLETE
-Rivers implemented via noise-based zero-crossing (not flow-based pathfinding).
+### 2.1 River System — COMPLETE (v2: Flow-Based)
+Rivers generated via elevation-based flow accumulation. A global pre-pass builds a
+512x512 elevation map, selects high-altitude sources, traces rivers downhill using
+steepest descent, and fills depressions into lakes. Replaces old noise zero-crossing.
 
-- [x] River tile type added to TileType enum
-- [x] River generation in TerrainGenerator (noise zero-crossing with variable width)
-- [x] Wetland fringe banks alongside rivers
+- [x] RiverMapper class: global elevation pre-pass using same noise + domain warping
+- [x] Source selection from high-elevation tiles (>0.68, spaced 12+ tiles apart, up to 80 sources)
+- [x] Steepest-descent river tracing from sources to ocean/edge
+- [x] Flow accumulation: multiple streams merge into wider rivers (flow >= 12 = 2-tile wide)
+- [x] Depression filling: rivers that hit local minima fill to form lakes (ShallowWater)
+- [x] Lake overflow: filled depressions overflow and continue river downstream
+- [x] Wetland banks: land tiles adjacent to rivers/lakes become Wetland
 - [x] River speed (0.35x), discomfort (8.0), avoidance (0.8) rules
 - [x] Rivers are walkable but very uncomfortable (drives creatures away naturally)
-- [ ] Future: Flow-based rivers (A* from peaks to ocean), fish species
+- [x] Old noise-based _riverNoise removed; lakes moved from landmark pass to flow system
+- [ ] Future: Fish species, waterfall features at elevation drops
 
 ### 2.2 Tile Depletion & Regrowth — COMPLETE
 Grazed tiles deplete over time, slowly regenerating — driving natural migration patterns.
@@ -852,7 +859,7 @@ Builds on Phase 6 (trait variation) and Phase 9 (directed mutation).
 | v0.2 | Feb 2026 | Species system, reproduction, fear, terrain discomfort, biome spawning |
 | v0.3 | Feb 2026 | Faction species (Shroomer/Sectid/Faeling), terraform system, nest/spore/crystal systems, pack tactics, mass-based hunting, AoE/ranged attacks, growth system, power inheritance |
 | v0.4 | Feb 2026 | Code reorganization (BehaviorSystems.cs split into 8 files, GameManager split into 4), entity jitter fixes (velocity damping, mass-based direction blending, hysteresis terrain escape, herding/escape priority), coordinated wolf flanking (Leader/Flanker/Disruptor roles, convergence triggers), crocodile ambush hunting (stealth mechanics, stalking, pounce burst), stealth-aware prey detection |
-| v0.5 | Feb 2026 | World Generation v2: 6 new tile types (Tundra, Ice, Savanna, Jungle, Reef, Lava), 3 new biome types (Arctic, Tropical, Volcanic), domain warping for organic biome boundaries, temperature noise + latitude gradient, tile depletion/regrowth system (per-tile nutrition), TileRegenerationSystem, nutrition-dependent grazing, landmark post-processing (lakes, oases, clearings, caves), terrain cover bonus for stealth |
+| v0.5 | Feb 2026 | World Generation v2: 6 new tile types (Tundra, Ice, Savanna, Jungle, Reef, Lava), 3 new biome types (Arctic, Tropical, Volcanic), domain warping for organic biome boundaries, temperature noise + latitude gradient, tile depletion/regrowth system (per-tile nutrition), TileRegenerationSystem, nutrition-dependent grazing, landmark post-processing (oases, clearings, caves), terrain cover bonus for stealth, flow-based river system (RiverMapper: elevation tracing, flow accumulation, depression lakes, wetland banks) replacing old noise zero-crossing |
 
 ---
 

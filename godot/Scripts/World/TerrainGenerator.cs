@@ -5,14 +5,13 @@ namespace Mitosis.World;
 
 /// <summary>
 /// Generates terrain using simplex noise with domain warping, temperature gradients,
-/// and landmark post-processing for diverse, biome-rich worlds.
+/// flow-based rivers, and landmark post-processing for diverse, biome-rich worlds.
 /// </summary>
 public sealed class TerrainGenerator
 {
     private readonly int _seed;
     private readonly FastNoiseLite _elevationNoise;
     private readonly FastNoiseLite _moistureNoise;
-    private readonly FastNoiseLite _riverNoise;
     private readonly FastNoiseLite _temperatureNoise;
     private readonly FastNoiseLite _warpNoiseX;
     private readonly FastNoiseLite _warpNoiseY;
@@ -20,6 +19,9 @@ public sealed class TerrainGenerator
 
     // Domain warping amplitude (in tiles)
     private const float WarpAmplitude = 12f;
+
+    // Flow-based river system (pre-computed before chunk generation)
+    private RiverMapper? _riverMapper;
 
     public TerrainGenerator(int seed = 42)
     {
@@ -40,14 +42,6 @@ public sealed class TerrainGenerator
         _moistureNoise.Frequency = 0.03f;
         _moistureNoise.FractalType = FastNoiseLite.FractalTypeEnum.Fbm;
         _moistureNoise.FractalOctaves = 3;
-
-        // River noise - low frequency for wide, meandering paths
-        _riverNoise = new FastNoiseLite();
-        _riverNoise.NoiseType = FastNoiseLite.NoiseTypeEnum.SimplexSmooth;
-        _riverNoise.Seed = seed + 3000;
-        _riverNoise.Frequency = 0.012f;
-        _riverNoise.FractalType = FastNoiseLite.FractalTypeEnum.Fbm;
-        _riverNoise.FractalOctaves = 2;
 
         // Temperature noise — large-scale regions with latitude-like gradient
         _temperatureNoise = new FastNoiseLite();
@@ -83,6 +77,17 @@ public sealed class TerrainGenerator
     }
 
     /// <summary>
+    /// Pre-compute the flow-based river map for the entire world.
+    /// Must be called before any chunks are generated.
+    /// Uses the same elevation noise and domain warping so rivers align with terrain.
+    /// </summary>
+    public void PrecomputeRivers(int worldSizeTiles)
+    {
+        _riverMapper = new RiverMapper(_elevationNoise, _warpNoiseX, _warpNoiseY, WarpAmplitude);
+        _riverMapper.Generate(worldSizeTiles, _seed);
+    }
+
+    /// <summary>
     /// Generate terrain for a chunk with domain warping and temperature-based biomes.
     /// </summary>
     public void GenerateChunk(Chunk chunk)
@@ -110,23 +115,19 @@ public sealed class TerrainGenerator
 
                 TileType tile = DetermineTileType(elevation, moisture, temperature);
 
-                // Carve rivers and add wetland banks on land tiles
-                if (tile.IsSpawnable())
+                // Apply flow-based rivers, lakes, and wetland banks on land tiles
+                if (_riverMapper != null && tile.IsSpawnable())
                 {
-                    float riverVal = _riverNoise.GetNoise2D(worldX, worldY);
-                    float absRiver = MathF.Abs(riverVal);
-
-                    // River width varies with elevation (wider in valleys)
-                    float threshold = 0.018f + (0.7f - elevation) * 0.02f;
-                    threshold = Math.Clamp(threshold, 0.01f, 0.04f);
-
-                    if (absRiver < threshold)
+                    if (_riverMapper.IsLake(worldX, worldY))
+                    {
+                        tile = TileType.ShallowWater;
+                    }
+                    else if (_riverMapper.IsRiver(worldX, worldY))
                     {
                         tile = TileType.River;
                     }
-                    else if (absRiver < threshold * 2.5f)
+                    else if (_riverMapper.IsWetlandBank(worldX, worldY))
                     {
-                        // Wetland fringe along river banks
                         tile = TileType.Wetland;
                     }
                 }
@@ -254,14 +255,12 @@ public sealed class TerrainGenerator
     }
 
     /// <summary>
-    /// Post-processing pass to add terrain landmarks: lakes, oases, clearings, and caves.
-    /// Runs after base terrain generation so it can read and modify the chunk.
+    /// Post-processing pass to add terrain landmarks: oases, clearings, and caves.
+    /// Lakes are now handled by the RiverMapper flow system, so the landmark pass
+    /// focuses on non-hydrological features only.
     /// </summary>
     private void ApplyLandmarks(Chunk chunk, int worldOffsetX, int worldOffsetY)
     {
-        // Use landmark noise to place features. Each feature type checks different
-        // thresholds and surrounding tile context.
-
         for (int localY = 0; localY < chunk.Size; localY++)
         {
             for (int localX = 0; localX < chunk.Size; localX++)
@@ -271,23 +270,11 @@ public sealed class TerrainGenerator
 
                 var currentTile = chunk.GetTile(localX, localY);
                 float lmNoise = _landmarkNoise.GetNoise2D(worldX, worldY);
-                float elevation = (_elevationNoise.GetNoise2D(worldX, worldY) + 1f) * 0.5f;
-                float moisture = (_moistureNoise.GetNoise2D(worldX, worldY) + 1f) * 0.5f;
-
-                // --- Lakes: local elevation minima filled with water ---
-                // Look for low-elevation pockets on land that form natural depressions
-                if (currentTile == TileType.Grass || currentTile == TileType.Wetland)
-                {
-                    if (elevation < 0.5f && moisture > 0.6f && lmNoise > 0.6f)
-                    {
-                        chunk.SetTile(localX, localY, TileType.ShallowWater);
-                        continue;
-                    }
-                }
 
                 // --- Oases: small grass/water patches in desert ---
                 if (currentTile == TileType.Arid || currentTile == TileType.Sand)
                 {
+                    float moisture = (_moistureNoise.GetNoise2D(worldX, worldY) + 1f) * 0.5f;
                     if (lmNoise > 0.7f && moisture > 0.35f)
                     {
                         chunk.SetTile(localX, localY, TileType.Grass);
@@ -318,6 +305,7 @@ public sealed class TerrainGenerator
                 // --- Surface Caves: walkable grass centers in mountain edges ---
                 if (currentTile == TileType.Mountain)
                 {
+                    float elevation = (_elevationNoise.GetNoise2D(worldX, worldY) + 1f) * 0.5f;
                     if (lmNoise > 0.75f && elevation < 0.85f)
                     {
                         chunk.SetTile(localX, localY, TileType.Grass);
