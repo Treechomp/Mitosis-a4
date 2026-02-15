@@ -33,7 +33,9 @@ public sealed class RiverMapper
     private const int MinRiverFlow = 3;                // Flow threshold to become a river
     private const int WideRiverFlow = 12;              // Flow threshold for wide (2-tile) rivers
     private const int MinSourceSpacing = 12;           // Minimum tiles between sources
-    private const int MaxRiverSources = 80;            // Max number of river source points
+    private const int MaxRiverSources = 50;            // Max number of river source points
+    private const float MaxLakeRise = 0.04f;             // Max water rise above depression bottom
+    private const int MaxLakeArea = 80;                  // Max tiles a single lake can occupy
 
     // 8-direction offsets (N, NE, E, SE, S, SW, W, NW)
     private static readonly int[] DX = { 0, 1, 1, 1, 0, -1, -1, -1 };
@@ -251,7 +253,8 @@ public sealed class RiverMapper
         float startElev = _elevation[startX, startY];
 
         // BFS flood fill: expand from the depression bottom, collecting tiles
-        // at or below rising water level, looking for an overflow point
+        // at or below rising water level, looking for an overflow point.
+        // Constrained by MaxLakeRise and MaxLakeArea to prevent flooding the map.
         var filled = new HashSet<(int, int)> { (startX, startY) };
         var frontier = new Queue<(int x, int y)>();
         frontier.Enqueue((startX, startY));
@@ -259,16 +262,19 @@ public sealed class RiverMapper
         int bestOverflowX = -1, bestOverflowY = -1;
         float bestOverflowElev = float.MaxValue;
         float waterLevel = startElev;
+        float maxWaterLevel = startElev + MaxLakeRise;
 
         // Rising water: incrementally raise water level to find overflow
-        int maxIterations = 200; // Limit lake size
+        int maxIterations = 40;
         for (int iter = 0; iter < maxIterations; iter++)
         {
+            if (filled.Count >= MaxLakeArea) break;
+
             if (frontier.Count == 0)
             {
                 // Raise water level slightly and re-check neighbors
-                waterLevel += 0.005f;
-                if (waterLevel > 0.75f) break; // Don't fill mountains
+                waterLevel += 0.002f;
+                if (waterLevel > maxWaterLevel) break;
 
                 foreach (var (fx, fy) in filled)
                 {
@@ -304,7 +310,7 @@ public sealed class RiverMapper
                 continue;
             }
 
-            while (frontier.Count > 0)
+            while (frontier.Count > 0 && filled.Count < MaxLakeArea)
             {
                 var (px, py) = frontier.Dequeue();
 
@@ -339,7 +345,7 @@ public sealed class RiverMapper
             }
         }
 
-        // Depression didn't overflow — mark as terminal lake
+        // Depression didn't overflow — mark as small terminal lake
         MarkFilledAsLake(filled, waterLevel);
         return null;
     }
