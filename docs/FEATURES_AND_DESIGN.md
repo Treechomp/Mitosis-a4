@@ -130,21 +130,41 @@ before fleeing (predator positions needed for flee calculations).
 
 ### Terrain Types
 
-| Tile | Walkable | Spawnable | Grazeable | Speed Modifier |
-|------|----------|-----------|-----------|----------------|
-| DeepWater | Yes* | No | No | 0.25x |
-| ShallowWater | Yes* | No | No | 0.4x |
-| River | Yes* | No | No | 0.35x |
-| Sand | Yes | Yes | No | 0.7x |
-| Grass | Yes | Yes | Yes | 1.0x |
-| Forest | Yes | Yes | Yes | 0.85x |
-| Wetland | Yes | Yes | No | 0.75x |
-| Arid | Yes | Yes | No | 0.8x |
-| Mountain | No | No | No | 0.05x |
+| Tile | Walkable | Spawnable | Grazeable | Speed | Discomfort | Avoidance | Cover |
+|------|----------|-----------|-----------|-------|-----------|-----------|-------|
+| DeepWater | Yes* | No | No | 0.25x | 12.0 | 0.95 | 0 |
+| ShallowWater | Yes* | No | No | 0.4x | 5.0 | 0.75 | 0 |
+| River | Yes* | No | No | 0.35x | 8.0 | 0.8 | 0 |
+| Sand | Yes | Yes | No | 0.7x | 1.0 | 0.3 | 0 |
+| Grass | Yes | Yes | Yes | 1.0x | 0 | 0 | 0 |
+| Forest | Yes | Yes | Yes | 0.85x | 0 | 0.05 | 0.2 |
+| Wetland | Yes | Yes | No | 0.75x | 0.5 | 0.15 | 0.15 |
+| Arid | Yes | Yes | No | 0.8x | 0.5 | 0.15 | 0 |
+| Mountain | No | No | No | 0.05x | 15.0 | 1.0 | 0 |
+| Tundra | Yes | Yes | No | 0.5x | 2.0 | 0.4 | 0 |
+| Ice | Yes | No | No | 0.45x | 4.0 | 0.6 | 0 |
+| Savanna | Yes | Yes | Yes | 1.05x | 0 | 0 | 0.05 |
+| Jungle | Yes | Yes | Yes | 0.6x | 0.3 | 0.1 | 0.4 |
+| Reef | No | No | No | 0.05x | 15.0 | 1.0 | 0 |
+| Lava | No | No | No | 0.05x | 20.0 | 1.0 | 0 |
 
 *Water tiles are walkable by all species but very slow and uncomfortable
 (high discomfort rates drive creatures away). Crocodiles get species-specific
 speed bonuses on water via `TerrainSpeedModifiers`.
+
+### Tile Nutrition (Depletion & Regrowth)
+
+Grazeable tiles (Grass, Forest, Savanna, Jungle) have per-tile nutrition (0.0-1.0).
+Herbivores consume nutrition when grazing; food gained scales with remaining nutrition.
+Depleted tiles (< 0.3 nutrition) generate grazing pressure via TerrainDiscomfortSystem,
+driving herbivores to migrate to richer areas.
+
+| Parameter | Value |
+|-----------|-------|
+| Max nutrition | 1.0 |
+| Consume rate | 0.02 per grazing tick |
+| Regen rate | 0.0005 per tick |
+| Depletion pressure threshold | 0.3 (below this, grazing pressure applies) |
 
 ### Tile Moisture Scale (for Spore System)
 
@@ -153,10 +173,12 @@ speed bonuses on water via `TerrainSpeedModifiers`.
 | Wetland | 1.0 |
 | ShallowWater / DeepWater | 1.0 |
 | Forest | 0.7 |
+| Jungle | 0.7 |
 | Grass | 0.4 |
+| Savanna | 0.3 |
 | River / Mountain | 0.2 (default) |
-| Sand | 0.1 |
-| Arid | 0.0 |
+| Sand / Tundra | 0.1 |
+| Arid / Ice | 0.0 |
 
 ### Terraform Shifts
 
@@ -164,8 +186,13 @@ Tiles can be shifted along a moisture axis by faction terraformers:
 
 ```
 Drier direction:  Wetland → Forest → Grass → Sand → Arid
+                  Jungle → Savanna
+                  Tundra → Arid
 Wetter direction: Arid → Sand → Grass → Forest → Wetland
+                  Savanna → Jungle
+                  Tundra → Grass
 Balanced:         Extremes shift toward Grass (center)
+                  Tundra → Grass, Savanna → Grass, Jungle → Forest
 ```
 
 ### Generation Algorithm
@@ -174,23 +201,40 @@ Balanced:         Extremes shift toward Grass (center)
    - Elevation noise: defines height map (frequency 0.02, 4 octaves FBM)
    - Moisture noise: defines biome moisture (frequency 0.03, 3 octaves FBM, seed offset +1000)
    - River noise: carves waterways (frequency 0.012, 2 octaves FBM, seed offset +3000)
+   - Temperature noise: regional climate zones (frequency 0.008, 3 octaves FBM, seed offset +5000)
+   - Domain warp X/Y: organic biome boundaries (frequency 0.015, 2 octaves FBM, amplitude 12 tiles)
+   - Landmark noise: feature placement (frequency 0.04, 2 octaves FBM, seed offset +9000)
 
-2. **Tile classification** (elevation + moisture thresholds):
+2. **Domain warping**: Elevation and moisture noise coordinates are warped by ±12 tiles
+   using independent warp noise, eliminating blobby noise artifacts and creating
+   organic, irregular biome boundaries.
+
+3. **Temperature**: Combines noise (70% weight) with a latitude gradient (30% weight,
+   top=cold, bottom=warm). High altitude reduces temperature by up to 0.525.
+   Temperature determines biome zone: Arctic (<0.35), Temperate (0.35-0.6), Tropical (>0.6).
+
+4. **Tile classification** (elevation + moisture + temperature thresholds):
    - Elevation < 0.30 → DeepWater
-   - Elevation 0.30-0.40 → ShallowWater
+   - Elevation 0.30-0.40 → ShallowWater (Reef if temperature > 0.7 and elevation > 0.35)
    - Elevation 0.40-0.45 → Sand (beach/coast)
-   - Elevation > 0.80 → Mountain
-   - Remaining land: moisture determines type:
-     - Moisture > 0.75 → Wetland
-     - Moisture > 0.55 → Forest
-     - Moisture > 0.35 → Grass
-     - Moisture > 0.20 → Sand
-     - Moisture <= 0.20 → Arid
+   - Elevation > 0.80 → Mountain (Lava if temperature > 0.65 and moisture < 0.3)
+   - Arctic (temp < 0.2): Ice (high moisture/low elev) or Tundra
+   - Arctic (temp 0.2-0.35): Tundra (Wetland if moisture > 0.7)
+   - Tropical (temp > 0.75): Jungle (moist) → Savanna → Sand → Arid (dry)
+   - Warm (temp 0.6-0.75): Jungle/Forest/Savanna/Grass/Sand/Arid (moisture-based)
+   - Temperate (temp 0.35-0.6): Wetland/Forest/Grass/Sand/Arid (moisture-based)
 
-3. **Rivers**: On spawnable land tiles, river noise absolute value is tested against a
+5. **Rivers**: On spawnable land tiles, river noise absolute value is tested against a
    variable-width threshold (wider in valleys: `0.018 + (0.7 - elevation) * 0.02`,
    clamped to 0.01-0.04). Tiles within the threshold become River; tiles within 2.5x
    the threshold become Wetland (riverbank fringe).
+
+6. **Landmarks** (post-processing pass per chunk):
+   - Lakes: Grass/Wetland at low elevation + high moisture + high landmark noise → ShallowWater
+   - Oases: Arid/Sand + high landmark noise + moderate moisture → Grass
+   - Forest Clearings: Forest + low landmark noise → Grass
+   - Jungle Clearings: Jungle + very low landmark noise → Savanna
+   - Surface Caves: Mountain + high landmark noise + low elevation → Grass
 
 ### World Parameters
 

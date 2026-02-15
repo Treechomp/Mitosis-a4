@@ -115,6 +115,7 @@ public partial class GameManager : Node2D
         _systems.Add(new AgingSystem());
         _systems.Add(new ReproductionSystem(_worldManager, MaxPopulation, spatialHash));
         _systems.Add(new TerraformSystem(_worldManager));
+        _systems.Add(new TileRegenerationSystem(_worldManager));
 
         // Faction systems
         _nestSystem = new NestSystem(_worldManager, spatialHash);

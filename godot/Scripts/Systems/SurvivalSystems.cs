@@ -146,6 +146,8 @@ public sealed class GrazingSystem : ISystem
     public void Process(EntityManager em)
     {
         const ComponentFlags required = ComponentFlags.Position | ComponentFlags.Species | ComponentFlags.Hunger;
+        // Amount of nutrition consumed from a tile per grazing tick
+        const float nutritionConsumeRate = 0.02f;
 
         foreach (int entity in em.Query(required))
         {
@@ -154,12 +156,22 @@ public sealed class GrazingSystem : ISystem
             ref var hunger = ref em.Hungers[entity];
             var tile = _worldManager.GetTile(pos.X, pos.Y);
 
-            // Standard herbivore grazing
+            // Standard herbivore grazing — nutrition-dependent
             if (species.Type == SpeciesType.Herbivore)
             {
                 var herbDef = SpeciesRegistry.GetById(species.SpeciesId);
                 if (tile.IsGrazeable())
-                    hunger.Current = MathF.Min(hunger.Max, hunger.Current + herbDef.GrazeNutrition);
+                {
+                    // Check tile nutrition; depleted tiles yield less food
+                    float nutrition = _worldManager.GetNutrition(pos.X, pos.Y);
+                    if (nutrition > 0.05f)
+                    {
+                        float consumed = _worldManager.ConsumeNutrition(pos.X, pos.Y, nutritionConsumeRate);
+                        // Food gained scales with tile nutrition level
+                        float foodGained = herbDef.GrazeNutrition * (consumed / nutritionConsumeRate);
+                        hunger.Current = MathF.Min(hunger.Max, hunger.Current + foodGained);
+                    }
+                }
                 continue;
             }
 

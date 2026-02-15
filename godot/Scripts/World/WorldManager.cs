@@ -45,6 +45,7 @@ public sealed class WorldManager
         // Generate new chunk
         chunk = new Chunk(chunkX, chunkY, ChunkSize);
         _generator.GenerateChunk(chunk);
+        chunk.InitializeNutrition();
         _chunks[key] = chunk;
         return chunk;
     }
@@ -108,6 +109,40 @@ public sealed class WorldManager
         chunk.SetTile(localX, localY, type);
         DirtyChunks.Add((chunkX, chunkY));
         return true;
+    }
+
+    /// <summary>
+    /// Get the nutrition level at world coordinates (0.0 = depleted, 1.0 = full).
+    /// </summary>
+    public float GetNutrition(float worldX, float worldY)
+    {
+        int chunkX = (int)(worldX / ChunkSize);
+        int chunkY = (int)(worldY / ChunkSize);
+
+        var chunk = GetChunk(chunkX, chunkY);
+        if (chunk == null)
+            return 0f;
+
+        int localX = (int)worldX % ChunkSize;
+        int localY = (int)worldY % ChunkSize;
+        return chunk.GetNutrition(localX, localY);
+    }
+
+    /// <summary>
+    /// Consume nutrition at world coordinates. Returns actual amount consumed.
+    /// </summary>
+    public float ConsumeNutrition(float worldX, float worldY, float amount)
+    {
+        int chunkX = (int)(worldX / ChunkSize);
+        int chunkY = (int)(worldY / ChunkSize);
+
+        var chunk = GetChunk(chunkX, chunkY);
+        if (chunk == null)
+            return 0f;
+
+        int localX = (int)worldX % ChunkSize;
+        int localY = (int)worldY % ChunkSize;
+        return chunk.ConsumeNutrition(localX, localY, amount);
     }
 
     /// <summary>

@@ -3,7 +3,7 @@
 > For comprehensive documentation of all implemented features, systems, and species,
 > see **[FEATURES_AND_DESIGN.md](FEATURES_AND_DESIGN.md)**.
 
-## Current State Summary (v0.3 - Full Ecosystem with Factions)
+## Current State Summary (v0.5 - World Generation v2)
 
 ### Architecture Overview
 ```
@@ -21,7 +21,7 @@
 │  • EntityManager - 16,384 entity capacity                   │
 │  • Components - Position, Velocity, Hunger, Fear,           │
 │                 Predator (Stealth, Pounce), Social, etc.    │
-│  • Systems - 17 systems across 15 files (20 TPS)           │
+│  • Systems - 18 systems across 15 files (20 TPS)           │
 └─────────────────────────────────────────────────────────────┘
                               │
                               ▼
@@ -43,6 +43,7 @@
       Wander, Predator, Prey, Social, Terraform, Nest, FoodCarrier, Spore, Growth,
       Crystal, FaelingPower, RangedAttack, Renderable, TerrainDiscomfort, SimulationLOD)
 
+
 #### Species System (100% Complete)
 - [x] SpeciesDefinition - comprehensive data class with 90+ configurable properties
 - [x] SpeciesRegistry - lookup by name or ID (hash)
@@ -57,16 +58,20 @@
 - [x] Preferred prey system with bias scoring
 - [x] Faction-specific fields: spore, nest, crystal, terraform, AoE, growth, ranged attack
 
-#### Terrain & World (90% Complete)
+#### Terrain & World (100% Complete)
 - [x] Chunk-based storage (32x32 tiles)
-- [x] Simplex noise terrain generation
-- [x] 9 tile types with walkability/speed rules
-- [x] 8 biome types (Ocean, Coast, Grassland, Forest, Desert, Mountain, Wetland, River)
-- [x] IsSpawnable(), IsWater(), IsGrazeable() tile queries
-- [x] BiomeType calculation from temperature/moisture
+- [x] Simplex noise terrain generation with domain warping
+- [x] 15 tile types with walkability/speed/discomfort/avoidance rules
+- [x] 11 biome types (Ocean, Coast, Grassland, Forest, Desert, Mountain, Wetland, River, Arctic, Tropical, Volcanic)
+- [x] IsSpawnable(), IsWater(), IsGrazeable(), IsTerraformable() tile queries
+- [x] GetCoverBonus() for stealth mechanics (Jungle/Forest)
+- [x] BiomeType calculation from elevation/moisture/temperature
+- [x] Temperature noise + latitude gradient for regional biome distribution
 - [x] Species-specific spawn filtering (biome + tile)
 - [x] River generation (noise-based zero-crossing with variable width and wetland banks)
-- [ ] Missing: Tile depletion/regrowth
+- [x] Per-tile nutrition with depletion and regrowth (migration-driving mechanic)
+- [x] Landmark post-processing (lakes, oases, clearings, caves)
+- [x] Terraform chains extended for new biome tiles (Tundra, Savanna, Jungle)
 
 #### Behavior Systems (97% Complete)
 - [x] MovementSystem - terrain speed modifiers, wall sliding, **velocity damping (0.85/frame)**
@@ -185,7 +190,7 @@ Tasks:
 
 ---
 
-## Phase 2: World Generation v2 (Priority: HIGH)
+## Phase 2: World Generation v2 (Priority: HIGH) — COMPLETE
 
 **Goal**: Diverse, biome-rich terrain with ecological variety and landmarks
 
@@ -199,65 +204,73 @@ Rivers implemented via noise-based zero-crossing (not flow-based pathfinding).
 - [x] Rivers are walkable but very uncomfortable (drives creatures away naturally)
 - [ ] Future: Flow-based rivers (A* from peaks to ocean), fish species
 
-### 2.2 Tile Depletion & Regrowth
-Design:
-- Grazed tiles become depleted (lower nutrition)
-- Depleted tiles slowly regenerate
-- Enables migration patterns as herds move to fresh grass
+### 2.2 Tile Depletion & Regrowth — COMPLETE
+Grazed tiles deplete over time, slowly regenerating — driving natural migration patterns.
 
-Tasks:
-- [ ] Add nutrition field to Chunk (per-tile float)
-- [ ] GrazingSystem reduces tile nutrition when feeding
-- [ ] Add TileRegenerationSystem
-- [ ] Herbivores prefer high-nutrition tiles
-- [ ] Consider seasonal variation later
+- [x] Per-tile nutrition field in Chunk (float array, 0.0 depleted → 1.0 full)
+- [x] Nutrition initialized on chunk generation (grazeable tiles start at 1.0)
+- [x] GrazingSystem consumes tile nutrition when herbivores feed (0.02/tick)
+- [x] Food gained scales with remaining nutrition (depleted tiles yield less food)
+- [x] TileRegenerationSystem regenerates nutrition on all grazeable tiles (0.0005/tick)
+- [x] TerrainDiscomfortSystem applies grazing pressure on depleted tiles (< 0.3 nutrition)
+- [x] Nutrition resets when tile type changes (terraform or landmark overwrite)
+- [ ] Future: Seasonal variation, visual depletion indicator
 
-### 2.3 Domain Warping & Biome Shaping
-- [ ] Implement domain warping in TerrainGenerator for organic biome boundaries
-- [ ] Reduce "blobby" noise artifacts at biome transitions
-- [ ] Temperature gradient (poles-to-equator or noise-based) to distribute biomes regionally
-- [ ] Biome clustering: ensure biomes form large coherent regions, not salt-and-pepper
+### 2.3 Domain Warping & Biome Shaping — COMPLETE
+Organic biome boundaries with temperature-driven regional biome distribution.
 
-### 2.4 New Tile Types
-Current world is mostly temperate forest+grassland with scattered rivers and dry patches.
-New tiles expand biome variety:
+- [x] Domain warping via two independent noise layers (warpX, warpY, amplitude 12 tiles)
+- [x] Warped coordinates fed to elevation and moisture noise for organic boundaries
+- [x] Temperature noise layer (frequency 0.008, 3 octaves) for regional variation
+- [x] Latitude gradient (30% weight) — top of world cooler, bottom warmer
+- [x] Altitude cooling — high elevation reduces temperature (mountains are cold)
+- [x] Temperature drives biome selection: arctic (<0.35), temperate (0.35-0.6), tropical (>0.6)
+- [x] Biomes form large coherent regions via low-frequency temperature noise
+- [x] 3 new BiomeType values: Arctic, Tropical, Volcanic
 
-| Tile | Biome | Walkable | Spawnable | Notes |
-|------|-------|----------|-----------|-------|
-| Tundra | Arctic | Yes | Yes | Frozen ground; very slow (0.5x), high discomfort |
-| Ice | Arctic | Yes | No | Frozen water; walkable but barren, no aquatic movement |
-| Savanna | Tropical | Yes | Yes | Sparse grass; grazeable, fast movement (1.05x) |
-| Jungle | Tropical | Yes | Yes | Dense vegetation; grazeable, very slow (0.6x), high cover |
-| Reef | Coastal | No* | No | Shallow water variant; aquatic species spawn/hunt |
-| Lava | Volcanic | No | No | Impassable, high terrain damage in radius |
+### 2.4 New Tile Types — COMPLETE
+Six new tile types expand biome variety across arctic, tropical, and volcanic zones.
 
-Tasks:
-- [ ] Add tile types to TileType enum
-- [ ] Extend all tile extension methods (IsWalkable, speed, discomfort, etc.)
-- [ ] Wire into TerrainGenerator with new noise layers or threshold rules
-- [ ] Update terraform shift chains (e.g., Tundra ↔ Grass, Savanna ↔ Jungle)
-- [ ] Update tile colors in RenderingManager
+| Tile | Biome | Walkable | Spawnable | Speed | Discomfort | Notes |
+|------|-------|----------|-----------|-------|-----------|-------|
+| Tundra | Arctic | Yes | Yes | 0.5x | 2.0 | Frozen ground; grazeable=no |
+| Ice | Arctic | Yes | No | 0.45x | 4.0 | Frozen water; barren |
+| Savanna | Tropical | Yes | Yes | 1.05x | 0.0 | Sparse grass; grazeable |
+| Jungle | Tropical | Yes | Yes | 0.6x | 0.3 | Dense vegetation; grazeable, high cover (0.4) |
+| Reef | Coast | No | No | 0.05x | 15.0 | Impassable shallow water variant |
+| Lava | Volcanic | No | No | 0.05x | 20.0 | Impassable volcanic terrain |
 
-### 2.5 Terrain Features & Landmarks
-Handcrafted or semi-procedural points of interest that break up noise terrain:
+- [x] Add tile types to TileType enum (Tundra=9, Ice=10, Savanna=11, Jungle=12, Reef=13, Lava=14)
+- [x] Extend all tile extension methods (IsWalkable, IsSpawnable, IsGrazeable, IsTerraformable, speed, discomfort, avoidance)
+- [x] Added GetCoverBonus() extension for stealth mechanics (Jungle: 0.4, Forest: 0.2)
+- [x] Wire into TerrainGenerator with temperature-based thresholds
+- [x] Update terraform shift chains:
+  - Tundra→Grass (ShiftWetter), Tundra→Arid (ShiftDrier), Tundra→Grass (ShiftBalanced)
+  - Savanna→Jungle (ShiftWetter), Jungle→Savanna (ShiftDrier)
+  - Savanna→Grass (ShiftBalanced), Jungle→Forest (ShiftBalanced)
+- [x] Reef generated in warm shallow coastal zones (temperature > 0.7, elevation > 0.35)
+- [x] Lava generated in hot dry mountain zones (temperature > 0.65, moisture < 0.3)
+- [x] Update tile colors in Chunk.GetTileColor()
 
-| Feature | Generation | Effect |
-|---------|-----------|--------|
-| Mountain ranges | Ridge noise (1D high-elevation spines) | Linear impassable barriers with passes |
-| Lakes | Flood-fill depressions below water table | Distinct water bodies (not just low noise) |
-| Oases | Small moisture pockets in desert biome | Grass/water surrounded by arid; species magnet |
-| Volcanic vents | Rare point features in mountain biome | Lava tile cluster, heat-based tile aura |
-| Caves (surface) | Cluster of mountain tiles with walkable center | Sheltered spawn points, ambush zones |
-| Clearings | Forest tile gaps | Grass patches inside forest; grazing hotspots |
+### 2.5 Terrain Features & Landmarks — COMPLETE
+Post-processing landmark pass runs after base terrain generation in each chunk.
 
-Tasks:
-- [ ] Add landmark generation pass after base terrain (post-process)
-- [ ] Mountain ridge noise layer (high frequency, directional)
-- [ ] Lake flood-fill from local elevation minima
-- [ ] Oasis placement (desert biome, min distance from water, rare)
-- [ ] Volcanic vent placement (mountain biome, very rare)
-- [ ] Surface cave generation (mountain edges)
-- [ ] Clearing generation (forest interior, medium frequency)
+| Feature | Trigger | Effect |
+|---------|---------|--------|
+| Lakes | Low elevation + high moisture + high landmark noise | Grass/Wetland → ShallowWater |
+| Oases | Desert + high landmark noise + moderate moisture | Arid/Sand → Grass |
+| Forest Clearings | Forest + low landmark noise | Forest → Grass |
+| Jungle Clearings | Jungle + very low landmark noise | Jungle → Savanna |
+| Surface Caves | Mountain + high landmark noise + low elevation | Mountain → Grass |
+
+- [x] Landmark noise layer (frequency 0.04, seed+9000)
+- [x] ApplyLandmarks() post-processing pass in TerrainGenerator
+- [x] Lake generation from low-elevation wet land depressions
+- [x] Oasis placement in desert biomes (rare, noise > 0.7)
+- [x] Forest clearing generation (grass gaps inside forest, noise < -0.65)
+- [x] Jungle clearing generation (savanna patches inside jungle, noise < -0.7)
+- [x] Surface cave generation (walkable grass in mountain edges, noise > 0.75)
+- [ ] Future: Mountain ridge noise layer for linear barriers with passes
 
 ---
 
@@ -839,6 +852,7 @@ Builds on Phase 6 (trait variation) and Phase 9 (directed mutation).
 | v0.2 | Feb 2026 | Species system, reproduction, fear, terrain discomfort, biome spawning |
 | v0.3 | Feb 2026 | Faction species (Shroomer/Sectid/Faeling), terraform system, nest/spore/crystal systems, pack tactics, mass-based hunting, AoE/ranged attacks, growth system, power inheritance |
 | v0.4 | Feb 2026 | Code reorganization (BehaviorSystems.cs split into 8 files, GameManager split into 4), entity jitter fixes (velocity damping, mass-based direction blending, hysteresis terrain escape, herding/escape priority), coordinated wolf flanking (Leader/Flanker/Disruptor roles, convergence triggers), crocodile ambush hunting (stealth mechanics, stalking, pounce burst), stealth-aware prey detection |
+| v0.5 | Feb 2026 | World Generation v2: 6 new tile types (Tundra, Ice, Savanna, Jungle, Reef, Lava), 3 new biome types (Arctic, Tropical, Volcanic), domain warping for organic biome boundaries, temperature noise + latitude gradient, tile depletion/regrowth system (per-tile nutrition), TileRegenerationSystem, nutrition-dependent grazing, landmark post-processing (lakes, oases, clearings, caves), terrain cover bonus for stealth |
 
 ---
 

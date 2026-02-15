@@ -54,16 +54,26 @@ public sealed class TerrainDiscomfortSystem : ISystem
             // Clamp so negative comfort can't cause negative discomfort accumulation
             tileDiscomfort = MathF.Max(0, tileDiscomfort);
 
-            // Add grazing pressure for hungry herbivores on non-grazeable terrain
-            if (discomfort.GrazingPressure > 0 && !tile.IsGrazeable())
+            // Add grazing pressure for hungry herbivores on non-grazeable or depleted terrain
+            if (discomfort.GrazingPressure > 0 && em.HasComponents(entity, ComponentFlags.Hunger))
             {
-                // Check hunger level
-                if (em.HasComponents(entity, ComponentFlags.Hunger))
+                ref var hunger = ref em.Hungers[entity];
+                float hungerFactor = 1f - (hunger.Current / hunger.Max);
+
+                if (!tile.IsGrazeable())
                 {
-                    ref var hunger = ref em.Hungers[entity];
-                    // Grazing pressure scales with hunger (hungrier = more pressure)
-                    float hungerFactor = 1f - (hunger.Current / hunger.Max);
+                    // Not grazeable at all — full pressure
                     tileDiscomfort += discomfort.GrazingPressure * hungerFactor;
+                }
+                else
+                {
+                    // Grazeable but possibly depleted — pressure scales with depletion
+                    float nutrition = _worldManager.GetNutrition(pos.X, pos.Y);
+                    if (nutrition < 0.3f)
+                    {
+                        float depletionFactor = 1f - (nutrition / 0.3f);
+                        tileDiscomfort += discomfort.GrazingPressure * hungerFactor * depletionFactor * 0.5f;
+                    }
                 }
             }
 
@@ -148,6 +158,29 @@ public sealed class TerraformSystem : ISystem
 
             if (newTile.HasValue)
                 _worldManager.SetTile(targetX, targetY, newTile.Value);
+        }
+    }
+}
+
+/// <summary>
+/// Regenerates nutrition on grazeable tiles across all loaded chunks.
+/// Runs every tick but the regeneration rate per tile is very slow, so
+/// depleted areas take many ticks to recover — driving migration patterns.
+/// </summary>
+public sealed class TileRegenerationSystem : ISystem
+{
+    private readonly WorldManager _worldManager;
+
+    public TileRegenerationSystem(WorldManager worldManager)
+    {
+        _worldManager = worldManager;
+    }
+
+    public void Process(EntityManager em)
+    {
+        foreach (var chunk in _worldManager.GetLoadedChunks())
+        {
+            chunk.RegenerateNutrition();
         }
     }
 }
