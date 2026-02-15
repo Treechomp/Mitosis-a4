@@ -22,6 +22,7 @@ public sealed class TerrainGenerator
 
     // Flow-based river system (pre-computed before chunk generation)
     private RiverMapper? _riverMapper;
+    private int _worldSizeTiles = 512; // Updated by PrecomputeRivers
 
     public TerrainGenerator(int seed = 42)
     {
@@ -83,6 +84,7 @@ public sealed class TerrainGenerator
     /// </summary>
     public void PrecomputeRivers(int worldSizeTiles)
     {
+        _worldSizeTiles = worldSizeTiles;
         _riverMapper = new RiverMapper(_elevationNoise, _warpNoiseX, _warpNoiseY, WarpAmplitude);
         _riverMapper.Generate(worldSizeTiles, _seed);
     }
@@ -151,12 +153,11 @@ public sealed class TerrainGenerator
         // Noise component (large-scale regional variation)
         float noiseTemp = (_temperatureNoise.GetNoise2D(worldX, worldY) + 1f) * 0.5f;
 
-        // The gradient is gentle — we don't want strictly banded biomes.
-        // Just a slight tendency: top = cooler, bottom = warmer.
-        // This uses a sine-like curve so the world "wraps" smoothly.
-        float gradientWeight = 0.3f;
-        float noiseWeight = 0.7f;
-        float gradient = (float)worldY / 512f; // Normalize to ~0-1 for a 512-tile world
+        // Gradient gives pole-to-equator feel; noise adds regional variation.
+        // Increased gradient weight for clearer biome banding on larger maps.
+        float gradientWeight = 0.4f;
+        float noiseWeight = 0.6f;
+        float gradient = (float)worldY / _worldSizeTiles;
         gradient = Math.Clamp(gradient, 0f, 1f);
 
         float temp = noiseTemp * noiseWeight + gradient * gradientWeight;
