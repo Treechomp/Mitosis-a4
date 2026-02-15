@@ -177,12 +177,19 @@ public sealed class SporeSystem : ISystem
         return tile switch
         {
             TileType.Wetland => 1.0f,
-            TileType.Forest => 0.7f,
-            TileType.Grass => 0.4f,
             TileType.ShallowWater => 1.0f,
             TileType.DeepWater => 1.0f,
+            TileType.River => 0.95f,
+            TileType.Reef => 0.9f,
+            TileType.Jungle => 0.8f,
+            TileType.Forest => 0.7f,
+            TileType.Ice => 0.5f,
+            TileType.Grass => 0.4f,
+            TileType.Savanna => 0.25f,
+            TileType.Tundra => 0.2f,
             TileType.Sand => 0.1f,
             TileType.Arid => 0.0f,
+            TileType.Lava => 0.0f,
             _ => 0.2f,
         };
     }
