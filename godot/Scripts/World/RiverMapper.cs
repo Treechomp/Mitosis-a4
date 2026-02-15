@@ -32,7 +32,7 @@ public sealed class RiverMapper
     private const float LandLevel = 0.45f;             // Minimum elevation for land
     private const int MinRiverFlow = 1;                // Flow threshold to become a river
     private const int WideRiverFlow = 3;               // Flow threshold for wide (2-tile) rivers
-    private const int MinSourceSpacing = 12;           // Minimum tiles between sources
+    private const int MinSourceSpacing = 18;           // Minimum tiles between sources
     private const int MaxRiverSources = 80;            // Max number of river source points
     private const float MaxLakeRise = 0.04f;             // Max water rise above depression bottom
     private const int MaxLakeArea = 80;                  // Max tiles a single lake can occupy

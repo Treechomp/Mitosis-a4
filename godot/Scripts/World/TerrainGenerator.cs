@@ -17,8 +17,8 @@ public sealed class TerrainGenerator
     private readonly FastNoiseLite _warpNoiseY;
     private readonly FastNoiseLite _landmarkNoise;
 
-    // Domain warping amplitude (in tiles)
-    private const float WarpAmplitude = 12f;
+    // Domain warping amplitude (in tiles) — larger value means more organic, winding boundaries
+    private const float WarpAmplitude = 24f;
 
     // Flow-based river system (pre-computed before chunk generation)
     private RiverMapper? _riverMapper;
@@ -28,35 +28,35 @@ public sealed class TerrainGenerator
     {
         _seed = seed;
 
-        // Elevation noise (larger features)
+        // Elevation noise — continent/landmass scale features
         _elevationNoise = new FastNoiseLite();
         _elevationNoise.NoiseType = FastNoiseLite.NoiseTypeEnum.SimplexSmooth;
         _elevationNoise.Seed = seed;
-        _elevationNoise.Frequency = 0.02f;
+        _elevationNoise.Frequency = 0.012f;
         _elevationNoise.FractalType = FastNoiseLite.FractalTypeEnum.Fbm;
         _elevationNoise.FractalOctaves = 4;
 
-        // Moisture noise (smaller features)
+        // Moisture noise — continent scale so deserts/wetlands form large regions
         _moistureNoise = new FastNoiseLite();
         _moistureNoise.NoiseType = FastNoiseLite.NoiseTypeEnum.SimplexSmooth;
         _moistureNoise.Seed = seed + 1000;
-        _moistureNoise.Frequency = 0.03f;
+        _moistureNoise.Frequency = 0.008f;
         _moistureNoise.FractalType = FastNoiseLite.FractalTypeEnum.Fbm;
         _moistureNoise.FractalOctaves = 3;
 
-        // Temperature noise — large-scale regions with latitude-like gradient
+        // Temperature noise — very large-scale regions with latitude-like gradient
         _temperatureNoise = new FastNoiseLite();
         _temperatureNoise.NoiseType = FastNoiseLite.NoiseTypeEnum.SimplexSmooth;
         _temperatureNoise.Seed = seed + 5000;
-        _temperatureNoise.Frequency = 0.008f;
+        _temperatureNoise.Frequency = 0.005f;
         _temperatureNoise.FractalType = FastNoiseLite.FractalTypeEnum.Fbm;
-        _temperatureNoise.FractalOctaves = 3;
+        _temperatureNoise.FractalOctaves = 2;
 
         // Domain warp noise X — distorts coordinates for organic biome boundaries
         _warpNoiseX = new FastNoiseLite();
         _warpNoiseX.NoiseType = FastNoiseLite.NoiseTypeEnum.SimplexSmooth;
         _warpNoiseX.Seed = seed + 7000;
-        _warpNoiseX.Frequency = 0.015f;
+        _warpNoiseX.Frequency = 0.008f;
         _warpNoiseX.FractalType = FastNoiseLite.FractalTypeEnum.Fbm;
         _warpNoiseX.FractalOctaves = 2;
 
@@ -64,7 +64,7 @@ public sealed class TerrainGenerator
         _warpNoiseY = new FastNoiseLite();
         _warpNoiseY.NoiseType = FastNoiseLite.NoiseTypeEnum.SimplexSmooth;
         _warpNoiseY.Seed = seed + 8000;
-        _warpNoiseY.Frequency = 0.015f;
+        _warpNoiseY.Frequency = 0.008f;
         _warpNoiseY.FractalType = FastNoiseLite.FractalTypeEnum.Fbm;
         _warpNoiseY.FractalOctaves = 2;
 
