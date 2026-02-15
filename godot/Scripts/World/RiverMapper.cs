@@ -270,12 +270,12 @@ public sealed class RiverMapper
                 waterLevel += 0.005f;
                 if (waterLevel > 0.75f) break; // Don't fill mountains
 
-                foreach (var pos in filled)
+                foreach (var (fx, fy) in filled)
                 {
                     for (int d = 0; d < 8; d++)
                     {
-                        int nx = pos.x + DX[d];
-                        int ny = pos.y + DY[d];
+                        int nx = fx + DX[d];
+                        int ny = fy + DY[d];
                         if (nx < 0 || nx >= _worldSize || ny < 0 || ny >= _worldSize)
                             continue;
                         if (filled.Contains((nx, ny))) continue;
