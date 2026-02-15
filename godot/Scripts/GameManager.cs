@@ -19,8 +19,8 @@ public partial class GameManager : Node2D
 {
     // Configuration
     [Export] public int ChunkSize = 32;
-    [Export] public int WorldSizeChunks = 16;
-    [Export] public int WorldSeed = 42;
+    [Export] public int WorldSizeChunks = 24;
+    [Export] public int WorldSeed = 0;
     [Export] public int TileSize = 16;
     [Export] public int TargetTPS = 20;
     [Export] public int MaxPopulation = 15000;
@@ -80,7 +80,9 @@ public partial class GameManager : Node2D
     public override void _Ready()
     {
         _entityManager = new EntityManager();
-        _worldManager = new WorldManager(ChunkSize, WorldSizeChunks, WorldSeed);
+        // Seed 0 means randomize each run; any other value gives a reproducible world
+        int seed = WorldSeed != 0 ? WorldSeed : (int)(DateTime.UtcNow.Ticks & 0x7FFFFFFF);
+        _worldManager = new WorldManager(ChunkSize, WorldSizeChunks, seed);
         _simulationDt = 1.0 / TargetTPS;
 
         // Create extracted managers
