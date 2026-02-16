@@ -102,7 +102,9 @@ public static class TileTypeExtensions
                tile == TileType.Jungle ||
                tile == TileType.Shrubland ||
                tile == TileType.Taiga ||
-               tile == TileType.Steppe;
+               tile == TileType.Steppe ||
+               tile == TileType.Tundra ||
+               tile == TileType.Arid;
     }
 
     /// <summary>

@@ -9,6 +9,7 @@ public enum SpeciesType : byte
 {
     Herbivore = 0,
     Carnivore = 1,
+    Omnivore = 5,  // Eats both plants and creatures
     Shroomer = 2,  // Fungi-like, spreads via spores
     Sectid = 3,    // Insect-like, multiplies quickly
     Faeling = 4    // Plant-like, grows crystals
@@ -280,4 +281,22 @@ public struct Fear
     public readonly bool IsPanicking => Current >= Max * 0.9f;
     public readonly bool IsVigilant => VigilanceTicks > 0;
     public readonly float Ratio => Current / Threshold;  // 0-1+ how close to threshold
+}
+
+/// <summary>
+/// Damage over time effect from venomous attacks.
+/// </summary>
+[StructLayout(LayoutKind.Sequential)]
+public struct VenomEffect
+{
+    public float DamagePerTick;
+    public int RemainingTicks;
+
+    public VenomEffect(float damagePerTick, int durationTicks)
+    {
+        DamagePerTick = damagePerTick;
+        RemainingTicks = durationTicks;
+    }
+
+    public readonly bool IsActive => RemainingTicks > 0;
 }

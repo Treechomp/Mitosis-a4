@@ -48,7 +48,15 @@ public sealed class TerrainDiscomfortSystem : ISystem
             {
                 var speciesDef = SpeciesRegistry.GetById(em.Species[entity].SpeciesId);
                 if (speciesDef != null)
+                {
+                    // Flying creatures ignore terrain discomfort entirely
+                    if (speciesDef.IsFlying)
+                    {
+                        discomfort.Current = MathF.Max(0, discomfort.Current - discomfort.DecayRate);
+                        continue;
+                    }
                     tileDiscomfort += speciesDef.GetTerrainComfortModifier(tile);
+                }
             }
 
             // Clamp so negative comfort can't cause negative discomfort accumulation

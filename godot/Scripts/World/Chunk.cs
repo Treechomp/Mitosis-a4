@@ -44,7 +44,15 @@ public sealed class Chunk
         {
             for (int x = 0; x < Size; x++)
             {
-                _nutrition[x, y] = _tiles[x, y].IsGrazeable() ? MaxNutrition : 0f;
+                var tile = _tiles[x, y];
+                if (!tile.IsGrazeable())
+                    _nutrition[x, y] = 0f;
+                else if (tile == TileType.Tundra)
+                    _nutrition[x, y] = 0.2f;  // Sparse arctic vegetation
+                else if (tile == TileType.Arid)
+                    _nutrition[x, y] = 0.15f; // Sparse desert scrub
+                else
+                    _nutrition[x, y] = MaxNutrition;
             }
         }
     }
@@ -62,7 +70,14 @@ public sealed class Chunk
         {
             _tiles[localX, localY] = type;
             // Reset nutrition when tile type changes
-            _nutrition[localX, localY] = type.IsGrazeable() ? MaxNutrition : 0f;
+            if (!type.IsGrazeable())
+                _nutrition[localX, localY] = 0f;
+            else if (type == TileType.Tundra)
+                _nutrition[localX, localY] = 0.2f;
+            else if (type == TileType.Arid)
+                _nutrition[localX, localY] = 0.15f;
+            else
+                _nutrition[localX, localY] = MaxNutrition;
         }
     }
 

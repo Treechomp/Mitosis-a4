@@ -59,6 +59,19 @@ public sealed class HungerSystem : ISystem
                     energy.Current = MathF.Min(energy.Max, energy.Current + speciesDef.EnergyRegenRate);
                 }
             }
+
+            // Venom DOT: apply damage and decrement timer
+            if (em.HasComponents(entity, ComponentFlags.VenomEffect | ComponentFlags.Energy))
+            {
+                ref var venom = ref em.VenomEffects[entity];
+                ref var energy = ref em.Energies[entity];
+                energy.Current -= venom.DamagePerTick;
+                venom.RemainingTicks--;
+                if (venom.RemainingTicks <= 0)
+                    em.RemoveComponent(entity, ComponentFlags.VenomEffect);
+                if (energy.IsDead)
+                    _toKill.Add(entity);
+            }
         }
 
         foreach (int entity in _toKill)
@@ -157,10 +170,11 @@ public sealed class GrazingSystem : ISystem
             var tile = _worldManager.GetTile(pos.X, pos.Y);
 
             // Standard herbivore grazing — nutrition-dependent
-            if (species.Type == SpeciesType.Herbivore)
+            // Omnivores also graze but at whatever GrazeNutrition their definition sets
+            if (species.Type == SpeciesType.Herbivore || species.Type == SpeciesType.Omnivore)
             {
                 var herbDef = SpeciesRegistry.GetById(species.SpeciesId);
-                if (tile.IsGrazeable())
+                if (herbDef.CanGraze && tile.IsGrazeable())
                 {
                     // Check tile nutrition; depleted tiles yield less food
                     float nutrition = _worldManager.GetNutrition(pos.X, pos.Y);
@@ -171,6 +185,11 @@ public sealed class GrazingSystem : ISystem
                         float foodGained = herbDef.GrazeNutrition * (consumed / nutritionConsumeRate);
                         hunger.Current = MathF.Min(hunger.Max, hunger.Current + foodGained);
                     }
+                }
+                // FeedTiles fallback: species that feed from specific tiles (e.g. Fish from water)
+                else if (herbDef.FeedTiles != null && herbDef.FeedTiles.Contains(tile))
+                {
+                    hunger.Current = MathF.Min(hunger.Max, hunger.Current + herbDef.FeedNutrition);
                 }
                 continue;
             }

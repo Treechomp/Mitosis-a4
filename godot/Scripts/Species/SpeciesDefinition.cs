@@ -196,6 +196,7 @@ public sealed class SpeciesDefinition
     public List<BiomeType>? PreferredBiomes { get; init; }
 
     public bool IsAquatic { get; init; } = false;
+    public bool IsFlying { get; init; } = false;
 
     /// <summary>
     /// Specific tile types where this species can spawn. If null, uses default logic.
@@ -303,6 +304,13 @@ public sealed class SpeciesDefinition
     public Color BaseColor { get; init; } = new(0.5f, 0.5f, 0.5f);
     public float BaseSize { get; init; } = 8f;
     public ShapeType Shape { get; init; } = ShapeType.Circle;
+
+    // === VENOM ===
+    /// <summary>Damage per tick applied to prey after a venomous attack. 0 = no venom.</summary>
+    public float VenomDamagePerTick { get; init; } = 0f;
+    /// <summary>Duration of venom effect in ticks.</summary>
+    public int VenomDurationTicks { get; init; } = 0;
+    public bool HasVenom => VenomDamagePerTick > 0f && VenomDurationTicks > 0;
 
     // === STAT VARIATION ===
     public float StatVariation { get; init; } = 0.2f;

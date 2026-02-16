@@ -1,6 +1,7 @@
 using System;
 using Mitosis.Components;
 using Mitosis.ECS;
+using Mitosis.SpeciesData;
 using Mitosis.World;
 using static Mitosis.ECS.EntityManager;
 
@@ -53,6 +54,14 @@ public sealed class MovementSystem : ISystem
             // Get current tile for speed modifier
             var currentTile = _worldManager.GetTile(pos.X, pos.Y);
             float speedMult = currentTile.GetSpeedMultiplier();
+
+            // Flying creatures ignore terrain speed penalties
+            if (em.HasComponents(entity, ComponentFlags.Species))
+            {
+                var speciesDef = SpeciesRegistry.GetById(em.Species[entity].SpeciesId);
+                if (speciesDef.IsFlying)
+                    speedMult = 1f;
+            }
 
             // Calculate movement delta with terrain speed modifier
             float dx = vel.Dx * speedMult;

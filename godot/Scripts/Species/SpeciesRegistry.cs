@@ -544,6 +544,1680 @@ public static class SpeciesRegistry
         });
 
         // ============================
+        // AQUATIC SPECIES (Phase 3.1)
+        // ============================
+
+        Register(new SpeciesDefinition
+        {
+            Name = "Fish",
+            Diet = DietType.Herbivore,
+            DefaultSocialType = SocialType.Herd,
+            IsAquatic = true,
+
+            // Movement - fast in water, school behavior
+            BaseWanderSpeed = 0.05f,
+            DirectionChangeChance = 0.02f,
+
+            // Fleeing - scatter on predator
+            FleeRange = 7f,
+            FleeSpeedMultiplier = 2.5f,
+
+            // Fear - skittish schooling fish
+            FearThreshold = 25f,
+            FearMax = 60f,
+            FearAccumulationRate = 12f,
+            FearDecayRate = 2f,
+            FearVigilanceDecay = 0.5f,
+            FearVigilanceDuration = 80,
+            DefaultFearResponse = FearResponse.Panic,
+
+            // Survival - short-lived, fast metabolism
+            MaxHunger = 120f,
+            HungerDecayRate = 0.06f,
+            MaxLifespan = 10000,
+            MaturityAge = 600,
+
+            // Reproduction - prolific
+            ReproHungerThreshold = 100f,
+            ReproEnergyThreshold = 60f,
+            ReproCooldown = 400,
+            ReproHungerCost = 30f,
+            ReproEnergyCost = 20f,
+            OffspringCount = 2,
+
+            // Social - tight schools
+            GroupAffinity = 0.9f,
+            PreferredGroupSize = 8f,
+            CohesionStrength = 0.04f,
+            AlignmentStrength = 0.03f,
+            SocialRadius = 8f,
+            LeaderInfluenceRadius = 5f,
+
+            // Terrain - water only
+            DiscomfortThreshold = 20f,
+            DiscomfortDecayRate = 1f,
+            GrazingPressure = 0f,
+            TerrainSpeedModifiers = new Dictionary<TileType, float>
+            {
+                { TileType.ShallowWater, 1.3f },
+                { TileType.DeepWater, 1.5f },
+                { TileType.River, 1.2f },
+            },
+            TerrainComfortModifiers = new Dictionary<TileType, float>
+            {
+                { TileType.ShallowWater, -3f },
+                { TileType.DeepWater, -5f },
+                { TileType.River, -2f },
+                { TileType.Grass, 10f },
+                { TileType.Sand, 10f },
+            },
+            AllowedSpawnTiles = new List<TileType> { TileType.ShallowWater, TileType.DeepWater },
+            PreferredBiomes = new List<BiomeType> { BiomeType.Ocean, BiomeType.Coast, BiomeType.River },
+
+            // Grazing - fish graze on aquatic vegetation (shallow water tiles)
+            CanGraze = false,
+            FeedTiles = new List<TileType> { TileType.ShallowWater, TileType.DeepWater, TileType.River },
+            FeedNutrition = 0.3f,  // Feed from water (plankton/algae)
+
+            // Separation
+            SeparationRadius = 1.0f,
+            SeparationStrength = 0.015f,
+
+            // Trophic - small prey
+            BodyMass = 0.5f,
+
+            // Visuals - small blue
+            BaseColor = new Color(0.3f, 0.6f, 0.9f),
+            BaseSize = 4f,
+            Shape = ShapeType.Circle,
+            StatVariation = 0.25f,
+        });
+
+        Register(new SpeciesDefinition
+        {
+            Name = "Shark",
+            Diet = DietType.Carnivore,
+            DefaultSocialType = SocialType.Solitary,
+            IsAquatic = true,
+
+            // Movement - fast aquatic predator
+            BaseWanderSpeed = 0.04f,
+            DirectionChangeChance = 0.005f,
+
+            // Combat - powerful bite
+            HuntRange = 14f,
+            AttackRange = 1.2f,
+            AttackPower = 45f,
+            AttackCooldown = 30,
+            BaseHuntSpeed = 0.14f,
+
+            // Survival - long lived apex
+            MaxHunger = 280f,
+            HungerDecayRate = 0.025f,
+            MaxLifespan = 40000,
+            MaturityAge = 3000,
+            MaxEnergy = 140f,
+            EnergyRegenRate = 0.12f,
+
+            // Hunting behavior
+            HuntThreshold = 0.75f,
+            TrackingHungerThreshold = 0.5f,
+            TrackingRange = 100f,
+
+            // Reproduction - slow
+            ReproHungerThreshold = 250f,
+            ReproEnergyThreshold = 90f,
+            ReproCooldown = 2000,
+            ReproHungerCost = 80f,
+            ReproEnergyCost = 50f,
+
+            // Roaming - wide ocean patrol
+            RoamDistance = 100f,
+            RoamCooldown = 400,
+
+            // Social - solitary
+            GroupAffinity = 0f,
+            PreferredGroupSize = 0f,
+
+            // Terrain - water only
+            DiscomfortThreshold = 30f,
+            DiscomfortDecayRate = 1f,
+            TerrainSpeedModifiers = new Dictionary<TileType, float>
+            {
+                { TileType.DeepWater, 1.8f },
+                { TileType.ShallowWater, 1.3f },
+                { TileType.River, 0.8f },
+            },
+            TerrainComfortModifiers = new Dictionary<TileType, float>
+            {
+                { TileType.DeepWater, -5f },
+                { TileType.ShallowWater, -2f },
+                { TileType.Grass, 15f },
+                { TileType.Sand, 15f },
+            },
+            AllowedSpawnTiles = new List<TileType> { TileType.DeepWater },
+            PreferredBiomes = new List<BiomeType> { BiomeType.Ocean },
+
+            CanGraze = false,
+
+            // Separation
+            SeparationRadius = 3f,
+            SeparationStrength = 0.02f,
+
+            // Trophic - large aquatic apex
+            BodyMass = 10.0f,
+            SoloHuntMaxRatio = 1.5f,
+            PreferredPrey = new List<string> { "Fish", "Turtle" },
+            PreferredPreyBias = 0.4f,
+
+            // Visuals - large dark blue triangle
+            BaseColor = new Color(0.2f, 0.3f, 0.5f),
+            BaseSize = 14f,
+            Shape = ShapeType.Triangle,
+            StatVariation = 0.15f,
+        });
+
+        Register(new SpeciesDefinition
+        {
+            Name = "Frog",
+            Diet = DietType.Herbivore,
+            DefaultSocialType = SocialType.Solitary,
+
+            // Movement - small hops
+            BaseWanderSpeed = 0.03f,
+            DirectionChangeChance = 0.02f,
+
+            // Fleeing
+            FleeRange = 5f,
+            FleeSpeedMultiplier = 2.0f,
+
+            // Fear - jumpy
+            FearThreshold = 25f,
+            FearMax = 70f,
+            FearAccumulationRate = 10f,
+            FearDecayRate = 1.5f,
+            DefaultFearResponse = FearResponse.Panic,
+
+            // Survival - short-lived
+            MaxHunger = 140f,
+            HungerDecayRate = 0.06f,
+            MaxLifespan = 12000,
+            MaturityAge = 800,
+
+            // Reproduction
+            ReproHungerThreshold = 120f,
+            ReproEnergyThreshold = 60f,
+            ReproCooldown = 500,
+            ReproHungerCost = 30f,
+            ReproEnergyCost = 20f,
+            OffspringCount = 2,
+
+            // Social - solitary
+            GroupAffinity = 0.1f,
+            PreferredGroupSize = 1f,
+
+            // Terrain - river/wetland specialist
+            DiscomfortThreshold = 35f,
+            DiscomfortDecayRate = 2f,
+            GrazingPressure = 1.0f,
+            TerrainSpeedModifiers = new Dictionary<TileType, float>
+            {
+                { TileType.Wetland, 1.2f },
+                { TileType.Bog, 1.1f },
+                { TileType.ShallowWater, 0.8f },
+                { TileType.Grass, 0.9f },
+            },
+            TerrainComfortModifiers = new Dictionary<TileType, float>
+            {
+                { TileType.Wetland, -3f },
+                { TileType.Bog, -2f },
+                { TileType.ShallowWater, -1f },
+                { TileType.Sand, 4f },
+                { TileType.Arid, 6f },
+            },
+            AllowedSpawnTiles = new List<TileType> { TileType.Wetland, TileType.Bog },
+            PreferredBiomes = new List<BiomeType> { BiomeType.Wetland, BiomeType.River },
+
+            CanGraze = true,
+            GrazeNutrition = 0.3f,
+
+            SeparationRadius = 1.5f,
+            SeparationStrength = 0.02f,
+
+            RoamDistance = 25f,
+            RoamCooldown = 400,
+
+            // Trophic - very small
+            BodyMass = 0.3f,
+
+            // Visuals - small green
+            BaseColor = new Color(0.2f, 0.8f, 0.3f),
+            BaseSize = 4f,
+            Shape = ShapeType.Circle,
+            StatVariation = 0.25f,
+        });
+
+        Register(new SpeciesDefinition
+        {
+            Name = "Turtle",
+            Diet = DietType.Herbivore,
+            DefaultSocialType = SocialType.Solitary,
+            SemiAquatic = true,
+
+            // Movement - very slow
+            BaseWanderSpeed = 0.015f,
+            DirectionChangeChance = 0.003f,
+
+            // Fleeing - barely flees
+            FleeRange = 3f,
+            FleeSpeedMultiplier = 1.3f,
+
+            // Fear - calm, retreats into shell
+            FearThreshold = 80f,
+            FearMax = 120f,
+            FearAccumulationRate = 2f,
+            FearDecayRate = 1f,
+            DefaultFearResponse = FearResponse.Freeze,
+
+            // Survival - very long-lived, slow metabolism
+            MaxHunger = 300f,
+            HungerDecayRate = 0.02f,
+            MaxLifespan = 60000,
+            MaturityAge = 5000,
+            MaxEnergy = 180f,
+            EnergyRegenRate = 0.3f,
+
+            // Reproduction - slow
+            ReproHungerThreshold = 260f,
+            ReproEnergyThreshold = 90f,
+            ReproCooldown = 2000,
+            ReproHungerCost = 60f,
+            ReproEnergyCost = 40f,
+
+            // Social - solitary
+            GroupAffinity = 0f,
+            PreferredGroupSize = 0f,
+
+            // Terrain - likes water edges
+            DiscomfortThreshold = 70f,
+            DiscomfortDecayRate = 1.5f,
+            GrazingPressure = 0.5f,
+            TerrainSpeedModifiers = new Dictionary<TileType, float>
+            {
+                { TileType.ShallowWater, 1.3f },
+                { TileType.Grass, 0.7f },
+                { TileType.Sand, 0.6f },
+            },
+            TerrainComfortModifiers = new Dictionary<TileType, float>
+            {
+                { TileType.ShallowWater, -3f },
+                { TileType.Wetland, -2f },
+                { TileType.Sand, 1f },
+            },
+            AllowedSpawnTiles = new List<TileType> { TileType.Grass, TileType.Wetland, TileType.ShallowWater },
+            PreferredBiomes = new List<BiomeType> { BiomeType.Coast, BiomeType.Wetland, BiomeType.River },
+
+            CanGraze = true,
+            GrazeNutrition = 0.3f,
+
+            SeparationRadius = 2f,
+            SeparationStrength = 0.02f,
+
+            RoamDistance = 20f,
+            RoamCooldown = 600,
+
+            // Trophic - high mass (shell protection)
+            BodyMass = 6.0f,
+
+            // Visuals - dark green
+            BaseColor = new Color(0.25f, 0.45f, 0.2f),
+            BaseSize = 8f,
+            Shape = ShapeType.Square,
+            StatVariation = 0.15f,
+        });
+
+        // ============================
+        // TEMPERATE SPECIES (Phase 3.2)
+        // ============================
+
+        Register(new SpeciesDefinition
+        {
+            Name = "Elk",
+            Diet = DietType.Herbivore,
+            DefaultSocialType = SocialType.Herd,
+
+            // Movement - large, steady
+            BaseWanderSpeed = 0.025f,
+            DirectionChangeChance = 0.004f,
+
+            // Fleeing
+            FleeRange = 7f,
+            FleeSpeedMultiplier = 2.0f,
+
+            // Fear - alert herd animal
+            FearThreshold = 55f,
+            FearMax = 100f,
+            FearAccumulationRate = 5f,
+            FearDecayRate = 1f,
+            FearVigilanceDecay = 0.3f,
+            FearVigilanceDuration = 120,
+            DefaultFearResponse = FearResponse.Flee,
+
+            // Survival - large, long-lived
+            MaxHunger = 300f,
+            HungerDecayRate = 0.05f,
+            MaxLifespan = 35000,
+            MaturityAge = 2500,
+            MaxEnergy = 120f,
+
+            // Reproduction
+            ReproHungerThreshold = 260f,
+            ReproEnergyThreshold = 85f,
+            ReproCooldown = 800,
+            ReproHungerCost = 60f,
+            ReproEnergyCost = 35f,
+
+            // Social - large herds
+            GroupAffinity = 0.8f,
+            PreferredGroupSize = 8f,
+            CohesionStrength = 0.03f,
+            AlignmentStrength = 0.02f,
+            SocialRadius = 12f,
+            LeaderInfluenceRadius = 8f,
+
+            // Terrain - grassland specialist
+            DiscomfortThreshold = 50f,
+            DiscomfortDecayRate = 2f,
+            GrazingPressure = 1.5f,
+            TerrainSpeedModifiers = new Dictionary<TileType, float>
+            {
+                { TileType.Grass, 1.1f },
+                { TileType.Forest, 0.7f },
+                { TileType.Steppe, 1.0f },
+            },
+            PreferredBiomes = new List<BiomeType> { BiomeType.Grassland },
+
+            CanGraze = true,
+            GrazeNutrition = 0.6f,
+
+            SeparationRadius = 3f,
+            SeparationStrength = 0.03f,
+
+            RoamDistance = 70f,
+            RoamCooldown = 500,
+
+            // Trophic - large herbivore, hard to solo hunt
+            BodyMass = 7.0f,
+
+            // Visuals - large brown
+            BaseColor = new Color(0.55f, 0.4f, 0.25f),
+            BaseSize = 11f,
+            Shape = ShapeType.Circle,
+            StatVariation = 0.2f,
+        });
+
+        Register(new SpeciesDefinition
+        {
+            Name = "Boar",
+            Diet = DietType.Omnivore,
+            DefaultSocialType = SocialType.Pack,
+
+            // Movement
+            BaseWanderSpeed = 0.035f,
+            DirectionChangeChance = 0.008f,
+
+            // Combat - aggressive omnivore that fights back
+            HuntRange = 6f,
+            AttackRange = 0.7f,
+            AttackPower = 18f,
+            AttackCooldown = 18,
+            BaseHuntSpeed = 0.09f,
+
+            // Fleeing - fights rather than flees
+            FleeRange = 4f,
+            FleeSpeedMultiplier = 1.6f,
+
+            // Fear - defensive, fights back
+            FearThreshold = 60f,
+            FearMax = 100f,
+            FearAccumulationRate = 4f,
+            FearDecayRate = 1.5f,
+            DefaultFearResponse = FearResponse.Defensive,
+
+            // Survival
+            MaxHunger = 250f,
+            HungerDecayRate = 0.06f,
+            MaxLifespan = 22000,
+            MaturityAge = 1500,
+            MaxEnergy = 110f,
+
+            // Hunting behavior
+            HuntThreshold = 0.6f,
+            TrackingHungerThreshold = 0.4f,
+            TrackingRange = 40f,
+            PackCoordinationRadius = 8f,
+            PackShareRadius = 8f,
+
+            // Reproduction
+            ReproHungerThreshold = 220f,
+            ReproEnergyThreshold = 75f,
+            ReproCooldown = 700,
+            ReproHungerCost = 50f,
+            ReproEnergyCost = 30f,
+            OffspringCount = 2,
+            EnergyRegenRate = 0.2f,
+
+            // Social - small packs
+            GroupAffinity = 0.6f,
+            PreferredGroupSize = 4f,
+            CohesionStrength = 0.025f,
+            AlignmentStrength = 0.015f,
+            PackHunterChance = 0.5f,
+            SocialRadius = 8f,
+
+            // Terrain - forest specialist
+            DiscomfortThreshold = 55f,
+            DiscomfortDecayRate = 2.5f,
+            GrazingPressure = 1.0f,
+            TerrainSpeedModifiers = new Dictionary<TileType, float>
+            {
+                { TileType.Forest, 1.1f },
+                { TileType.Grass, 1.0f },
+                { TileType.Shrubland, 1.05f },
+            },
+            PreferredBiomes = new List<BiomeType> { BiomeType.Forest, BiomeType.Grassland },
+
+            // Grazing - omnivore: grazes at reduced efficiency, also hunts small prey
+            CanGraze = true,
+            GrazeNutrition = 0.3f,  // Lower than pure herbivores
+
+            SeparationRadius = 2f,
+            SeparationStrength = 0.025f,
+
+            // Trophic - medium, tough
+            BodyMass = 4.5f,
+            SoloHuntMaxRatio = 0.8f,  // Only hunts small prey solo
+            PreferredPrey = new List<string> { "Rabbit", "Frog" },
+            PreferredPreyBias = 0.3f,
+
+            // Visuals - dark brown
+            BaseColor = new Color(0.4f, 0.3f, 0.2f),
+            BaseSize = 9f,
+            Shape = ShapeType.Square,
+            StatVariation = 0.2f,
+        });
+
+        Register(new SpeciesDefinition
+        {
+            Name = "Bear",
+            Diet = DietType.Carnivore,
+            DefaultSocialType = SocialType.Solitary,
+
+            // Movement - slow but powerful
+            BaseWanderSpeed = 0.02f,
+            DirectionChangeChance = 0.004f,
+
+            // Combat - devastating attacks
+            HuntRange = 10f,
+            AttackRange = 1.5f,
+            AttackPower = 60f,
+            AttackCooldown = 35,
+            BaseHuntSpeed = 0.09f,
+
+            // Survival - large, long-lived
+            MaxHunger = 350f,
+            HungerDecayRate = 0.04f,
+            MaxLifespan = 40000,
+            MaturityAge = 3000,
+            MaxEnergy = 200f,
+            EnergyRegenRate = 0.15f,
+
+            // Hunting behavior
+            HuntThreshold = 0.75f,
+            TrackingHungerThreshold = 0.5f,
+            TrackingRange = 60f,
+
+            // Reproduction - slow
+            ReproHungerThreshold = 300f,
+            ReproEnergyThreshold = 90f,
+            ReproCooldown = 1500,
+            ReproHungerCost = 90f,
+            ReproEnergyCost = 60f,
+
+            // Roaming
+            RoamDistance = 80f,
+            RoamCooldown = 600,
+
+            // Social - solitary
+            GroupAffinity = 0f,
+            PreferredGroupSize = 0f,
+
+            // Terrain - forest specialist
+            DiscomfortThreshold = 70f,
+            DiscomfortDecayRate = 2f,
+            TerrainSpeedModifiers = new Dictionary<TileType, float>
+            {
+                { TileType.Forest, 1.0f },
+                { TileType.Grass, 0.9f },
+                { TileType.Taiga, 1.0f },
+            },
+            PreferredBiomes = new List<BiomeType> { BiomeType.Forest },
+
+            CanGraze = false,
+
+            SeparationRadius = 4f,
+            SeparationStrength = 0.03f,
+
+            // Trophic - apex predator, very high mass
+            BodyMass = 12.0f,
+            SoloHuntMaxRatio = 1.5f,
+            PreferredPrey = new List<string> { "Deer", "Elk", "Boar" },
+            PreferredPreyBias = 0.4f,
+
+            // Visuals - large dark brown
+            BaseColor = new Color(0.35f, 0.2f, 0.1f),
+            BaseSize = 15f,
+            Shape = ShapeType.Triangle,
+            StatVariation = 0.15f,
+        });
+
+        Register(new SpeciesDefinition
+        {
+            Name = "Hawk",
+            Diet = DietType.Carnivore,
+            DefaultSocialType = SocialType.Solitary,
+            IsFlying = true,
+
+            // Movement - fast aerial hunter
+            BaseWanderSpeed = 0.06f,
+            DirectionChangeChance = 0.008f,
+
+            // Combat - fast strikes on small prey
+            HuntRange = 15f,
+            AttackRange = 0.8f,
+            AttackPower = 22f,
+            AttackCooldown = 20,
+            BaseHuntSpeed = 0.15f,
+
+            // Survival
+            MaxHunger = 160f,
+            HungerDecayRate = 0.05f,
+            MaxLifespan = 20000,
+            MaturityAge = 1200,
+            EnergyRegenRate = 0.15f,
+
+            // Hunting behavior
+            HuntThreshold = 0.75f,
+            TrackingHungerThreshold = 0.5f,
+            TrackingRange = 80f,
+
+            // Reproduction
+            ReproHungerThreshold = 140f,
+            ReproEnergyThreshold = 75f,
+            ReproCooldown = 1000,
+            ReproHungerCost = 40f,
+            ReproEnergyCost = 30f,
+
+            // Roaming - wide aerial patrol
+            RoamDistance = 120f,
+            RoamCooldown = 300,
+
+            // Social - solitary
+            GroupAffinity = 0f,
+            PreferredGroupSize = 0f,
+
+            // Terrain - flying ignores terrain (handled by system)
+            DiscomfortThreshold = 100f,
+            DiscomfortDecayRate = 5f,
+            PreferredBiomes = new List<BiomeType> { BiomeType.Grassland, BiomeType.Forest },
+
+            CanGraze = false,
+
+            SeparationRadius = 3f,
+            SeparationStrength = 0.02f,
+
+            // Trophic - small but effective aerial hunter
+            BodyMass = 1.5f,
+            SoloHuntMaxRatio = 1.0f,
+            PreferredPrey = new List<string> { "Rabbit", "Frog", "Lizard" },
+            PreferredPreyBias = 0.5f,
+
+            // Visuals - brown triangle
+            BaseColor = new Color(0.5f, 0.35f, 0.15f),
+            BaseSize = 7f,
+            Shape = ShapeType.Triangle,
+            StatVariation = 0.2f,
+        });
+
+        // ============================
+        // DESERT SPECIES (Phase 3.3)
+        // ============================
+
+        Register(new SpeciesDefinition
+        {
+            Name = "Lizard",
+            Diet = DietType.Herbivore,
+            DefaultSocialType = SocialType.Solitary,
+
+            // Movement - fast on hot terrain
+            BaseWanderSpeed = 0.05f,
+            DirectionChangeChance = 0.015f,
+
+            // Fleeing - very fast
+            FleeRange = 6f,
+            FleeSpeedMultiplier = 2.6f,
+
+            // Fear - skittish
+            FearThreshold = 30f,
+            FearMax = 70f,
+            FearAccumulationRate = 10f,
+            FearDecayRate = 1.5f,
+            DefaultFearResponse = FearResponse.Flee,
+
+            // Survival - short-lived, adapted to heat
+            MaxHunger = 140f,
+            HungerDecayRate = 0.04f,
+            MaxLifespan = 12000,
+            MaturityAge = 800,
+
+            // Reproduction - quick breeders
+            ReproHungerThreshold = 120f,
+            ReproEnergyThreshold = 60f,
+            ReproCooldown = 500,
+            ReproHungerCost = 30f,
+            ReproEnergyCost = 20f,
+            OffspringCount = 2,
+
+            // Social - solitary
+            GroupAffinity = 0.1f,
+            PreferredGroupSize = 1f,
+
+            // Terrain - desert specialist, fast on sand
+            DiscomfortThreshold = 40f,
+            DiscomfortDecayRate = 3f,
+            GrazingPressure = 1.0f,
+            TerrainSpeedModifiers = new Dictionary<TileType, float>
+            {
+                { TileType.Sand, 1.3f },
+                { TileType.Arid, 1.2f },
+                { TileType.Dirt, 1.1f },
+                { TileType.Grass, 0.8f },
+            },
+            TerrainComfortModifiers = new Dictionary<TileType, float>
+            {
+                { TileType.Sand, -3f },
+                { TileType.Arid, -2f },
+                { TileType.Dirt, -1f },
+                { TileType.Forest, 3f },
+                { TileType.Wetland, 5f },
+            },
+            AllowedSpawnTiles = new List<TileType> { TileType.Sand, TileType.Arid, TileType.Dirt },
+            PreferredBiomes = new List<BiomeType> { BiomeType.Desert },
+
+            CanGraze = true,
+            GrazeNutrition = 0.25f,  // Can eat sparse desert scrub
+
+            SeparationRadius = 1.5f,
+            SeparationStrength = 0.02f,
+
+            RoamDistance = 40f,
+            RoamCooldown = 300,
+
+            // Trophic - very small
+            BodyMass = 0.4f,
+
+            // Visuals - sandy yellow
+            BaseColor = new Color(0.85f, 0.75f, 0.4f),
+            BaseSize = 4f,
+            Shape = ShapeType.Circle,
+            StatVariation = 0.25f,
+        });
+
+        Register(new SpeciesDefinition
+        {
+            Name = "Scorpion",
+            Diet = DietType.Carnivore,
+            DefaultSocialType = SocialType.Solitary,
+
+            // Movement - slow, ambush
+            BaseWanderSpeed = 0.02f,
+            DirectionChangeChance = 0.005f,
+
+            // Combat - venomous ambush
+            HuntRange = 5f,
+            AttackRange = 0.6f,
+            AttackPower = 15f,
+            AttackCooldown = 25,
+            BaseHuntSpeed = 0.07f,
+
+            // Ambush tactics
+            AmbushStealthGain = 0.01f,
+            AmbushStealthDecay = 0.05f,
+            AmbushSpeedThreshold = 0.5f,
+            PounceRange = 1.5f,
+            PounceSpeedMult = 2.5f,
+            PounceAttackMult = 2.0f,
+            PounceDuration = 10,
+            PounceStealthThreshold = 0.6f,
+
+            // Venom
+            VenomDamagePerTick = 1.5f,
+            VenomDurationTicks = 100,  // 5 seconds of poison at 20 TPS
+
+            // Survival
+            MaxHunger = 200f,
+            HungerDecayRate = 0.025f,  // Very slow metabolism
+            MaxLifespan = 25000,
+            MaturityAge = 1500,
+            EnergyRegenRate = 0.12f,
+
+            // Hunting behavior
+            HuntThreshold = 0.75f,
+            TrackingHungerThreshold = 0.5f,
+            TrackingRange = 30f,
+
+            // Reproduction
+            ReproHungerThreshold = 170f,
+            ReproEnergyThreshold = 70f,
+            ReproCooldown = 900,
+            ReproHungerCost = 40f,
+            ReproEnergyCost = 25f,
+
+            // Social - solitary
+            GroupAffinity = 0f,
+            PreferredGroupSize = 0f,
+
+            // Terrain - desert only
+            DiscomfortThreshold = 50f,
+            DiscomfortDecayRate = 2f,
+            TerrainSpeedModifiers = new Dictionary<TileType, float>
+            {
+                { TileType.Sand, 1.2f },
+                { TileType.Arid, 1.1f },
+                { TileType.Dirt, 1.0f },
+                { TileType.Grass, 0.7f },
+            },
+            TerrainComfortModifiers = new Dictionary<TileType, float>
+            {
+                { TileType.Sand, -3f },
+                { TileType.Arid, -2f },
+                { TileType.Wetland, 6f },
+            },
+            AllowedSpawnTiles = new List<TileType> { TileType.Sand, TileType.Arid },
+            PreferredBiomes = new List<BiomeType> { BiomeType.Desert },
+
+            CanGraze = false,
+
+            SeparationRadius = 2f,
+            SeparationStrength = 0.02f,
+
+            RoamDistance = 25f,
+            RoamCooldown = 500,
+
+            // Trophic - small venomous predator
+            BodyMass = 0.8f,
+            SoloHuntMaxRatio = 1.2f,
+            PreferredPrey = new List<string> { "Lizard", "Rabbit" },
+            PreferredPreyBias = 0.4f,
+
+            // Visuals - dark red
+            BaseColor = new Color(0.6f, 0.15f, 0.1f),
+            BaseSize = 5f,
+            Shape = ShapeType.Triangle,
+            StatVariation = 0.2f,
+        });
+
+        Register(new SpeciesDefinition
+        {
+            Name = "Camel",
+            Diet = DietType.Herbivore,
+            DefaultSocialType = SocialType.Herd,
+
+            // Movement - steady desert traveler
+            BaseWanderSpeed = 0.025f,
+            DirectionChangeChance = 0.004f,
+
+            // Fleeing
+            FleeRange = 5f,
+            FleeSpeedMultiplier = 1.8f,
+
+            // Fear - calm, hard to startle
+            FearThreshold = 65f,
+            FearMax = 100f,
+            FearAccumulationRate = 3f,
+            FearDecayRate = 1.2f,
+            DefaultFearResponse = FearResponse.Flee,
+
+            // Survival - desert adapted, very slow hunger
+            MaxHunger = 400f,
+            HungerDecayRate = 0.02f,  // Extremely slow - desert adapted
+            MaxLifespan = 35000,
+            MaturityAge = 3000,
+            MaxEnergy = 130f,
+
+            // Reproduction
+            ReproHungerThreshold = 350f,
+            ReproEnergyThreshold = 85f,
+            ReproCooldown = 1000,
+            ReproHungerCost = 70f,
+            ReproEnergyCost = 40f,
+
+            // Social - small herds
+            GroupAffinity = 0.6f,
+            PreferredGroupSize = 5f,
+            CohesionStrength = 0.02f,
+            AlignmentStrength = 0.015f,
+            SocialRadius = 10f,
+
+            // Terrain - desert specialist
+            DiscomfortThreshold = 60f,
+            DiscomfortDecayRate = 2f,
+            GrazingPressure = 0.8f,
+            TerrainSpeedModifiers = new Dictionary<TileType, float>
+            {
+                { TileType.Sand, 1.1f },
+                { TileType.Arid, 1.15f },
+                { TileType.Dirt, 1.0f },
+                { TileType.Grass, 0.85f },
+            },
+            TerrainComfortModifiers = new Dictionary<TileType, float>
+            {
+                { TileType.Sand, -2f },
+                { TileType.Arid, -3f },
+                { TileType.Forest, 3f },
+                { TileType.Wetland, 5f },
+            },
+            AllowedSpawnTiles = new List<TileType> { TileType.Sand, TileType.Arid, TileType.Dirt },
+            PreferredBiomes = new List<BiomeType> { BiomeType.Desert },
+
+            CanGraze = true,
+            GrazeNutrition = 0.4f,
+
+            SeparationRadius = 3f,
+            SeparationStrength = 0.025f,
+
+            RoamDistance = 80f,
+            RoamCooldown = 400,
+
+            // Trophic - large desert herbivore
+            BodyMass = 8.0f,
+
+            // Visuals - tan
+            BaseColor = new Color(0.8f, 0.7f, 0.5f),
+            BaseSize = 12f,
+            Shape = ShapeType.Circle,
+            StatVariation = 0.15f,
+        });
+
+        Register(new SpeciesDefinition
+        {
+            Name = "Snake",
+            Diet = DietType.Carnivore,
+            DefaultSocialType = SocialType.Solitary,
+
+            // Movement - slithering
+            BaseWanderSpeed = 0.03f,
+            DirectionChangeChance = 0.008f,
+
+            // Combat - fast strike stealth hunter
+            HuntRange = 6f,
+            AttackRange = 0.8f,
+            AttackPower = 18f,
+            AttackCooldown = 18,
+            BaseHuntSpeed = 0.10f,
+
+            // Ambush tactics - stalking predator
+            AmbushStealthGain = 0.012f,
+            AmbushStealthDecay = 0.06f,
+            AmbushSpeedThreshold = 0.4f,
+            PounceRange = 2.0f,
+            PounceSpeedMult = 3.0f,
+            PounceAttackMult = 2.0f,
+            PounceDuration = 8,
+            PounceStealthThreshold = 0.6f,
+
+            // Venom - milder than scorpion
+            VenomDamagePerTick = 1.0f,
+            VenomDurationTicks = 80,
+
+            // Survival
+            MaxHunger = 220f,
+            HungerDecayRate = 0.025f,
+            MaxLifespan = 20000,
+            MaturityAge = 1200,
+            EnergyRegenRate = 0.12f,
+
+            // Hunting behavior
+            HuntThreshold = 0.75f,
+            TrackingHungerThreshold = 0.5f,
+            TrackingRange = 40f,
+
+            // Reproduction
+            ReproHungerThreshold = 190f,
+            ReproEnergyThreshold = 70f,
+            ReproCooldown = 800,
+            ReproHungerCost = 45f,
+            ReproEnergyCost = 30f,
+
+            // Social - solitary
+            GroupAffinity = 0f,
+            PreferredGroupSize = 0f,
+
+            // Terrain - desert and grassland
+            DiscomfortThreshold = 55f,
+            DiscomfortDecayRate = 2.5f,
+            TerrainSpeedModifiers = new Dictionary<TileType, float>
+            {
+                { TileType.Sand, 1.1f },
+                { TileType.Arid, 1.0f },
+                { TileType.Grass, 1.0f },
+                { TileType.Shrubland, 1.1f },
+            },
+            TerrainComfortModifiers = new Dictionary<TileType, float>
+            {
+                { TileType.Sand, -2f },
+                { TileType.Arid, -1f },
+                { TileType.Shrubland, -1f },
+                { TileType.Wetland, 3f },
+            },
+            AllowedSpawnTiles = new List<TileType> { TileType.Sand, TileType.Arid, TileType.Dirt, TileType.Shrubland },
+            PreferredBiomes = new List<BiomeType> { BiomeType.Desert, BiomeType.Grassland },
+
+            CanGraze = false,
+
+            SeparationRadius = 2f,
+            SeparationStrength = 0.02f,
+
+            RoamDistance = 40f,
+            RoamCooldown = 400,
+
+            // Trophic - small predator
+            BodyMass = 1.2f,
+            SoloHuntMaxRatio = 1.0f,
+            PreferredPrey = new List<string> { "Lizard", "Frog" },
+            PreferredPreyBias = 0.4f,
+
+            // Visuals - olive green
+            BaseColor = new Color(0.45f, 0.5f, 0.2f),
+            BaseSize = 6f,
+            Shape = ShapeType.Triangle,
+            StatVariation = 0.2f,
+        });
+
+        // ============================
+        // ARCTIC SPECIES (Phase 3.4)
+        // ============================
+
+        Register(new SpeciesDefinition
+        {
+            Name = "Penguin",
+            Diet = DietType.Herbivore,
+            DefaultSocialType = SocialType.Herd,
+            SemiAquatic = true,
+
+            // Movement - waddle on land, faster in water
+            BaseWanderSpeed = 0.025f,
+            DirectionChangeChance = 0.008f,
+
+            // Fleeing
+            FleeRange = 6f,
+            FleeSpeedMultiplier = 2.0f,
+
+            // Fear - alert in colony
+            FearThreshold = 40f,
+            FearMax = 80f,
+            FearAccumulationRate = 7f,
+            FearDecayRate = 1.2f,
+            DefaultFearResponse = FearResponse.Flee,
+
+            // Survival
+            MaxHunger = 200f,
+            HungerDecayRate = 0.05f,
+            MaxLifespan = 20000,
+            MaturityAge = 1500,
+
+            // Reproduction
+            ReproHungerThreshold = 175f,
+            ReproEnergyThreshold = 70f,
+            ReproCooldown = 600,
+            ReproHungerCost = 40f,
+            ReproEnergyCost = 25f,
+
+            // Social - tight huddle colonies
+            GroupAffinity = 0.9f,
+            PreferredGroupSize = 10f,
+            CohesionStrength = 0.05f,   // Very tight huddling
+            AlignmentStrength = 0.02f,
+            SocialRadius = 8f,
+            LeaderInfluenceRadius = 6f,
+
+            // Terrain - ice/tundra, can swim
+            DiscomfortThreshold = 40f,
+            DiscomfortDecayRate = 2f,
+            GrazingPressure = 1.2f,
+            TerrainSpeedModifiers = new Dictionary<TileType, float>
+            {
+                { TileType.Ice, 1.0f },
+                { TileType.Tundra, 0.9f },
+                { TileType.Steppe, 0.85f },
+                { TileType.ShallowWater, 1.3f },
+                { TileType.DeepWater, 1.2f },
+            },
+            TerrainComfortModifiers = new Dictionary<TileType, float>
+            {
+                { TileType.Ice, -3f },
+                { TileType.Tundra, -2f },
+                { TileType.ShallowWater, -1f },
+                { TileType.Sand, 5f },
+                { TileType.Arid, 8f },
+            },
+            AllowedSpawnTiles = new List<TileType> { TileType.Ice, TileType.Tundra, TileType.Steppe },
+            PreferredBiomes = new List<BiomeType> { BiomeType.Arctic },
+
+            CanGraze = true,
+            GrazeNutrition = 0.3f,
+
+            SeparationRadius = 1.0f,   // Huddle close
+            SeparationStrength = 0.01f,
+
+            RoamDistance = 30f,
+            RoamCooldown = 400,
+
+            // Trophic - small-medium
+            BodyMass = 1.5f,
+
+            // Visuals - black/white
+            BaseColor = new Color(0.15f, 0.15f, 0.2f),
+            BaseSize = 6f,
+            Shape = ShapeType.Circle,
+            StatVariation = 0.2f,
+        });
+
+        Register(new SpeciesDefinition
+        {
+            Name = "Polar Bear",
+            Diet = DietType.Carnivore,
+            DefaultSocialType = SocialType.Solitary,
+            SemiAquatic = true,
+
+            // Movement - powerful but slow
+            BaseWanderSpeed = 0.02f,
+            DirectionChangeChance = 0.004f,
+
+            // Combat - devastating
+            HuntRange = 12f,
+            AttackRange = 1.5f,
+            AttackPower = 55f,
+            AttackCooldown = 35,
+            BaseHuntSpeed = 0.10f,
+
+            // Survival - large, long-lived
+            MaxHunger = 380f,
+            HungerDecayRate = 0.035f,
+            MaxLifespan = 40000,
+            MaturityAge = 3500,
+            MaxEnergy = 200f,
+            EnergyRegenRate = 0.15f,
+
+            // Hunting behavior
+            HuntThreshold = 0.75f,
+            TrackingHungerThreshold = 0.5f,
+            TrackingRange = 80f,
+
+            // Reproduction - slow
+            ReproHungerThreshold = 330f,
+            ReproEnergyThreshold = 90f,
+            ReproCooldown = 1800,
+            ReproHungerCost = 100f,
+            ReproEnergyCost = 60f,
+
+            // Roaming - wide arctic patrol
+            RoamDistance = 100f,
+            RoamCooldown = 500,
+
+            // Social - solitary
+            GroupAffinity = 0f,
+            PreferredGroupSize = 0f,
+
+            // Terrain - ice/tundra, swims
+            DiscomfortThreshold = 80f,
+            DiscomfortDecayRate = 2f,
+            TerrainSpeedModifiers = new Dictionary<TileType, float>
+            {
+                { TileType.Ice, 1.1f },
+                { TileType.Tundra, 1.0f },
+                { TileType.Steppe, 0.9f },
+                { TileType.ShallowWater, 1.0f },
+                { TileType.DeepWater, 0.8f },
+            },
+            TerrainComfortModifiers = new Dictionary<TileType, float>
+            {
+                { TileType.Ice, -3f },
+                { TileType.Tundra, -2f },
+                { TileType.ShallowWater, -1f },
+                { TileType.Sand, 6f },
+                { TileType.Arid, 8f },
+            },
+            AllowedSpawnTiles = new List<TileType> { TileType.Ice, TileType.Tundra, TileType.Steppe },
+            PreferredBiomes = new List<BiomeType> { BiomeType.Arctic },
+
+            CanGraze = false,
+
+            SeparationRadius = 4f,
+            SeparationStrength = 0.03f,
+
+            // Trophic - arctic apex
+            BodyMass = 14.0f,
+            SoloHuntMaxRatio = 1.5f,
+            PreferredPrey = new List<string> { "Penguin", "Fish", "Musk Ox" },
+            PreferredPreyBias = 0.4f,
+
+            // Visuals - white
+            BaseColor = new Color(0.9f, 0.9f, 0.85f),
+            BaseSize = 16f,
+            Shape = ShapeType.Triangle,
+            StatVariation = 0.15f,
+        });
+
+        Register(new SpeciesDefinition
+        {
+            Name = "Arctic Fox",
+            Diet = DietType.Carnivore,
+            DefaultSocialType = SocialType.Solitary,
+
+            // Movement - quick
+            BaseWanderSpeed = 0.05f,
+            DirectionChangeChance = 0.012f,
+
+            // Combat - small, fast
+            HuntRange = 8f,
+            AttackRange = 0.6f,
+            AttackPower = 18f,
+            AttackCooldown = 15,
+            BaseHuntSpeed = 0.12f,
+
+            // Survival
+            MaxHunger = 170f,
+            HungerDecayRate = 0.04f,
+            MaxLifespan = 18000,
+            MaturityAge = 1000,
+            EnergyRegenRate = 0.15f,
+
+            // Hunting behavior
+            HuntThreshold = 0.75f,
+            TrackingHungerThreshold = 0.5f,
+            TrackingRange = 60f,
+
+            // Reproduction
+            ReproHungerThreshold = 150f,
+            ReproEnergyThreshold = 70f,
+            ReproCooldown = 700,
+            ReproHungerCost = 35f,
+            ReproEnergyCost = 25f,
+
+            // Roaming - wide range
+            RoamDistance = 70f,
+            RoamCooldown = 350,
+
+            // Social - solitary
+            GroupAffinity = 0.1f,
+            PreferredGroupSize = 1f,
+
+            // Terrain - tundra/grassland edge
+            DiscomfortThreshold = 50f,
+            DiscomfortDecayRate = 3f,
+            TerrainSpeedModifiers = new Dictionary<TileType, float>
+            {
+                { TileType.Tundra, 1.1f },
+                { TileType.Steppe, 1.1f },
+                { TileType.Ice, 0.9f },
+                { TileType.Grass, 1.0f },
+            },
+            TerrainComfortModifiers = new Dictionary<TileType, float>
+            {
+                { TileType.Tundra, -2f },
+                { TileType.Steppe, -1f },
+                { TileType.Sand, 4f },
+                { TileType.Arid, 6f },
+            },
+            AllowedSpawnTiles = new List<TileType> { TileType.Tundra, TileType.Steppe },
+            PreferredBiomes = new List<BiomeType> { BiomeType.Arctic },
+
+            CanGraze = false,
+
+            SeparationRadius = 2f,
+            SeparationStrength = 0.02f,
+
+            // Trophic - small arctic predator
+            BodyMass = 1.8f,
+            SoloHuntMaxRatio = 1.0f,
+            PreferredPrey = new List<string> { "Penguin", "Rabbit" },
+            PreferredPreyBias = 0.4f,
+
+            // Visuals - white/grey
+            BaseColor = new Color(0.8f, 0.8f, 0.85f),
+            BaseSize = 6f,
+            Shape = ShapeType.Triangle,
+            StatVariation = 0.2f,
+        });
+
+        Register(new SpeciesDefinition
+        {
+            Name = "Musk Ox",
+            Diet = DietType.Herbivore,
+            DefaultSocialType = SocialType.Herd,
+
+            // Movement - slow, steady
+            BaseWanderSpeed = 0.02f,
+            DirectionChangeChance = 0.004f,
+
+            // Fleeing - barely flees, stands ground
+            FleeRange = 4f,
+            FleeSpeedMultiplier = 1.4f,
+
+            // Fear - defensive herd formation
+            FearThreshold = 70f,
+            FearMax = 120f,
+            FearAccumulationRate = 3f,
+            FearDecayRate = 1f,
+            DefaultFearResponse = FearResponse.Defensive,
+
+            // Survival - tough, long-lived
+            MaxHunger = 320f,
+            HungerDecayRate = 0.04f,
+            MaxLifespan = 30000,
+            MaturityAge = 2500,
+            MaxEnergy = 160f,
+            EnergyRegenRate = 0.25f,
+
+            // Reproduction
+            ReproHungerThreshold = 280f,
+            ReproEnergyThreshold = 85f,
+            ReproCooldown = 900,
+            ReproHungerCost = 65f,
+            ReproEnergyCost = 40f,
+
+            // Social - defensive herds
+            GroupAffinity = 0.8f,
+            PreferredGroupSize = 6f,
+            CohesionStrength = 0.04f,
+            AlignmentStrength = 0.02f,
+            SocialRadius = 10f,
+            LeaderInfluenceRadius = 7f,
+
+            // Terrain - tundra/steppe
+            DiscomfortThreshold = 55f,
+            DiscomfortDecayRate = 2f,
+            GrazingPressure = 1.2f,
+            TerrainSpeedModifiers = new Dictionary<TileType, float>
+            {
+                { TileType.Tundra, 1.0f },
+                { TileType.Steppe, 1.1f },
+                { TileType.Ice, 0.7f },
+                { TileType.Grass, 0.9f },
+            },
+            TerrainComfortModifiers = new Dictionary<TileType, float>
+            {
+                { TileType.Tundra, -3f },
+                { TileType.Steppe, -2f },
+                { TileType.Sand, 5f },
+                { TileType.Arid, 7f },
+            },
+            AllowedSpawnTiles = new List<TileType> { TileType.Tundra, TileType.Steppe },
+            PreferredBiomes = new List<BiomeType> { BiomeType.Arctic },
+
+            CanGraze = true,
+            GrazeNutrition = 0.5f,
+
+            SeparationRadius = 2.5f,
+            SeparationStrength = 0.025f,
+
+            RoamDistance = 50f,
+            RoamCooldown = 500,
+
+            // Trophic - very high mass, tough
+            BodyMass = 10.0f,
+
+            // Visuals - dark brown
+            BaseColor = new Color(0.3f, 0.25f, 0.15f),
+            BaseSize = 13f,
+            Shape = ShapeType.Square,
+            StatVariation = 0.15f,
+        });
+
+        // ============================
+        // TROPICAL SPECIES (Phase 3.5)
+        // ============================
+
+        Register(new SpeciesDefinition
+        {
+            Name = "Monkey",
+            Diet = DietType.Herbivore,
+            DefaultSocialType = SocialType.Herd,
+
+            // Movement - fast, erratic
+            BaseWanderSpeed = 0.05f,
+            DirectionChangeChance = 0.025f,  // Very erratic - hard to predict
+
+            // Fleeing - very fast, unpredictable
+            FleeRange = 7f,
+            FleeSpeedMultiplier = 2.5f,
+
+            // Fear - alert but not panicky
+            FearThreshold = 35f,
+            FearMax = 80f,
+            FearAccumulationRate = 8f,
+            FearDecayRate = 1.5f,
+            DefaultFearResponse = FearResponse.Flee,
+
+            // Survival
+            MaxHunger = 180f,
+            HungerDecayRate = 0.06f,
+            MaxLifespan = 20000,
+            MaturityAge = 1200,
+
+            // Reproduction
+            ReproHungerThreshold = 155f,
+            ReproEnergyThreshold = 70f,
+            ReproCooldown = 600,
+            ReproHungerCost = 40f,
+            ReproEnergyCost = 25f,
+
+            // Social - troops
+            GroupAffinity = 0.7f,
+            PreferredGroupSize = 6f,
+            CohesionStrength = 0.025f,
+            AlignmentStrength = 0.015f,
+            SocialRadius = 10f,
+            LeaderInfluenceRadius = 7f,
+
+            // Terrain - jungle/forest specialist
+            DiscomfortThreshold = 45f,
+            DiscomfortDecayRate = 2.5f,
+            GrazingPressure = 1.5f,
+            TerrainSpeedModifiers = new Dictionary<TileType, float>
+            {
+                { TileType.Jungle, 1.3f },
+                { TileType.Forest, 1.2f },
+                { TileType.Grass, 0.8f },
+                { TileType.Savanna, 0.85f },
+            },
+            TerrainComfortModifiers = new Dictionary<TileType, float>
+            {
+                { TileType.Jungle, -3f },
+                { TileType.Forest, -2f },
+                { TileType.Sand, 4f },
+                { TileType.Arid, 6f },
+            },
+            AllowedSpawnTiles = new List<TileType> { TileType.Jungle, TileType.Forest },
+            PreferredBiomes = new List<BiomeType> { BiomeType.Tropical },
+
+            CanGraze = true,
+            GrazeNutrition = 0.4f,
+
+            SeparationRadius = 1.5f,
+            SeparationStrength = 0.02f,
+
+            RoamDistance = 40f,
+            RoamCooldown = 300,
+
+            // Trophic - small, agile
+            BodyMass = 1.2f,
+
+            // Visuals - brown
+            BaseColor = new Color(0.6f, 0.4f, 0.2f),
+            BaseSize = 6f,
+            Shape = ShapeType.Circle,
+            StatVariation = 0.25f,
+        });
+
+        Register(new SpeciesDefinition
+        {
+            Name = "Parrot",
+            Diet = DietType.Herbivore,
+            DefaultSocialType = SocialType.Herd,
+            IsFlying = true,
+
+            // Movement - aerial
+            BaseWanderSpeed = 0.055f,
+            DirectionChangeChance = 0.015f,
+
+            // Fleeing
+            FleeRange = 8f,
+            FleeSpeedMultiplier = 2.3f,
+
+            // Fear - alert flocking
+            FearThreshold = 30f,
+            FearMax = 70f,
+            FearAccumulationRate = 8f,
+            FearDecayRate = 1.5f,
+            DefaultFearResponse = FearResponse.Flee,
+
+            // Survival
+            MaxHunger = 130f,
+            HungerDecayRate = 0.06f,
+            MaxLifespan = 18000,
+            MaturityAge = 1000,
+
+            // Reproduction
+            ReproHungerThreshold = 110f,
+            ReproEnergyThreshold = 65f,
+            ReproCooldown = 550,
+            ReproHungerCost = 30f,
+            ReproEnergyCost = 20f,
+
+            // Social - flocks
+            GroupAffinity = 0.8f,
+            PreferredGroupSize = 6f,
+            CohesionStrength = 0.03f,
+            AlignmentStrength = 0.025f,
+            SocialRadius = 10f,
+            LeaderInfluenceRadius = 7f,
+
+            // Terrain - flying ignores terrain, prefers tropical
+            DiscomfortThreshold = 80f,
+            DiscomfortDecayRate = 3f,
+            GrazingPressure = 1.0f,
+            PreferredBiomes = new List<BiomeType> { BiomeType.Tropical, BiomeType.Forest },
+            AllowedSpawnTiles = new List<TileType> { TileType.Jungle, TileType.Forest, TileType.Savanna },
+
+            CanGraze = true,
+            GrazeNutrition = 0.3f,
+
+            SeparationRadius = 1.5f,
+            SeparationStrength = 0.02f,
+
+            RoamDistance = 60f,
+            RoamCooldown = 300,
+
+            // Trophic - small
+            BodyMass = 0.4f,
+
+            // Visuals - bright green
+            BaseColor = new Color(0.2f, 0.9f, 0.3f),
+            BaseSize = 5f,
+            Shape = ShapeType.Circle,
+            StatVariation = 0.25f,
+        });
+
+        Register(new SpeciesDefinition
+        {
+            Name = "Jaguar",
+            Diet = DietType.Carnivore,
+            DefaultSocialType = SocialType.Solitary,
+
+            // Movement
+            BaseWanderSpeed = 0.04f,
+            DirectionChangeChance = 0.006f,
+
+            // Combat - ambush predator with jungle stealth
+            HuntRange = 10f,
+            AttackRange = 1.0f,
+            AttackPower = 45f,
+            AttackCooldown = 25,
+            BaseHuntSpeed = 0.12f,
+
+            // Ambush - jungle specialist
+            AmbushStealthGain = 0.01f,
+            AmbushStealthDecay = 0.04f,
+            AmbushSpeedThreshold = 0.5f,
+            PounceRange = 3.0f,
+            PounceSpeedMult = 3.5f,
+            PounceAttackMult = 2.5f,
+            PounceDuration = 12,
+            PounceStealthThreshold = 0.6f,
+
+            // Survival - large jungle cat
+            MaxHunger = 260f,
+            HungerDecayRate = 0.035f,
+            MaxLifespan = 30000,
+            MaturityAge = 2000,
+            MaxEnergy = 140f,
+            EnergyRegenRate = 0.15f,
+
+            // Hunting behavior
+            HuntThreshold = 0.75f,
+            TrackingHungerThreshold = 0.5f,
+            TrackingRange = 70f,
+
+            // Reproduction
+            ReproHungerThreshold = 230f,
+            ReproEnergyThreshold = 85f,
+            ReproCooldown = 1200,
+            ReproHungerCost = 70f,
+            ReproEnergyCost = 45f,
+
+            // Roaming
+            RoamDistance = 80f,
+            RoamCooldown = 500,
+
+            // Social - solitary
+            GroupAffinity = 0f,
+            PreferredGroupSize = 0f,
+
+            // Terrain - jungle specialist
+            DiscomfortThreshold = 60f,
+            DiscomfortDecayRate = 2f,
+            TerrainSpeedModifiers = new Dictionary<TileType, float>
+            {
+                { TileType.Jungle, 1.2f },
+                { TileType.Forest, 1.0f },
+                { TileType.Savanna, 0.9f },
+                { TileType.Grass, 0.85f },
+            },
+            TerrainComfortModifiers = new Dictionary<TileType, float>
+            {
+                { TileType.Jungle, -3f },
+                { TileType.Forest, -1f },
+                { TileType.Sand, 4f },
+                { TileType.Arid, 6f },
+            },
+            AllowedSpawnTiles = new List<TileType> { TileType.Jungle, TileType.Forest },
+            PreferredBiomes = new List<BiomeType> { BiomeType.Tropical },
+
+            CanGraze = false,
+
+            SeparationRadius = 3f,
+            SeparationStrength = 0.025f,
+
+            // Trophic - large jungle apex
+            BodyMass = 7.0f,
+            SoloHuntMaxRatio = 1.5f,
+            PreferredPrey = new List<string> { "Monkey", "Tapir", "Deer" },
+            PreferredPreyBias = 0.4f,
+
+            // Visuals - spotted gold
+            BaseColor = new Color(0.85f, 0.65f, 0.2f),
+            BaseSize = 12f,
+            Shape = ShapeType.Triangle,
+            StatVariation = 0.15f,
+        });
+
+        Register(new SpeciesDefinition
+        {
+            Name = "Tapir",
+            Diet = DietType.Herbivore,
+            DefaultSocialType = SocialType.Herd,
+
+            // Movement - medium pace
+            BaseWanderSpeed = 0.025f,
+            DirectionChangeChance = 0.005f,
+
+            // Fleeing - shy, low threshold
+            FleeRange = 8f,
+            FleeSpeedMultiplier = 2.0f,
+
+            // Fear - very shy, panics easily
+            FearThreshold = 25f,
+            FearMax = 70f,
+            FearAccumulationRate = 10f,
+            FearDecayRate = 0.8f,
+            FearVigilanceDecay = 0.2f,
+            FearVigilanceDuration = 200,
+            DefaultFearResponse = FearResponse.Flee,
+
+            // Survival
+            MaxHunger = 270f,
+            HungerDecayRate = 0.05f,
+            MaxLifespan = 28000,
+            MaturityAge = 2000,
+            MaxEnergy = 110f,
+
+            // Reproduction
+            ReproHungerThreshold = 235f,
+            ReproEnergyThreshold = 80f,
+            ReproCooldown = 700,
+            ReproHungerCost = 55f,
+            ReproEnergyCost = 35f,
+
+            // Social - small groups
+            GroupAffinity = 0.5f,
+            PreferredGroupSize = 4f,
+            CohesionStrength = 0.02f,
+            AlignmentStrength = 0.015f,
+            SocialRadius = 8f,
+
+            // Terrain - jungle grazer
+            DiscomfortThreshold = 45f,
+            DiscomfortDecayRate = 2f,
+            GrazingPressure = 1.5f,
+            TerrainSpeedModifiers = new Dictionary<TileType, float>
+            {
+                { TileType.Jungle, 1.0f },
+                { TileType.Forest, 0.95f },
+                { TileType.Savanna, 0.9f },
+                { TileType.Grass, 0.85f },
+            },
+            TerrainComfortModifiers = new Dictionary<TileType, float>
+            {
+                { TileType.Jungle, -3f },
+                { TileType.Forest, -1f },
+                { TileType.Sand, 4f },
+                { TileType.Arid, 6f },
+            },
+            AllowedSpawnTiles = new List<TileType> { TileType.Jungle, TileType.Forest },
+            PreferredBiomes = new List<BiomeType> { BiomeType.Tropical },
+
+            CanGraze = true,
+            GrazeNutrition = 0.5f,
+
+            SeparationRadius = 2.5f,
+            SeparationStrength = 0.025f,
+
+            RoamDistance = 40f,
+            RoamCooldown = 400,
+
+            // Trophic - medium
+            BodyMass = 5.0f,
+
+            // Visuals - dark grey
+            BaseColor = new Color(0.35f, 0.3f, 0.3f),
+            BaseSize = 10f,
+            Shape = ShapeType.Circle,
+            StatVariation = 0.2f,
+        });
+
+        // ============================
         // FACTION SPECIES (Terraformers)
         // ============================
 

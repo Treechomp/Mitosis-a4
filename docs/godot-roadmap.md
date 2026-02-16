@@ -47,8 +47,8 @@
 #### Species System (100% Complete)
 - [x] SpeciesDefinition - comprehensive data class with 90+ configurable properties
 - [x] SpeciesRegistry - lookup by name or ID (hash)
-- [x] 8 species defined: Deer, Rabbit, Wolf, Fox, Crocodile, Shroomer, Sectid, Faeling
-- [x] Diet types: Herbivore, Carnivore, Terraformer (Omnivore prepared)
+- [x] 28 species defined across 6 biome categories (8 original + 20 Phase 3)
+- [x] Diet types: Herbivore, Carnivore, Omnivore, Terraformer
 - [x] Social types: Herd, Pack, Solitary
 - [x] Biome preferences per species
 - [x] Spawn tile preferences (IsAquatic, AllowedSpawnTiles, CanSpawnOnTile)
@@ -292,17 +292,15 @@ Post-processing landmark pass runs after base terrain generation in each chunk.
 
 ---
 
-## Phase 3: Species Diversity (Priority: MEDIUM)
+## Phase 3: Species Diversity (Priority: MEDIUM) — IN PROGRESS
 
 **Goal**: Expand from 8 species to ~25-30, with multiple species per biome
 and distinct aquatic/arctic/tropical/desert ecosystems
 
-Currently the world is populated by 5 generalist species (Deer, Rabbit, Wolf,
-Fox, Crocodile) that all share the same biomes, plus 3 faction species. The
-world feels like a single temperate forest. Each biome should have its own
-food web with 2-4 unique species.
+The world now has 28 species across 6 biome categories: 5 original generalists,
+3 faction species, and 20 new biome-specific species.
 
-### 3.1 Aquatic Species
+### 3.1 Aquatic Species — COMPLETE
 
 Shore interactions already working:
 - [x] Crocodile hunts prey at water's edge via ambush hunting (stealth + pounce)
@@ -322,15 +320,13 @@ New species:
 | Turtle | Semi-aquatic herb. | Solitary | Very slow, very tough (high mass), grazes on water-adjacent grass |
 
 Tasks:
-- [ ] Add Fish species (IsAquatic=true, schooling herd, small mass)
-- [ ] Add Shark species (IsAquatic=true, solitary, high mass, hunts fish)
-- [ ] Add Frog species (semi-aquatic, river/wetland spawning, low mass)
-- [ ] Add Turtle species (semi-aquatic, high mass, very slow, long-lived)
+- [x] Add Fish species (IsAquatic=true, schooling herd, small mass, feeds from water tiles)
+- [x] Add Shark species (IsAquatic=true, solitary, high mass, hunts fish)
+- [x] Add Frog species (semi-aquatic, river/wetland spawning, low mass)
+- [x] Add Turtle species (semi-aquatic, high mass, very slow, long-lived)
 - [ ] Fish schooling behavior: tighter herding in water, scatter on predator
 
-### 3.2 Grassland/Forest Species (Temperate)
-
-Current: Deer, Rabbit, Wolf, Fox — adequate but could use more variety.
+### 3.2 Grassland/Forest Species (Temperate) — COMPLETE
 
 | Species | Role | Social | Notes |
 |---------|------|--------|-------|
@@ -340,16 +336,14 @@ Current: Deer, Rabbit, Wolf, Fox — adequate but could use more variety.
 | Hawk | Small predator | Solitary | Fast, hunts Rabbit/Frog, ignores terrain speed penalties (flying) |
 
 Tasks:
-- [ ] Add Elk species (high mass, large herd, grassland biome preference)
-- [ ] Add Boar species (Omnivore diet, Defensive fear response, forest preference)
-- [ ] Add Bear species (solitary apex, very high mass, slow, forest biome)
-- [ ] Add Hawk species (fast, ignores terrain speed mods, hunts small prey)
-- [ ] Implement Omnivore diet in GrazingSystem (graze AND hunt, lower efficiency at both)
-- [ ] Implement flying movement flag (ignore terrain speed, ignore terrain discomfort)
+- [x] Add Elk species (high mass, large herd, grassland biome preference)
+- [x] Add Boar species (Omnivore diet, Defensive fear response, forest preference)
+- [x] Add Bear species (solitary apex, very high mass, slow, forest biome)
+- [x] Add Hawk species (IsFlying=true, ignores terrain speed mods, hunts small prey)
+- [x] Implement Omnivore diet in GrazingSystem (SpeciesType.Omnivore, graze + hunt)
+- [x] Implement flying movement flag (bypass terrain speed in MovementSystem, skip discomfort in TerrainDiscomfortSystem)
 
-### 3.3 Desert/Arid Species
-
-Currently only Sectids occupy arid terrain. Needs a standalone desert food web.
+### 3.3 Desert/Arid Species — COMPLETE
 
 | Species | Role | Social | Notes |
 |---------|------|--------|-------|
@@ -359,14 +353,14 @@ Currently only Sectids occupy arid terrain. Needs a standalone desert food web.
 | Snake | Desert predator | Solitary | Stealth hunter, very fast strike, hunts Lizard/Frog |
 
 Tasks:
-- [ ] Add Lizard species (small, fast on arid/sand, desert biome only)
-- [ ] Add Scorpion species (ambush, venom DOT, desert biome only)
-- [ ] Add Camel species (herd, very slow hunger decay, desert specialist)
-- [ ] Add Snake species (stealth hunter, fast attack, desert/grassland)
-- [ ] Implement venom DOT mechanic (energy damage over time after attack)
-- [ ] Make Arid tiles grazeable at reduced nutrition (0.15) for desert herbivores
+- [x] Add Lizard species (small, fast on arid/sand, desert biome only)
+- [x] Add Scorpion species (ambush, venom DOT, desert biome only)
+- [x] Add Camel species (herd, very slow hunger decay, desert specialist)
+- [x] Add Snake species (stealth hunter + venom, fast attack, desert/grassland)
+- [x] Implement venom DOT mechanic (VenomEffect component, applied in HuntingSystem, processed in HungerSystem)
+- [x] Make Arid tiles grazeable at reduced nutrition (0.15) for desert herbivores
 
-### 3.4 Arctic/Tundra Species
+### 3.4 Arctic/Tundra Species — COMPLETE
 
 | Species | Role | Social | Notes |
 |---------|------|--------|-------|
@@ -376,13 +370,13 @@ Tasks:
 | Musk Ox | Arctic herbivore | Herd | Tough, slow, Defensive fear response, tundra grazer |
 
 Tasks:
-- [ ] Add Penguin species (semi-aquatic, huddle herding, ice/tundra)
-- [ ] Add Polar Bear species (semi-aquatic apex, ice/tundra)
-- [ ] Add Arctic Fox species (small predator, tundra biome)
-- [ ] Add Musk Ox species (high mass, Defensive fear, tundra grazer)
-- [ ] Tundra tiles grazeable at reduced nutrition (0.2)
+- [x] Add Penguin species (semi-aquatic, tight huddle herding, ice/tundra)
+- [x] Add Polar Bear species (semi-aquatic apex, ice/tundra)
+- [x] Add Arctic Fox species (small predator, tundra biome)
+- [x] Add Musk Ox species (high mass, Defensive fear, tundra grazer)
+- [x] Tundra tiles grazeable at reduced nutrition (0.2)
 
-### 3.5 Tropical/Jungle Species
+### 3.5 Tropical/Jungle Species — COMPLETE
 
 | Species | Role | Social | Notes |
 |---------|------|--------|-------|
@@ -392,21 +386,21 @@ Tasks:
 | Tapir | Tropical herbivore | Herd | Medium size, jungle grazer, shy (low fear threshold) |
 
 Tasks:
-- [ ] Add Monkey species (fast, erratic, forest/jungle preference)
-- [ ] Add Parrot species (flying, small, herd, tropical biome)
-- [ ] Add Jaguar species (ambush hunter, jungle stealth bonus)
-- [ ] Add Tapir species (jungle herbivore, shy, medium mass)
+- [x] Add Monkey species (fast, erratic, forest/jungle preference)
+- [x] Add Parrot species (IsFlying=true, small, herd, tropical biome)
+- [x] Add Jaguar species (ambush hunter, jungle stealth bonus)
+- [x] Add Tapir species (jungle herbivore, shy, medium mass)
 - [x] Jungle tile: high cover bonus for stealth hunters (GetCoverBonus: Jungle 0.4)
 
-### 3.6 Species Framework Tasks
+### 3.6 Species Framework Tasks — MOSTLY COMPLETE
 Shared work needed before/during species expansion:
 
-- [ ] Omnivore diet type implementation (GrazingSystem + HuntingSystem)
-- [ ] Flying movement flag (bypass terrain speed/discomfort)
-- [ ] Venom/DOT damage component
+- [x] Omnivore diet type implementation (SpeciesType.Omnivore, GrazingSystem + HuntingSystem)
+- [x] Flying movement flag (IsFlying: bypass terrain speed in MovementSystem, skip discomfort in TerrainDiscomfortSystem)
+- [x] Venom/DOT damage component (VenomEffect struct, ComponentFlags.VenomEffect, applied in HuntingSystem, processed in HungerSystem)
 - [x] Terrain-based stealth bonuses (GetCoverBonus: Jungle 0.4, Forest/Taiga 0.2, Wetland/Bog 0.15, Shrubland 0.1, Savanna 0.05)
-- [ ] Biome-restricted spawning enforcement (species only spawn in preferred biomes)
-- [ ] Rebalance InitialPopulation distribution for 25+ species
+- [x] Biome-restricted spawning (PreferredBiomes + AllowedSpawnTiles on all 20 new species)
+- [ ] Rebalance InitialPopulation distribution for 28 species
 - [ ] Per-biome spawn budgets (species count proportional to biome tile area)
 
 ---

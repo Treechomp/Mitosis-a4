@@ -49,6 +49,7 @@ public sealed class EntityManager
         Crystal = 1 << 21,
         FaelingPower = 1 << 22,
         RangedAttack = 1 << 23,
+        VenomEffect = 1 << 24,
     }
 
     private readonly ComponentFlags[] _componentFlags;
@@ -78,6 +79,7 @@ public sealed class EntityManager
     public readonly Crystal[] Crystals;
     public readonly FaelingPower[] FaelingPowers;
     public readonly RangedAttack[] RangedAttacks;
+    public readonly VenomEffect[] VenomEffects;
 
     public EntityManager()
     {
@@ -112,6 +114,7 @@ public sealed class EntityManager
         Crystals = new Crystal[MaxEntities];
         FaelingPowers = new FaelingPower[MaxEntities];
         RangedAttacks = new RangedAttack[MaxEntities];
+        VenomEffects = new VenomEffect[MaxEntities];
     }
 
     public int EntityCount => _entityCount;

@@ -85,7 +85,7 @@ public sealed class EntityFactory
         {
             DietType.Herbivore => SpeciesType.Herbivore,
             DietType.Carnivore => SpeciesType.Carnivore,
-            DietType.Omnivore => SpeciesType.Carnivore,
+            DietType.Omnivore => SpeciesType.Omnivore,
             DietType.Terraformer => species.Name switch
             {
                 "Shroomer" => SpeciesType.Shroomer,

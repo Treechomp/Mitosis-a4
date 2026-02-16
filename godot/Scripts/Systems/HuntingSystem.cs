@@ -566,6 +566,14 @@ public sealed class HuntingSystem : ISystem
                         preyEnergy.Current -= predator.AttackPower * attackMult;
                         preyEnergy.RegenCooldown = 60; // 3s combat cooldown at 20 TPS
 
+                        // Apply venom DOT if this predator has it
+                        if (speciesDef.HasVenom && !em.HasComponents(predator.TargetEntity, ComponentFlags.VenomEffect))
+                        {
+                            em.VenomEffects[predator.TargetEntity] = new VenomEffect(
+                                speciesDef.VenomDamagePerTick, speciesDef.VenomDurationTicks);
+                            em.AddComponent(predator.TargetEntity, ComponentFlags.VenomEffect);
+                        }
+
                         if (preyEnergy.IsDead)
                         {
                             _entitiesToKill.Add(predator.TargetEntity);
