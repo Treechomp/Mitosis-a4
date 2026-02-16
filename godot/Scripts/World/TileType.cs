@@ -2,8 +2,8 @@ namespace Mitosis.World;
 
 /// <summary>
 /// Types of terrain tiles in the world.
-/// Moisture spectrum (dry→wet): Arid → Sand → Grass → Forest → Wetland
-/// Temperature spectrum: Tundra/Ice (cold) → temperate → Savanna/Jungle (hot)
+/// Moisture spectrum (dry→wet): Arid → Sand → Dirt → Shrubland → Grass → Forest → Wetland → Bog
+/// Temperature spectrum: Ice/Tundra/Steppe (cold) → Taiga → temperate → Savanna/Jungle (hot)
 /// </summary>
 public enum TileType : byte
 {
@@ -21,7 +21,12 @@ public enum TileType : byte
     Savanna = 11,
     Jungle = 12,
     Reef = 13,
-    Lava = 14
+    Lava = 14,
+    Dirt = 15,
+    Taiga = 16,
+    Steppe = 17,
+    Shrubland = 18,
+    Bog = 19
 }
 
 /// <summary>
@@ -46,12 +51,11 @@ public static class TileTypeExtensions
 {
     /// <summary>
     /// Check if a tile type is walkable by creatures.
-    /// Water is passable but uncomfortable. Mountains, Reef, and Lava block movement.
+    /// Water and reef are passable but uncomfortable. Mountains and Lava block movement.
     /// </summary>
     public static bool IsWalkable(this TileType tile)
     {
         return tile != TileType.Mountain &&
-               tile != TileType.Reef &&
                tile != TileType.Lava;
     }
 
@@ -78,19 +82,27 @@ public static class TileTypeExtensions
                tile == TileType.Arid ||
                tile == TileType.Tundra ||
                tile == TileType.Savanna ||
-               tile == TileType.Jungle;
+               tile == TileType.Jungle ||
+               tile == TileType.Dirt ||
+               tile == TileType.Taiga ||
+               tile == TileType.Steppe ||
+               tile == TileType.Shrubland ||
+               tile == TileType.Bog;
     }
 
     /// <summary>
     /// Check if a tile type can be grazed by herbivores.
-    /// Savanna is grazeable (sparse grass). Jungle is grazeable (dense vegetation).
+    /// Requires some vegetation — bare earth, sand, and bogs are not grazeable.
     /// </summary>
     public static bool IsGrazeable(this TileType tile)
     {
         return tile == TileType.Grass ||
                tile == TileType.Forest ||
                tile == TileType.Savanna ||
-               tile == TileType.Jungle;
+               tile == TileType.Jungle ||
+               tile == TileType.Shrubland ||
+               tile == TileType.Taiga ||
+               tile == TileType.Steppe;
     }
 
     /// <summary>
@@ -101,10 +113,15 @@ public static class TileTypeExtensions
     {
         return tile == TileType.Arid ||
                tile == TileType.Sand ||
+               tile == TileType.Dirt ||
+               tile == TileType.Shrubland ||
                tile == TileType.Grass ||
                tile == TileType.Forest ||
                tile == TileType.Wetland ||
+               tile == TileType.Bog ||
                tile == TileType.Tundra ||
+               tile == TileType.Steppe ||
+               tile == TileType.Taiga ||
                tile == TileType.Savanna ||
                tile == TileType.Jungle;
     }
@@ -119,13 +136,18 @@ public static class TileTypeExtensions
             TileType.DeepWater => BiomeType.Ocean,
             TileType.ShallowWater => BiomeType.Coast,
             TileType.Sand => BiomeType.Desert,
+            TileType.Dirt => BiomeType.Desert,
             TileType.Grass => BiomeType.Grassland,
+            TileType.Shrubland => BiomeType.Grassland,
             TileType.Forest => BiomeType.Forest,
+            TileType.Taiga => BiomeType.Forest,
             TileType.Mountain => BiomeType.Mountain,
             TileType.River => BiomeType.River,
             TileType.Wetland => BiomeType.Wetland,
+            TileType.Bog => BiomeType.Wetland,
             TileType.Arid => BiomeType.Desert,
             TileType.Tundra => BiomeType.Arctic,
+            TileType.Steppe => BiomeType.Arctic,
             TileType.Ice => BiomeType.Arctic,
             TileType.Savanna => BiomeType.Tropical,
             TileType.Jungle => BiomeType.Tropical,
@@ -144,19 +166,24 @@ public static class TileTypeExtensions
         {
             TileType.Grass => 1.0f,
             TileType.Savanna => 1.05f,       // Sparse grass, slightly faster
+            TileType.Shrubland => 0.95f,     // Sparse bushes, nearly open
+            TileType.Dirt => 0.9f,           // Packed earth, faster than sand
+            TileType.Steppe => 0.9f,         // Open cold grassland
             TileType.Forest => 0.85f,
-            TileType.Sand => 0.7f,
-            TileType.Wetland => 0.75f,
+            TileType.Taiga => 0.8f,          // Cold dense forest
             TileType.Arid => 0.8f,
+            TileType.Wetland => 0.75f,
+            TileType.Sand => 0.7f,
+            TileType.Jungle => 0.6f,         // Dense vegetation, very slow
+            TileType.Bog => 0.55f,           // Squishy waterlogged ground
             TileType.Tundra => 0.5f,         // Frozen ground, very slow
-            TileType.Ice => 0.45f,            // Slippery ice, very slow
-            TileType.Jungle => 0.6f,          // Dense vegetation, very slow
+            TileType.Ice => 0.45f,           // Slippery ice, very slow
+            TileType.Reef => 0.35f,          // Shallow rocky water
             TileType.River => 0.35f,
             TileType.ShallowWater => 0.4f,
             TileType.DeepWater => 0.25f,
             TileType.Mountain => 0.05f,
-            TileType.Reef => 0.05f,           // Impassable (not walkable)
-            TileType.Lava => 0.05f,           // Impassable (not walkable)
+            TileType.Lava => 0.05f,          // Impassable (not walkable)
             _ => 0.5f
         };
     }
@@ -172,17 +199,22 @@ public static class TileTypeExtensions
             TileType.Grass => 0f,
             TileType.Forest => 0f,
             TileType.Savanna => 0f,           // Comfortable open terrain
+            TileType.Shrubland => 0f,         // Comfortable sparse terrain
+            TileType.Dirt => 0.2f,            // Bare but passable
             TileType.Jungle => 0.3f,          // Dense but habitable
-            TileType.Wetland => 0.5f,
+            TileType.Taiga => 0.4f,           // Cold forest
             TileType.Arid => 0.5f,
+            TileType.Wetland => 0.5f,
+            TileType.Bog => 0.8f,             // Waterlogged, unpleasant
+            TileType.Steppe => 0.8f,          // Cold open grassland
+            TileType.Sand => 1f,
             TileType.Tundra => 2.0f,          // Freezing cold
             TileType.Ice => 4.0f,             // Extremely cold
-            TileType.Sand => 1f,
+            TileType.Reef => 6f,              // Sharp coral, uncomfortable
             TileType.River => 8f,
             TileType.ShallowWater => 5f,
             TileType.DeepWater => 12f,
             TileType.Mountain => 15f,
-            TileType.Reef => 15f,
             TileType.Lava => 20f,             // Extreme heat damage
             _ => 2f
         };
@@ -198,18 +230,23 @@ public static class TileTypeExtensions
         {
             TileType.Grass => 0f,
             TileType.Savanna => 0f,           // Easy terrain
+            TileType.Shrubland => 0.02f,      // Nearly open
+            TileType.Dirt => 0.05f,           // Bare earth
             TileType.Forest => 0.05f,
+            TileType.Taiga => 0.1f,           // Cold forest
             TileType.Jungle => 0.1f,          // Dense but traversable
+            TileType.Steppe => 0.12f,         // Cold grassland
             TileType.Wetland => 0.15f,
             TileType.Arid => 0.15f,
-            TileType.Tundra => 0.4f,          // Cold, creatures avoid
+            TileType.Bog => 0.25f,            // Very wet, avoided
             TileType.Sand => 0.3f,
+            TileType.Tundra => 0.4f,          // Cold, creatures avoid
             TileType.Ice => 0.6f,             // Very cold, strongly avoided
+            TileType.Reef => 0.7f,            // Shallow rocky water
             TileType.River => 0.8f,
             TileType.ShallowWater => 0.75f,
             TileType.DeepWater => 0.95f,
             TileType.Mountain => 1.0f,
-            TileType.Reef => 1.0f,            // Impassable
             TileType.Lava => 1.0f,            // Impassable
             _ => 0.5f
         };
@@ -225,8 +262,10 @@ public static class TileTypeExtensions
         {
             TileType.Jungle => 0.4f,          // Dense vegetation, excellent cover
             TileType.Forest => 0.2f,          // Good cover
+            TileType.Taiga => 0.2f,           // Cold forest, same cover as forest
             TileType.Wetland => 0.15f,        // Some cover
-            TileType.Tundra => 0.0f,          // Barren, no cover
+            TileType.Bog => 0.15f,            // Reeds and muck
+            TileType.Shrubland => 0.1f,       // Sparse bushes
             TileType.Savanna => 0.05f,        // Sparse, minimal cover
             _ => 0.0f
         };
@@ -235,17 +274,21 @@ public static class TileTypeExtensions
     /// <summary>
     /// Shift a tile one step wetter on the moisture spectrum.
     /// Returns null if at the wet extreme or not terraformable.
-    /// Tundra→Grass (thaw), Savanna→Jungle (tropical wet shift).
     /// </summary>
     public static TileType? ShiftWetter(this TileType tile)
     {
         return tile switch
         {
             TileType.Arid => TileType.Sand,
-            TileType.Sand => TileType.Grass,
+            TileType.Sand => TileType.Dirt,
+            TileType.Dirt => TileType.Shrubland,
+            TileType.Shrubland => TileType.Grass,
             TileType.Grass => TileType.Forest,
             TileType.Forest => TileType.Wetland,
-            TileType.Tundra => TileType.Grass,
+            TileType.Wetland => TileType.Bog,
+            TileType.Tundra => TileType.Steppe,
+            TileType.Steppe => TileType.Taiga,
+            TileType.Taiga => TileType.Forest,
             TileType.Savanna => TileType.Jungle,
             _ => null
         };
@@ -254,16 +297,20 @@ public static class TileTypeExtensions
     /// <summary>
     /// Shift a tile one step drier on the moisture spectrum.
     /// Returns null if at the dry extreme or not terraformable.
-    /// Jungle→Savanna (tropical dry shift).
     /// </summary>
     public static TileType? ShiftDrier(this TileType tile)
     {
         return tile switch
         {
+            TileType.Bog => TileType.Wetland,
             TileType.Wetland => TileType.Forest,
             TileType.Forest => TileType.Grass,
-            TileType.Grass => TileType.Sand,
+            TileType.Grass => TileType.Shrubland,
+            TileType.Shrubland => TileType.Dirt,
+            TileType.Dirt => TileType.Sand,
             TileType.Sand => TileType.Arid,
+            TileType.Taiga => TileType.Steppe,
+            TileType.Steppe => TileType.Tundra,
             TileType.Jungle => TileType.Savanna,
             TileType.Tundra => TileType.Arid,
             _ => null
@@ -279,10 +326,15 @@ public static class TileTypeExtensions
         return tile switch
         {
             TileType.Arid => TileType.Sand,
-            TileType.Sand => TileType.Grass,
+            TileType.Sand => TileType.Dirt,
+            TileType.Dirt => TileType.Shrubland,
+            TileType.Shrubland => TileType.Grass,
+            TileType.Bog => TileType.Wetland,
             TileType.Wetland => TileType.Forest,
             TileType.Forest => TileType.Grass,
-            TileType.Tundra => TileType.Grass,
+            TileType.Tundra => TileType.Steppe,
+            TileType.Steppe => TileType.Grass,
+            TileType.Taiga => TileType.Forest,
             TileType.Savanna => TileType.Grass,
             TileType.Jungle => TileType.Forest,
             _ => null

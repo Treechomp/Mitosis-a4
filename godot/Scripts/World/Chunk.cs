@@ -139,18 +139,23 @@ public sealed class Chunk
             TileType.DeepWater => new Color(0.1f, 0.2f, 0.5f),
             TileType.ShallowWater => new Color(0.2f, 0.4f, 0.7f),
             TileType.Sand => new Color(0.9f, 0.85f, 0.6f),
+            TileType.Dirt => new Color(0.55f, 0.42f, 0.25f),       // Earth brown
             TileType.Grass => new Color(0.3f, 0.7f, 0.3f),
+            TileType.Shrubland => new Color(0.52f, 0.58f, 0.32f),  // Olive/dusty green
             TileType.Forest => new Color(0.15f, 0.5f, 0.2f),
+            TileType.Taiga => new Color(0.15f, 0.4f, 0.32f),      // Dark blue-green
             TileType.Mountain => new Color(0.5f, 0.5f, 0.5f),
             TileType.River => new Color(0.15f, 0.45f, 0.75f),
             TileType.Wetland => new Color(0.1f, 0.45f, 0.3f),
+            TileType.Bog => new Color(0.22f, 0.32f, 0.18f),       // Dark murky green
             TileType.Arid => new Color(0.75f, 0.6f, 0.35f),
-            TileType.Tundra => new Color(0.78f, 0.82f, 0.85f),   // Pale icy blue-gray
-            TileType.Ice => new Color(0.85f, 0.92f, 0.97f),      // Near-white ice
-            TileType.Savanna => new Color(0.7f, 0.75f, 0.3f),    // Dry yellowish-green
-            TileType.Jungle => new Color(0.05f, 0.4f, 0.12f),    // Deep dark green
-            TileType.Reef => new Color(0.25f, 0.55f, 0.65f),     // Teal shallow water
-            TileType.Lava => new Color(0.8f, 0.25f, 0.05f),      // Bright orange-red
+            TileType.Tundra => new Color(0.78f, 0.82f, 0.85f),    // Pale icy blue-gray
+            TileType.Steppe => new Color(0.62f, 0.68f, 0.42f),    // Pale yellow-green
+            TileType.Ice => new Color(0.85f, 0.92f, 0.97f),       // Near-white ice
+            TileType.Savanna => new Color(0.7f, 0.75f, 0.3f),     // Dry yellowish-green
+            TileType.Jungle => new Color(0.05f, 0.4f, 0.12f),     // Deep dark green
+            TileType.Reef => new Color(0.25f, 0.55f, 0.65f),      // Teal shallow water
+            TileType.Lava => new Color(0.8f, 0.25f, 0.05f),       // Bright orange-red
             _ => new Color(1f, 0f, 1f) // Magenta for unknown
         };
     }

@@ -208,9 +208,13 @@ public sealed class TerrainGenerator
 
         if (temperature < 0.35f)
         {
-            // Tundra: cold but not frozen
+            // Cold band: tundra → steppe → taiga → wetland
             if (moisture > 0.7f)
-                return TileType.Wetland; // Cold wetlands still possible
+                return TileType.Wetland;
+            if (moisture > 0.5f)
+                return TileType.Taiga;
+            if (moisture > 0.3f)
+                return TileType.Steppe;
             return TileType.Tundra;
         }
 
@@ -221,37 +225,42 @@ public sealed class TerrainGenerator
                 return TileType.Jungle;
             if (moisture > 0.4f)
                 return TileType.Savanna;
-            if (moisture > 0.2f)
+            if (moisture > 0.25f)
+                return TileType.Dirt;
+            if (moisture > 0.15f)
                 return TileType.Sand;
             return TileType.Arid;
         }
 
         if (temperature > 0.6f)
         {
-            // Warm-temperate: Savanna replaces Grass in drier warm areas
+            // Warm-temperate
             if (moisture > 0.7f)
                 return TileType.Jungle;
             if (moisture > 0.55f)
                 return TileType.Forest;
             if (moisture > 0.35f)
-            {
-                // Transition zone: warm grassland becomes savanna
                 return temperature > 0.67f ? TileType.Savanna : TileType.Grass;
-            }
-            if (moisture > 0.2f)
-                return TileType.Sand;
+            if (moisture > 0.25f)
+                return TileType.Shrubland;
+            if (moisture > 0.15f)
+                return TileType.Dirt;
             return TileType.Arid;
         }
 
         // === Temperate biomes (middle temperature) ===
-        if (moisture > 0.75f)
+        if (moisture > 0.82f)
+            return TileType.Bog;
+        if (moisture > 0.7f)
             return TileType.Wetland;
         if (moisture > 0.55f)
             return TileType.Forest;
         if (moisture > 0.35f)
             return TileType.Grass;
-        if (moisture > 0.2f)
-            return TileType.Sand;
+        if (moisture > 0.25f)
+            return TileType.Shrubland;
+        if (moisture > 0.15f)
+            return TileType.Dirt;
         return TileType.Arid;
     }
 
