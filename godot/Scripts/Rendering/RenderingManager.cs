@@ -207,18 +207,175 @@ public sealed class RenderingManager
             for (int lx = 0; lx < chunk.Size; lx++)
             {
                 var tileType = chunk.GetTile(lx, ly);
-                var color = Chunk.GetTileColor(tileType);
+                var baseColor = Chunk.GetTileColor(tileType);
+                int worldX = chunk.ChunkX * chunk.Size + lx;
+                int worldY = chunk.ChunkY * chunk.Size + ly;
 
                 int px = lx * pixelsPerTile;
                 int py = ly * pixelsPerTile;
                 for (int dy = 0; dy < pixelsPerTile; dy++)
+                {
                     for (int dx = 0; dx < pixelsPerTile; dx++)
+                    {
+                        var color = VaryTilePixel(baseColor, tileType, worldX, worldY, dx, dy);
                         image.SetPixel(px + dx, py + dy, color);
+                    }
+                }
             }
         }
 
         var texture = ImageTexture.CreateFromImage(image);
         return texture;
+    }
+
+    /// <summary>
+    /// Apply deterministic per-pixel color variation to break up flat tile colors.
+    /// Uses a fast hash seeded from world position + sub-pixel offset for consistency.
+    /// </summary>
+    private static Color VaryTilePixel(Color baseColor, TileType tile, int wx, int wy, int dx, int dy)
+    {
+        uint hash = PixelHash(wx, wy, dx, dy);
+        // Normalized random value 0-1
+        float rand = (hash & 0xFFFF) / 65535f;
+        // Secondary random for feature checks
+        float rand2 = ((hash >> 16) & 0xFFFF) / 65535f;
+
+        float r = baseColor.R;
+        float g = baseColor.G;
+        float b = baseColor.B;
+
+        switch (tile)
+        {
+            // Vegetation tiles: brightness variation + occasional dark "tree" pixels
+            case TileType.Forest:
+            case TileType.Taiga:
+            case TileType.Jungle:
+            {
+                float variation = (rand - 0.5f) * 0.12f;
+                r += variation;
+                g += variation;
+                b += variation;
+                // ~18% chance of a darker pixel suggesting tree canopy depth
+                if (rand2 < 0.18f)
+                {
+                    r -= 0.06f;
+                    g -= 0.04f;
+                    b -= 0.05f;
+                }
+                break;
+            }
+
+            // Grasslands: gentle brightness and slight hue shift
+            case TileType.Grass:
+            case TileType.Steppe:
+            case TileType.Savanna:
+            case TileType.Shrubland:
+            {
+                float brightness = (rand - 0.5f) * 0.08f;
+                float hueShift = (rand2 - 0.5f) * 0.03f;
+                r += brightness + hueShift;
+                g += brightness;
+                b += brightness - hueShift;
+                break;
+            }
+
+            // Dry terrain: speckle with occasional lighter grains
+            case TileType.Sand:
+            case TileType.Dirt:
+            case TileType.Arid:
+            {
+                float variation = (rand - 0.5f) * 0.1f;
+                r += variation;
+                g += variation;
+                b += variation;
+                // ~10% lighter grain
+                if (rand2 < 0.10f)
+                {
+                    r += 0.06f;
+                    g += 0.05f;
+                    b += 0.03f;
+                }
+                break;
+            }
+
+            // Water tiles: very subtle ripple-like variation
+            case TileType.DeepWater:
+            case TileType.ShallowWater:
+            case TileType.River:
+            case TileType.Reef:
+            {
+                float variation = (rand - 0.5f) * 0.05f;
+                r += variation * 0.5f;
+                g += variation * 0.7f;
+                b += variation;
+                break;
+            }
+
+            // Wet tiles: murky variation with dark spots
+            case TileType.Wetland:
+            case TileType.Bog:
+            {
+                float variation = (rand - 0.5f) * 0.1f;
+                r += variation;
+                g += variation;
+                b += variation;
+                if (rand2 < 0.12f)
+                {
+                    r -= 0.04f;
+                    g -= 0.02f;
+                    b -= 0.03f;
+                }
+                break;
+            }
+
+            // Rocky/cold tiles: higher contrast variation for texture
+            case TileType.Mountain:
+            case TileType.Tundra:
+            case TileType.Ice:
+            {
+                float variation = (rand - 0.5f) * 0.08f;
+                r += variation;
+                g += variation;
+                b += variation;
+                break;
+            }
+
+            case TileType.Lava:
+            {
+                // Flickering glow effect
+                float variation = (rand - 0.5f) * 0.15f;
+                r += variation;
+                g += variation * 0.5f;
+                break;
+            }
+
+            default:
+            {
+                float variation = (rand - 0.5f) * 0.06f;
+                r += variation;
+                g += variation;
+                b += variation;
+                break;
+            }
+        }
+
+        return new Color(
+            Math.Clamp(r, 0f, 1f),
+            Math.Clamp(g, 0f, 1f),
+            Math.Clamp(b, 0f, 1f)
+        );
+    }
+
+    /// <summary>
+    /// Fast deterministic hash for per-pixel tile variation.
+    /// Produces consistent results for the same world position + sub-pixel offset.
+    /// </summary>
+    private static uint PixelHash(int wx, int wy, int dx, int dy)
+    {
+        uint h = (uint)(wx * 374761393 + wy * 668265263 + dx * 2147483647 + dy * 1013904223);
+        h = (h ^ (h >> 13)) * 1274126177;
+        h ^= h >> 16;
+        return h;
     }
 
     /// <summary>
