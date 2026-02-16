@@ -115,9 +115,10 @@ Each Tick (0.05 seconds):
   12. AgingSystem          - Increment age, natural death            [SurvivalSystems.cs]
   13. ReproductionSystem  - Spawn offspring when thresholds met
   14. TerraformSystem     - Faction tile modification                [TerrainSystems.cs]
-  15. NestSystem           - Sectid nest breeding & food delivery
-  16. SporeSystem          - Shroomer spore lifecycle & AoE attacks
-  17. CrystalSystem        - Faeling crystal management & ranged attacks
+  15. TileRegenerationSystem - Regrow nutrition on grazeable tiles   [TerrainSystems.cs]
+  16. NestSystem           - Sectid nest breeding & food delivery
+  17. SporeSystem          - Shroomer spore lifecycle & AoE attacks
+  18. CrystalSystem        - Faeling crystal management & ranged attacks
 ```
 
 Order matters: LOD must be first (sets up skip flags). Movement before behavior
@@ -258,9 +259,9 @@ Balanced:         Extremes shift toward Grass (center)
 | Parameter | Value |
 |-----------|-------|
 | Chunk size | 32x32 tiles |
-| World size | 16x16 chunks (512x512 tiles) |
+| World size | 24x24 chunks (768x768 tiles) |
 | Tile size | 16 pixels |
-| World seed | 42 (configurable) |
+| World seed | 0 (random each run; set non-zero for reproducible worlds) |
 
 ---
 
@@ -972,8 +973,8 @@ Faelings, Nests, Spores, Crystals), total population. Updated every 0.5 seconds.
 | Parameter | Default | Description |
 |-----------|---------|-------------|
 | ChunkSize | 32 | Tiles per chunk side |
-| WorldSizeChunks | 16 | Chunks per world axis (16x16 = 512x512 tiles) |
-| WorldSeed | 42 | Deterministic generation seed |
+| WorldSizeChunks | 24 | Chunks per world axis (24x24 = 768x768 tiles) |
+| WorldSeed | 0 | Seed for terrain generation (0 = random each run) |
 | TileSize | 16 | Pixel size of each tile |
 | TargetTPS | 20 | Simulation ticks per second |
 | MaxPopulation | 15000 | Hard entity cap |
@@ -1022,7 +1023,7 @@ godot/
 │   │   ├── ISystem.cs               # System interface
 │   │   ├── LODSystem.cs             # Distance-based simulation LOD
 │   │   ├── MovementSystem.cs        # Position + velocity damping (0.85/frame)
-│   │   ├── TerrainSystems.cs        # TerrainDiscomfort + TerraformSystem
+│   │   ├── TerrainSystems.cs        # TerrainDiscomfort + TerraformSystem + TileRegeneration
 │   │   ├── SurvivalSystems.cs       # HungerSystem + AgingSystem + GrazingSystem
 │   │   ├── WanderSystem.cs          # Random movement, roaming, terrain escape (hysteresis)
 │   │   ├── HerdingSystem.cs         # Social cohesion, alignment, leader following
@@ -1058,9 +1059,11 @@ godot/
 archived/                            # Original Python/Arcade version (reference only)
 docs/
 ├── FEATURES_AND_DESIGN.md           # This document
-├── architecture.md                  # Legacy architecture overview
-├── development-plan.md              # Original design rationale
-└── godot-roadmap.md                 # Development roadmap & task tracking
+├── architecture.md                  # Architecture overview
+├── godot-roadmap.md                 # Development roadmap & task tracking
+├── documentation-review.md          # Docs-vs-code audit log
+├── plan-optimization.md             # Performance optimization strategy
+└── development-plan.md              # Original design rationale (historical)
 ```
 
 ### Adding New Components

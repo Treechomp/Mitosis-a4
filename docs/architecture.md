@@ -30,16 +30,16 @@ built-in scene tree, for maximum cache efficiency with thousands of entities.
 │  Components: Position, Velocity, Hunger, Energy, Age, Fear,      │
 │              Species, Wander, Predator (with Stealth/Pounce),    │
 │              Prey, Social, Terraform, Nest, Spore, Crystal...    │
-│  Systems: 17 systems across 15 files, 20 TPS fixed timestep     │
+│  Systems: 18 systems across 15 files, 20 TPS fixed timestep     │
 │  SpatialHash: O(1) grid-based neighbor queries                │
 └──────────────────────────┬───────────────────────────────────┘
                            │
                            ▼
 ┌──────────────────────────────────────────────────────────────┐
 │                    WORLD LAYER                                 │
-│  WorldManager: 16x16 chunks (512x512 tiles)                   │
+│  WorldManager: 24x24 chunks (768x768 tiles)                   │
 │  TerrainGenerator: FastNoiseLite (SimplexSmooth) generation     │
-│  9 tile types with walkability, grazeability, moisture values  │
+│  20 tile types with walkability, grazeability, moisture values │
 │  Terraformable: tiles shift along moisture axis                │
 └──────────────────────────┬───────────────────────────────────┘
                            │
@@ -94,9 +94,10 @@ Systems run in this order each tick (order matters for data dependencies):
 12. AgingSystem            - Age increment, natural death            [SurvivalSystems.cs]
 13. ReproductionSystem     - Standard offspring spawning
 14. TerraformSystem        - Faction tile modification               [TerrainSystems.cs]
-15. NestSystem             - Sectid nest breeding
-16. SporeSystem            - Shroomer spore lifecycle
-17. CrystalSystem          - Faeling crystal management
+15. TileRegenerationSystem - Regrow nutrition on grazeable tiles     [TerrainSystems.cs]
+16. NestSystem             - Sectid nest breeding
+17. SporeSystem            - Shroomer spore lifecycle
+18. CrystalSystem          - Faeling crystal management
 ```
 
 ### File Structure
@@ -114,7 +115,7 @@ godot/Scripts/
 │   ├── ISystem.cs                    # System interface
 │   ├── LODSystem.cs                  # Distance-based simulation fidelity
 │   ├── MovementSystem.cs             # Position updates + velocity damping
-│   ├── TerrainSystems.cs             # TerrainDiscomfort + Terraform
+│   ├── TerrainSystems.cs             # TerrainDiscomfort + Terraform + TileRegeneration
 │   ├── SurvivalSystems.cs            # Hunger + Aging + Grazing
 │   ├── WanderSystem.cs               # Random movement, roaming, terrain escape
 │   ├── HerdingSystem.cs              # Social cohesion, alignment, leadership

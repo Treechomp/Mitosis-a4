@@ -366,7 +366,7 @@ Tasks:
 - [ ] Implement venom DOT mechanic (energy damage over time after attack)
 - [ ] Make Arid tiles grazeable at reduced nutrition (0.15) for desert herbivores
 
-### 3.4 Arctic/Tundra Species (requires Phase 2.4 Tundra tile)
+### 3.4 Arctic/Tundra Species
 
 | Species | Role | Social | Notes |
 |---------|------|--------|-------|
@@ -382,7 +382,7 @@ Tasks:
 - [ ] Add Musk Ox species (high mass, Defensive fear, tundra grazer)
 - [ ] Tundra tiles grazeable at reduced nutrition (0.2)
 
-### 3.5 Tropical/Jungle Species (requires Phase 2.4 Jungle tile)
+### 3.5 Tropical/Jungle Species
 
 | Species | Role | Social | Notes |
 |---------|------|--------|-------|
@@ -396,7 +396,7 @@ Tasks:
 - [ ] Add Parrot species (flying, small, herd, tropical biome)
 - [ ] Add Jaguar species (ambush hunter, jungle stealth bonus)
 - [ ] Add Tapir species (jungle herbivore, shy, medium mass)
-- [ ] Jungle tile: high cover bonus for stealth hunters
+- [x] Jungle tile: high cover bonus for stealth hunters (GetCoverBonus: Jungle 0.4)
 
 ### 3.6 Species Framework Tasks
 Shared work needed before/during species expansion:
@@ -404,7 +404,7 @@ Shared work needed before/during species expansion:
 - [ ] Omnivore diet type implementation (GrazingSystem + HuntingSystem)
 - [ ] Flying movement flag (bypass terrain speed/discomfort)
 - [ ] Venom/DOT damage component
-- [ ] Terrain-based stealth bonuses (jungle cover, water cover for croc already exists)
+- [x] Terrain-based stealth bonuses (GetCoverBonus: Jungle 0.4, Forest/Taiga 0.2, Wetland/Bog 0.15, Shrubland 0.1, Savanna 0.05)
 - [ ] Biome-restricted spawning enforcement (species only spawn in preferred biomes)
 - [ ] Rebalance InitialPopulation distribution for 25+ species
 - [ ] Per-biome spawn budgets (species count proportional to biome tile area)
