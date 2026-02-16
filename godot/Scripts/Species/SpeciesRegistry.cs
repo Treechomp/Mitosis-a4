@@ -255,7 +255,7 @@ public static class SpeciesRegistry
             // Visuals - small
             BaseColor = new Color(0.6f, 0.5f, 0.4f),
             BaseSize = 5f,
-            Shape = ShapeType.Circle,
+            Shape = ShapeType.Teardrop,
 
             StatVariation = 0.25f,
         });
@@ -538,7 +538,7 @@ public static class SpeciesRegistry
             // Visuals - large, green
             BaseColor = new Color(0.3f, 0.5f, 0.3f),
             BaseSize = 14f,
-            Shape = ShapeType.Triangle,
+            Shape = ShapeType.Fangs,
 
             StatVariation = 0.15f,
         });
@@ -629,7 +629,7 @@ public static class SpeciesRegistry
             // Visuals - small blue
             BaseColor = new Color(0.3f, 0.6f, 0.9f),
             BaseSize = 4f,
-            Shape = ShapeType.Circle,
+            Shape = ShapeType.FishShape,
             StatVariation = 0.25f,
         });
 
@@ -713,7 +713,7 @@ public static class SpeciesRegistry
             // Visuals - large dark blue triangle
             BaseColor = new Color(0.2f, 0.3f, 0.5f),
             BaseSize = 14f,
-            Shape = ShapeType.Triangle,
+            Shape = ShapeType.Fin,
             StatVariation = 0.15f,
         });
 
@@ -872,7 +872,7 @@ public static class SpeciesRegistry
             // Visuals - dark green
             BaseColor = new Color(0.25f, 0.45f, 0.2f),
             BaseSize = 8f,
-            Shape = ShapeType.Square,
+            Shape = ShapeType.Diamond,
             StatVariation = 0.15f,
         });
 
@@ -1043,7 +1043,7 @@ public static class SpeciesRegistry
             // Visuals - dark brown
             BaseColor = new Color(0.4f, 0.3f, 0.2f),
             BaseSize = 9f,
-            Shape = ShapeType.Square,
+            Shape = ShapeType.Diamond,
             StatVariation = 0.2f,
         });
 
@@ -1117,7 +1117,7 @@ public static class SpeciesRegistry
             // Visuals - large dark brown
             BaseColor = new Color(0.35f, 0.2f, 0.1f),
             BaseSize = 15f,
-            Shape = ShapeType.Triangle,
+            Shape = ShapeType.Fangs,
             StatVariation = 0.15f,
         });
 
@@ -1185,7 +1185,7 @@ public static class SpeciesRegistry
             // Visuals - brown triangle
             BaseColor = new Color(0.5f, 0.35f, 0.15f),
             BaseSize = 7f,
-            Shape = ShapeType.Triangle,
+            Shape = ShapeType.Chevron,
             StatVariation = 0.2f,
         });
 
@@ -1269,7 +1269,7 @@ public static class SpeciesRegistry
             // Visuals - sandy yellow
             BaseColor = new Color(0.85f, 0.75f, 0.4f),
             BaseSize = 4f,
-            Shape = ShapeType.Circle,
+            Shape = ShapeType.Diamond,
             StatVariation = 0.25f,
         });
 
@@ -1363,7 +1363,7 @@ public static class SpeciesRegistry
             // Visuals - dark red
             BaseColor = new Color(0.6f, 0.15f, 0.1f),
             BaseSize = 5f,
-            Shape = ShapeType.Triangle,
+            Shape = ShapeType.Crescent,
             StatVariation = 0.2f,
         });
 
@@ -1540,7 +1540,7 @@ public static class SpeciesRegistry
             // Visuals - olive green
             BaseColor = new Color(0.45f, 0.5f, 0.2f),
             BaseSize = 6f,
-            Shape = ShapeType.Triangle,
+            Shape = ShapeType.Serpent,
             StatVariation = 0.2f,
         });
 
@@ -1629,7 +1629,7 @@ public static class SpeciesRegistry
             // Visuals - black/white
             BaseColor = new Color(0.15f, 0.15f, 0.2f),
             BaseSize = 6f,
-            Shape = ShapeType.Circle,
+            Shape = ShapeType.Teardrop,
             StatVariation = 0.2f,
         });
 
@@ -1715,7 +1715,7 @@ public static class SpeciesRegistry
             // Visuals - white
             BaseColor = new Color(0.9f, 0.9f, 0.85f),
             BaseSize = 16f,
-            Shape = ShapeType.Triangle,
+            Shape = ShapeType.Fangs,
             StatVariation = 0.15f,
         });
 
@@ -1881,7 +1881,7 @@ public static class SpeciesRegistry
             // Visuals - dark brown
             BaseColor = new Color(0.3f, 0.25f, 0.15f),
             BaseSize = 13f,
-            Shape = ShapeType.Square,
+            Shape = ShapeType.Diamond,
             StatVariation = 0.15f,
         });
 
@@ -2036,7 +2036,7 @@ public static class SpeciesRegistry
             // Visuals - bright green
             BaseColor = new Color(0.2f, 0.9f, 0.3f),
             BaseSize = 5f,
-            Shape = ShapeType.Circle,
+            Shape = ShapeType.Chevron,
             StatVariation = 0.25f,
         });
 
@@ -2129,7 +2129,7 @@ public static class SpeciesRegistry
             // Visuals - spotted gold
             BaseColor = new Color(0.85f, 0.65f, 0.2f),
             BaseSize = 12f,
-            Shape = ShapeType.Triangle,
+            Shape = ShapeType.Fangs,
             StatVariation = 0.15f,
         });
 
@@ -2213,7 +2213,7 @@ public static class SpeciesRegistry
             // Visuals - dark grey
             BaseColor = new Color(0.35f, 0.3f, 0.3f),
             BaseSize = 10f,
-            Shape = ShapeType.Circle,
+            Shape = ShapeType.Teardrop,
             StatVariation = 0.2f,
         });
 
@@ -2335,7 +2335,7 @@ public static class SpeciesRegistry
             // Visuals - purple/violet fungi
             BaseColor = new Color(0.55f, 0.23f, 0.78f),
             BaseSize = 9f,
-            Shape = ShapeType.Circle,
+            Shape = ShapeType.Mushroom,
 
             StatVariation = 0.2f,
         });
@@ -2475,7 +2475,7 @@ public static class SpeciesRegistry
             // Visuals - orange insects
             BaseColor = new Color(0.86f, 0.55f, 0.16f),
             BaseSize = 5f,   // Smaller — numerous
-            Shape = ShapeType.Triangle,
+            Shape = ShapeType.Star,
 
             StatVariation = 0.25f,
         });

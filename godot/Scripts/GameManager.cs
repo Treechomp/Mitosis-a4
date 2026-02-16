@@ -160,10 +160,9 @@ public partial class GameManager : Node2D
         _lodSystem?.SetPlayerEntity(_playerController.PlayerEntity);
 
         // Setup entity rendering via MultiMesh
-        var (circleMMI, triangleMMI, squareMMI) = _renderingManager.CreateMultiMeshInstances();
-        AddChild(circleMMI);
-        AddChild(triangleMMI);
-        AddChild(squareMMI);
+        var shapeMMIs = _renderingManager.CreateMultiMeshInstances();
+        foreach (var mmi in shapeMMIs)
+            AddChild(mmi);
 
         // Setup debug UI
         SetupDebugUI();

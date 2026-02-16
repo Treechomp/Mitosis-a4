@@ -135,9 +135,19 @@ public struct Renderable
 
 public enum ShapeType : byte
 {
-    Circle = 0,
-    Triangle = 1,
-    Square = 2
+    Circle = 0,      // Deer, Elk, Frog, Camel, Monkey
+    Triangle = 1,    // Wolf, Fox, Arctic Fox
+    Square = 2,      // Faeling (crystal guardian)
+    Diamond = 3,     // Boar, Musk Ox, Turtle, Lizard (tough/armored)
+    Star = 4,        // Sectid (6-armed star, oscillating rotation)
+    Chevron = 5,     // Hawk, Parrot (bird V-silhouette)
+    FishShape = 6,   // Fish (body + forked tail)
+    Fin = 7,         // Shark (dorsal fin)
+    Teardrop = 8,    // Penguin, Tapir, Rabbit (rounded bottom, pointed top)
+    Crescent = 9,    // Scorpion (curved pincers)
+    Serpent = 10,    // Snake (S-curve)
+    Mushroom = 11,   // Shroomer (cap on stem)
+    Fangs = 12,      // Bear, Polar Bear, Jaguar, Crocodile (wide jaw)
 }
 
 /// <summary>
