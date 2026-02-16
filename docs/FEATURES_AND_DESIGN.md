@@ -136,16 +136,21 @@ before fleeing (predator positions needed for flee calculations).
 | ShallowWater | Yes* | No | No | 0.4x | 5.0 | 0.75 | 0 |
 | River | Yes* | No | No | 0.35x | 8.0 | 0.8 | 0 |
 | Sand | Yes | Yes | No | 0.7x | 1.0 | 0.3 | 0 |
+| Dirt | Yes | Yes | No | 0.9x | 0.2 | 0.05 | 0 |
+| Shrubland | Yes | Yes | Yes | 0.95x | 0 | 0.02 | 0.1 |
 | Grass | Yes | Yes | Yes | 1.0x | 0 | 0 | 0 |
 | Forest | Yes | Yes | Yes | 0.85x | 0 | 0.05 | 0.2 |
+| Taiga | Yes | Yes | Yes | 0.8x | 0.4 | 0.1 | 0.2 |
 | Wetland | Yes | Yes | No | 0.75x | 0.5 | 0.15 | 0.15 |
+| Bog | Yes | Yes | No | 0.55x | 0.8 | 0.25 | 0.15 |
 | Arid | Yes | Yes | No | 0.8x | 0.5 | 0.15 | 0 |
-| Mountain | No | No | No | 0.05x | 15.0 | 1.0 | 0 |
+| Steppe | Yes | Yes | Yes | 0.9x | 0.8 | 0.12 | 0 |
 | Tundra | Yes | Yes | No | 0.5x | 2.0 | 0.4 | 0 |
 | Ice | Yes | No | No | 0.45x | 4.0 | 0.6 | 0 |
 | Savanna | Yes | Yes | Yes | 1.05x | 0 | 0 | 0.05 |
 | Jungle | Yes | Yes | Yes | 0.6x | 0.3 | 0.1 | 0.4 |
-| Reef | No | No | No | 0.05x | 15.0 | 1.0 | 0 |
+| Mountain | No | No | No | 0.05x | 15.0 | 1.0 | 0 |
+| Reef | Yes* | No | No | 0.35x | 6.0 | 0.7 | 0 |
 | Lava | No | No | No | 0.05x | 20.0 | 1.0 | 0 |
 
 *Water tiles are walkable by all species but very slow and uncomfortable
@@ -154,7 +159,7 @@ speed bonuses on water via `TerrainSpeedModifiers`.
 
 ### Tile Nutrition (Depletion & Regrowth)
 
-Grazeable tiles (Grass, Forest, Savanna, Jungle) have per-tile nutrition (0.0-1.0).
+Grazeable tiles (Grass, Forest, Savanna, Jungle, Shrubland, Taiga, Steppe) have per-tile nutrition (0.0-1.0).
 Herbivores consume nutrition when grazing; food gained scales with remaining nutrition.
 Depleted tiles (< 0.3 nutrition) generate grazing pressure via TerrainDiscomfortSystem,
 driving herbivores to migrate to richer areas.
@@ -170,29 +175,37 @@ driving herbivores to migrate to richer areas.
 
 | Tile | Moisture Value |
 |------|---------------|
-| Wetland | 1.0 |
+| Bog / Wetland | 1.0 |
 | ShallowWater / DeepWater | 1.0 |
-| Forest | 0.7 |
-| Jungle | 0.7 |
+| River | 0.95 |
+| Reef | 0.9 |
+| Jungle | 0.8 |
+| Forest / Taiga | 0.7 |
+| Ice | 0.5 |
 | Grass | 0.4 |
-| Savanna | 0.3 |
-| River / Mountain | 0.2 (default) |
-| Sand / Tundra | 0.1 |
-| Arid / Ice | 0.0 |
+| Shrubland | 0.35 |
+| Savanna / Steppe | 0.25 |
+| Tundra | 0.2 |
+| Dirt | 0.15 |
+| Sand | 0.1 |
+| Arid / Lava | 0.0 |
 
 ### Terraform Shifts
 
 Tiles can be shifted along a moisture axis by faction terraformers:
 
 ```
-Drier direction:  Wetland → Forest → Grass → Sand → Arid
+Drier direction:  Bog → Wetland → Forest → Grass → Shrubland → Dirt → Sand → Arid
                   Jungle → Savanna
-                  Tundra → Arid
-Wetter direction: Arid → Sand → Grass → Forest → Wetland
+                  Taiga → Steppe → Tundra → Arid
+Wetter direction: Arid → Sand → Dirt → Shrubland → Grass → Forest → Wetland → Bog
                   Savanna → Jungle
-                  Tundra → Grass
+                  Tundra → Steppe → Taiga → Forest
 Balanced:         Extremes shift toward Grass (center)
-                  Tundra → Grass, Savanna → Grass, Jungle → Forest
+                  Bog → Wetland → Forest → Grass
+                  Arid → Sand → Dirt → Shrubland → Grass
+                  Tundra → Steppe → Grass, Taiga → Forest
+                  Savanna → Grass, Jungle → Forest
 ```
 
 ### Generation Algorithm
@@ -504,7 +517,7 @@ Each tick:
 **File**: `Scripts/Systems/SurvivalSystems.cs`
 **Components**: Position, Species, Hunger
 
-- **Herbivores**: If on grazeable tile (Grass/Forest), gain `GrazeNutrition` per tick
+- **Herbivores**: If on grazeable tile (Grass/Forest/Savanna/Jungle/Shrubland/Taiga/Steppe), gain `GrazeNutrition` per tick
 - **Faction species**: If on one of their `FeedTiles`, gain `FeedNutrition` per tick
 - Capped at `hunger.Max`
 

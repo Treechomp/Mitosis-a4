@@ -61,10 +61,10 @@
 #### Terrain & World (100% Complete)
 - [x] Chunk-based storage (32x32 tiles)
 - [x] Simplex noise terrain generation with domain warping
-- [x] 15 tile types with walkability/speed/discomfort/avoidance rules
+- [x] 20 tile types with walkability/speed/discomfort/avoidance rules
 - [x] 11 biome types (Ocean, Coast, Grassland, Forest, Desert, Mountain, Wetland, River, Arctic, Tropical, Volcanic)
 - [x] IsSpawnable(), IsWater(), IsGrazeable(), IsTerraformable() tile queries
-- [x] GetCoverBonus() for stealth mechanics (Jungle/Forest)
+- [x] GetCoverBonus() for stealth mechanics (Jungle/Forest/Taiga/Wetland/Bog/Shrubland/Savanna)
 - [x] BiomeType calculation from elevation/moisture/temperature
 - [x] Temperature noise + latitude gradient for regional biome distribution
 - [x] Species-specific spawn filtering (biome + tile)
@@ -236,25 +236,36 @@ Organic biome boundaries with temperature-driven regional biome distribution.
 - [x] 3 new BiomeType values: Arctic, Tropical, Volcanic
 
 ### 2.4 New Tile Types — COMPLETE
-Six new tile types expand biome variety across arctic, tropical, and volcanic zones.
+Eleven new tile types expand biome variety across arctic, tropical, volcanic, and
+transitional zones. Six initial biome tiles plus five moisture-spectrum transitional tiles.
 
 | Tile | Biome | Walkable | Spawnable | Speed | Discomfort | Notes |
 |------|-------|----------|-----------|-------|-----------|-------|
 | Tundra | Arctic | Yes | Yes | 0.5x | 2.0 | Frozen ground; grazeable=no |
 | Ice | Arctic | Yes | No | 0.45x | 4.0 | Frozen water; barren |
-| Savanna | Tropical | Yes | Yes | 1.05x | 0.0 | Sparse grass; grazeable |
+| Steppe | Arctic | Yes | Yes | 0.9x | 0.8 | Cold open grassland; grazeable |
+| Taiga | Forest | Yes | Yes | 0.8x | 0.4 | Cold dense forest; grazeable, cover (0.2) |
+| Savanna | Tropical | Yes | Yes | 1.05x | 0.0 | Sparse grass; grazeable, cover (0.05) |
 | Jungle | Tropical | Yes | Yes | 0.6x | 0.3 | Dense vegetation; grazeable, high cover (0.4) |
-| Reef | Coast | No | No | 0.05x | 15.0 | Impassable shallow water variant |
+| Dirt | Desert | Yes | Yes | 0.9x | 0.2 | Packed earth; between Sand and Shrubland |
+| Shrubland | Grassland | Yes | Yes | 0.95x | 0.0 | Sparse bushes; grazeable, cover (0.1) |
+| Bog | Wetland | Yes | Yes | 0.55x | 0.8 | Waterlogged ground; wettest extreme, cover (0.15) |
+| Reef | Coast | Yes* | No | 0.35x | 6.0 | Shallow rocky water; walkable but uncomfortable |
 | Lava | Volcanic | No | No | 0.05x | 20.0 | Impassable volcanic terrain |
 
-- [x] Add tile types to TileType enum (Tundra=9, Ice=10, Savanna=11, Jungle=12, Reef=13, Lava=14)
+*Reef is technically walkable but slow and uncomfortable, like other water tiles.
+
+- [x] Add tile types to TileType enum (Tundra=9, Ice=10, Savanna=11, Jungle=12, Reef=13, Lava=14, Dirt=15, Taiga=16, Steppe=17, Shrubland=18, Bog=19)
 - [x] Extend all tile extension methods (IsWalkable, IsSpawnable, IsGrazeable, IsTerraformable, speed, discomfort, avoidance)
-- [x] Added GetCoverBonus() extension for stealth mechanics (Jungle: 0.4, Forest: 0.2)
+- [x] Added GetCoverBonus() extension for stealth mechanics (Jungle: 0.4, Forest/Taiga: 0.2, Wetland/Bog: 0.15, Shrubland: 0.1, Savanna: 0.05)
 - [x] Wire into TerrainGenerator with temperature-based thresholds
+- [x] Full moisture spectrum: Arid → Sand → Dirt → Shrubland → Grass → Forest → Wetland → Bog
+- [x] Arctic temperature band: Ice/Tundra/Steppe (cold) → Taiga → temperate
 - [x] Update terraform shift chains:
-  - Tundra→Grass (ShiftWetter), Tundra→Arid (ShiftDrier), Tundra→Grass (ShiftBalanced)
-  - Savanna→Jungle (ShiftWetter), Jungle→Savanna (ShiftDrier)
-  - Savanna→Grass (ShiftBalanced), Jungle→Forest (ShiftBalanced)
+  - Full moisture chain: Arid↔Sand↔Dirt↔Shrubland↔Grass↔Forest↔Wetland↔Bog
+  - Arctic chain: Tundra↔Steppe↔Taiga→Forest (wetter), Tundra→Arid (drier)
+  - Tropical chain: Savanna↔Jungle
+  - Balanced: all extremes shift toward Grass
 - [x] Reef generated in warm shallow coastal zones (temperature > 0.7, elevation > 0.35)
 - [x] Lava generated in hot dry mountain zones (temperature > 0.65, moisture < 0.3)
 - [x] Update tile colors in Chunk.GetTileColor()
@@ -859,7 +870,7 @@ Builds on Phase 6 (trait variation) and Phase 9 (directed mutation).
 | v0.2 | Feb 2026 | Species system, reproduction, fear, terrain discomfort, biome spawning |
 | v0.3 | Feb 2026 | Faction species (Shroomer/Sectid/Faeling), terraform system, nest/spore/crystal systems, pack tactics, mass-based hunting, AoE/ranged attacks, growth system, power inheritance |
 | v0.4 | Feb 2026 | Code reorganization (BehaviorSystems.cs split into 8 files, GameManager split into 4), entity jitter fixes (velocity damping, mass-based direction blending, hysteresis terrain escape, herding/escape priority), coordinated wolf flanking (Leader/Flanker/Disruptor roles, convergence triggers), crocodile ambush hunting (stealth mechanics, stalking, pounce burst), stealth-aware prey detection |
-| v0.5 | Feb 2026 | World Generation v2: 6 new tile types (Tundra, Ice, Savanna, Jungle, Reef, Lava), 3 new biome types (Arctic, Tropical, Volcanic), domain warping for organic biome boundaries, temperature noise + latitude gradient, tile depletion/regrowth system (per-tile nutrition), TileRegenerationSystem, nutrition-dependent grazing, landmark post-processing (oases, clearings, caves), terrain cover bonus for stealth, flow-based river system (RiverMapper: elevation tracing, flow accumulation, depression lakes, wetland banks) replacing old noise zero-crossing |
+| v0.5 | Feb 2026 | World Generation v2: 11 new tile types (Tundra, Ice, Steppe, Taiga, Savanna, Jungle, Dirt, Shrubland, Bog, Reef, Lava), 3 new biome types (Arctic, Tropical, Volcanic), full moisture spectrum (Arid→Sand→Dirt→Shrubland→Grass→Forest→Wetland→Bog), domain warping for organic biome boundaries, temperature noise + latitude gradient, tile depletion/regrowth system (per-tile nutrition), TileRegenerationSystem, nutrition-dependent grazing, landmark post-processing (oases, clearings, caves), terrain cover bonus for stealth (Jungle/Forest/Taiga/Wetland/Bog/Shrubland/Savanna), flow-based river system (RiverMapper: elevation tracing, flow accumulation, depression lakes, wetland banks) replacing old noise zero-crossing |
 
 ---
 
