@@ -13,10 +13,19 @@ namespace Mitosis.Systems;
 /// <summary>
 /// Accumulates terrain discomfort when on uncomfortable tiles, decays on comfortable ones.
 /// Also applies grazing pressure for hungry herbivores on non-grazeable terrain.
+/// Handles drowning (land creatures in water) and suffocation (aquatic creatures on land).
 /// </summary>
 public sealed class TerrainDiscomfortSystem : ISystem
 {
     private readonly WorldManager _worldManager;
+    private readonly List<int> _toKill = new(16);
+
+    // Grace period before drowning/suffocation damage begins (ticks at 20 TPS)
+    private const int DrowningGraceTicks = 60;      // 3 seconds to swim back
+    private const int SuffocationGraceTicks = 60;    // 3 seconds to flop back
+    // Base damage per tick (scaled by energy — healthier = resist longer)
+    private const float DrowningBaseDamage = 2f;
+    private const float SuffocationBaseDamage = 1.5f;
 
     public TerrainDiscomfortSystem(WorldManager worldManager)
     {
@@ -25,6 +34,7 @@ public sealed class TerrainDiscomfortSystem : ISystem
 
     public void Process(EntityManager em)
     {
+        _toKill.Clear();
         const ComponentFlags required = ComponentFlags.Position | ComponentFlags.TerrainDiscomfort;
 
         foreach (int entity in em.Query(required))
@@ -43,16 +53,19 @@ public sealed class TerrainDiscomfortSystem : ISystem
             // Get current tile and apply species-specific comfort modifier
             var tile = _worldManager.GetTile(pos.X, pos.Y);
             float tileDiscomfort = tile.GetDiscomfortRate();
+            bool inWater = tile.IsWater();
 
+            SpeciesDefinition? speciesDef = null;
             if (em.HasComponents(entity, ComponentFlags.Species))
             {
-                var speciesDef = SpeciesRegistry.GetById(em.Species[entity].SpeciesId);
+                speciesDef = SpeciesRegistry.GetById(em.Species[entity].SpeciesId);
                 if (speciesDef != null)
                 {
                     // Flying creatures ignore terrain discomfort entirely
                     if (speciesDef.IsFlying)
                     {
                         discomfort.Current = MathF.Max(0, discomfort.Current - discomfort.DecayRate);
+                        discomfort.WrongElementTicks = 0;
                         continue;
                     }
                     tileDiscomfort += speciesDef.GetTerrainComfortModifier(tile);
@@ -96,6 +109,43 @@ public sealed class TerrainDiscomfortSystem : ISystem
                 // Decay discomfort on comfortable terrain
                 discomfort.Current = MathF.Max(0, discomfort.Current - discomfort.DecayRate);
             }
+
+            // === Drowning / Suffocation ===
+            if (speciesDef != null && em.HasComponents(entity, ComponentFlags.Energy))
+            {
+                bool isDrowning = inWater && !speciesDef.IsAquatic && !speciesDef.SemiAquatic;
+                bool isSuffocating = !inWater && speciesDef.IsAquatic;
+
+                if (isDrowning || isSuffocating)
+                {
+                    discomfort.WrongElementTicks++;
+                    int graceThreshold = isDrowning ? DrowningGraceTicks : SuffocationGraceTicks;
+
+                    if (discomfort.WrongElementTicks > graceThreshold)
+                    {
+                        ref var energy = ref em.Energies[entity];
+                        // Healthier entities resist longer; damage accelerates as energy drops
+                        float energyFactor = 1f - (energy.Percent * 0.7f);
+                        float damage = (isDrowning ? DrowningBaseDamage : SuffocationBaseDamage) * energyFactor;
+                        energy.Current -= damage;
+                        energy.RegenCooldown = 40; // Suppress regen while drowning/suffocating
+
+                        if (energy.IsDead)
+                            _toKill.Add(entity);
+                    }
+                }
+                else
+                {
+                    // Back in correct element — reset counter
+                    discomfort.WrongElementTicks = 0;
+                }
+            }
+        }
+
+        // Kill drowned/suffocated entities
+        foreach (int entity in _toKill)
+        {
+            em.DestroyEntity(entity);
         }
     }
 }

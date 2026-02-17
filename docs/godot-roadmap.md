@@ -403,6 +403,7 @@ Shared work needed before/during species expansion:
 - [x] Rebalance InitialPopulation distribution for 28 species (SpawnWeight per species, weighted budget in WorldSpawner)
 - [x] Soft hunt threshold (predators hunt opportunistically when well-fed, stop at 95%+)
 - [x] Reproduction tuning for prolific species (higher cooldowns/costs for Fish, Frog, Lizard, Rabbit, Boar)
+- [x] Drowning/suffocation mechanics (WrongElementTicks grace period, energy-scaled damage in TerrainDiscomfortSystem)
 - [ ] Per-biome spawn budgets (species count proportional to biome tile area)
 
 ---

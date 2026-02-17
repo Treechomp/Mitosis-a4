@@ -212,6 +212,7 @@ public struct TerrainDiscomfort
     public float DecayRate;         // How fast discomfort decays on comfortable terrain
     public float GrazingPressure;   // Extra discomfort when hungry and not on grazeable terrain (herbivores)
     public bool IsEscaping;         // Hysteresis flag: true while actively escaping discomfort
+    public int WrongElementTicks;   // Ticks spent in wrong element (water for land, land for aquatic)
 
     public TerrainDiscomfort(
         float threshold = 50f,
@@ -223,6 +224,7 @@ public struct TerrainDiscomfort
         DecayRate = decayRate;
         GrazingPressure = grazingPressure;
         IsEscaping = false;
+        WrongElementTicks = 0;
     }
 
     public readonly bool IsUncomfortable => Current > 0;
