@@ -110,6 +110,8 @@ public static class SpeciesRegistry
             Diet = DietType.Herbivore,
             DefaultSocialType = SocialType.Herd,
             SpawnWeight = 1.5f,
+            WrongElementGraceTicks = 80,    // Can swim rivers
+            WrongElementDamageRate = 1.8f,
 
             // Movement
             BaseWanderSpeed = 0.03f,
@@ -188,6 +190,8 @@ public static class SpeciesRegistry
             Diet = DietType.Herbivore,
             DefaultSocialType = SocialType.Herd,
             SpawnWeight = 1.5f,
+            WrongElementGraceTicks = 40,    // Small, panics in water
+            WrongElementDamageRate = 3.0f,
 
             // Movement - fast and erratic
             BaseWanderSpeed = 0.04f,
@@ -272,6 +276,8 @@ public static class SpeciesRegistry
             Diet = DietType.Carnivore,
             DefaultSocialType = SocialType.Pack,
             SpawnWeight = 1.5f,
+            WrongElementGraceTicks = 90,    // Decent swimmer
+            WrongElementDamageRate = 1.5f,
 
             // Movement
             BaseWanderSpeed = 0.06f,
@@ -558,6 +564,8 @@ public static class SpeciesRegistry
             Diet = DietType.Herbivore,
             DefaultSocialType = SocialType.Herd,
             SpawnWeight = 0.8f,
+            WrongElementGraceTicks = 40,    // Pure gill breather
+            WrongElementDamageRate = 2.5f,
             IsAquatic = true,
 
             // Movement - fast in water, school behavior
@@ -645,6 +653,8 @@ public static class SpeciesRegistry
             Diet = DietType.Carnivore,
             DefaultSocialType = SocialType.Solitary,
             SpawnWeight = 0.4f,
+            WrongElementGraceTicks = 30,    // Needs constant water flow over gills
+            WrongElementDamageRate = 3.0f,
             IsAquatic = true,
 
             // Movement - fast aquatic predator
@@ -730,6 +740,8 @@ public static class SpeciesRegistry
             Diet = DietType.Herbivore,
             DefaultSocialType = SocialType.Solitary,
             SpawnWeight = 0.7f,
+            WrongElementGraceTicks = 200,   // Nearly amphibious
+            WrongElementDamageRate = 0.5f,
 
             // Movement - small hops
             BaseWanderSpeed = 0.03f,
@@ -895,6 +907,8 @@ public static class SpeciesRegistry
             Diet = DietType.Herbivore,
             DefaultSocialType = SocialType.Herd,
             SpawnWeight = 1.2f,
+            WrongElementGraceTicks = 100,   // Large, can wade through rivers
+            WrongElementDamageRate = 1.2f,
 
             // Movement - large, steady
             BaseWanderSpeed = 0.025f,
@@ -971,6 +985,8 @@ public static class SpeciesRegistry
             Name = "Boar",
             Diet = DietType.Omnivore,
             DefaultSocialType = SocialType.Pack,
+            WrongElementGraceTicks = 90,    // Pigs can swim
+            WrongElementDamageRate = 1.5f,
 
             // Movement
             BaseWanderSpeed = 0.035f,
@@ -1063,6 +1079,8 @@ public static class SpeciesRegistry
             Diet = DietType.Carnivore,
             DefaultSocialType = SocialType.Solitary,
             SpawnWeight = 0.3f,
+            WrongElementGraceTicks = 150,   // Excellent swimmer
+            WrongElementDamageRate = 0.8f,
 
             // Movement - slow but powerful
             BaseWanderSpeed = 0.02f,
@@ -1211,6 +1229,8 @@ public static class SpeciesRegistry
             Diet = DietType.Herbivore,
             DefaultSocialType = SocialType.Solitary,
             SpawnWeight = 0.7f,
+            WrongElementGraceTicks = 40,    // Cold-blooded, tires quickly
+            WrongElementDamageRate = 2.5f,
 
             // Movement - fast on hot terrain
             BaseWanderSpeed = 0.05f,
@@ -1292,6 +1312,8 @@ public static class SpeciesRegistry
             Diet = DietType.Carnivore,
             DefaultSocialType = SocialType.Solitary,
             SpawnWeight = 0.6f,
+            WrongElementGraceTicks = 25,    // Cannot swim at all
+            WrongElementDamageRate = 4.0f,
 
             // Movement - slow, ambush
             BaseWanderSpeed = 0.02f,
@@ -1386,6 +1408,8 @@ public static class SpeciesRegistry
             Name = "Camel",
             Diet = DietType.Herbivore,
             DefaultSocialType = SocialType.Herd,
+            WrongElementGraceTicks = 40,    // Desert animal, poor swimmer
+            WrongElementDamageRate = 2.5f,
             SpawnWeight = 0.6f,
 
             // Movement - steady desert traveler
@@ -1470,6 +1494,8 @@ public static class SpeciesRegistry
             Diet = DietType.Carnivore,
             DefaultSocialType = SocialType.Solitary,
             SpawnWeight = 0.6f,
+            WrongElementGraceTicks = 100,   // Snakes swim well
+            WrongElementDamageRate = 1.0f,
 
             // Movement - slithering
             BaseWanderSpeed = 0.03f,
@@ -1742,6 +1768,8 @@ public static class SpeciesRegistry
             Name = "Arctic Fox",
             Diet = DietType.Carnivore,
             DefaultSocialType = SocialType.Solitary,
+            WrongElementGraceTicks = 50,    // Small, freezing water
+            WrongElementDamageRate = 2.2f,
             SpawnWeight = 0.8f,
 
             // Movement - quick
@@ -1826,6 +1854,8 @@ public static class SpeciesRegistry
             Diet = DietType.Herbivore,
             DefaultSocialType = SocialType.Herd,
             SpawnWeight = 0.8f,
+            WrongElementGraceTicks = 100,   // Large, can ford water
+            WrongElementDamageRate = 1.5f,
 
             // Movement - slow, steady
             BaseWanderSpeed = 0.02f,
@@ -1914,6 +1944,8 @@ public static class SpeciesRegistry
             Name = "Monkey",
             Diet = DietType.Herbivore,
             DefaultSocialType = SocialType.Herd,
+            WrongElementGraceTicks = 80,    // Some monkeys swim
+            WrongElementDamageRate = 1.5f,
             SpawnWeight = 0.8f,
 
             // Movement - fast, erratic
@@ -2067,6 +2099,8 @@ public static class SpeciesRegistry
             Name = "Jaguar",
             Diet = DietType.Carnivore,
             DefaultSocialType = SocialType.Solitary,
+            WrongElementGraceTicks = 120,   // Jaguars swim well
+            WrongElementDamageRate = 1.0f,
             SpawnWeight = 0.4f,
 
             // Movement
@@ -2162,6 +2196,8 @@ public static class SpeciesRegistry
             Diet = DietType.Herbivore,
             DefaultSocialType = SocialType.Herd,
             SpawnWeight = 0.7f,
+            WrongElementGraceTicks = 120,   // Tapirs love water, strong swimmers
+            WrongElementDamageRate = 0.8f,
 
             // Movement - medium pace
             BaseWanderSpeed = 0.025f,
@@ -2369,6 +2405,8 @@ public static class SpeciesRegistry
             Name = "Sectid",
             Diet = DietType.Terraformer,
             DefaultSocialType = SocialType.Pack,  // Pack hunters — swarm tactics
+            WrongElementGraceTicks = 40,    // Insects drown quickly
+            WrongElementDamageRate = 2.5f,
 
             // Movement - quick, numerous insects
             BaseWanderSpeed = 0.06f,

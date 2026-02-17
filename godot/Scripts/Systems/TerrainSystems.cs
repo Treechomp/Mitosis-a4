@@ -20,13 +20,6 @@ public sealed class TerrainDiscomfortSystem : ISystem
     private readonly WorldManager _worldManager;
     private readonly List<int> _toKill = new(16);
 
-    // Grace period before drowning/suffocation damage begins (ticks at 20 TPS)
-    private const int DrowningGraceTicks = 60;      // 3 seconds to swim back
-    private const int SuffocationGraceTicks = 60;    // 3 seconds to flop back
-    // Base damage per tick (scaled by energy — healthier = resist longer)
-    private const float DrowningBaseDamage = 2f;
-    private const float SuffocationBaseDamage = 1.5f;
-
     public TerrainDiscomfortSystem(WorldManager worldManager)
     {
         _worldManager = worldManager;
@@ -119,15 +112,13 @@ public sealed class TerrainDiscomfortSystem : ISystem
                 if (isDrowning || isSuffocating)
                 {
                     discomfort.WrongElementTicks++;
-                    int graceThreshold = isDrowning ? DrowningGraceTicks : SuffocationGraceTicks;
 
-                    if (discomfort.WrongElementTicks > graceThreshold)
+                    if (discomfort.WrongElementTicks > speciesDef.WrongElementGraceTicks)
                     {
                         ref var energy = ref em.Energies[entity];
                         // Healthier entities resist longer; damage accelerates as energy drops
                         float energyFactor = 1f - (energy.Percent * 0.7f);
-                        float damage = (isDrowning ? DrowningBaseDamage : SuffocationBaseDamage) * energyFactor;
-                        energy.Current -= damage;
+                        energy.Current -= speciesDef.WrongElementDamageRate * energyFactor;
                         energy.RegenCooldown = 40; // Suppress regen while drowning/suffocating
 
                         if (energy.IsDead)

@@ -205,6 +205,13 @@ public sealed class SpeciesDefinition
     public bool IsAquatic { get; init; } = false;
     public bool IsFlying { get; init; } = false;
 
+    /// <summary>Ticks in wrong element (water for land, land for aquatic) before damage starts.
+    /// Good swimmers get longer grace; panicky species drown fast. Default 60 (3 sec at 20 TPS).</summary>
+    public int WrongElementGraceTicks { get; init; } = 60;
+    /// <summary>Base damage per tick in wrong element, scaled by energy (healthier = less damage).
+    /// Higher = drowns/suffocates faster. Default 2.0.</summary>
+    public float WrongElementDamageRate { get; init; } = 2.0f;
+
     /// <summary>
     /// Specific tile types where this species can spawn. If null, uses default logic.
     /// </summary>
