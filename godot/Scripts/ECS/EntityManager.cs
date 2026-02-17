@@ -202,17 +202,60 @@ public sealed class EntityManager
     }
 
     /// <summary>
-    /// Iterate over all alive entities with specific components.
+    /// Upper bound of allocated entity IDs (exclusive). Useful for raw loops.
     /// </summary>
-    public IEnumerable<int> Query(ComponentFlags requiredFlags)
+    public int NextId => _nextId;
+
+    /// <summary>
+    /// Zero-allocation struct enumerator for iterating entities matching component flags.
+    /// Works with foreach via duck typing — no IEnumerable heap allocation.
+    /// </summary>
+    public struct EntityQuery
     {
-        for (int i = 0; i < _nextId; i++)
+        private readonly bool[] _alive;
+        private readonly ComponentFlags[] _flags;
+        private readonly ComponentFlags _required;
+        private readonly int _count;
+        private int _current;
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        internal EntityQuery(bool[] alive, ComponentFlags[] flags, int count, ComponentFlags required)
         {
-            if (_alive[i] && (_componentFlags[i] & requiredFlags) == requiredFlags)
-            {
-                yield return i;
-            }
+            _alive = alive;
+            _flags = flags;
+            _count = count;
+            _required = required;
+            _current = -1;
         }
+
+        public int Current
+        {
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            get => _current;
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public bool MoveNext()
+        {
+            while (++_current < _count)
+            {
+                if (_alive[_current] && (_flags[_current] & _required) == _required)
+                    return true;
+            }
+            return false;
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public EntityQuery GetEnumerator() => this;
+    }
+
+    /// <summary>
+    /// Iterate over all alive entities with specific components (zero-allocation).
+    /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public EntityQuery Query(ComponentFlags requiredFlags)
+    {
+        return new EntityQuery(_alive, _componentFlags, _nextId, requiredFlags);
     }
 
     /// <summary>
@@ -230,14 +273,49 @@ public sealed class EntityManager
     }
 
     /// <summary>
-    /// Iterate over all alive entities.
+    /// Zero-allocation struct enumerator for iterating all alive entities.
     /// </summary>
-    public IEnumerable<int> AllEntities()
+    public struct AllEntityQuery
     {
-        for (int i = 0; i < _nextId; i++)
+        private readonly bool[] _alive;
+        private readonly int _count;
+        private int _current;
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        internal AllEntityQuery(bool[] alive, int count)
         {
-            if (_alive[i])
-                yield return i;
+            _alive = alive;
+            _count = count;
+            _current = -1;
         }
+
+        public int Current
+        {
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            get => _current;
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public bool MoveNext()
+        {
+            while (++_current < _count)
+            {
+                if (_alive[_current])
+                    return true;
+            }
+            return false;
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public AllEntityQuery GetEnumerator() => this;
+    }
+
+    /// <summary>
+    /// Iterate over all alive entities (zero-allocation).
+    /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public AllEntityQuery AllEntities()
+    {
+        return new AllEntityQuery(_alive, _nextId);
     }
 }

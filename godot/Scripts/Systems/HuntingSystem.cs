@@ -43,25 +43,7 @@ public sealed class HuntingSystem : ISystem
         _entitiesToKill.Clear();
         _groupTargets.Clear();
 
-        // Update spatial hash for all prey (targets for hunting)
-        const ComponentFlags preyRequired = ComponentFlags.Position | ComponentFlags.Prey;
-        foreach (int entity in em.Query(preyRequired))
-        {
-            ref var pos = ref em.Positions[entity];
-            _spatialHash.Update(entity, pos.X, pos.Y);
-        }
-
-        // Also update predator-only entities for pack coordination detection
-        // (prey-predators like Sectids are already updated above)
-        const ComponentFlags predPosRequired = ComponentFlags.Position | ComponentFlags.Predator | ComponentFlags.Hunger;
-        foreach (int entity in em.Query(predPosRequired))
-        {
-            if (!em.HasComponents(entity, ComponentFlags.Prey))
-            {
-                ref var pos = ref em.Positions[entity];
-                _spatialHash.Update(entity, pos.X, pos.Y);
-            }
-        }
+        // Spatial hash already updated by SpatialHashUpdateSystem
 
         // First pass: Share targets, leader positions, and convergence state within packs
         const ComponentFlags predatorRequired = ComponentFlags.Position | ComponentFlags.Predator | ComponentFlags.Hunger;

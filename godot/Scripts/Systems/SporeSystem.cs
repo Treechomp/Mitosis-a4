@@ -33,11 +33,13 @@ public sealed class SporeSystem : ISystem
     private readonly List<(float x, float y, int speciesId)> _pendingSpores = new(16);
     private readonly List<(float x, float y, int speciesId)> _pendingTransforms = new(8);
     private readonly List<int> _toKill = new(16);
+    private readonly int _maxPopulation;
 
-    public SporeSystem(WorldManager worldManager, SpatialHash spatialHash)
+    public SporeSystem(WorldManager worldManager, SpatialHash spatialHash, int maxPopulation)
     {
         _worldManager = worldManager;
         _spatialHash = spatialHash;
+        _maxPopulation = maxPopulation;
     }
 
     public void Process(EntityManager em)
@@ -166,10 +168,16 @@ public sealed class SporeSystem : ISystem
             em.DestroyEntity(entity);
 
         foreach (var (x, y, speciesId) in _pendingSpores)
+        {
+            if (em.EntityCount >= _maxPopulation) break;
             SpawnSpore(em, x, y, speciesId);
+        }
 
         foreach (var (x, y, speciesId) in _pendingTransforms)
+        {
+            if (em.EntityCount >= _maxPopulation) break;
             SpawnShroomer(em, x, y, speciesId);
+        }
     }
 
     private float GetTileMoisture(TileType tile)

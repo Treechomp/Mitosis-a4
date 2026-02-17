@@ -27,14 +27,7 @@ public sealed class SeparationSystem : ISystem
     {
         const ComponentFlags required = ComponentFlags.Position | ComponentFlags.Velocity | ComponentFlags.Species;
 
-        // First pass: update spatial hash positions for all creatures
-        foreach (int entity in em.Query(required))
-        {
-            ref var pos = ref em.Positions[entity];
-            _spatialHash.Update(entity, pos.X, pos.Y);
-        }
-
-        // Second pass: apply separation forces
+        // Apply separation forces (spatial hash already updated by SpatialHashUpdateSystem)
         foreach (int entity in em.Query(required))
         {
             // Check LOD - skip if not due for update
@@ -124,8 +117,7 @@ public sealed class CollisionSystem : ISystem
     {
         const ComponentFlags required = ComponentFlags.Position | ComponentFlags.Renderable;
 
-        // Resolve collisions - multiple passes for better resolution
-        for (int pass = 0; pass < 2; pass++)
+        // Resolve collisions — single pass (position updates synced inline)
         {
             foreach (int entity in em.Query(required))
             {

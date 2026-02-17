@@ -105,6 +105,7 @@ public partial class GameManager : Node2D
         _lodSystem = new LODSystem();
         _systems.Add(_lodSystem);
         _systems.Add(new MovementSystem(ChunkSize, WorldSizeChunks, _worldManager));
+        _systems.Add(new SpatialHashUpdateSystem(spatialHash));    // Sync all positions once
         _systems.Add(new TerrainDiscomfortSystem(_worldManager));  // Process discomfort early
         _systems.Add(new HungerSystem());
         _systems.Add(new GrazingSystem(_worldManager));
@@ -120,11 +121,11 @@ public partial class GameManager : Node2D
         _systems.Add(new TileRegenerationSystem(_worldManager));
 
         // Faction systems
-        _nestSystem = new NestSystem(_worldManager, spatialHash);
+        _nestSystem = new NestSystem(_worldManager, spatialHash, MaxPopulation);
         _systems.Add(_nestSystem);
-        var sporeSystem = new SporeSystem(_worldManager, spatialHash);
+        var sporeSystem = new SporeSystem(_worldManager, spatialHash, MaxPopulation);
         _systems.Add(sporeSystem);
-        _crystalSystem = new CrystalSystem(_worldManager, spatialHash);
+        _crystalSystem = new CrystalSystem(_worldManager, spatialHash, MaxPopulation);
         _systems.Add(_crystalSystem);
 
         // Get camera reference

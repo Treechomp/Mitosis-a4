@@ -28,11 +28,13 @@ public sealed class CrystalSystem : ISystem
     private readonly Random _rng = new();
 
     private readonly List<(float x, float y, int crystalEntity, float inheritedPower)> _pendingFaelings = new(4);
+    private readonly int _maxPopulation;
 
-    public CrystalSystem(WorldManager worldManager, SpatialHash spatialHash)
+    public CrystalSystem(WorldManager worldManager, SpatialHash spatialHash, int maxPopulation)
     {
         _worldManager = worldManager;
         _spatialHash = spatialHash;
+        _maxPopulation = maxPopulation;
     }
 
     public void Process(EntityManager em)
@@ -107,9 +109,10 @@ public sealed class CrystalSystem : ISystem
         // === RANGED ATTACK PROCESSING ===
         ProcessRangedAttacks(em);
 
-        // === SPAWN PENDING FAELINGS ===
+        // === SPAWN PENDING FAELINGS (respect population cap) ===
         foreach (var (x, y, crystalEntity, inheritedPower) in _pendingFaelings)
         {
+            if (em.EntityCount >= _maxPopulation) break;
             int faeling = SpawnFaeling(em, x, y, crystalEntity, inheritedPower);
             if (faeling >= 0)
             {

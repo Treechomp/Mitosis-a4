@@ -33,11 +33,13 @@ public sealed class NestSystem : ISystem
     private readonly List<(float x, float y, int colonyId)> _pendingSpawns = new(16);
     private readonly List<(float x, float y, int colonyId)> _pendingNests = new(4);
     private int _nextColonyId = 1;
+    private readonly int _maxPopulation;
 
-    public NestSystem(WorldManager worldManager, SpatialHash spatialHash)
+    public NestSystem(WorldManager worldManager, SpatialHash spatialHash, int maxPopulation)
     {
         _worldManager = worldManager;
         _spatialHash = spatialHash;
+        _maxPopulation = maxPopulation;
     }
 
     public void Process(EntityManager em)
@@ -109,15 +111,17 @@ public sealed class NestSystem : ISystem
         // === FOOD CARRIER SYSTEM (Sectids delivering food) ===
         ProcessFoodCarriers(em);
 
-        // === SPAWN PENDING SECTIDS ===
+        // === SPAWN PENDING SECTIDS (respect population cap) ===
         foreach (var (x, y, colonyId) in _pendingSpawns)
         {
+            if (em.EntityCount >= _maxPopulation) break;
             SpawnSectid(em, x, y, colonyId);
         }
 
-        // === SPAWN PENDING NESTS ===
+        // === SPAWN PENDING NESTS (respect population cap) ===
         foreach (var (x, y, colonyId) in _pendingNests)
         {
+            if (em.EntityCount >= _maxPopulation) break;
             SpawnNest(em, x, y, colonyId);
         }
     }

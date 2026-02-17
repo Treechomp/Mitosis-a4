@@ -63,9 +63,6 @@ public sealed class FleeingSystem : ISystem
             ref var pred = ref em.Predators[entity];
             _predatorStealth[_predatorCount] = pred.Stealth;
             _predatorCount++;
-
-            // Update spatial hash for predators
-            _spatialHash.Update(entity, pos.X, pos.Y);
         }
 
         // Process prey

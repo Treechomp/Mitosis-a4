@@ -38,15 +38,13 @@ public sealed class HerdingSystem : ISystem
         const ComponentFlags required = ComponentFlags.Position | ComponentFlags.Velocity |
                                         ComponentFlags.Species | ComponentFlags.Social;
 
-        // Pre-pass: Count group sizes, find leaders, update spatial hash
+        // Pre-pass: Count group sizes, find leaders (spatial hash already updated)
         _groupSizes.Clear();
         _groupLeaders.Clear();
 
         foreach (int entity in em.Query(required))
         {
-            ref var pos = ref em.Positions[entity];
             ref var social = ref em.Socials[entity];
-            _spatialHash.Update(entity, pos.X, pos.Y);
 
             if (social.GroupId >= 0)
             {
