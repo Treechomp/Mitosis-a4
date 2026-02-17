@@ -197,6 +197,9 @@ public partial class GameManager : Node2D
             _fpsTimer = 0;
         }
 
+        // Guard against partial initialization (e.g. world-gen failure)
+        if (_playerController == null) return;
+
         // Handle input
         _playerController.HandleInput();
         _playerController.HandleZoomInput(_camera);
@@ -228,7 +231,7 @@ public partial class GameManager : Node2D
 
     public override void _UnhandledInput(InputEvent @event)
     {
-        _playerController.HandleMouseZoom(@event, _camera);
+        _playerController?.HandleMouseZoom(@event, _camera);
     }
 
     public override void _Draw()

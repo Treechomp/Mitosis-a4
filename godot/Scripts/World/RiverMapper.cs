@@ -276,7 +276,9 @@ public sealed class RiverMapper
                 waterLevel += 0.002f;
                 if (waterLevel > maxWaterLevel) break;
 
-                foreach (var (fx, fy) in filled)
+                // Snapshot to avoid modifying filled while iterating
+                var snapshot = new List<(int, int)>(filled);
+                foreach (var (fx, fy) in snapshot)
                 {
                     for (int d = 0; d < 8; d++)
                     {
