@@ -109,6 +109,7 @@ public static class SpeciesRegistry
             Name = "Deer",
             Diet = DietType.Herbivore,
             DefaultSocialType = SocialType.Herd,
+            SpawnWeight = 1.5f,
 
             // Movement
             BaseWanderSpeed = 0.03f,
@@ -186,6 +187,7 @@ public static class SpeciesRegistry
             Name = "Rabbit",
             Diet = DietType.Herbivore,
             DefaultSocialType = SocialType.Herd,
+            SpawnWeight = 1.5f,
 
             // Movement - fast and erratic
             BaseWanderSpeed = 0.04f,
@@ -213,7 +215,7 @@ public static class SpeciesRegistry
             // Reproduction - breeds moderately (controlled by predation pressure)
             ReproHungerThreshold = 180f,
             ReproEnergyThreshold = 70f,
-            ReproCooldown = 600,   // 10 sec (was 5 sec — halved breeding rate)
+            ReproCooldown = 800,   // Slower breeding to prevent overpopulation
 
             // Social - loose groups
             GroupAffinity = 0.4f,
@@ -244,8 +246,8 @@ public static class SpeciesRegistry
             SeparationStrength = 0.02f,
 
             // Reproduction costs - meaningful investment per litter
-            ReproHungerCost = 45f,
-            ReproEnergyCost = 30f,
+            ReproHungerCost = 55f,
+            ReproEnergyCost = 35f,
             OffspringCount = 2,
             SpawnRadius = 2f,
 
@@ -269,6 +271,7 @@ public static class SpeciesRegistry
             Name = "Wolf",
             Diet = DietType.Carnivore,
             DefaultSocialType = SocialType.Pack,
+            SpawnWeight = 1.5f,
 
             // Movement
             BaseWanderSpeed = 0.06f,
@@ -364,6 +367,7 @@ public static class SpeciesRegistry
             Name = "Fox",
             Diet = DietType.Carnivore,
             DefaultSocialType = SocialType.Solitary,
+            SpawnWeight = 1.2f,
 
             // Movement - quick and agile
             BaseWanderSpeed = 0.05f,
@@ -448,6 +452,7 @@ public static class SpeciesRegistry
             Name = "Crocodile",
             Diet = DietType.Carnivore,
             DefaultSocialType = SocialType.Solitary,
+            SpawnWeight = 0.4f,
             SemiAquatic = true, // Crocs hunt through water freely
 
             // Movement - slow on land, ambush predator
@@ -552,6 +557,7 @@ public static class SpeciesRegistry
             Name = "Fish",
             Diet = DietType.Herbivore,
             DefaultSocialType = SocialType.Herd,
+            SpawnWeight = 0.8f,
             IsAquatic = true,
 
             // Movement - fast in water, school behavior
@@ -577,12 +583,12 @@ public static class SpeciesRegistry
             MaxLifespan = 10000,
             MaturityAge = 600,
 
-            // Reproduction - prolific
+            // Reproduction - still prolific but costlier per litter
             ReproHungerThreshold = 100f,
             ReproEnergyThreshold = 60f,
-            ReproCooldown = 400,
-            ReproHungerCost = 30f,
-            ReproEnergyCost = 20f,
+            ReproCooldown = 700,
+            ReproHungerCost = 45f,
+            ReproEnergyCost = 30f,
             OffspringCount = 2,
 
             // Social - tight schools
@@ -638,6 +644,7 @@ public static class SpeciesRegistry
             Name = "Shark",
             Diet = DietType.Carnivore,
             DefaultSocialType = SocialType.Solitary,
+            SpawnWeight = 0.4f,
             IsAquatic = true,
 
             // Movement - fast aquatic predator
@@ -722,6 +729,7 @@ public static class SpeciesRegistry
             Name = "Frog",
             Diet = DietType.Herbivore,
             DefaultSocialType = SocialType.Solitary,
+            SpawnWeight = 0.7f,
 
             // Movement - small hops
             BaseWanderSpeed = 0.03f,
@@ -744,12 +752,12 @@ public static class SpeciesRegistry
             MaxLifespan = 12000,
             MaturityAge = 800,
 
-            // Reproduction
+            // Reproduction - controlled breeding
             ReproHungerThreshold = 120f,
             ReproEnergyThreshold = 60f,
-            ReproCooldown = 500,
-            ReproHungerCost = 30f,
-            ReproEnergyCost = 20f,
+            ReproCooldown = 750,
+            ReproHungerCost = 40f,
+            ReproEnergyCost = 25f,
             OffspringCount = 2,
 
             // Social - solitary
@@ -803,6 +811,7 @@ public static class SpeciesRegistry
             Diet = DietType.Herbivore,
             DefaultSocialType = SocialType.Solitary,
             SemiAquatic = true,
+            SpawnWeight = 0.5f,
 
             // Movement - very slow
             BaseWanderSpeed = 0.015f,
@@ -885,6 +894,7 @@ public static class SpeciesRegistry
             Name = "Elk",
             Diet = DietType.Herbivore,
             DefaultSocialType = SocialType.Herd,
+            SpawnWeight = 1.2f,
 
             // Movement - large, steady
             BaseWanderSpeed = 0.025f,
@@ -998,12 +1008,12 @@ public static class SpeciesRegistry
             PackCoordinationRadius = 8f,
             PackShareRadius = 8f,
 
-            // Reproduction
+            // Reproduction - slower breeding for omnivore
             ReproHungerThreshold = 220f,
             ReproEnergyThreshold = 75f,
-            ReproCooldown = 700,
-            ReproHungerCost = 50f,
-            ReproEnergyCost = 30f,
+            ReproCooldown = 900,
+            ReproHungerCost = 60f,
+            ReproEnergyCost = 35f,
             OffspringCount = 2,
             EnergyRegenRate = 0.2f,
 
@@ -1052,6 +1062,7 @@ public static class SpeciesRegistry
             Name = "Bear",
             Diet = DietType.Carnivore,
             DefaultSocialType = SocialType.Solitary,
+            SpawnWeight = 0.3f,
 
             // Movement - slow but powerful
             BaseWanderSpeed = 0.02f,
@@ -1127,6 +1138,7 @@ public static class SpeciesRegistry
             Diet = DietType.Carnivore,
             DefaultSocialType = SocialType.Solitary,
             IsFlying = true,
+            SpawnWeight = 0.7f,
 
             // Movement - fast aerial hunter
             BaseWanderSpeed = 0.06f,
@@ -1198,6 +1210,7 @@ public static class SpeciesRegistry
             Name = "Lizard",
             Diet = DietType.Herbivore,
             DefaultSocialType = SocialType.Solitary,
+            SpawnWeight = 0.7f,
 
             // Movement - fast on hot terrain
             BaseWanderSpeed = 0.05f,
@@ -1220,12 +1233,12 @@ public static class SpeciesRegistry
             MaxLifespan = 12000,
             MaturityAge = 800,
 
-            // Reproduction - quick breeders
+            // Reproduction - controlled breeding
             ReproHungerThreshold = 120f,
             ReproEnergyThreshold = 60f,
-            ReproCooldown = 500,
-            ReproHungerCost = 30f,
-            ReproEnergyCost = 20f,
+            ReproCooldown = 750,
+            ReproHungerCost = 40f,
+            ReproEnergyCost = 25f,
             OffspringCount = 2,
 
             // Social - solitary
@@ -1278,6 +1291,7 @@ public static class SpeciesRegistry
             Name = "Scorpion",
             Diet = DietType.Carnivore,
             DefaultSocialType = SocialType.Solitary,
+            SpawnWeight = 0.6f,
 
             // Movement - slow, ambush
             BaseWanderSpeed = 0.02f,
@@ -1372,6 +1386,7 @@ public static class SpeciesRegistry
             Name = "Camel",
             Diet = DietType.Herbivore,
             DefaultSocialType = SocialType.Herd,
+            SpawnWeight = 0.6f,
 
             // Movement - steady desert traveler
             BaseWanderSpeed = 0.025f,
@@ -1454,6 +1469,7 @@ public static class SpeciesRegistry
             Name = "Snake",
             Diet = DietType.Carnivore,
             DefaultSocialType = SocialType.Solitary,
+            SpawnWeight = 0.6f,
 
             // Movement - slithering
             BaseWanderSpeed = 0.03f,
@@ -1554,6 +1570,7 @@ public static class SpeciesRegistry
             Diet = DietType.Herbivore,
             DefaultSocialType = SocialType.Herd,
             SemiAquatic = true,
+            SpawnWeight = 0.7f,
 
             // Movement - waddle on land, faster in water
             BaseWanderSpeed = 0.025f,
@@ -1639,6 +1656,7 @@ public static class SpeciesRegistry
             Diet = DietType.Carnivore,
             DefaultSocialType = SocialType.Solitary,
             SemiAquatic = true,
+            SpawnWeight = 0.3f,
 
             // Movement - powerful but slow
             BaseWanderSpeed = 0.02f,
@@ -1724,6 +1742,7 @@ public static class SpeciesRegistry
             Name = "Arctic Fox",
             Diet = DietType.Carnivore,
             DefaultSocialType = SocialType.Solitary,
+            SpawnWeight = 0.8f,
 
             // Movement - quick
             BaseWanderSpeed = 0.05f,
@@ -1806,6 +1825,7 @@ public static class SpeciesRegistry
             Name = "Musk Ox",
             Diet = DietType.Herbivore,
             DefaultSocialType = SocialType.Herd,
+            SpawnWeight = 0.8f,
 
             // Movement - slow, steady
             BaseWanderSpeed = 0.02f,
@@ -1894,6 +1914,7 @@ public static class SpeciesRegistry
             Name = "Monkey",
             Diet = DietType.Herbivore,
             DefaultSocialType = SocialType.Herd,
+            SpawnWeight = 0.8f,
 
             // Movement - fast, erratic
             BaseWanderSpeed = 0.05f,
@@ -1977,6 +1998,7 @@ public static class SpeciesRegistry
             Diet = DietType.Herbivore,
             DefaultSocialType = SocialType.Herd,
             IsFlying = true,
+            SpawnWeight = 0.5f,
 
             // Movement - aerial
             BaseWanderSpeed = 0.055f,
@@ -2045,6 +2067,7 @@ public static class SpeciesRegistry
             Name = "Jaguar",
             Diet = DietType.Carnivore,
             DefaultSocialType = SocialType.Solitary,
+            SpawnWeight = 0.4f,
 
             // Movement
             BaseWanderSpeed = 0.04f,
@@ -2138,6 +2161,7 @@ public static class SpeciesRegistry
             Name = "Tapir",
             Diet = DietType.Herbivore,
             DefaultSocialType = SocialType.Herd,
+            SpawnWeight = 0.7f,
 
             // Movement - medium pace
             BaseWanderSpeed = 0.025f,

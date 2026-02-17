@@ -400,7 +400,9 @@ Shared work needed before/during species expansion:
 - [x] Venom/DOT damage component (VenomEffect struct, ComponentFlags.VenomEffect, applied in HuntingSystem, processed in HungerSystem)
 - [x] Terrain-based stealth bonuses (GetCoverBonus: Jungle 0.4, Forest/Taiga 0.2, Wetland/Bog 0.15, Shrubland 0.1, Savanna 0.05)
 - [x] Biome-restricted spawning (PreferredBiomes + AllowedSpawnTiles on all 20 new species)
-- [ ] Rebalance InitialPopulation distribution for 28 species
+- [x] Rebalance InitialPopulation distribution for 28 species (SpawnWeight per species, weighted budget in WorldSpawner)
+- [x] Soft hunt threshold (predators hunt opportunistically when well-fed, stop at 95%+)
+- [x] Reproduction tuning for prolific species (higher cooldowns/costs for Fish, Frog, Lizard, Rabbit, Boar)
 - [ ] Per-biome spawn budgets (species count proportional to biome tile area)
 
 ---

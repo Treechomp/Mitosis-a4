@@ -186,17 +186,31 @@ public sealed class HuntingSystem : ISystem
 
             float hungerRatio = hunger.Current / hunger.Max;
 
-            // Stop hunting if full
-            if (hungerRatio >= speciesDef.HuntThreshold)
+            // Only stop hunting when nearly full (95%+)
+            // Between HuntThreshold and 95%, predators hunt opportunistically
+            // This encourages predation when prey is abundant, keeping herbivores in check
+            const float fullThreshold = 0.95f;
+            if (hungerRatio >= fullThreshold)
             {
                 predator.TargetEntity = -1;
                 predator.Phase = PackPhase.Idle;
                 predator.Role = PackRole.None;
-                // Keep building stealth while idle (ambush predators lurk passively)
                 continue;
             }
 
-            float urgency = 1f - (hungerRatio / speciesDef.HuntThreshold);
+            // Urgency scales with hunger:
+            // - Below HuntThreshold: full urgency (desperate hunting, faster, wider range)
+            // - Above HuntThreshold: low opportunistic urgency (well-fed, still takes easy kills)
+            float urgency;
+            if (hungerRatio < speciesDef.HuntThreshold)
+            {
+                urgency = 1f - (hungerRatio / speciesDef.HuntThreshold);
+            }
+            else
+            {
+                float wellFedRange = fullThreshold - speciesDef.HuntThreshold;
+                urgency = 0.15f * (1f - (hungerRatio - speciesDef.HuntThreshold) / wellFedRange);
+            }
 
             // Check terrain discomfort
             float discomfortRatio = 0f;

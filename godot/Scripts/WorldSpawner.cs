@@ -97,12 +97,12 @@ public sealed class WorldSpawner
                 }
             }
 
-            int perSpecies = targetPredators / predatorSpecies.Count;
-            int remainder = targetPredators % predatorSpecies.Count;
+            var predatorTargets = ComputeWeightedTargets(predatorSpecies, targetPredators);
 
-            foreach (var species in predatorSpecies)
+            for (int si = 0; si < predatorSpecies.Count; si++)
             {
-                int target = perSpecies + (remainder-- > 0 ? 1 : 0);
+                var species = predatorSpecies[si];
+                int target = predatorTargets[si];
                 int speciesSpawned = 0;
 
                 // Round-robin: one group/solo per chunk per pass
@@ -168,12 +168,14 @@ public sealed class WorldSpawner
         if (speciesList.Count == 0 || totalTarget <= 0) return 0;
 
         int spawned = 0;
-        int perSpecies = totalTarget / speciesList.Count;
-        int remainder = totalTarget % speciesList.Count;
 
-        foreach (var species in speciesList)
+        // Weighted allocation: each species gets budget proportional to its SpawnWeight
+        var speciesTargets = ComputeWeightedTargets(speciesList, totalTarget);
+
+        for (int i = 0; i < speciesList.Count; i++)
         {
-            int target = perSpecies + (remainder-- > 0 ? 1 : 0);
+            var species = speciesList[i];
+            int target = speciesTargets[i];
             int speciesSpawned = 0;
             var preyChunkSet = new HashSet<(int, int)>();
 
@@ -230,6 +232,50 @@ public sealed class WorldSpawner
             int j = _rng.Next(i + 1);
             (list[i], list[j]) = (list[j], list[i]);
         }
+    }
+
+    /// <summary>
+    /// Computes per-species spawn targets proportional to SpawnWeight.
+    /// Uses largest-remainder method to distribute the total exactly.
+    /// </summary>
+    private static int[] ComputeWeightedTargets(List<SpeciesDefinition> speciesList, int totalTarget)
+    {
+        float totalWeight = 0f;
+        foreach (var species in speciesList)
+            totalWeight += species.SpawnWeight;
+
+        var targets = new int[speciesList.Count];
+        var fractional = new float[speciesList.Count];
+        int allocated = 0;
+
+        for (int i = 0; i < speciesList.Count; i++)
+        {
+            float ideal = totalTarget * speciesList[i].SpawnWeight / totalWeight;
+            targets[i] = Math.Max(2, (int)ideal);  // At least 2 (one group) per species
+            fractional[i] = ideal - targets[i];
+            allocated += targets[i];
+        }
+
+        // Distribute remaining budget to species with highest fractional remainders
+        int remaining = totalTarget - allocated;
+        while (remaining > 0)
+        {
+            float bestFrac = -1f;
+            int bestIdx = 0;
+            for (int i = 0; i < speciesList.Count; i++)
+            {
+                if (fractional[i] > bestFrac)
+                {
+                    bestFrac = fractional[i];
+                    bestIdx = i;
+                }
+            }
+            targets[bestIdx]++;
+            fractional[bestIdx] -= 1f;
+            remaining--;
+        }
+
+        return targets;
     }
 
     /// <summary>

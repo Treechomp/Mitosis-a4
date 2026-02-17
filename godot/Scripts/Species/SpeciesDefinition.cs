@@ -144,6 +144,13 @@ public sealed class SpeciesDefinition
     public int OffspringCount { get; init; } = 1;
     public float SpawnRadius { get; init; } = 3f;
 
+    /// <summary>
+    /// Relative weight for initial spawn budget distribution.
+    /// Higher = more individuals spawned. Common species get higher weights,
+    /// rare apex predators get lower weights. Default 1.0.
+    /// </summary>
+    public float SpawnWeight { get; init; } = 1.0f;
+
     // === SOCIAL ===
     public float GroupAffinity { get; init; } = 0.5f;
     public float PreferredGroupSize { get; init; } = 5f;
