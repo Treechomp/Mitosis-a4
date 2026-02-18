@@ -359,7 +359,12 @@ public sealed class StatisticalSimSystem : ISystem
 
             // Density suppression: reduce births as count approaches carrying capacity
             float carryingCapacity = EstimateCarryingCapacity(speciesDef, popData, chunkX, chunkY);
-            if (carryingCapacity > 0 && pop.Count > carryingCapacity * 0.5f)
+            if (carryingCapacity <= 0)
+            {
+                // No food source in this chunk — species cannot sustain here at all
+                birthRate = 0;
+            }
+            else if (pop.Count > carryingCapacity * 0.5f)
             {
                 float densityFactor = MathF.Max(0, 1f - pop.Count / carryingCapacity);
                 birthRate *= densityFactor;
@@ -408,25 +413,43 @@ public sealed class StatisticalSimSystem : ISystem
 
             pop.Count = Math.Max(0, pop.Count + intBirths - intDeaths);
 
-            // Update hunger based on food availability
-            if (speciesDef.CanGraze && popData.GrazeableTileCount > 0)
+            // Hard per-chunk cap: no species should exceed 2x carrying capacity
+            // (in entity sim, spatial density + food depletion enforce this naturally)
+            if (carryingCapacity > 0)
             {
-                // Each herbivore consumes HungerDecayRate per tick; grazing restores GrazeNutrition
-                // Supply: tiles * regeneration rate; Demand: count * consumption rate
-                float demandPerTick = pop.Count * (speciesDef.HungerDecayRate / speciesDef.GrazeNutrition);
-                float supplyPerTick = popData.GrazeableTileCount * Chunk.RegenerationRate;
+                int maxPerChunk = Math.Max(2, (int)(carryingCapacity * 2));
+                pop.Count = Math.Min(pop.Count, maxPerChunk);
+            }
+            else if (pop.Count > 0 && birthRate <= 0)
+            {
+                // No carrying capacity and no births — cap at what we started with
+                // (population can only shrink in a hostile chunk)
+            }
 
-                if (supplyPerTick > demandPerTick)
+            // Update hunger based on food availability
+            if (speciesDef.CanGraze)
+            {
+                if (popData.GrazeableTileCount > 0)
                 {
-                    // Enough food — hunger drifts up slowly
-                    pop.AverageHungerRatio = MathF.Min(1f, pop.AverageHungerRatio + 0.01f);
+                    // Each herbivore consumes HungerDecayRate per tick; grazing restores GrazeNutrition
+                    float demandPerTick = pop.Count * (speciesDef.HungerDecayRate / speciesDef.GrazeNutrition);
+                    float supplyPerTick = popData.GrazeableTileCount * Chunk.RegenerationRate;
+
+                    if (supplyPerTick > demandPerTick)
+                    {
+                        pop.AverageHungerRatio = MathF.Min(1f, pop.AverageHungerRatio + 0.01f);
+                    }
+                    else
+                    {
+                        float deficit = demandPerTick / MathF.Max(0.001f, supplyPerTick);
+                        pop.AverageHungerRatio = MathF.Max(0f, pop.AverageHungerRatio - 0.02f * deficit);
+                        popData.AverageNutrition *= 0.95f;
+                    }
                 }
                 else
                 {
-                    // Overgrazing — hunger drops, nutrition depletes
-                    float deficit = demandPerTick / MathF.Max(0.001f, supplyPerTick);
-                    pop.AverageHungerRatio = MathF.Max(0f, pop.AverageHungerRatio - 0.02f * deficit);
-                    popData.AverageNutrition *= 0.95f;
+                    // No grazeable tiles — herbivores starve rapidly
+                    pop.AverageHungerRatio = MathF.Max(0f, pop.AverageHungerRatio - 0.1f);
                 }
             }
             else if (speciesDef.IsPredator)
