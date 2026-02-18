@@ -37,10 +37,9 @@ public partial class GameManager : Node2D
     [Export] public float ZoomMax = 5.0f;             // Maximum zoom in
     [Export] public float ZoomSpeed = 0.15f;          // Zoom sensitivity
 
-    // Faction spawning
-    [Export] public int CrystalCount = 5;             // Number of Faeling crystals in the world
-    [Export] public int InitialNestsPerColony = 2;    // Starting Sectid nests per colony
-    [Export] public int InitialSectidColonies = 3;    // Starting Sectid colonies
+    // Faction spawning — proportions of InitialPopulation
+    [Export] public float FaelingShare = 0.04f;   // Fraction of initial pop as Faelings (crystals + spawns)
+    [Export] public float SectidShare = 0.06f;    // Fraction of initial pop as Sectids (nests + starters)
 
     // Core systems
     private EntityManager _entityManager = null!;
@@ -166,16 +165,19 @@ public partial class GameManager : Node2D
         });
         GD.Print($"World generated: {_worldManager.LoadedChunkCount} chunks");
 
-        // Spawn faction structures (crystals and nests) before creatures
+        // Spawn faction structures proportional to InitialPopulation
+        int faelingBudget = (int)(InitialPopulation * FaelingShare);
+        int sectidBudget = (int)(InitialPopulation * SectidShare);
+        int creatureBudget = InitialPopulation - faelingBudget - sectidBudget;
+
         GD.Print("Spawning faction structures...");
-        _worldSpawner.SpawnCrystals(_crystalSystem!, _entityManager, CrystalCount);
-        _worldSpawner.SpawnInitialNests(_nestSystem!, _entityManager, InitialNestsPerColony, InitialSectidColonies);
+        _worldSpawner.SpawnCrystals(_crystalSystem!, _entityManager, faelingBudget);
+        _worldSpawner.SpawnInitialNests(_nestSystem!, _entityManager, sectidBudget);
 
         // Spawn creatures (herbivores, predators, initial Shroomers)
-        // Sectids and Faelings are spawned by their respective systems
         GD.Print("Spawning creatures...");
-        int spawnedCount = _worldSpawner.SpawnCreatures(InitialPopulation, HerbivoreRatio);
-        GD.Print($"Spawned {spawnedCount} creatures");
+        int spawnedCount = _worldSpawner.SpawnCreatures(creatureBudget, HerbivoreRatio);
+        GD.Print($"Spawned {spawnedCount} creatures (+ faction structures from {faelingBudget} Faeling + {sectidBudget} Sectid budget)");
 
         // Spawn player
         float centerX = WorldSizeChunks * ChunkSize / 2f;

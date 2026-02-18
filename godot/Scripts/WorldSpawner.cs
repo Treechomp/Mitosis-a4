@@ -337,10 +337,15 @@ public sealed class WorldSpawner
 
     /// <summary>
     /// Spawns Faeling crystals spread across the world on grass tiles.
+    /// Crystal count is derived from population budget: each crystal eventually
+    /// sustains ~8-12 Faelings, so crystalCount = budget / 10.
     /// </summary>
-    public void SpawnCrystals(CrystalSystem crystalSystem, EntityManager entityManager, int crystalCount)
+    public void SpawnCrystals(CrystalSystem crystalSystem, EntityManager entityManager, int populationBudget)
     {
         if (crystalSystem == null) return;
+
+        // Each crystal sustains a small group of Faelings
+        int crystalCount = Math.Max(1, populationBudget / 10);
 
         var allChunks = new List<Chunk>(_worldManager.GetLoadedChunks());
         ShuffleList(allChunks);
@@ -358,19 +363,28 @@ public sealed class WorldSpawner
             var (x, y, _, _) = positions[0];
             crystalSystem.SpawnCrystal(entityManager, x, y);
             spawned++;
-            GD.Print($"  Crystal spawned at ({x:F0}, {y:F0})");
         }
 
-        GD.Print($"  Total crystals: {spawned}/{crystalCount}");
+        GD.Print($"  Faeling crystals: {spawned}/{crystalCount} (from budget {populationBudget})");
     }
 
     /// <summary>
     /// Spawns initial Sectid nests on dry tiles with starter Sectids around each.
+    /// Colony and nest counts are derived from population budget.
+    /// Each nest gets ~5 starter Sectids, so nestCount = budget / 5.
+    /// Colonies = ceil(nestCount / 2) to spread nests geographically.
     /// </summary>
     public void SpawnInitialNests(NestSystem nestSystem, EntityManager entityManager,
-                                   int initialNestsPerColony, int initialSectidColonies)
+                                   int populationBudget)
     {
         if (nestSystem == null) return;
+
+        // Derive counts from budget
+        const int sectidsPerNest = 5;
+        int totalNestTarget = Math.Max(1, populationBudget / sectidsPerNest);
+        int colonyCount = Math.Max(1, (totalNestTarget + 1) / 2);
+        int nestsPerColony = Math.Max(1, totalNestTarget / colonyCount);
+        int sectidBudgetRemaining = populationBudget;
 
         var allChunks = new List<Chunk>(_worldManager.GetLoadedChunks());
         ShuffleList(allChunks);
@@ -380,12 +394,12 @@ public sealed class WorldSpawner
         int totalSectids = 0;
         int chunkIndex = 0;
 
-        for (int colony = 0; colony < initialSectidColonies; colony++)
+        for (int colony = 0; colony < colonyCount; colony++)
         {
             int colonyId = colony + 1;
             int nestsThisColony = 0;
 
-            while (nestsThisColony < initialNestsPerColony && chunkIndex < allChunks.Count)
+            while (nestsThisColony < nestsPerColony && chunkIndex < allChunks.Count)
             {
                 var chunk = allChunks[chunkIndex++];
                 var positions = _worldManager.GetSpawnablePositionsForSpecies(
@@ -402,15 +416,15 @@ public sealed class WorldSpawner
                         break;
                     }
                 }
-                if (posIdx < 0) continue; // All positions too close to water
+                if (posIdx < 0) continue;
 
                 var (x, y, _, _) = positions[posIdx];
                 int nestEntity = nestSystem.SpawnNest(entityManager, x, y, colonyId);
                 nestsThisColony++;
                 totalNests++;
 
-                // Spawn starter Sectids around each nest
-                int starterCount = 4 + _rng.Next(0, 3);
+                // Spawn starter Sectids around each nest, respecting remaining budget
+                int starterCount = Math.Min(sectidsPerNest, sectidBudgetRemaining);
                 for (int i = 0; i < starterCount; i++)
                 {
                     float angle = (float)(_rng.NextDouble() * Math.PI * 2);
@@ -422,6 +436,7 @@ public sealed class WorldSpawner
                     {
                         _entityFactory.SpawnCreature(sx, sy, sectidDef, colonyId);
                         totalSectids++;
+                        sectidBudgetRemaining--;
                     }
                 }
             }
@@ -429,6 +444,6 @@ public sealed class WorldSpawner
             GD.Print($"  Colony {colonyId}: {nestsThisColony} nests");
         }
 
-        GD.Print($"  Total nests: {totalNests}, starter Sectids: {totalSectids}");
+        GD.Print($"  Sectid nests: {totalNests}, starter Sectids: {totalSectids} (from budget {populationBudget})");
     }
 }
