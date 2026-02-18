@@ -351,17 +351,21 @@ public partial class GameManager : Node2D
             }
         }
 
+        // Merge statistical populations into per-species counts
+        _statSimSystem?.AccumulateSpeciesPopulations(_perSpeciesCounts);
+
         // Update debug label
         if (_debugLabel != null)
         {
             int statPop = _statSimSystem?.TotalStatisticalPopulation ?? 0;
             int statChunks = _statSimSystem?.StatisticalChunkCount ?? 0;
-            _debugLabel.Text = $"FPS: {_fps}  |  Entities: {_entityManager.EntityCount}  |  TPS: {TargetTPS}\n" +
-                              $"Herbivores: {_herbivoreCount}  Predators: {_predatorCount}\n" +
-                              $"Shroomers: {_shroomerCount} (spores: {_sporeCount})  " +
-                              $"Sectids: {_sectidCount} (nests: {_nestCount})  " +
-                              $"Faelings: {_faelingCount} (crystals: {_crystalCount})\n" +
-                              $"Statistical: {statPop} pop in {statChunks} chunks";
+            int worldPop = _entityManager.EntityCount + statPop;
+            _debugLabel.Text = $"FPS: {_fps}  |  TPS: {TargetTPS}  |  World pop: {worldPop}\n" +
+                              $"Nearby: {_entityManager.EntityCount} entities  |  " +
+                              $"Distant: {statPop} in {statChunks} chunks\n" +
+                              $"Herbivores: {_herbivoreCount}  Predators: {_predatorCount}  " +
+                              $"Shroomers: {_shroomerCount}  Sectids: {_sectidCount}  " +
+                              $"Faelings: {_faelingCount}";
 
             if (_showProfiling)
             {
@@ -395,20 +399,15 @@ public partial class GameManager : Node2D
                     _debugLabel.Text += $"  {_systemNames[idx],-28} {ms,6:F2} ms  {pct,5:F1}%  {bar}\n";
                 }
 
-                // Per-species population breakdown
-                _debugLabel.Text += "\n--- Population by Species ---\n";
+                // Per-species world population (entities + statistical)
+                _debugLabel.Text += "\n--- World Population by Species ---\n";
                 foreach (string name in SpeciesRegistry.GetAllNames())
                 {
                     int id = SpeciesRegistry.GetId(name);
                     _perSpeciesCounts.TryGetValue(id, out int count);
                     if (count > 0)
                         _debugLabel.Text += $"  {name,-16} {count,5}\n";
-                }
-                // Show extinct species
-                foreach (string name in SpeciesRegistry.GetAllNames())
-                {
-                    int id = SpeciesRegistry.GetId(name);
-                    if (!_perSpeciesCounts.ContainsKey(id))
+                    else
                         _debugLabel.Text += $"  {name,-16}     0  EXTINCT\n";
                 }
             }

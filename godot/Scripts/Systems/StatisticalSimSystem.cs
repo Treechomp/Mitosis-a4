@@ -57,6 +57,23 @@ public sealed class StatisticalSimSystem : ISystem
     /// <summary>Number of chunks currently running statistical simulation.</summary>
     public int StatisticalChunkCount => _statisticalChunks.Count;
 
+    /// <summary>
+    /// Get per-species population counts across all statistical chunks.
+    /// Writes into the provided dictionary (additive — does not clear it).
+    /// </summary>
+    public void AccumulateSpeciesPopulations(Dictionary<int, int> target)
+    {
+        foreach (var popData in _chunkPopulations.Values)
+        {
+            if (!popData.IsActive) continue;
+            foreach (var (sid, pop) in popData.Populations)
+            {
+                target.TryGetValue(sid, out int existing);
+                target[sid] = existing + pop.Count;
+            }
+        }
+    }
+
     public StatisticalSimSystem(WorldManager worldManager, EntityFactory entityFactory,
                                  SpatialHash spatialHash, int maxPopulation, int chunkSize)
     {
