@@ -35,6 +35,8 @@ public sealed class StatisticalSimSystem : ISystem
     private readonly List<int> _entityBuffer = new(256);
     private readonly List<int> _entitiesToDestroy = new(256);
     private readonly List<(int speciesId, int count)> _toMaterialize = new(32);
+    private readonly Dictionary<int, (int count, float totalHungerRatio, float totalAgeRatio)> __speciesAccum = new(8);
+    private readonly List<int> _keyBuffer = new(16);
 
     // Player position (set by GameManager)
     private float _playerX;
@@ -169,7 +171,7 @@ public sealed class StatisticalSimSystem : ISystem
         }
 
         // Aggregate by species
-        var speciesAccum = new Dictionary<int, (int count, float totalHungerRatio, float totalAgeRatio)>(8);
+        __speciesAccum.Clear();
 
         foreach (int entity in _entityBuffer)
         {
@@ -190,16 +192,16 @@ public sealed class StatisticalSimSystem : ISystem
                 ageRatio = age.MaxLifespan > 0 ? (float)age.Current / age.MaxLifespan : 0.5f;
             }
 
-            if (speciesAccum.TryGetValue(sid, out var acc))
-                speciesAccum[sid] = (acc.count + 1, acc.totalHungerRatio + hungerRatio, acc.totalAgeRatio + ageRatio);
+            if (_speciesAccum.TryGetValue(sid, out var acc))
+                _speciesAccum[sid] = (acc.count + 1, acc.totalHungerRatio + hungerRatio, acc.totalAgeRatio + ageRatio);
             else
-                speciesAccum[sid] = (1, hungerRatio, ageRatio);
+                _speciesAccum[sid] = (1, hungerRatio, ageRatio);
 
             _entitiesToDestroy.Add(entity);
         }
 
         // Store aggregated data
-        foreach (var (sid, (count, totalHunger, totalAge)) in speciesAccum)
+        foreach (var (sid, (count, totalHunger, totalAge)) in _speciesAccum)
         {
             popData.AddPopulation(sid, count, totalHunger / count, totalAge / count);
         }
@@ -229,10 +231,8 @@ public sealed class StatisticalSimSystem : ISystem
 
         // Destroy aggregated entities
         foreach (int entity in _entitiesToDestroy)
-        {
             _spatialHash.Remove(entity);
-            em.DestroyEntity(entity);
-        }
+        em.DestroyEntities(_entitiesToDestroy);
     }
 
     /// <summary>
@@ -299,9 +299,10 @@ public sealed class StatisticalSimSystem : ISystem
         // Count herbivores and predators for interaction
         int totalHerbivores = 0;
         int totalPredators = 0;
-        var keys = new List<int>(popData.Populations.Keys);
+        _keyBuffer.Clear();
+        _keyBuffer.AddRange(popData.Populations.Keys);
 
-        foreach (int sid in keys)
+        foreach (int sid in _keyBuffer)
         {
             var speciesDef = SpeciesRegistry.GetById(sid);
             if (speciesDef == null) continue;
@@ -311,7 +312,7 @@ public sealed class StatisticalSimSystem : ISystem
         }
 
         // Process each species
-        foreach (int sid in keys)
+        foreach (int sid in _keyBuffer)
         {
             var speciesDef = SpeciesRegistry.GetById(sid);
             if (speciesDef == null) continue;

@@ -6,21 +6,24 @@ namespace Mitosis.Utils;
 
 /// <summary>
 /// Spatial hash for O(1) neighbor queries.
-/// Optimized for frequently-moving entities.
+/// Uses List cells (faster iteration than HashSet for small N)
+/// with object pooling to avoid GC pressure from cell allocation.
 /// </summary>
 public sealed class SpatialHash
 {
     private readonly float _cellSize;
     private readonly float _invCellSize;
-    private readonly Dictionary<long, HashSet<int>> _cells;
+    private readonly Dictionary<long, List<int>> _cells;
     private readonly Dictionary<int, long> _entityCells;
+    private readonly Stack<List<int>> _cellPool;
 
     public SpatialHash(float cellSize = 32f)
     {
         _cellSize = cellSize;
         _invCellSize = 1f / cellSize;
-        _cells = new Dictionary<long, HashSet<int>>(1024);
+        _cells = new Dictionary<long, List<int>>(1024);
         _entityCells = new Dictionary<int, long>(2048);
+        _cellPool = new Stack<List<int>>(256);
     }
 
     /// <summary>
@@ -42,6 +45,43 @@ public sealed class SpatialHash
         return ((int)MathF.Floor(x * _invCellSize), (int)MathF.Floor(y * _invCellSize));
     }
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private List<int> RentCell()
+    {
+        if (_cellPool.TryPop(out var cell))
+        {
+            cell.Clear();
+            return cell;
+        }
+        return new List<int>(8);
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private void ReturnCell(List<int> cell)
+    {
+        cell.Clear();
+        _cellPool.Push(cell);
+    }
+
+    /// <summary>
+    /// Remove an entity from a cell using swap-and-remove-last (O(1)).
+    /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static void SwapRemove(List<int> cell, int entityId)
+    {
+        for (int i = cell.Count - 1; i >= 0; i--)
+        {
+            if (cell[i] == entityId)
+            {
+                int last = cell.Count - 1;
+                if (i != last)
+                    cell[i] = cell[last];
+                cell.RemoveAt(last);
+                return;
+            }
+        }
+    }
+
     /// <summary>
     /// Insert or update an entity's position in the spatial hash.
     /// </summary>
@@ -58,16 +98,19 @@ public sealed class SpatialHash
             // Remove from old cell
             if (_cells.TryGetValue(oldKey, out var oldCell))
             {
-                oldCell.Remove(entityId);
+                SwapRemove(oldCell, entityId);
                 if (oldCell.Count == 0)
+                {
                     _cells.Remove(oldKey);
+                    ReturnCell(oldCell);
+                }
             }
         }
 
         // Add to new cell
         if (!_cells.TryGetValue(newKey, out var cell))
         {
-            cell = new HashSet<int>();
+            cell = RentCell();
             _cells[newKey] = cell;
         }
         cell.Add(entityId);
@@ -84,9 +127,12 @@ public sealed class SpatialHash
             _entityCells.Remove(entityId);
             if (_cells.TryGetValue(key, out var cell))
             {
-                cell.Remove(entityId);
+                SwapRemove(cell, entityId);
                 if (cell.Count == 0)
+                {
                     _cells.Remove(key);
+                    ReturnCell(cell);
+                }
             }
         }
     }
@@ -134,6 +180,8 @@ public sealed class SpatialHash
     /// </summary>
     public void Clear()
     {
+        foreach (var cell in _cells.Values)
+            ReturnCell(cell);
         _cells.Clear();
         _entityCells.Clear();
     }

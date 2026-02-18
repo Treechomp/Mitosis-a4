@@ -157,6 +157,26 @@ public sealed class EntityManager
     }
 
     /// <summary>
+    /// Destroy multiple entities in batch. More efficient than calling DestroyEntity
+    /// in a loop (single count update, inlined bounds checks).
+    /// </summary>
+    public void DestroyEntities(List<int> entityIds)
+    {
+        int destroyed = 0;
+        foreach (int entityId in entityIds)
+        {
+            if (entityId >= 0 && entityId < MaxEntities && _alive[entityId])
+            {
+                _alive[entityId] = false;
+                _componentFlags[entityId] = ComponentFlags.None;
+                _freeIds.Enqueue(entityId);
+                destroyed++;
+            }
+        }
+        _entityCount -= destroyed;
+    }
+
+    /// <summary>
     /// Check if an entity is alive.
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]

@@ -33,6 +33,7 @@ public sealed class SporeSystem : ISystem
     private readonly List<(float x, float y, int speciesId)> _pendingSpores = new(16);
     private readonly List<(float x, float y, int speciesId)> _pendingTransforms = new(8);
     private readonly List<int> _toKill = new(16);
+    private readonly List<int> __nearbyBuffer = new(32);
     private readonly int _maxPopulation;
 
     public SporeSystem(WorldManager worldManager, SpatialHash spatialHash, int maxPopulation)
@@ -164,8 +165,7 @@ public sealed class SporeSystem : ISystem
         ProcessShroomAoE(em);
 
         // === CLEANUP AND SPAWNING ===
-        foreach (int entity in _toKill)
-            em.DestroyEntity(entity);
+        em.DestroyEntities(_toKill);
 
         foreach (var (x, y, speciesId) in _pendingSpores)
         {
@@ -331,7 +331,7 @@ public sealed class SporeSystem : ISystem
     {
         const ComponentFlags required = ComponentFlags.Position | ComponentFlags.Species |
                                          ComponentFlags.Growth | ComponentFlags.Terraform;
-        var nearbyBuffer = new List<int>(32);
+        __nearbyBuffer.Clear();
 
         foreach (int entity in em.Query(required))
         {
@@ -366,9 +366,9 @@ public sealed class SporeSystem : ISystem
             float aoeRadius = speciesDef.AoEAttackRadius * growth.CurrentScale;
             float aoeDamage = speciesDef.AoEAttackDamage * growth.CurrentScale;
 
-            _spatialHash.QueryRadius(pos.X, pos.Y, aoeRadius, nearbyBuffer);
+            _spatialHash.QueryRadius(pos.X, pos.Y, aoeRadius, _nearbyBuffer);
 
-            foreach (int other in nearbyBuffer)
+            foreach (int other in _nearbyBuffer)
             {
                 if (other == entity || !em.IsAlive(other)) continue;
                 if (!em.HasComponents(other, ComponentFlags.Species | ComponentFlags.Energy)) continue;

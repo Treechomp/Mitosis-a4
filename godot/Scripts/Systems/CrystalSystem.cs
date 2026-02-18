@@ -28,6 +28,7 @@ public sealed class CrystalSystem : ISystem
     private readonly Random _rng = new();
 
     private readonly List<(float x, float y, int crystalEntity, float inheritedPower)> _pendingFaelings = new(4);
+    private readonly List<int> __nearbyBuffer = new(32);
     private readonly int _maxPopulation;
 
     public CrystalSystem(WorldManager worldManager, SpatialHash spatialHash, int maxPopulation)
@@ -127,7 +128,7 @@ public sealed class CrystalSystem : ISystem
     {
         const ComponentFlags required = ComponentFlags.Position | ComponentFlags.RangedAttack |
                                          ComponentFlags.FaelingPower;
-        var nearbyBuffer = new List<int>(32);
+        __nearbyBuffer.Clear();
 
         foreach (int entity in em.Query(required))
         {
@@ -150,12 +151,12 @@ public sealed class CrystalSystem : ISystem
             }
 
             // Find terraformer target (Sectids and Shroomers — NOT other Faelings)
-            _spatialHash.QueryRadius(pos.X, pos.Y, ranged.Range, nearbyBuffer);
+            _spatialHash.QueryRadius(pos.X, pos.Y, ranged.Range, _nearbyBuffer);
 
             int bestTarget = -1;
             float bestDistSq = ranged.Range * ranged.Range;
 
-            foreach (int other in nearbyBuffer)
+            foreach (int other in _nearbyBuffer)
             {
                 if (other == entity || !em.IsAlive(other)) continue;
                 if (!em.HasComponents(other, ComponentFlags.Species | ComponentFlags.Energy)) continue;

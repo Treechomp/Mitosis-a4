@@ -134,10 +134,7 @@ public sealed class TerrainDiscomfortSystem : ISystem
         }
 
         // Kill drowned/suffocated entities
-        foreach (int entity in _toKill)
-        {
-            em.DestroyEntity(entity);
-        }
+        em.DestroyEntities(_toKill);
     }
 }
 
