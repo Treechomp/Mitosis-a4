@@ -1,10 +1,12 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using Godot;
 using Mitosis.Components;
 using Mitosis.ECS;
 using Mitosis.Rendering;
 using Mitosis.Systems;
+using Mitosis.SpeciesData;
 using Mitosis.World;
 using static Mitosis.ECS.EntityManager;
 
@@ -72,6 +74,18 @@ public partial class GameManager : Node2D
     private int _sporeCount;
     private int _crystalCount;
     private double _statsTimer;
+    private readonly Dictionary<int, int> _perSpeciesCounts = new(32);  // speciesId -> count
+
+    // Profiling
+    private readonly Stopwatch _tickStopwatch = new();
+    private readonly Stopwatch _systemStopwatch = new();
+    private readonly Stopwatch _renderStopwatch = new();
+    private string[] _systemNames = Array.Empty<string>();
+    private double[] _systemTimingsMs = Array.Empty<double>();
+    private double _totalTickMs;
+    private double _renderMs;
+    private bool _showProfiling;
+    private const double SmoothingFactor = 0.05; // ~20 sample EMA window
 
     // Rendering
     private Camera2D? _camera;
@@ -128,6 +142,12 @@ public partial class GameManager : Node2D
         _crystalSystem = new CrystalSystem(_worldManager, spatialHash, MaxPopulation);
         _systems.Add(_crystalSystem);
 
+        // Initialize profiling arrays
+        _systemNames = new string[_systems.Count];
+        _systemTimingsMs = new double[_systems.Count];
+        for (int i = 0; i < _systems.Count; i++)
+            _systemNames[i] = _systems[i].GetType().Name;
+
         // Get camera reference
         _camera = GetNode<Camera2D>("Camera2D");
 
@@ -183,6 +203,11 @@ public partial class GameManager : Node2D
         _debugLabel.AddThemeColorOverride("font_shadow_color", Colors.Black);
         _debugLabel.AddThemeConstantOverride("shadow_offset_x", 1);
         _debugLabel.AddThemeConstantOverride("shadow_offset_y", 1);
+        // Use monospace font for aligned profiling columns
+        var monoFont = new SystemFont();
+        monoFont.FontNames = new string[] { "Courier New", "monospace", "Consolas" };
+        _debugLabel.AddThemeFontOverride("font", monoFont);
+        _debugLabel.AddThemeFontSizeOverride("font_size", 14);
         canvasLayer.AddChild(_debugLabel);
     }
 
@@ -209,10 +234,19 @@ public partial class GameManager : Node2D
         _simulationAccumulator += delta;
         while (_simulationAccumulator >= _simulationDt)
         {
-            foreach (var system in _systems)
+            _tickStopwatch.Restart();
+            for (int i = 0; i < _systems.Count; i++)
             {
-                system.Process(_entityManager);
+                _systemStopwatch.Restart();
+                _systems[i].Process(_entityManager);
+                _systemStopwatch.Stop();
+                double ms = _systemStopwatch.Elapsed.TotalMilliseconds;
+                _systemTimingsMs[i] += (ms - _systemTimingsMs[i]) * SmoothingFactor;
             }
+            _tickStopwatch.Stop();
+            double tickMs = _tickStopwatch.Elapsed.TotalMilliseconds;
+            _totalTickMs += (tickMs - _totalTickMs) * SmoothingFactor;
+
             _simulationAccumulator -= _simulationDt;
         }
 
@@ -223,8 +257,14 @@ public partial class GameManager : Node2D
         UpdateStats(delta);
 
         // Update entity MultiMesh buffers for rendering
+        _renderStopwatch.Restart();
         if (_camera != null)
             _renderingManager.UpdateEntityMultiMeshes(_camera);
+        _renderStopwatch.Stop();
+        {
+            double ms = _renderStopwatch.Elapsed.TotalMilliseconds;
+            _renderMs += (ms - _renderMs) * SmoothingFactor;
+        }
 
         // Request redraw (for terrain and debug overlay)
         QueueRedraw();
@@ -233,6 +273,11 @@ public partial class GameManager : Node2D
     public override void _UnhandledInput(InputEvent @event)
     {
         _playerController?.HandleMouseZoom(@event, _camera);
+
+        if (@event is InputEventKey { Pressed: true, Keycode: Key.F3 })
+        {
+            _showProfiling = !_showProfiling;
+        }
     }
 
     public override void _Draw()
@@ -250,7 +295,7 @@ public partial class GameManager : Node2D
         if (_statsTimer < 0.5) return;
         _statsTimer = 0;
 
-        // Count entities by type
+        // Count entities by type and per-species
         _herbivoreCount = 0;
         _predatorCount = 0;
         _shroomerCount = 0;
@@ -259,6 +304,7 @@ public partial class GameManager : Node2D
         _nestCount = 0;
         _sporeCount = 0;
         _crystalCount = 0;
+        _perSpeciesCounts.Clear();
 
         foreach (int entity in _entityManager.AllEntities())
         {
@@ -272,6 +318,11 @@ public partial class GameManager : Node2D
             if (_entityManager.HasComponents(entity, ComponentFlags.Species))
             {
                 ref var species = ref _entityManager.Species[entity];
+
+                // Per-species count
+                _perSpeciesCounts.TryGetValue(species.SpeciesId, out int cnt);
+                _perSpeciesCounts[species.SpeciesId] = cnt + 1;
+
                 switch (species.Type)
                 {
                     case SpeciesType.Herbivore: _herbivoreCount++; break;
@@ -286,14 +337,65 @@ public partial class GameManager : Node2D
         // Update debug label
         if (_debugLabel != null)
         {
-            _debugLabel.Text = $"FPS: {_fps}\n" +
-                              $"Entities: {_entityManager.EntityCount}\n" +
-                              $"Herbivores: {_herbivoreCount}\n" +
-                              $"Predators: {_predatorCount}\n" +
-                              $"Shroomers: {_shroomerCount} (spores: {_sporeCount})\n" +
-                              $"Sectids: {_sectidCount} (nests: {_nestCount})\n" +
-                              $"Faelings: {_faelingCount} (crystals: {_crystalCount})\n" +
-                              $"TPS: {TargetTPS}";
+            _debugLabel.Text = $"FPS: {_fps}  |  Entities: {_entityManager.EntityCount}  |  TPS: {TargetTPS}\n" +
+                              $"Herbivores: {_herbivoreCount}  Predators: {_predatorCount}\n" +
+                              $"Shroomers: {_shroomerCount} (spores: {_sporeCount})  " +
+                              $"Sectids: {_sectidCount} (nests: {_nestCount})  " +
+                              $"Faelings: {_faelingCount} (crystals: {_crystalCount})";
+
+            if (_showProfiling)
+            {
+                _debugLabel.Text += $"\n\n--- Profiling (F3 to hide) ---\n" +
+                                   $"Tick: {_totalTickMs:F2} ms  |  Render: {_renderMs:F2} ms  |  " +
+                                   $"Budget: {1000.0 / TargetTPS:F1} ms/tick\n";
+
+                // Sort systems by cost (descending) via index array
+                Span<int> indices = stackalloc int[_systems.Count];
+                for (int i = 0; i < indices.Length; i++) indices[i] = i;
+                // Simple insertion sort (small N)
+                for (int i = 1; i < indices.Length; i++)
+                {
+                    int key = indices[i];
+                    double keyVal = _systemTimingsMs[key];
+                    int j = i - 1;
+                    while (j >= 0 && _systemTimingsMs[indices[j]] < keyVal)
+                    {
+                        indices[j + 1] = indices[j];
+                        j--;
+                    }
+                    indices[j + 1] = key;
+                }
+
+                for (int i = 0; i < indices.Length; i++)
+                {
+                    int idx = indices[i];
+                    double ms = _systemTimingsMs[idx];
+                    double pct = _totalTickMs > 0 ? ms / _totalTickMs * 100 : 0;
+                    string bar = new string('|', (int)(pct / 2)); // 50 chars = 100%
+                    _debugLabel.Text += $"  {_systemNames[idx],-28} {ms,6:F2} ms  {pct,5:F1}%  {bar}\n";
+                }
+
+                // Per-species population breakdown
+                _debugLabel.Text += "\n--- Population by Species ---\n";
+                foreach (string name in SpeciesRegistry.GetAllNames())
+                {
+                    int id = SpeciesRegistry.GetId(name);
+                    _perSpeciesCounts.TryGetValue(id, out int count);
+                    if (count > 0)
+                        _debugLabel.Text += $"  {name,-16} {count,5}\n";
+                }
+                // Show extinct species
+                foreach (string name in SpeciesRegistry.GetAllNames())
+                {
+                    int id = SpeciesRegistry.GetId(name);
+                    if (!_perSpeciesCounts.ContainsKey(id))
+                        _debugLabel.Text += $"  {name,-16}     0  EXTINCT\n";
+                }
+            }
+            else
+            {
+                _debugLabel.Text += $"\n[F3] profiling";
+            }
         }
     }
 }
