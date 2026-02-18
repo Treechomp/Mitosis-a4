@@ -138,6 +138,9 @@ public sealed class ReproductionSystem : ISystem
             energy.Current -= reproduction.EnergyCost;
             reproduction.CurrentCooldown = reproduction.Cooldown;
 
+            EcosystemLogger.Instance?.LogReproduction(
+                species.SpeciesId, entity, pos.X, pos.Y, reproduction.OffspringCount);
+
             // Queue offspring for spawning (inherit parent species)
             for (int i = 0; i < reproduction.OffspringCount; i++)
             {

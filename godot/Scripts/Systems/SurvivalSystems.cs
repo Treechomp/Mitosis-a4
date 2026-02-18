@@ -50,7 +50,15 @@ public sealed class HungerSystem : ISystem
                 energy.Current -= hunger.StarvationDamage;
 
                 if (energy.IsDead)
+                {
                     _toKill.Add(entity);
+                    if (em.HasComponents(entity, ComponentFlags.Species | ComponentFlags.Position))
+                    {
+                        ref var sp = ref em.Species[entity];
+                        ref var p = ref em.Positions[entity];
+                        EcosystemLogger.Instance?.LogStarvation(sp.SpeciesId, entity, p.X, p.Y);
+                    }
+                }
             }
 
             // Conditional energy regen: only when not starving and out of combat
@@ -137,7 +145,15 @@ public sealed class AgingSystem : ISystem
 
             // Natural death from old age
             if (age.Current >= age.MaxLifespan)
+            {
                 _toKill.Add(entity);
+                if (em.HasComponents(entity, ComponentFlags.Species | ComponentFlags.Position))
+                {
+                    ref var sp = ref em.Species[entity];
+                    ref var p = ref em.Positions[entity];
+                    EcosystemLogger.Instance?.LogAgeDeath(sp.SpeciesId, entity, p.X, p.Y);
+                }
+            }
         }
 
         foreach (int entity in _toKill)

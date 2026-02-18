@@ -574,6 +574,19 @@ public sealed class HuntingSystem : ISystem
                         {
                             _entitiesToKill.Add(predator.TargetEntity);
 
+                            // Log the kill
+                            if (em.HasComponents(entity, ComponentFlags.Species) &&
+                                em.HasComponents(predator.TargetEntity, ComponentFlags.Species))
+                            {
+                                ref var predSp = ref em.Species[entity];
+                                ref var preySp = ref em.Species[predator.TargetEntity];
+                                ref var preyPos = ref em.Positions[predator.TargetEntity];
+                                EcosystemLogger.Instance?.LogKill(
+                                    predSp.SpeciesId, preySp.SpeciesId,
+                                    entity, predator.TargetEntity,
+                                    preyPos.X, preyPos.Y);
+                            }
+
                             // Nutrition scales with prey mass (and growth for Shroomers)
                             float nutrition = GetPreyNutrition(predator.TargetEntity, em);
 

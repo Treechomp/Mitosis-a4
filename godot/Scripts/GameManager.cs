@@ -21,12 +21,12 @@ public partial class GameManager : Node2D
 {
     // Configuration
     [Export] public int ChunkSize = 32;
-    [Export] public int WorldSizeChunks = 24;
+    [Export] public int WorldSizeChunks = 4;  // DEBUG: small world for ecosystem observation
     [Export] public int WorldSeed = 0;
     [Export] public int TileSize = 16;
     [Export] public int TargetTPS = 20;
-    [Export] public int MaxPopulation = 15000;
-    [Export] public int InitialPopulation = 1500;  // Starting population (separate from max)
+    [Export] public int MaxPopulation = 2000;  // DEBUG: lower cap for small world
+    [Export] public int InitialPopulation = 200;  // DEBUG: small pop for ecosystem observation
     [Export] public float HerbivoreRatio = 0.85f;
     [Export] public float CreaturesPerChunk = 2f;
 
@@ -50,6 +50,7 @@ public partial class GameManager : Node2D
     private NestSystem? _nestSystem;
     private CrystalSystem? _crystalSystem;
     private StatisticalSimSystem? _statSimSystem;
+    private EcosystemLogger? _ecosystemLogger;
 
     // Extracted managers
     private EntityFactory _entityFactory = null!;
@@ -115,10 +116,11 @@ public partial class GameManager : Node2D
         _renderingManager = new RenderingManager(_entityManager, _worldManager,
             ChunkSize, WorldSizeChunks, TileSize);
 
-        // Initialize systems - LODSystem must be first to update LOD levels
+        // Initialize systems
+        // DEBUG: LODSystem disabled — all entities run at Full LOD (no gating)
         var spatialHash = _worldManager.SpatialHash;
-        _lodSystem = new LODSystem();
-        _systems.Add(_lodSystem);
+        // _lodSystem = new LODSystem();
+        // _systems.Add(_lodSystem);
         _systems.Add(new MovementSystem(ChunkSize, WorldSizeChunks, _worldManager));
         _systems.Add(new SpatialHashUpdateSystem(spatialHash));    // Sync all positions once
         _systems.Add(new TerrainDiscomfortSystem(_worldManager));  // Process discomfort early
@@ -143,9 +145,13 @@ public partial class GameManager : Node2D
         _crystalSystem = new CrystalSystem(_worldManager, spatialHash, MaxPopulation);
         _systems.Add(_crystalSystem);
 
-        // Statistical simulation for distant chunks (runs outside main loop)
-        _statSimSystem = new StatisticalSimSystem(
-            _worldManager, _entityFactory, spatialHash, MaxPopulation, ChunkSize);
+        // DEBUG: StatisticalSimSystem disabled — everything runs as entities
+        // _statSimSystem = new StatisticalSimSystem(
+        //     _worldManager, _entityFactory, spatialHash, MaxPopulation, ChunkSize);
+
+        // DEBUG: Ecosystem logger — writes CSV logs to user://ecosystem_logs/
+        _ecosystemLogger = new EcosystemLogger();
+        _systems.Add(_ecosystemLogger);
 
         // Initialize profiling arrays (does not include StatisticalSimSystem — it runs separately)
         _systemNames = new string[_systems.Count];
@@ -185,8 +191,8 @@ public partial class GameManager : Node2D
         int playerEntity = _entityFactory.SpawnPlayer(centerX, centerY, _worldManager);
         _playerController.SetPlayerEntity(playerEntity, TileSize, _camera);
 
-        // Set player entity for LOD system
-        _lodSystem?.SetPlayerEntity(_playerController.PlayerEntity);
+        // DEBUG: LOD system disabled — skip player entity setup
+        // _lodSystem?.SetPlayerEntity(_playerController.PlayerEntity);
 
         // Setup entity rendering via MultiMesh
         var shapeMMIs = _renderingManager.CreateMultiMeshInstances();
