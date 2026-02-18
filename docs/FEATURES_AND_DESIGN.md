@@ -462,10 +462,25 @@ Other systems check `ShouldUpdate()` to skip distant entities.
 | HerdingSystem | ShouldUpdate() | HerdingSystem.cs |
 | CollisionSystem | Reduced+ | SpatialSystems.cs |
 | TerrainDiscomfortSystem | Reduced+ | TerrainSystems.cs |
+| SporeSystem (spread) | Reduced+ | SporeSystem.cs |
+| SporeSystem (AoE) | Reduced+ | SporeSystem.cs |
 | TerraformSystem | Statistical+ | TerrainSystems.cs |
-| ReproductionSystem | Aggregate+ | ReproductionSystem.cs |
+| SporeSystem (maturation) | Statistical+ | SporeSystem.cs |
+| HungerSystem | Statistical+ | SurvivalSystems.cs |
+| AgingSystem | Statistical+ | SurvivalSystems.cs |
+| GrazingSystem | Statistical+ | SurvivalSystems.cs |
+| ReproductionSystem | Statistical+ | ReproductionSystem.cs |
+| HuntingSystem | Aggregate+ | HuntingSystem.cs |
+| FleeingSystem | Aggregate+ | FleeingSystem.cs |
 
-Systems that must NOT be LOD-gated: MovementSystem, HungerSystem, AgingSystem, LODSystem.
+Systems that must NOT be LOD-gated: MovementSystem, LODSystem.
+
+**Critical design rule**: Systems that produce resources (GrazingSystem) and systems that
+consume them (HungerSystem) must be gated at the **same LOD level**. If hunger decays but
+grazing is skipped, entities starve unfairly. If grazing runs but reproduction is skipped
+at a lower threshold, entities accumulate food without paying breeding costs. The
+StatisticalSimSystem handles population dynamics for entities beyond the Statistical
+threshold using aggregate math.
 
 ### 5.2 Movement System
 
@@ -776,7 +791,7 @@ Elderly threshold: 80% of MaxLifespan (available for future mechanics).
 **File**: `Scripts/Systems/ReproductionSystem.cs`
 **Components**: Position, Species, Hunger, Energy, Age, Reproduction
 
-Standard reproduction for non-faction species:
+Standard reproduction for non-faction species (LOD gate: Statistical+):
 
 **Requirements**:
 1. Population below `MaxPopulation` (default 15000)
@@ -786,8 +801,11 @@ Standard reproduction for non-faction species:
 5. `hunger.Current >= HungerThreshold`
 6. `energy.Current >= EnergyThreshold`
 7. **Local density check**: Nearby same-species count (within `1.5× SocialRadius`)
-   must be below `2× PreferredGroupSize`. This prevents exponential population
-   explosions in well-fed areas.
+   must be below `2× PreferredGroupSize`. Prevents local clustering.
+8. **Global population pressure**: Random skip based on `entityCount / maxPopulation`.
+   Linear ramp: 100% pass rate at ≤50% cap, 0% pass rate at 100% cap.
+9. **Hard cap in spawn loop**: Both the spawn-queue loop and `SpawnCreature()` itself
+   re-check `EntityCount >= MaxPopulation` before each entity creation.
 
 **Process**:
 1. Find walkable spawn location within `SpawnRadius` of parent
@@ -800,6 +818,61 @@ Standard reproduction for non-faction species:
 - Hunger: 60% of max
 - Energy: 100% of max
 - All species components inherited
+
+---
+
+### 5.14 Statistical Simulation System
+
+**File**: `Scripts/Systems/StatisticalSimSystem.cs`
+**Data**: `Scripts/World/ChunkPopulationData.cs`
+
+Replaces per-entity simulation for distant chunks (>100 tiles from player) with
+population-level birth/death math. Runs every 30 ticks.
+
+**Three transitions:**
+1. **Aggregation** (entity → stats): When chunk becomes distant, scan entities via
+   spatial hash, accumulate per-species counts/hunger/age, destroy entities.
+2. **Statistical tick**: Apply birth/death rates to population counts.
+3. **Materialization** (stats → entities): When chunk becomes nearby, spawn entities
+   from population data via `EntityFactory.SpawnCreature()`, capped at `MaxPopulation`.
+
+**Birth rate model** (per species per tick):
+```
+matureFraction = 1 - MaturityAge / MaxLifespan
+wellFedFraction = 0.8 if fed, 0.3 if marginal, 0.0 if starving
+birthRate = count × matureFraction × wellFedFraction × (OffspringCount / ReproCooldown)
+```
+Suppressed by density: linear ramp from 50% to 100% of carrying capacity → 0 births.
+When carrying capacity = 0 (no food): births forced to 0.
+
+**Death rate model**:
+- Natural: `count / MaxLifespan` (uniform age distribution assumption)
+- Starvation: when `AverageHungerRatio < 0.1`, deaths at rate `count / (MaxEnergy / StarvationDamage)`
+- Predation: `totalPredators × (HungerDecayRate / EffectiveNutrition) × preyShareFraction`
+  (terraformers excluded from herbivore count to avoid diluting predation)
+
+**Carrying capacity** (per chunk, per species):
+- Herbivores: `(GrazeableTileCount × RegenerationRate) / (HungerDecayRate / GrazeNutrition)`
+  — typically 10-20 per chunk depending on grazeable tile count
+- Predators: `totalHerbivores × 0.15` (~1 per 7 prey)
+- Terraformers: `CountFeedTiles() / (HungerDecayRate / FeedNutrition)`
+  — actual tile scan of chunk for species' FeedTiles list
+- Hard per-chunk cap: `min(pop.Count, carryingCapacity × 2)` safety net
+
+**Hunger model** (drift per 30-tick interval):
+- Herbivores with food: +0.01 if supply > demand, else −0.02 × deficit ratio
+- Herbivores without food: −0.1 (rapid starvation)
+- Predators: +0.01 if prey abundant (>3× predators), else −0.02
+- Terraformers: based on feed tile count vs population ratio
+
+**Statistical terraforming** (faction species):
+Each terraformer changes `count × (Strength / Cooldown) × 30` tiles per interval.
+Picks random tiles in chunk, applies directional shift (Wetter/Drier/Balanced).
+Marks chunk dirty for re-rendering when player approaches.
+
+**Population control** — `EntityFactory.SpawnCreature()` enforces hard cap via
+`SetPopulationCap()`. `ReproductionSystem` applies global population pressure
+(linear ramp: 100% birth chance at 50% cap → 0% at 100%).
 
 ---
 

@@ -450,34 +450,126 @@ Shared work needed before/during species expansion:
 
 ---
 
-## Phase 5: LOD & Scale (Priority: HIGH)
+## Phase 5: LOD & Scale (Priority: HIGH) — IN PROGRESS
 
-**Goal**: 10,000+ entities with smooth performance
+**Goal**: 10,000+ entities with smooth performance via statistical simulation of distant chunks
 
-### 5.1 Statistical Simulation
-Design:
-- Distant chunks use population-level math, not individual entities
-- When player approaches, entities are "materialized" from stats
+### 5.1 Statistical Simulation — IMPLEMENTED
 
-Tasks:
-- [ ] Add ChunkPopulationData structure
-  - [ ] Per-species count
-  - [ ] Average hunger/age
-  - [ ] Birth/death rates
-- [ ] Create StatisticalSimSystem
-  - [ ] Run for LOD 2+ chunks
-  - [ ] Apply birth/death rates to counts
-  - [ ] Don't track individuals
-- [ ] Entity materialization when chunk becomes visible
-- [ ] Entity aggregation when chunk becomes distant
+The StatisticalSimSystem runs population-level birth/death math for chunks beyond 100 tiles
+from the player. When the player approaches, entities are materialized from aggregate data.
 
-### 5.2 Performance Profiling
+**Core architecture:**
+- `ChunkPopulationData` — per-chunk, per-species aggregate (count, avg hunger, avg age)
+- `StatisticalSimSystem` — aggregation, statistical tick (every 30 ticks), materialization
+- Aggregation: entity → SpeciesPopulation (destroy entity, record stats)
+- Materialization: SpeciesPopulation → entities (spawn via EntityFactory with cap check)
+
+Implemented:
+- [x] ChunkPopulationData structure (per-species count, avg hunger/age, fractional births/deaths)
+- [x] StatisticalSimSystem with aggregation, statistical tick, materialization
+- [x] Entity aggregation when chunk becomes distant (>100 tiles)
+- [x] Entity materialization when chunk becomes nearby (capped at MaxPopulation)
+- [x] Statistical terraforming (faction species change tiles while distant)
+- [x] CountFeedTiles for faction species carrying capacity
+
+Remaining:
+- [ ] Population monitoring: log per-species counts every N ticks for balance verification
+- [ ] Smoother materialization (currently spawns all entities in tight cluster)
+- [ ] Validate statistical sim produces similar outcomes to entity sim over time
+
+### 5.2 LOD Gating — REVISED
+
+All survival/reproduction systems are now gated at consistent LOD thresholds to prevent
+asymmetric behavior between near and far entities. The key invariant: **if a system that
+produces a resource (food, offspring) is gated, the system that consumes that resource
+(hunger, death) must be gated at the same level.**
+
+Current LOD gate map:
+
+| System | LOD Gate | Rationale |
+|--------|----------|-----------|
+| LODSystem | None (always) | Must run first to set LOD levels |
+| MovementSystem | None (always) | Position must be current for all queries |
+| **HungerSystem** | **Statistical+** | Must match GrazingSystem — otherwise entities starve without ability to eat |
+| **AgingSystem** | **Statistical+** | Statistical sim handles age/death for distant entities |
+| **GrazingSystem** | **Statistical+** | Must match HungerSystem — food and hunger in same LOD band |
+| **ReproductionSystem** | **Statistical+** | Must match hunger/grazing — otherwise entities breed without hunger cost |
+| **SporeSystem (spread)** | **Reduced+** | Shroomer spore creation — most aggressive gate to break feedback loop |
+| **SporeSystem (maturation)** | **Statistical+** | Spore moisture accumulation |
+| SporeSystem (AoE) | Reduced+ | Combat — fine to skip at distance |
+| HuntingSystem | Aggregate+ | Predators need to hunt to survive |
+| FleeingSystem | Aggregate+ | Must match hunting gate |
+| TerraformSystem | Statistical+ | Tile changes handled by statistical terraforming |
+| TerrainDiscomfort | Reduced+ | Behavioral comfort — cosmetic at distance |
+| CollisionSystem | Reduced+ | Spatial overlap — cosmetic at distance |
+| WanderSystem | ShouldUpdate() | Tick-rate throttled per LOD |
+| SocialSystem | ShouldUpdate() | Tick-rate throttled per LOD |
+
+**Critical invariant violated previously:**
+- HungerSystem, AgingSystem, GrazingSystem had **no LOD gate** (ran every tick for all entities)
+- ReproductionSystem gated at Aggregate (LOD 3) only
+- SporeSystem had **no LOD gate** on spread or maturation
+- Result: entities at Reduced/Statistical LOD could eat and breed every tick but predators
+  couldn't hunt (collision gated at Reduced+), creating massive prey population explosion
+  near the player
+
+### 5.3 Population Control — IMPLEMENTED
+
+Multiple layers of population control prevent runaway growth:
+
+**Entity-level (near player):**
+1. **EntityFactory hard cap** — `SpawnCreature()` refuses to spawn beyond `MaxPopulation`
+2. **ReproductionSystem cap checks** — checked before queuing AND before spawning
+3. **Global population pressure** — linear ramp: 100% birth chance at 50% cap → 0% at 100% cap
+4. **Local density suppression** — spatial hash query within `SocialRadius * 1.5`:
+   hard cap at `PreferredGroupSize * 2` same-species nearby
+
+**Statistical-level (distant chunks):**
+1. **Carrying capacity** — per-species, per-chunk based on actual food availability:
+   - Herbivores: `(GrazeableTileCount * RegenerationRate) / (HungerDecayRate / GrazeNutrition)`
+   - Predators: `totalHerbivores * 0.15` (1 predator per ~7 prey)
+   - Terraformers: `CountFeedTiles() / (HungerDecayRate / FeedNutrition)` (actual tile scan)
+2. **Density suppression** — linear ramp from 50% to 100% of carrying capacity
+3. **Zero-capacity starvation** — when `carryingCapacity <= 0`: births = 0, hunger drops rapidly
+4. **Hard per-chunk cap** — `min(pop.Count, carryingCapacity * 2)` safety net
+5. **Hunger model** — per-species hunger drift based on food availability:
+   - Herbivores: supply vs demand comparison (demand = count × HungerDecayRate / GrazeNutrition)
+   - Predators: prey/predator ratio check
+   - Terraformers: feed tile count vs population (actual chunk tile scan)
+
+### 5.4 Known Issues & Remaining Work
+
+**Observed behavior that still needs investigation:**
+- Rabbits tend to die within seconds of simulation start — may indicate balance issue
+  with hunger decay (0.08) vs grazing opportunity, or initial spawn placement on non-food tiles
+- Predators die off shortly after herbivores establish — hunt cycle timing vs hunger drain
+  rate may be unfavorable (time-to-find + time-to-chase + cooldown > hunger budget)
+- Ecological cascades (prey explosion after predator collapse) are natural but the timing
+  and magnitude should be comparable between entity sim and statistical sim
+- Materialization spawns entities in tight cluster at chunk center — should spread across
+  chunk using `GetSpawnablePositionsForSpecies` more effectively
+
+**Entity sim vs statistical sim consistency:**
+The fundamental challenge is that the statistical sim is an approximation. It cannot model:
+- Individual hunting behavior (chase duration, success rate, terrain obstacles)
+- Spatial distribution within a chunk (clustering, edge effects)
+- Spore lifecycle (moisture accumulation, withering, predation on spores)
+- Terrain discomfort driving migration
+
+To improve consistency:
+- [ ] Run parallel entity/statistical sims and compare population curves
+- [ ] Calibrate statistical birth/death rates from observed entity sim data
+- [ ] Add migration model (species moving between adjacent statistical chunks)
+- [ ] Model spore lifecycle statistically (spread rate × survival rate × maturation rate)
+
+### 5.5 Performance Profiling
 - [ ] Add per-system timing to debug overlay
 - [ ] Identify hotspots in each system
 - [ ] Profile memory allocation patterns
 - [ ] Test with 5K, 10K, 20K entities
 
-### 5.3 Optimization Targets
+### 5.6 Optimization Targets
 Based on profiling:
 - [ ] SpatialHash optimization if needed
 - [ ] Consider SIMD for position updates
