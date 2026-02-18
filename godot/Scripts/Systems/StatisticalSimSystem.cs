@@ -447,6 +447,9 @@ public sealed class StatisticalSimSystem : ISystem
         popData.TotalCount = 0;
         foreach (var pop in popData.Populations.Values)
             popData.TotalCount += pop.Count;
+
+        // Statistical terraforming for faction species
+        ApplyStatisticalTerraforming(popData, chunkX, chunkY);
     }
 
     /// <summary>
@@ -473,5 +476,62 @@ public sealed class StatisticalSimSystem : ISystem
 
         // Faction/other: small steady population
         return 10f;
+    }
+
+    /// <summary>
+    /// Apply simplified terraforming for faction species in a statistical chunk.
+    /// Each terraformer has: Strength chance per Cooldown ticks, within Radius.
+    /// Statistical rate: count * (strength / cooldown) * tickInterval tile changes.
+    /// </summary>
+    private void ApplyStatisticalTerraforming(ChunkPopulationData popData, int chunkX, int chunkY)
+    {
+        var chunk = _worldManager.GetChunk(chunkX, chunkY);
+        if (chunk == null) return;
+
+        foreach (var (sid, pop) in popData.Populations)
+        {
+            if (pop.Count <= 0) continue;
+
+            var speciesDef = SpeciesRegistry.GetById(sid);
+            if (speciesDef.Diet != DietType.Terraformer) continue;
+            if (speciesDef.TerraformCooldown <= 0) continue;
+
+            // Expected tile changes this interval
+            float changesPerTick = pop.Count * speciesDef.TerraformStrength / speciesDef.TerraformCooldown;
+            float expectedChanges = changesPerTick * StatisticalTickInterval;
+            int tileChanges = (int)expectedChanges;
+            // Fractional part: random chance for one extra
+            if (_rng.NextDouble() < (expectedChanges - tileChanges))
+                tileChanges++;
+
+            if (tileChanges <= 0) continue;
+
+            // Determine shift function
+            TerraformDirection dir = speciesDef.TerraformDir;
+
+            for (int i = 0; i < tileChanges; i++)
+            {
+                // Pick a random tile in the chunk
+                int lx = _rng.Next(_chunkSize);
+                int ly = _rng.Next(_chunkSize);
+
+                var currentTile = chunk.GetTile(lx, ly);
+                if (!currentTile.IsTerraformable()) continue;
+
+                TileType? newTile = dir switch
+                {
+                    TerraformDirection.Wetter => currentTile.ShiftWetter(),
+                    TerraformDirection.Drier => currentTile.ShiftDrier(),
+                    TerraformDirection.Balanced => currentTile.ShiftBalanced(),
+                    _ => null
+                };
+
+                if (newTile.HasValue)
+                {
+                    chunk.SetTile(lx, ly, newTile.Value);
+                    _worldManager.DirtyChunks.Add((chunkX, chunkY));
+                }
+            }
+        }
     }
 }
