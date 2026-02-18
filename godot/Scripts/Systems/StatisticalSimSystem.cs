@@ -35,7 +35,7 @@ public sealed class StatisticalSimSystem : ISystem
     private readonly List<int> _entityBuffer = new(256);
     private readonly List<int> _entitiesToDestroy = new(256);
     private readonly List<(int speciesId, int count)> _toMaterialize = new(32);
-    private readonly Dictionary<int, (int count, float totalHungerRatio, float totalAgeRatio)> __speciesAccum = new(8);
+    private readonly Dictionary<int, (int count, float totalHungerRatio, float totalAgeRatio)> _speciesAccum = new(8);
     private readonly List<int> _keyBuffer = new(16);
 
     // Player position (set by GameManager)
@@ -171,7 +171,7 @@ public sealed class StatisticalSimSystem : ISystem
         }
 
         // Aggregate by species
-        __speciesAccum.Clear();
+        _speciesAccum.Clear();
 
         foreach (int entity in _entityBuffer)
         {

@@ -28,7 +28,7 @@ public sealed class CrystalSystem : ISystem
     private readonly Random _rng = new();
 
     private readonly List<(float x, float y, int crystalEntity, float inheritedPower)> _pendingFaelings = new(4);
-    private readonly List<int> __nearbyBuffer = new(32);
+    private readonly List<int> _nearbyBuffer = new(32);
     private readonly int _maxPopulation;
 
     public CrystalSystem(WorldManager worldManager, SpatialHash spatialHash, int maxPopulation)
@@ -128,7 +128,7 @@ public sealed class CrystalSystem : ISystem
     {
         const ComponentFlags required = ComponentFlags.Position | ComponentFlags.RangedAttack |
                                          ComponentFlags.FaelingPower;
-        __nearbyBuffer.Clear();
+        _nearbyBuffer.Clear();
 
         foreach (int entity in em.Query(required))
         {

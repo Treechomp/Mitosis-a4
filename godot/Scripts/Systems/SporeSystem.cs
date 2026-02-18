@@ -33,7 +33,7 @@ public sealed class SporeSystem : ISystem
     private readonly List<(float x, float y, int speciesId)> _pendingSpores = new(16);
     private readonly List<(float x, float y, int speciesId)> _pendingTransforms = new(8);
     private readonly List<int> _toKill = new(16);
-    private readonly List<int> __nearbyBuffer = new(32);
+    private readonly List<int> _nearbyBuffer = new(32);
     private readonly int _maxPopulation;
 
     public SporeSystem(WorldManager worldManager, SpatialHash spatialHash, int maxPopulation)
@@ -331,7 +331,7 @@ public sealed class SporeSystem : ISystem
     {
         const ComponentFlags required = ComponentFlags.Position | ComponentFlags.Species |
                                          ComponentFlags.Growth | ComponentFlags.Terraform;
-        __nearbyBuffer.Clear();
+        _nearbyBuffer.Clear();
 
         foreach (int entity in em.Query(required))
         {
