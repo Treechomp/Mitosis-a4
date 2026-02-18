@@ -50,6 +50,7 @@ public partial class GameManager : Node2D
     private LODSystem? _lodSystem;
     private NestSystem? _nestSystem;
     private CrystalSystem? _crystalSystem;
+    private StatisticalSimSystem? _statSimSystem;
 
     // Extracted managers
     private EntityFactory _entityFactory = null!;
@@ -142,7 +143,11 @@ public partial class GameManager : Node2D
         _crystalSystem = new CrystalSystem(_worldManager, spatialHash, MaxPopulation);
         _systems.Add(_crystalSystem);
 
-        // Initialize profiling arrays
+        // Statistical simulation for distant chunks (runs outside main loop)
+        _statSimSystem = new StatisticalSimSystem(
+            _worldManager, _entityFactory, spatialHash, MaxPopulation, ChunkSize);
+
+        // Initialize profiling arrays (does not include StatisticalSimSystem — it runs separately)
         _systemNames = new string[_systems.Count];
         _systemTimingsMs = new double[_systems.Count];
         for (int i = 0; i < _systems.Count; i++)
@@ -230,6 +235,14 @@ public partial class GameManager : Node2D
         _playerController.HandleInput();
         _playerController.HandleZoomInput(_camera);
 
+        // Update statistical sim with player position
+        if (_statSimSystem != null && _playerController.PlayerEntity >= 0 &&
+            _entityManager.HasComponents(_playerController.PlayerEntity, ComponentFlags.Position))
+        {
+            ref var playerPos = ref _entityManager.Positions[_playerController.PlayerEntity];
+            _statSimSystem.SetPlayerPosition(playerPos.X, playerPos.Y);
+        }
+
         // Fixed timestep simulation
         _simulationAccumulator += delta;
         while (_simulationAccumulator >= _simulationDt)
@@ -243,6 +256,10 @@ public partial class GameManager : Node2D
                 double ms = _systemStopwatch.Elapsed.TotalMilliseconds;
                 _systemTimingsMs[i] += (ms - _systemTimingsMs[i]) * SmoothingFactor;
             }
+
+            // Statistical simulation runs after all entity systems
+            _statSimSystem?.Process(_entityManager);
+
             _tickStopwatch.Stop();
             double tickMs = _tickStopwatch.Elapsed.TotalMilliseconds;
             _totalTickMs += (tickMs - _totalTickMs) * SmoothingFactor;
@@ -337,11 +354,14 @@ public partial class GameManager : Node2D
         // Update debug label
         if (_debugLabel != null)
         {
+            int statPop = _statSimSystem?.TotalStatisticalPopulation ?? 0;
+            int statChunks = _statSimSystem?.StatisticalChunkCount ?? 0;
             _debugLabel.Text = $"FPS: {_fps}  |  Entities: {_entityManager.EntityCount}  |  TPS: {TargetTPS}\n" +
                               $"Herbivores: {_herbivoreCount}  Predators: {_predatorCount}\n" +
                               $"Shroomers: {_shroomerCount} (spores: {_sporeCount})  " +
                               $"Sectids: {_sectidCount} (nests: {_nestCount})  " +
-                              $"Faelings: {_faelingCount} (crystals: {_crystalCount})";
+                              $"Faelings: {_faelingCount} (crystals: {_crystalCount})\n" +
+                              $"Statistical: {statPop} pop in {statChunks} chunks";
 
             if (_showProfiling)
             {
