@@ -102,6 +102,7 @@ public partial class GameManager : Node2D
 
         // Create extracted managers
         _entityFactory = new EntityFactory(_entityManager, _rng);
+        _entityFactory.SetPopulationCap(MaxPopulation);
         _worldSpawner = new WorldSpawner(_worldManager, _entityFactory, _rng);
         _playerController = new PlayerController(_entityManager)
         {

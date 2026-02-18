@@ -15,12 +15,19 @@ public sealed class EntityFactory
 {
     private readonly EntityManager _entityManager;
     private readonly Random _rng;
+    private int _populationCap = int.MaxValue;
 
     public EntityFactory(EntityManager entityManager, Random rng)
     {
         _entityManager = entityManager;
         _rng = rng;
     }
+
+    /// <summary>Set the soft population cap. SpawnCreature will refuse to spawn beyond this.</summary>
+    public void SetPopulationCap(int cap) => _populationCap = cap;
+
+    /// <summary>True if entity count is at or above the population cap.</summary>
+    public bool AtCapacity => _entityManager.EntityCount >= _populationCap;
 
     /// <summary>
     /// Applies random variation to a base value (+-percentage).
@@ -41,6 +48,10 @@ public sealed class EntityFactory
     public void SpawnCreature(float x, float y, SpeciesDefinition species, int groupId = -1,
                                bool forceSolitary = false, bool isAlpha = false)
     {
+        // Hard population cap — refuse to spawn beyond the limit
+        if (_entityManager.EntityCount >= _populationCap)
+            return;
+
         int entity = _entityManager.CreateEntity();
         float variation = species.StatVariation;
 

@@ -29,6 +29,15 @@ public sealed class HungerSystem : ISystem
                 em.HasComponents(entity, ComponentFlags.Crystal))
                 continue;
 
+            // LOD gate: skip hunger decay for distant entities (Statistical+)
+            // Must match GrazingSystem gate — otherwise entities starve without being able to eat
+            if (em.HasComponents(entity, ComponentFlags.SimulationLOD))
+            {
+                ref var lod = ref em.SimulationLODs[entity];
+                if (lod.Level >= LODLevel.Statistical)
+                    continue;
+            }
+
             ref var hunger = ref em.Hungers[entity];
 
             // Decay hunger
@@ -114,6 +123,15 @@ public sealed class AgingSystem : ISystem
                 em.HasComponents(entity, ComponentFlags.Crystal))
                 continue;
 
+            // LOD gate: skip aging for distant entities (Statistical+)
+            // Statistical sim handles population-level age/death for these entities
+            if (em.HasComponents(entity, ComponentFlags.SimulationLOD))
+            {
+                ref var lod = ref em.SimulationLODs[entity];
+                if (lod.Level >= LODLevel.Statistical)
+                    continue;
+            }
+
             ref var age = ref em.Ages[entity];
             age.Current++;
 
@@ -164,6 +182,15 @@ public sealed class GrazingSystem : ISystem
 
         foreach (int entity in em.Query(required))
         {
+            // LOD gate: skip grazing for distant entities (Statistical+)
+            // Matches hunger decay gating so food/hunger stay balanced at each LOD
+            if (em.HasComponents(entity, ComponentFlags.SimulationLOD))
+            {
+                ref var lod = ref em.SimulationLODs[entity];
+                if (lod.Level >= LODLevel.Statistical)
+                    continue;
+            }
+
             ref var species = ref em.Species[entity];
             ref var pos = ref em.Positions[entity];
             ref var hunger = ref em.Hungers[entity];

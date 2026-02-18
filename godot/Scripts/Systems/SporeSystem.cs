@@ -55,6 +55,14 @@ public sealed class SporeSystem : ISystem
 
         foreach (int entity in em.Query(sporeRequired))
         {
+            // LOD gate: skip spore maturation for distant spores (Statistical+)
+            if (em.HasComponents(entity, ComponentFlags.SimulationLOD))
+            {
+                ref var lod = ref em.SimulationLODs[entity];
+                if (lod.Level >= LODLevel.Statistical)
+                    continue;
+            }
+
             ref var spore = ref em.Spores[entity];
             ref var pos = ref em.Positions[entity];
             ref var energy = ref em.Energies[entity];
@@ -98,6 +106,14 @@ public sealed class SporeSystem : ISystem
 
         foreach (int entity in em.Query(shroomRequired))
         {
+            // LOD gate: skip spore spreading for distant Shroomers (Reduced+)
+            if (em.HasComponents(entity, ComponentFlags.SimulationLOD))
+            {
+                ref var lod = ref em.SimulationLODs[entity];
+                if (lod.Level >= LODLevel.Reduced)
+                    continue;
+            }
+
             ref var species = ref em.Species[entity];
             if (species.Type != SpeciesType.Shroomer) continue;
 

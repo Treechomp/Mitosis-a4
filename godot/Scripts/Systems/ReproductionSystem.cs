@@ -38,18 +38,28 @@ public sealed class ReproductionSystem : ISystem
         if (em.EntityCount >= _maxPopulation)
             return;
 
+        // Global population pressure: as population approaches cap, reproduction becomes
+        // increasingly unlikely. This prevents local pockets from ignoring the global limit.
+        float populationRatio = (float)em.EntityCount / _maxPopulation;
+        float globalPressure = 1f; // 1.0 = no suppression
+        if (populationRatio > 0.5f)
+        {
+            // Linear ramp from 1.0 at 50% to 0.0 at 100%
+            globalPressure = MathF.Max(0f, 2f * (1f - populationRatio));
+        }
+
         const ComponentFlags required = ComponentFlags.Position | ComponentFlags.Species |
                                          ComponentFlags.Hunger | ComponentFlags.Energy |
                                          ComponentFlags.Age | ComponentFlags.Reproduction;
 
         foreach (int entity in em.Query(required))
         {
-            // LOD gate: skip reproduction only for very distant entities (Aggregate)
-            // Aging kills at all distances — reproduction must also run to maintain balance
+            // LOD gate: skip reproduction for distant entities (Statistical+)
+            // Must match hunger/grazing gate — otherwise entities breed without hunger cost
             if (em.HasComponents(entity, ComponentFlags.SimulationLOD))
             {
                 ref var lod = ref em.SimulationLODs[entity];
-                if (lod.Level >= LODLevel.Aggregate)
+                if (lod.Level >= LODLevel.Statistical)
                     continue;
             }
 
@@ -111,6 +121,10 @@ public sealed class ReproductionSystem : ISystem
                     continue;
             }
 
+            // Global population pressure: randomly skip reproduction based on global fullness
+            if (globalPressure < 1f && (float)_rng.NextDouble() > globalPressure)
+                continue;
+
             // Find spawn position
             float spawnX = pos.X + ((float)_rng.NextDouble() * 2 - 1) * reproduction.SpawnRadius;
             float spawnY = pos.Y + ((float)_rng.NextDouble() * 2 - 1) * reproduction.SpawnRadius;
@@ -134,12 +148,14 @@ public sealed class ReproductionSystem : ISystem
         // Spawn offspring
         foreach (var (x, y, speciesType, speciesId) in _toSpawn)
         {
+            if (em.EntityCount >= _maxPopulation) break;
             SpawnCreature(em, x, y, speciesType, speciesId);
         }
     }
 
     private void SpawnCreature(EntityManager em, float x, float y, SpeciesType speciesType, int speciesId)
     {
+        if (em.EntityCount >= _maxPopulation) return;
         int entity = em.CreateEntity();
 
         em.Positions[entity] = new Position(x, y);

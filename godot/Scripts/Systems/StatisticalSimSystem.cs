@@ -324,8 +324,10 @@ public sealed class StatisticalSimSystem : ISystem
             var speciesDef = SpeciesRegistry.GetById(sid);
             if (speciesDef == null) continue;
             var pop = popData.Populations[sid];
-            if (speciesDef.IsPredator) totalPredators += pop.Count;
-            else totalHerbivores += pop.Count;
+            if (speciesDef.IsPredator)
+                totalPredators += pop.Count;
+            else if (speciesDef.Diet != DietType.Terraformer)
+                totalHerbivores += pop.Count; // Don't count terraformers — they aren't typical prey
         }
 
         // Process each species
@@ -356,7 +358,7 @@ public sealed class StatisticalSimSystem : ISystem
             float birthRate = pop.Count * matureFraction * wellFedFraction * birthsPerTickPerIndividual;
 
             // Density suppression: reduce births as count approaches carrying capacity
-            float carryingCapacity = EstimateCarryingCapacity(speciesDef, popData);
+            float carryingCapacity = EstimateCarryingCapacity(speciesDef, popData, chunkX, chunkY);
             if (carryingCapacity > 0 && pop.Count > carryingCapacity * 0.5f)
             {
                 float densityFactor = MathF.Max(0, 1f - pop.Count / carryingCapacity);
@@ -409,19 +411,21 @@ public sealed class StatisticalSimSystem : ISystem
             // Update hunger based on food availability
             if (speciesDef.CanGraze && popData.GrazeableTileCount > 0)
             {
-                // Grazing pressure: each herbivore consumes HungerDecayRate worth of nutrition
-                float consumptionPerTick = pop.Count * speciesDef.HungerDecayRate / speciesDef.MaxHunger;
-                float nutritionSupply = popData.AverageNutrition * popData.GrazeableTileCount * 0.01f;
+                // Each herbivore consumes HungerDecayRate per tick; grazing restores GrazeNutrition
+                // Supply: tiles * regeneration rate; Demand: count * consumption rate
+                float demandPerTick = pop.Count * (speciesDef.HungerDecayRate / speciesDef.GrazeNutrition);
+                float supplyPerTick = popData.GrazeableTileCount * Chunk.RegenerationRate;
 
-                if (nutritionSupply > consumptionPerTick * StatisticalTickInterval)
+                if (supplyPerTick > demandPerTick)
                 {
-                    // Plenty of food — hunger drifts up
-                    pop.AverageHungerRatio = MathF.Min(1f, pop.AverageHungerRatio + 0.02f);
+                    // Enough food — hunger drifts up slowly
+                    pop.AverageHungerRatio = MathF.Min(1f, pop.AverageHungerRatio + 0.01f);
                 }
                 else
                 {
-                    // Overgrazing — hunger drifts down, nutrition depletes
-                    pop.AverageHungerRatio = MathF.Max(0f, pop.AverageHungerRatio - 0.03f);
+                    // Overgrazing — hunger drops, nutrition depletes
+                    float deficit = demandPerTick / MathF.Max(0.001f, supplyPerTick);
+                    pop.AverageHungerRatio = MathF.Max(0f, pop.AverageHungerRatio - 0.02f * deficit);
                     popData.AverageNutrition *= 0.95f;
                 }
             }
@@ -432,6 +436,20 @@ public sealed class StatisticalSimSystem : ISystem
                     pop.AverageHungerRatio = MathF.Min(1f, pop.AverageHungerRatio + 0.01f);
                 else
                     pop.AverageHungerRatio = MathF.Max(0f, pop.AverageHungerRatio - 0.02f);
+            }
+            else if (speciesDef.Diet == DietType.Terraformer)
+            {
+                // Faction terraformers feed from specific tile types (FeedTiles).
+                // Estimate food availability: count matching tiles in the chunk vs population.
+                float feedTileCount = CountFeedTiles(speciesDef, chunkX, chunkY);
+                // Each terraformer needs ~1 feed tile to sustain (FeedNutrition offsets HungerDecayRate)
+                float tilesPerCreature = feedTileCount / MathF.Max(1f, pop.Count);
+                if (tilesPerCreature > 2f)
+                    pop.AverageHungerRatio = MathF.Min(1f, pop.AverageHungerRatio + 0.01f);
+                else if (tilesPerCreature > 0.5f)
+                    pop.AverageHungerRatio = MathF.Min(0.6f, pop.AverageHungerRatio + 0.005f);
+                else
+                    pop.AverageHungerRatio = MathF.Max(0f, pop.AverageHungerRatio - 0.03f);
             }
 
             // Age drift (average age drifts toward middle of lifespan in steady state)
@@ -455,7 +473,8 @@ public sealed class StatisticalSimSystem : ISystem
     /// <summary>
     /// Estimate carrying capacity for a species in a chunk.
     /// </summary>
-    private float EstimateCarryingCapacity(SpeciesDefinition species, ChunkPopulationData popData)
+    private float EstimateCarryingCapacity(SpeciesDefinition species, ChunkPopulationData popData,
+                                             int chunkX, int chunkY)
     {
         if (species.CanGraze)
         {
@@ -474,8 +493,46 @@ public sealed class StatisticalSimSystem : ISystem
             return popData.TotalCount * 0.15f;
         }
 
-        // Faction/other: small steady population
+        // Faction terraformers: capacity based on feed tile availability
+        if (species.Diet == DietType.Terraformer)
+        {
+            float feedTiles = CountFeedTiles(species, chunkX, chunkY);
+            // Each terraformer needs feed tiles proportional to hunger drain vs feed rate
+            // FeedNutrition is gained per tick on a feed tile, HungerDecayRate is lost per tick
+            // So a creature needs to be on a feed tile (HungerDecayRate / FeedNutrition) of the time
+            float feedRatio = species.FeedNutrition > 0
+                ? species.HungerDecayRate / species.FeedNutrition
+                : 1f;
+            // Each creature effectively occupies feedRatio tiles worth of capacity
+            return feedTiles / MathF.Max(0.5f, feedRatio);
+        }
+
+        // Other: small steady population
         return 10f;
+    }
+
+    /// <summary>
+    /// Count tiles in a chunk that match a species' FeedTiles list.
+    /// Called once per statistical tick per faction species — acceptable cost.
+    /// </summary>
+    private int CountFeedTiles(SpeciesDefinition species, int chunkX, int chunkY)
+    {
+        if (species.FeedTiles == null || species.FeedTiles.Count == 0)
+            return 0;
+
+        var chunk = _worldManager.GetChunk(chunkX, chunkY);
+        if (chunk == null) return 0;
+
+        int count = 0;
+        for (int ly = 0; ly < _chunkSize; ly++)
+        {
+            for (int lx = 0; lx < _chunkSize; lx++)
+            {
+                if (species.FeedTiles.Contains(chunk.GetTile(lx, ly)))
+                    count++;
+            }
+        }
+        return count;
     }
 
     /// <summary>
