@@ -33,6 +33,10 @@ ENV/
 *.swp
 *.swo
 
+# Godot
+godot/.godot/
+godot/logs/
+
 # OS
 .DS_Store
 Thumbs.db
