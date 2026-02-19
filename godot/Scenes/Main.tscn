@@ -4,15 +4,6 @@
 
 [node name="Main" type="Node2D"]
 script = ExtResource("1_game")
-ChunkSize = 32
-WorldSizeChunks = 24
-WorldSeed = 0
-TileSize = 16
-TargetTPS = 20
-MaxPopulation = 15000
-InitialPopulation = 1500
-HerbivoreRatio = 0.85
-CreaturesPerChunk = 2.0
 
 [node name="Camera2D" type="Camera2D" parent="."]
 zoom = Vector2(1, 1)

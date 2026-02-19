@@ -22,12 +22,12 @@ public sealed class ReproductionSystem : ISystem
     private readonly List<(float x, float y, SpeciesType speciesType, int speciesId)> _toSpawn = new(32);
     private readonly List<int> _nearbyBuffer = new(64);
 
-    public ReproductionSystem(World.WorldManager worldManager, int maxPopulation = 500,
-                               SpatialHash? spatialHash = null)
+    public ReproductionSystem(World.WorldManager worldManager, int maxPopulation,
+                               SpatialHash spatialHash)
     {
         _worldManager = worldManager;
         _maxPopulation = maxPopulation;
-        _spatialHash = spatialHash!;
+        _spatialHash = spatialHash;
     }
 
     public void Process(EntityManager em)
