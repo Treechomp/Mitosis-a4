@@ -96,11 +96,24 @@ public sealed class WanderSystem : ISystem
                 bool shouldRoam = ShouldStartRoaming(entity, em, ref pos);
                 if (shouldRoam)
                 {
-                    // Pick a distant waypoint
-                    float angle = (float)(_rng.NextDouble() * Math.PI * 2);
-                    float dist = roamDistance * (0.5f + (float)_rng.NextDouble() * 0.5f);
-                    float targetX = pos.X + MathF.Cos(angle) * dist;
-                    float targetY = pos.Y + MathF.Sin(angle) * dist;
+                    float targetX, targetY;
+
+                    // Faelings: seek damaged terrain (non-balanced tiles) to restore
+                    if (wanderSpeciesDef != null
+                        && wanderSpeciesDef.TerraformDir == TerraformDirection.Balanced
+                        && _worldManager != null
+                        && TryFindDamagedTerrainTarget(pos.X, pos.Y, roamDistance, out targetX, out targetY))
+                    {
+                        // Target already set toward damaged terrain
+                    }
+                    else
+                    {
+                        // Default: random direction
+                        float angle = (float)(_rng.NextDouble() * Math.PI * 2);
+                        float dist = roamDistance * (0.5f + (float)_rng.NextDouble() * 0.5f);
+                        targetX = pos.X + MathF.Cos(angle) * dist;
+                        targetY = pos.Y + MathF.Sin(angle) * dist;
+                    }
 
                     // Clamp to world bounds
                     int worldSize = _worldManager?.WorldSizeTiles ?? 512;
@@ -245,6 +258,14 @@ public sealed class WanderSystem : ISystem
     private bool ShouldStartRoaming(int entity, EntityManager em, ref Position pos)
     {
         if (_spatialHash == null) return false;
+
+        // Faelings: always patrol — they're balance guardians that seek damaged terrain
+        if (em.HasComponents(entity, ComponentFlags.Terraform | ComponentFlags.Species))
+        {
+            ref var sp = ref em.Species[entity];
+            if (sp.Type == SpeciesType.Faeling)
+                return _rng.NextDouble() < 0.04f; // ~25 tick average wait between patrols
+        }
 
         // Predators: roam when hungry and no prey nearby
         if (em.HasComponents(entity, ComponentFlags.Predator | ComponentFlags.Hunger))
@@ -411,5 +432,68 @@ public sealed class WanderSystem : ISystem
         }
 
         return new Vector2(avoidX, avoidY);
+    }
+
+    /// <summary>
+    /// Find a roam target toward the most damaged (non-balanced) terrain.
+    /// Samples 8 compass directions and picks the one with highest damage score.
+    /// Used by Faelings to patrol toward areas needing restoration.
+    /// </summary>
+    private bool TryFindDamagedTerrainTarget(float x, float y, float roamDistance,
+        out float targetX, out float targetY)
+    {
+        targetX = x;
+        targetY = y;
+        float bestScore = 0;
+
+        for (int i = 0; i < 8; i++)
+        {
+            float angle = i * MathF.PI / 4f;
+            float dx = MathF.Cos(angle);
+            float dy = MathF.Sin(angle);
+
+            // Sample 5 points along this direction
+            float dirScore = 0;
+            for (float t = 0.2f; t <= 1.0f; t += 0.2f)
+            {
+                float sampleX = x + dx * roamDistance * t;
+                float sampleY = y + dy * roamDistance * t;
+                dirScore += GetTerrainDamageScore(sampleX, sampleY);
+            }
+
+            if (dirScore > bestScore)
+            {
+                bestScore = dirScore;
+                float dist = roamDistance * (0.5f + (float)_rng.NextDouble() * 0.5f);
+                targetX = x + dx * dist;
+                targetY = y + dy * dist;
+            }
+        }
+
+        return bestScore > 2f; // Only seek if significant damage found
+    }
+
+    /// <summary>
+    /// Score a tile by how far it is from balanced (Grass). Higher = more damaged.
+    /// </summary>
+    private float GetTerrainDamageScore(float x, float y)
+    {
+        var tile = _worldManager!.GetTile(x, y);
+        return tile switch
+        {
+            TileType.Arid => 4f,
+            TileType.Bog => 4f,
+            TileType.Wetland => 3f,
+            TileType.Sand => 2.5f,
+            TileType.Tundra => 2f,
+            TileType.Jungle => 2f,
+            TileType.Taiga => 1.5f,
+            TileType.Dirt => 1.5f,
+            TileType.Forest => 1f,
+            TileType.Steppe => 1f,
+            TileType.Savanna => 1f,
+            TileType.Shrubland => 0.5f,
+            _ => 0f // Grass, water, mountain = balanced or untargetable
+        };
     }
 }

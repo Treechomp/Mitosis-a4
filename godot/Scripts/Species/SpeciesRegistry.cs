@@ -2323,7 +2323,7 @@ public static class SpeciesRegistry
             GrowthMaxScale = 4f,
             GrowthRate = 0.00008f,
             InitialScale = 1f,
-            AoEMinScale = 1.5f,
+            AoEMinScale = 1.0f,   // Defend from birth (weak at small scale, devastating when mature)
 
             // Spore reproduction parameters
             SporeSpreadChance = 0.0003f,
@@ -2414,13 +2414,13 @@ public static class SpeciesRegistry
 
             // Combat — Sectids are predators too (hunt small prey, spores)
             // Individually weak, but effective mass scales with pack size
-            // Pack of 8: 0.5 * 8^0.7 = 2.38 — can hunt rabbits and spores
-            // Pack of 15: 0.5 * 15^0.7 = 3.52 — can threaten Shroomers
-            HuntRange = 8f,
+            // Pack of 8: 0.5 * 8^0.8 = 3.03 — can hunt rabbits and foxes
+            // Pack of 15: 0.5 * 15^0.8 = 5.18 — can threaten wolves and Shroomers
+            HuntRange = 12f,       // Wider detection range for swarming
             AttackRange = 0.5f,
-            AttackPower = 12f,    // Swarm overwhelms through numbers
-            AttackCooldown = 12,
-            BaseHuntSpeed = 0.11f,  // Fast closing speed for swarm
+            AttackPower = 16f,     // Swarm overwhelms through numbers
+            AttackCooldown = 10,   // Faster bite cycle
+            BaseHuntSpeed = 0.13f, // Fast closing speed for swarm
             PackHunterChance = 0.9f,  // Almost always hunt in groups
 
             // Fleeing - fast
@@ -2450,7 +2450,7 @@ public static class SpeciesRegistry
             HuntThreshold = 0.75f,
             TrackingHungerThreshold = 0.5f,
             TrackingRange = 80f,
-            PackCoordinationRadius = 12f,  // Wide swarm coordination
+            PackCoordinationRadius = 16f,  // Wide swarm coordination
             PackShareRadius = 10f,
 
             // Reproduction — via nests only (NestSystem handles this)
@@ -2489,9 +2489,9 @@ public static class SpeciesRegistry
             FlankerSpeedMult = 1.05f,
             ChaserSpeedMult = 1.1f,
 
-            // Terrain - thrives in dry areas
-            DiscomfortThreshold = 70f,
-            DiscomfortDecayRate = 4f,
+            // Terrain - thrives in dry areas, tolerant when hunting
+            DiscomfortThreshold = 120f,   // High tolerance — relentless swarm pushes into enemy terrain
+            DiscomfortDecayRate = 5f,
             GrazingPressure = 0f,
             TerrainSpeedModifiers = new Dictionary<TileType, float>
             {
@@ -2548,8 +2548,8 @@ public static class SpeciesRegistry
             Diet = DietType.Terraformer,
             DefaultSocialType = SocialType.Solitary,  // Lone guardians spawned from crystals
 
-            // Movement - fast roamer, covers large territory seeking terraformed tiles
-            BaseWanderSpeed = 0.07f,
+            // Movement - fast roamer, patrols territory seeking damaged terrain to restore
+            BaseWanderSpeed = 0.09f,   // Faster patrol speed
             DirectionChangeChance = 0.003f,
 
             // No fleeing — Faelings fight, not flee (ranged attack)
@@ -2580,9 +2580,9 @@ public static class SpeciesRegistry
 
             // Crystal spawning parameters
             CrystalSpawnDelay = 500,
-            RangedAttackRange = 8f,
-            RangedAttackDamage = 10f,
-            RangedAttackCooldown = 30,
+            RangedAttackRange = 12f,  // Wide engagement range — intercepts terraformers early
+            RangedAttackDamage = 12f, // Stronger bolts
+            RangedAttackCooldown = 20, // Faster attack rate
 
             // Growth — slow power-based growth
             GrowthMaxScale = 2.5f,
@@ -2603,9 +2603,9 @@ public static class SpeciesRegistry
             CohesionStrength = 0f,
             AlignmentStrength = 0f,
 
-            // Terrain - prefers balanced grass, moves to find terraformed tiles
-            DiscomfortThreshold = 50f,
-            DiscomfortDecayRate = 2f,
+            // Terrain - immune to discomfort (guardians go INTO damaged terrain to fix it)
+            DiscomfortThreshold = 999f,  // Never triggers escape — terrain-seeking AI handles pathing
+            DiscomfortDecayRate = 10f,
             GrazingPressure = 0f,
             TerrainSpeedModifiers = new Dictionary<TileType, float>
             {

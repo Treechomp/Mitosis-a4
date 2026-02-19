@@ -211,6 +211,9 @@ public sealed class HuntingSystem : ISystem
                 ref var discomfort = ref em.TerrainDiscomforts[entity];
                 discomfortRatio = discomfort.Ratio;
                 float discomfortTolerance = urgency;
+                // Swarm hunters commit harder to hunts — relentless pursuit
+                if (speciesDef.SwarmHunter && predator.HasTarget)
+                    discomfortTolerance += 0.5f;
                 if (discomfort.ExceedsThreshold && discomfortRatio > discomfortTolerance + 0.3f)
                 {
                     if (predator.HasTarget && em.HasComponents(entity, ComponentFlags.Species))
@@ -220,6 +223,8 @@ public sealed class HuntingSystem : ISystem
                     }
                     predator.TargetEntity = -1;
                     predator.Phase = PackPhase.Idle;
+                    // Suppress re-acquisition to prevent find→abandon→find spam loop
+                    predator.PhaseTimer = 40;
                     continue;
                 }
             }
@@ -303,8 +308,8 @@ public sealed class HuntingSystem : ISystem
                 }
             }
 
-            // Find target if we don't have one
-            if (!predator.HasTarget)
+            // Find target if we don't have one (and not suppressed from recent abandon)
+            if (!predator.HasTarget && predator.PhaseTimer <= 0)
             {
                 float effectiveRange = predator.HuntRange * rangeMultiplier;
                 float huntRangeSq = effectiveRange * effectiveRange;
@@ -586,6 +591,23 @@ public sealed class HuntingSystem : ISystem
                         ref var preyEnergy = ref em.Energies[predator.TargetEntity];
                         preyEnergy.Current -= predator.AttackPower * attackMult;
                         preyEnergy.RegenCooldown = 60; // 3s combat cooldown at 20 TPS
+
+                        // Shroomer toxic thorns — attackers take damage scaling with growth
+                        if (em.HasComponents(predator.TargetEntity, ComponentFlags.Growth | ComponentFlags.Species))
+                        {
+                            ref var preySpecies = ref em.Species[predator.TargetEntity];
+                            if (preySpecies.Type == SpeciesType.Shroomer)
+                            {
+                                ref var growth = ref em.Growths[predator.TargetEntity];
+                                float thornDamage = 3f * growth.CurrentScale;
+                                if (em.HasComponents(entity, ComponentFlags.Energy))
+                                {
+                                    ref var predEnergy = ref em.Energies[entity];
+                                    predEnergy.Current -= thornDamage;
+                                    predEnergy.RegenCooldown = 30;
+                                }
+                            }
+                        }
 
                         // Apply venom DOT if this predator has it
                         if (speciesDef.HasVenom && !em.HasComponents(predator.TargetEntity, ComponentFlags.VenomEffect))

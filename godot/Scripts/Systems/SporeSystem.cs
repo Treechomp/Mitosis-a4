@@ -371,14 +371,14 @@ public sealed class SporeSystem : ISystem
             ref var growth = ref em.Growths[entity];
             if (growth.CurrentScale < speciesDef.AoEMinScale) continue; // Only mature shroomers attack
 
-            ref var terraform = ref em.Terraforms[entity];
-            // Reuse terraform cooldown timer as AoE attack timer
-            // (AoE triggers separately on a longer cycle)
-            // We'll use a simple tick modulo check instead
+            // AoE pulse interval: normal rate on timer, double rate when in combat (reactive defense)
+            int aoeInterval = speciesDef.AoEAttackCooldown;
+            if (em.HasComponents(entity, ComponentFlags.Energy) && em.Energies[entity].RegenCooldown > 0)
+                aoeInterval = Math.Max(1, aoeInterval / 2);
             if (em.HasComponents(entity, ComponentFlags.Age))
             {
                 ref var age = ref em.Ages[entity];
-                if (age.Current % speciesDef.AoEAttackCooldown != 0) continue;
+                if (age.Current % aoeInterval != 0) continue;
             }
 
             ref var pos = ref em.Positions[entity];
