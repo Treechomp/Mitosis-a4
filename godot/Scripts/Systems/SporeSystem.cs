@@ -187,12 +187,15 @@ public sealed class SporeSystem : ISystem
         {
             if (em.EntityCount >= _maxPopulation) break;
             SpawnSpore(em, x, y, speciesId);
+            EcosystemLogger.Instance?.LogSporeCreated(x, y);
         }
 
         foreach (var (x, y, speciesId) in _pendingTransforms)
         {
             if (em.EntityCount >= _maxPopulation) break;
             SpawnShroomer(em, x, y, speciesId);
+            EcosystemLogger.Instance?.LogSporeMatured(x, y);
+            EcosystemLogger.Instance?.LogReproduction(speciesId, -1, x, y, 1);
         }
     }
 
@@ -403,6 +406,18 @@ public sealed class SporeSystem : ISystem
 
                 if (otherEnergy.IsDead)
                 {
+                    // Log the kill
+                    if (em.HasComponents(entity, ComponentFlags.Species) &&
+                        em.HasComponents(other, ComponentFlags.Species))
+                    {
+                        ref var killerSpecies = ref em.Species[entity];
+                        ref var victimSpecies = ref em.Species[other];
+                        ref var victimPos = ref em.Positions[other];
+                        EcosystemLogger.Instance?.LogKill(
+                            killerSpecies.SpeciesId, victimSpecies.SpeciesId,
+                            entity, other, victimPos.X, victimPos.Y);
+                    }
+
                     // Handle Faeling death → crystal power inheritance
                     if (em.HasComponents(other, ComponentFlags.FaelingPower))
                     {

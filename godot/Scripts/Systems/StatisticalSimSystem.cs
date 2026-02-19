@@ -184,6 +184,12 @@ public sealed class StatisticalSimSystem : ISystem
             if (em.HasComponents(entity, ComponentFlags.Crystal)) continue;
             if (em.HasComponents(entity, ComponentFlags.Spore)) continue;
 
+            // Skip faction species (Sectids, Shroomers, Faelings) — their unique
+            // reproduction systems (nests, spores, crystals) and feeding strategies
+            // (hunting, tile-feeding) can't be reduced to statistical birth/death rates.
+            // They stay as live entities; LOD gates already reduce processing cost.
+            if (em.HasComponents(entity, ComponentFlags.Terraform)) continue;
+
             _entityBuffer.Add(entity);
         }
 

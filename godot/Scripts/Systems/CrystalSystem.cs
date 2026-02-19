@@ -111,6 +111,7 @@ public sealed class CrystalSystem : ISystem
         ProcessRangedAttacks(em);
 
         // === SPAWN PENDING FAELINGS (respect population cap) ===
+        var faelingSpeciesId = SpeciesRegistry.GetId("Faeling");
         foreach (var (x, y, crystalEntity, inheritedPower) in _pendingFaelings)
         {
             if (em.EntityCount >= _maxPopulation) break;
@@ -120,6 +121,7 @@ public sealed class CrystalSystem : ISystem
                 ref var crystal = ref em.Crystals[crystalEntity];
                 crystal.LinkedFaeling = faeling;
                 crystal.InheritedPower = 0f;
+                EcosystemLogger.Instance?.LogReproduction(faelingSpeciesId, crystalEntity, x, y, 1);
             }
         }
     }
@@ -193,6 +195,19 @@ public sealed class CrystalSystem : ISystem
                     ref var power = ref em.FaelingPowers[entity];
                     power.Power += power.PowerPerKill;
                     power.KillCount++;
+
+                    // Log ranged attack kill
+                    if (em.HasComponents(entity, ComponentFlags.Species) &&
+                        em.HasComponents(bestTarget, ComponentFlags.Species))
+                    {
+                        ref var killerSpecies = ref em.Species[entity];
+                        ref var victimSpecies = ref em.Species[bestTarget];
+                        ref var victimPos = ref em.Positions[bestTarget];
+                        EcosystemLogger.Instance?.LogKill(
+                            killerSpecies.SpeciesId, victimSpecies.SpeciesId,
+                            entity, bestTarget, victimPos.X, victimPos.Y);
+                    }
+
                     em.DestroyEntity(bestTarget);
                 }
             }

@@ -112,10 +112,12 @@ public sealed class NestSystem : ISystem
         ProcessFoodCarriers(em);
 
         // === SPAWN PENDING SECTIDS (respect population cap) ===
+        var sectidSpeciesId = SpeciesRegistry.GetId("Sectid");
         foreach (var (x, y, colonyId) in _pendingSpawns)
         {
             if (em.EntityCount >= _maxPopulation) break;
             SpawnSectid(em, x, y, colonyId);
+            EcosystemLogger.Instance?.LogReproduction(sectidSpeciesId, -1, x, y, 1);
         }
 
         // === SPAWN PENDING NESTS (respect population cap) ===
