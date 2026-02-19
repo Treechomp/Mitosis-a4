@@ -1,0 +1,2435 @@
+tick,event,species,entity_id,x,y,detail
+0,reproduce,Deer,15,15,2,83,0,offspring:1
+0,reproduce,Frog,86,121,5,121,5,offspring:2
+0,reproduce,Frog,92,21,5,100,4,offspring:2
+0,reproduce,Elk,118,47,3,41,3,offspring:1
+0,reproduce,Elk,119,46,5,42,3,offspring:1
+0,reproduce,Camel,140,70,4,117,4,offspring:1
+0,reproduce,Penguin,154,1,1,0,2,offspring:1
+0,reproduce,Penguin,159,40,3,0,4,offspring:1
+0,reproduce,Musk Ox,164,127,6,3,7,offspring:1
+0,reproduce,Musk Ox,170,127,1,3,6,offspring:1
+0,reproduce,Musk Ox,173,39,4,0,4,offspring:1
+0,reproduce,Monkey,178,121,5,114,5,offspring:1
+0,reproduce,Monkey,189,19,4,8,7,offspring:1
+0,reproduce,Monkey,190,21,0,7,4,offspring:1
+0,reproduce,Parrot,195,73,8,85,5,offspring:1
+0,reproduce,Parrot,200,13,5,81,7,offspring:1
+0,reproduce,Tapir,202,63,1,39,4,offspring:1
+0,reproduce,Tapir,207,118,5,121,5,offspring:1
+0,reproduce,Tapir,210,26,2,23,5,offspring:1
+0,reproduce,Tapir,212,31,5,82,5,offspring:1
+0,reproduce,Wolf,252,118,6,2,6,offspring:1
+0,reproduce,Crocodile,259,29,5,1,5,offspring:1
+0,reproduce,Scorpion,272,1,5,15,5,offspring:1
+0,reproduce,Snake,274,20,5,117,5,offspring:1
+0,reproduce,Arctic Fox,279,126,5,1,5,offspring:1
+0,reproduce,Arctic Fox,280,0,6,0,5,offspring:1
+6,reproduce,Tapir,204,33,5,104,5,offspring:1
+7,reproduce,Fish,77,67,8,69,8,offspring:2
+10,reproduce,Turtle,96,16,4,25,8,offspring:1
+10,reproduce,Elk,124,85,5,116,4,offspring:1
+13,reproduce,Lizard,135,26,4,42,0,offspring:2
+29,reproduce,Fish,79,68,0,67,0,offspring:2
+30,reproduce,Tapir,205,33,8,103,6,offspring:1
+33,reproduce,Deer,16,13,1,80,4,offspring:1
+44,reproduce,Fish,74,67,8,66,9,offspring:2
+51,reproduce,Elk,109,122,8,19,8,offspring:1
+51,reproduce,Parrot,193,75,2,87,5,offspring:1
+65,kill,Penguin,162,45,7,-0,0,killed_by:Arctic Fox:278
+65,reproduce,Arctic Fox,278,45,3,0,0,offspring:1
+68,kill,Penguin,154,1,6,3,8,killed_by:Arctic Fox:311
+68,reproduce,Fish,75,66,6,63,8,offspring:2
+68,reproduce,Elk,108,124,1,20,2,offspring:1
+69,reproduce,Lizard,132,83,2,31,8,offspring:2
+72,reproduce,Penguin,155,4,0,0,5,offspring:1
+79,reproduce,Penguin,156,4,5,-0,0,offspring:1
+81,kill,Sectid,4,26,8,81,4,killed_by:Hawk:271
+81,reproduce,Deer,17,11,8,82,1,offspring:1
+84,kill,Musk Ox,165,124,9,2,5,killed_by:Polar Bear:277
+84,reproduce,Fish,76,66,8,65,3,offspring:2
+84,reproduce,Polar Bear,277,125,7,2,6,offspring:1
+92,kill,Shroomer,216,63,7,31,3,killed_by:Crocodile:260
+92,reproduce,Crocodile,260,64,2,30,8,offspring:1
+95,reproduce,Camel,141,68,3,117,6,offspring:1
+103,kill,Penguin,150,5,6,9,2,killed_by:Arctic Fox:280
+117,kill,Hawk,271,29,6,81,6,killed_by:Sectid:5
+143,reproduce,Frog,82,52,5,122,1,offspring:2
+155,kill,Penguin,161,33,9,0,0,killed_by:Crocodile:307
+158,kill,Penguin,151,-0,0,6,0,killed_by:Arctic Fox:311
+173,kill,Shroomer,217,64,3,31,1,killed_by:Crocodile:216
+176,reproduce,Lizard,129,61,6,100,5,offspring:2
+177,reproduce,Frog,90,65,1,42,7,offspring:2
+191,reproduce,Musk Ox,163,125,9,9,5,offspring:1
+197,reproduce,Boar,266,74,6,70,9,offspring:2
+203,reproduce,Tapir,206,36,1,103,7,offspring:1
+206,kill,Shroomer,219,61,9,28,3,killed_by:Crocodile:260
+213,kill,Musk Ox,166,123,0,9,6,killed_by:Polar Bear:334
+227,kill,Shroomer,247,34,9,83,2,killed_by:Sectid:12
+248,kill,Penguin,292,-0,0,13,1,killed_by:Arctic Fox:311
+248,reproduce,Lizard,130,20,3,105,9,offspring:2
+249,reproduce,Frog,84,27,9,38,0,offspring:2
+265,reproduce,Boar,263,75,6,75,3,offspring:2
+269,kill,Penguin,159,37,4,7,9,killed_by:Arctic Fox:278
+270,reproduce,Deer,24,69,8,23,8,offspring:1
+272,kill,Shroomer,242,25,7,102,1,killed_by:Wolf:250
+272,reproduce,Wolf,250,25,2,101,8,offspring:1
+290,kill,Fish,323,84,7,58,0,killed_by:Hawk:269
+293,kill,Shroomer,237,63,8,35,3,killed_by:Crocodile:216
+296,kill,Camel,142,74,5,62,3,killed_by:Boar:266
+304,reproduce,Fish,71,13,3,114,4,offspring:2
+325,reproduce,Elk,107,123,5,23,2,offspring:1
+331,kill,Shroomer,218,64,9,32,9,killed_by:Crocodile:260
+337,kill,Musk Ox,167,128,0,8,6,killed_by:Polar Bear:277
+354,reproduce,Camel,144,80,3,82,2,offspring:1
+354,reproduce,Camel,145,82,1,75,7,offspring:1
+355,kill,Shroomer,240,31,3,102,5,killed_by:Wolf:292
+358,reproduce,Elk,110,124,7,22,8,offspring:1
+370,kill,Tapir,305,24,5,70,0,killed_by:Sectid:6
+400,kill,Penguin,152,-0,1,9,7,killed_by:Polar Bear:276
+400,kill,Penguin,152,-0,1,9,7,killed_by:Arctic Fox:280
+404,kill,Shroomer,243,23,4,103,2,killed_by:Wolf:250
+413,kill,Shroomer,234,66,5,36,5,killed_by:Crocodile:216
+445,reproduce,Deer,13,18,4,81,0,offspring:1
+446,reproduce,Parrot,198,70,8,89,8,offspring:1
+447,reproduce,Deer,28,86,1,32,0,offspring:1
+453,reproduce,Deer,27,68,4,25,6,offspring:1
+482,reproduce,Parrot,192,67,8,94,0,offspring:1
+490,kill,Frog,93,23,3,101,5,killed_by:Wolf:250
+494,reproduce,Camel,147,93,5,59,7,offspring:1
+495,kill,Frog,288,42,3,107,8,killed_by:Wolf:292
+502,reproduce,Fish,73,8,0,114,0,offspring:2
+521,kill,Penguin,160,20,7,1,9,killed_by:Arctic Fox:162
+534,reproduce,Deer,16,14,6,61,0,offspring:1
+542,reproduce,Parrot,200,14,4,81,1,offspring:1
+544,reproduce,Parrot,195,76,8,95,2,offspring:1
+556,reproduce,Deer,14,13,8,81,1,offspring:1
+568,kill,Frog,87,117,2,118,7,killed_by:Jaguar:281
+574,reproduce,Penguin,156,11,6,0,0,offspring:1
+575,kill,Musk Ox,176,5,6,-0,0,killed_by:Polar Bear:276
+575,reproduce,Polar Bear,276,4,7,0,2,offspring:1
+599,kill,Rabbit,49,98,7,38,2,killed_by:Fox:258
+601,reproduce,Monkey,178,125,1,114,7,offspring:1
+601,reproduce,Parrot,199,2,4,96,0,offspring:1
+606,reproduce,Fish,79,68,6,69,3,offspring:2
+610,reproduce,Fish,81,118,0,56,8,offspring:2
+612,reproduce,Monkey,190,11,9,6,3,offspring:1
+626,kill,Penguin,157,0,0,1,0,killed_by:Polar Bear:288
+634,kill,Penguin,332,11,6,1,8,killed_by:Arctic Fox:311
+634,reproduce,Deer,17,13,5,84,9,offspring:1
+646,kill,Rabbit,59,48,0,98,9,killed_by:Wolf:292
+648,reproduce,Monkey,188,17,8,0,0,offspring:1
+648,reproduce,Tapir,204,53,8,105,6,offspring:1
+650,reproduce,Tapir,207,119,1,126,3,offspring:1
+653,kill,Rabbit,60,47,9,98,9,killed_by:Wolf:253
+653,reproduce,Rabbit,58,38,8,113,0,offspring:2
+658,kill,Penguin,158,12,6,10,8,killed_by:Arctic Fox:162
+658,reproduce,Musk Ox,168,127,0,2,9,offspring:1
+659,kill,Rabbit,44,98,3,39,0,killed_by:Fox:258
+659,reproduce,Elk,104,121,6,20,4,offspring:1
+679,reproduce,Deer,15,12,7,77,6,offspring:1
+679,reproduce,Monkey,189,20,9,0,0,offspring:1
+704,reproduce,Fish,154,61,0,60,8,offspring:2
+704,reproduce,Fish,327,61,2,61,7,offspring:2
+706,kill,Shroomer,49,25,8,100,0,killed_by:Wolf:250
+710,kill,Penguin,93,16,8,4,7,killed_by:Crocodile:307
+719,kill,Rabbit,51,97,7,37,0,killed_by:Fox:258
+719,reproduce,Fox,258,97,9,37,3,offspring:1
+730,kill,Shroomer,225,114,6,124,5,killed_by:Jaguar:281
+757,kill,Shroomer,241,20,8,104,1,killed_by:Bear:268
+757,reproduce,Tapir,210,30,4,27,9,offspring:1
+770,kill,Rabbit,43,96,3,41,5,killed_by:Fox:93
+770,reproduce,Rabbit,46,97,2,52,5,offspring:2
+770,reproduce,Rabbit,47,97,7,45,9,offspring:2
+790,reproduce,Lizard,135,25,8,0,0,offspring:2
+798,kill,Shroomer,238,22,2,101,3,killed_by:Wolf:250
+800,reproduce,Parrot,193,64,0,98,6,offspring:1
+800,reproduce,Frog,286,117,2,126,5,offspring:2
+822,kill,Fish,77,71,2,68,6,killed_by:Boar:247
+829,kill,Frog,287,32,4,94,9,killed_by:Wolf:253
+839,reproduce,Deer,38,96,7,121,1,offspring:1
+843,reproduce,Lizard,132,67,0,47,4,offspring:2
+845,kill,Rabbit,42,97,0,40,9,killed_by:Fox:93
+851,reproduce,Monkey,179,117,0,117,2,offspring:1
+852,kill,Penguin,156,13,6,-0,1,killed_by:Arctic Fox:162
+868,kill,Musk Ox,294,122,8,-0,0,killed_by:Polar Bear:334
+869,reproduce,Elk,109,123,8,25,1,offspring:1
+874,kill,Shroomer,245,41,0,90,6,killed_by:Sectid:49
+881,reproduce,Musk Ox,164,128,0,15,3,offspring:1
+885,reproduce,Elk,106,127,5,24,1,offspring:1
+891,reproduce,Lizard,129,55,9,97,2,offspring:2
+895,reproduce,Frog,285,116,1,123,4,offspring:2
+901,reproduce,Monkey,191,12,1,16,1,offspring:1
+904,reproduce,Fish,67,13,8,115,9,offspring:2
+904,reproduce,Fish,217,14,4,116,7,offspring:2
+928,kill,Penguin,155,14,2,-0,0,killed_by:Arctic Fox:311
+936,reproduce,Elk,124,89,2,117,8,offspring:1
+937,kill,Sectid,12,37,7,88,7,killed_by:Wolf:253
+943,reproduce,Frog,150,56,0,119,1,offspring:2
+949,kill,Rabbit,47,98,1,45,4,killed_by:Fox:93
+955,kill,Lizard,135,16,4,0,0,killed_by:Hawk:270
+958,kill,Shroomer,220,65,0,32,2,killed_by:Crocodile:216
+989,reproduce,Elk,108,126,0,25,5,offspring:1
+1000,reproduce,Parrot,301,5,0,94,3,offspring:1
+1000,reproduce,Arctic Fox,311,15,3,3,2,offspring:1
+1017,kill,Penguin,331,12,5,1,0,killed_by:Arctic Fox:162
+1025,kill,Shroomer,244,34,8,92,6,killed_by:Wolf:253
+1033,reproduce,Monkey,180,124,8,111,3,offspring:1
+1037,reproduce,Elk,122,58,7,37,3,offspring:1
+1038,kill,Frog,285,114,5,123,5,killed_by:Jaguar:281
+1054,kill,Penguin,153,12,4,-0,1,killed_by:Polar Bear:288
+1057,reproduce,Boar,263,86,0,56,7,offspring:2
+1063,reproduce,Camel,140,78,1,117,5,offspring:1
+1065,reproduce,Arctic Fox,162,12,7,2,4,offspring:1
+1069,kill,Monkey,337,14,5,0,5,killed_by:Hawk:270
+1079,kill,Musk Ox,295,128,0,13,4,killed_by:Polar Bear:277
+1079,reproduce,Musk Ox,172,29,5,1,0,offspring:1
+1083,reproduce,Lizard,271,64,0,99,7,offspring:2
+1084,reproduce,Parrot,200,9,9,79,7,offspring:1
+1085,reproduce,Wolf,250,30,0,92,1,offspring:1
+1099,kill,Monkey,157,16,4,-0,0,killed_by:Arctic Fox:220
+1102,kill,Monkey,189,21,0,0,0,killed_by:Crocodile:307
+1102,reproduce,Musk Ox,163,126,4,19,0,offspring:1
+1142,kill,Monkey,188,21,0,-0,1,killed_by:Crocodile:307
+1143,kill,Rabbit,45,85,2,48,8,killed_by:Fox:93
+1146,reproduce,Deer,27,66,0,27,0,offspring:1
+1146,reproduce,Parrot,199,9,1,96,8,offspring:1
+1148,reproduce,Wolf,253,38,7,95,5,offspring:1
+1192,kill,Shroomer,246,39,9,88,3,killed_by:Sectid:49
+1193,kill,Rabbit,63,115,9,118,7,killed_by:Jaguar:281
+1200,reproduce,Monkey,297,111,4,113,2,offspring:1
+1200,reproduce,Monkey,298,13,2,9,8,offspring:1
+1200,reproduce,Monkey,299,12,3,10,8,offspring:1
+1202,reproduce,Monkey,178,125,0,114,6,offspring:1
+1210,reproduce,Fish,87,120,3,60,0,offspring:2
+1210,reproduce,Fish,186,120,4,59,0,offspring:2
+1224,reproduce,Monkey,190,15,5,15,0,offspring:1
+1239,reproduce,Lizard,317,14,1,32,0,offspring:2
+1270,reproduce,Elk,123,88,5,123,7,offspring:1
+1292,kill,Musk Ox,177,11,2,8,5,killed_by:Polar Bear:288
+1300,reproduce,Tapir,207,120,9,127,5,offspring:1
+1359,reproduce,Deer,35,96,7,126,2,offspring:1
+1359,reproduce,Deer,39,96,6,123,6,offspring:1
+1359,reproduce,Monkey,181,123,1,108,3,offspring:1
+1360,kill,Frog,83,50,9,125,2,killed_by:Bear:267
+1360,reproduce,Frog,82,63,2,118,4,offspring:2
+1360,reproduce,Frog,131,55,6,123,9,offspring:2
+1371,kill,Rabbit,60,44,8,128,0,killed_by:Wolf:292
+1397,reproduce,Monkey,179,123,9,108,6,offspring:1
+1407,reproduce,Rabbit,46,98,6,61,5,offspring:2
+1415,kill,Rabbit,30,96,8,62,0,killed_by:Jaguar:282
+1420,kill,Rabbit,48,94,5,55,5,killed_by:Boar:263
+1439,kill,Fish,78,71,8,70,9,killed_by:Fox:254
+1450,kill,Shroomer,223,54,7,126,4,killed_by:Bear:267
+1451,kill,Rabbit,58,43,8,126,3,killed_by:Wolf:292
+1463,starvation,Frog,89,59,6,53,2,
+1463,reproduce,Frog,91,76,5,39,2,offspring:2
+1471,reproduce,Camel,147,102,1,58,9,offspring:1
+1482,kill,Frog,92,28,7,101,0,killed_by:Fox:255
+1498,starvation,Frog,88,54,9,48,6,
+1500,reproduce,Penguin,293,32,9,6,6,offspring:1
+1504,reproduce,Fish,350,19,6,109,4,offspring:2
+1504,reproduce,Fish,351,12,8,114,8,offspring:2
+1504,reproduce,Fish,352,11,8,115,0,offspring:2
+1514,reproduce,Tapir,210,33,9,28,8,offspring:1
+1517,kill,Rabbit,46,96,6,60,3,killed_by:Fox:93
+1533,kill,Musk Ox,168,127,2,0,6,killed_by:Polar Bear:334
+1542,reproduce,Parrot,243,1,5,65,7,offspring:1
+1546,kill,Rabbit,61,121,3,116,5,killed_by:Jaguar:281
+1564,reproduce,Monkey,191,11,4,20,5,offspring:1
+1565,reproduce,Parrot,301,7,0,80,0,offspring:1
+1580,reproduce,Elk,125,83,6,124,4,offspring:1
+1600,reproduce,Lizard,130,6,2,100,3,offspring:2
+1600,reproduce,Lizard,151,0,0,112,6,offspring:2
+1601,reproduce,Parrot,160,0,0,113,1,offspring:1
+1604,kill,Deer,25,67,5,29,0,killed_by:Crocodile:216
+1605,reproduce,Fish,67,13,8,115,9,offspring:2
+1605,reproduce,Fish,217,14,4,116,7,offspring:2
+1609,kill,Frog,94,52,5,28,1,killed_by:Arctic Fox:278
+1628,reproduce,Polar Bear,277,123,8,20,1,offspring:1
+1630,kill,Rabbit,57,49,4,117,0,killed_by:Wolf:292
+1630,reproduce,Rabbit,41,55,1,97,5,offspring:2
+1643,kill,Rabbit,50,100,1,62,0,killed_by:Boar:285
+1643,reproduce,Lizard,287,85,2,31,3,offspring:2
+1656,kill,Musk Ox,157,123,8,21,8,killed_by:Polar Bear:277
+1687,reproduce,Monkey,180,123,3,111,3,offspring:1
+1744,kill,Sectid,11,32,6,87,9,killed_by:Fox:255
+1747,kill,Sectid,10,12,7,78,9,killed_by:Wolf:45
+1749,reproduce,Deer,31,96,0,41,3,offspring:1
+1762,reproduce,Musk Ox,164,121,7,28,6,offspring:1
+1763,reproduce,Parrot,199,4,6,97,3,offspring:1
+1767,reproduce,Deer,29,96,0,39,1,offspring:1
+1767,reproduce,Musk Ox,169,128,0,4,3,offspring:1
+1768,reproduce,Turtle,96,22,1,31,9,offspring:1
+1772,reproduce,Wolf,292,48,9,109,3,offspring:1
+1776,reproduce,Deer,27,64,8,22,0,offspring:1
+1791,kill,Musk Ox,170,128,0,23,7,killed_by:Polar Bear:94
+1801,reproduce,Monkey,298,13,7,17,2,offspring:1
+1801,reproduce,Monkey,299,12,3,20,2,offspring:1
+1802,kill,Deer,35,105,7,128,0,killed_by:Wolf:248
+1812,reproduce,Monkey,176,19,2,19,4,offspring:1
+1817,reproduce,Deer,28,96,0,38,4,offspring:1
+1830,kill,Shroomer,236,68,3,40,9,killed_by:Crocodile:260
+1830,reproduce,Crocodile,260,67,6,40,9,offspring:1
+1840,kill,Deer,284,7,6,84,1,killed_by:Wolf:45
+1842,reproduce,Frog,72,17,6,32,3,offspring:2
+1842,reproduce,Frog,84,10,9,43,8,offspring:2
+1842,reproduce,Frog,85,22,2,52,0,offspring:2
+1842,reproduce,Frog,126,64,0,33,2,offspring:2
+1842,reproduce,Frog,219,19,3,33,5,offspring:2
+1846,kill,Penguin,119,25,8,4,7,killed_by:Hawk:270
+1851,reproduce,Tapir,209,111,6,120,0,offspring:1
+1862,reproduce,Elk,124,79,1,120,0,offspring:1
+1880,kill,Frog,126,66,1,34,2,killed_by:Arctic Fox:278
+1881,starvation,Frog,86,118,7,122,3,
+1917,reproduce,Parrot,200,-0,0,91,8,offspring:1
+1929,reproduce,Elk,122,60,9,33,9,offspring:1
+1944,kill,Elk,244,61,5,36,8,killed_by:Crocodile:236
+1944,reproduce,Lizard,77,87,6,29,6,offspring:2
+1950,reproduce,Tapir,207,111,9,117,4,offspring:1
+1975,reproduce,Fish,87,120,3,60,1,offspring:2
+1975,reproduce,Fish,186,120,4,58,9,offspring:2
+1975,reproduce,Fish,360,122,1,62,2,offspring:2
+1975,reproduce,Fish,361,123,0,62,5,offspring:2
+1977,kill,Lizard,341,24,2,23,4,killed_by:Hawk:270
+1987,kill,Deer,32,-0,0,87,1,killed_by:Wolf:45
+2000,reproduce,Tapir,303,114,4,119,6,offspring:1
+2013,reproduce,Musk Ox,163,123,2,30,9,offspring:1
+2023,reproduce,Parrot,135,10,6,96,0,offspring:1
+2057,kill,Shroomer,235,67,3,37,0,killed_by:Crocodile:260
+2058,reproduce,Musk Ox,172,35,3,2,5,offspring:1
+2101,reproduce,Penguin,293,29,4,7,2,offspring:1
+2105,kill,Musk Ox,296,28,2,17,7,killed_by:Polar Bear:288
+2109,kill,Lizard,342,27,8,42,1,killed_by:Hawk:270
+2109,reproduce,Lizard,184,18,3,25,4,offspring:2
+2115,reproduce,Parrot,243,1,7,56,9,offspring:1
+2115,reproduce,Parrot,357,13,5,53,7,offspring:1
+2119,kill,Fox,255,39,5,81,6,killed_by:Sectid:2
+2171,reproduce,Camel,140,91,5,120,8,offspring:1
+2171,reproduce,Camel,141,93,7,120,6,offspring:1
+2183,kill,Musk Ox,158,127,0,0,2,killed_by:Polar Bear:334
+2195,reproduce,Elk,123,77,2,114,8,offspring:1
+2201,kill,Frog,131,87,8,89,8,killed_by:Bear:267
+2201,reproduce,Turtle,95,13,8,25,0,offspring:1
+2219,starvation,Rabbit,43,108,5,62,2,
+2219,starvation,Rabbit,241,108,6,62,5,
+2226,kill,Shroomer,221,64,9,21,0,killed_by:Crocodile:216
+2267,starvation,Rabbit,64,115,5,110,2,
+2297,starvation,Frog,68,49,3,49,5,
+2297,reproduce,Frog,8,85,9,33,2,offspring:2
+2297,reproduce,Frog,79,76,9,34,0,offspring:2
+2297,reproduce,Frog,91,79,3,39,8,offspring:2
+2298,kill,Lizard,318,1,9,55,9,killed_by:Hawk:270
+2308,reproduce,Parrot,199,9,3,96,8,offspring:1
+2311,reproduce,Parrot,182,96,0,79,3,offspring:1
+2312,kill,Frog,400,71,9,33,9,killed_by:Crocodile:260
+2345,kill,Shroomer,228,10,6,84,2,killed_by:Wolf:45
+2354,reproduce,Musk Ox,175,7,8,24,2,offspring:1
+2360,kill,Frog,90,62,3,37,2,killed_by:Arctic Fox:162
+2365,starvation,Hawk,269,76,7,54,5,
+2367,kill,Deer,81,111,3,118,1,killed_by:Wolf:248
+2372,kill,Musk Ox,294,128,0,11,0,killed_by:Polar Bear:277
+2399,kill,Frog,91,79,6,39,6,killed_by:Arctic Fox:278
+2403,kill,Camel,144,94,6,81,1,killed_by:Bear:267
+2403,reproduce,Bear,267,93,9,82,0,offspring:1
+2406,reproduce,Deer,27,57,0,16,9,offspring:1
+2416,reproduce,Deer,4,13,5,91,1,offspring:1
+2416,reproduce,Deer,13,20,3,94,0,offspring:1
+2416,reproduce,Deer,14,21,0,81,5,offspring:1
+2416,reproduce,Deer,15,9,4,91,8,offspring:1
+2416,reproduce,Deer,17,13,8,88,3,offspring:1
+2416,reproduce,Deer,143,56,5,32,0,offspring:1
+2416,reproduce,Deer,322,8,1,90,7,offspring:1
+2433,kill,Shroomer,76,111,7,118,4,killed_by:Wolf:249
+2444,reproduce,Elk,125,74,5,110,8,offspring:1
+2461,kill,Musk Ox,163,127,6,36,2,killed_by:Polar Bear:94
+2489,reproduce,Lizard,356,96,0,91,1,offspring:2
+2495,kill,Shroomer,163,42,7,20,2,killed_by:Arctic Fox:311
+2498,kill,Lizard,137,19,5,79,8,killed_by:Hawk:270
+2500,kill,Frog,221,69,3,38,1,killed_by:Arctic Fox:162
+2501,reproduce,Musk Ox,171,42,2,19,6,offspring:1
+2510,reproduce,Elk,316,54,6,106,9,offspring:1
+2535,kill,Shroomer,227,116,0,123,2,killed_by:Wolf:249
+2535,reproduce,Wolf,249,115,8,122,6,offspring:1
+2543,reproduce,Fish,350,0,0,128,0,offspring:2
+2566,reproduce,Musk Ox,169,128,0,2,4,offspring:1
+2570,starvation,Arctic Fox,279,127,3,6,9,
+2580,kill,Frog,64,78,1,38,6,killed_by:Arctic Fox:278
+2594,kill,Shroomer,383,117,2,126,4,killed_by:Wolf:249
+2600,reproduce,Tapir,207,103,6,115,3,offspring:1
+2605,reproduce,Deer,29,97,5,34,4,offspring:1
+2611,reproduce,Deer,218,55,5,28,9,offspring:1
+2623,reproduce,Deer,33,91,9,99,5,offspring:1
+2623,reproduce,Deer,34,88,6,121,3,offspring:1
+2623,reproduce,Deer,38,93,8,123,2,offspring:1
+2623,reproduce,Deer,39,90,9,115,2,offspring:1
+2640,reproduce,Parrot,372,0,0,32,0,offspring:1
+2644,kill,Rabbit,65,112,9,113,2,killed_by:Jaguar:281
+2648,reproduce,Wolf,45,14,0,78,9,offspring:1
+2649,starvation,Arctic Fox,310,127,3,2,4,
+2666,kill,Shroomer,41,24,3,90,6,killed_by:Sectid:400
+2666,reproduce,Parrot,243,0,2,31,6,offspring:1
+2685,kill,Shroomer,405,12,0,77,8,killed_by:Wolf:65
+2685,kill,Frog,79,85,2,30,1,killed_by:Arctic Fox:278
+2702,reproduce,Penguin,293,32,0,3,8,offspring:1
+2718,starvation,Wolf,252,117,3,3,2,
+2722,kill,Tapir,341,119,3,113,1,killed_by:Jaguar:281
+2722,reproduce,Tapir,59,106,5,126,4,offspring:1
+2722,reproduce,Tapir,209,124,3,117,2,offspring:1
+2722,reproduce,Tapir,303,123,7,119,0,offspring:1
+2726,kill,Camel,145,79,9,71,3,killed_by:Bear:267
+2730,kill,Shroomer,434,14,5,81,7,killed_by:Wolf:65
+2738,kill,Frog,344,116,1,128,0,killed_by:Wolf:221
+2755,starvation,Fish,363,124,9,58,7,
+2759,kill,Penguin,418,29,5,3,3,killed_by:Crocodile:307
+2779,reproduce,Tapir,212,24,6,99,0,offspring:1
+2785,reproduce,Frog,399,70,6,33,1,offspring:2
+2788,reproduce,Elk,124,69,3,105,2,offspring:1
+2803,starvation,Fish,48,48,7,119,5,
+2803,starvation,Fish,187,2,4,73,6,
+2803,reproduce,Fish,75,60,3,63,0,offspring:2
+2803,reproduce,Fish,154,61,1,60,7,offspring:2
+2803,reproduce,Fish,327,61,2,61,7,offspring:2
+2803,reproduce,Fish,338,61,4,62,7,offspring:2
+2803,reproduce,Fish,339,59,1,63,7,offspring:2
+2803,reproduce,Fish,340,59,5,62,5,offspring:2
+2820,kill,Penguin,40,25,8,6,0,killed_by:Arctic Fox:220
+2821,reproduce,Elk,122,62,8,32,4,offspring:1
+2824,kill,Frog,241,83,9,37,5,killed_by:Fox:93
+2828,reproduce,Parrot,135,9,4,96,0,offspring:1
+2836,kill,Musk Ox,169,128,0,3,7,killed_by:Polar Bear:334
+2838,kill,Shroomer,46,110,3,125,0,killed_by:Wolf:221
+2846,reproduce,Elk,104,120,3,43,0,offspring:1
+2846,reproduce,Elk,105,124,7,42,1,offspring:1
+2846,reproduce,Elk,110,121,8,39,7,offspring:1
+2846,reproduce,Elk,112,119,7,27,3,offspring:1
+2846,reproduce,Elk,159,127,5,22,4,offspring:1
+2846,reproduce,Elk,325,118,8,24,9,offspring:1
+2846,reproduce,Elk,328,125,9,41,2,offspring:1
+2853,kill,Shroomer,157,17,3,88,3,killed_by:Wolf:65
+2857,kill,Penguin,293,31,0,-0,1,killed_by:Arctic Fox:355
+2869,starvation,Sectid,9,26,5,87,0,
+2885,reproduce,Parrot,200,11,8,99,9,offspring:1
+2887,reproduce,Camel,139,66,6,98,5,offspring:1
+2906,kill,Elk,86,63,6,31,4,killed_by:Crocodile:236
+2924,reproduce,Lizard,184,14,8,11,5,offspring:2
+2932,kill,Deer,81,8,1,96,6,killed_by:Wolf:45
+2933,kill,Shroomer,174,118,5,127,6,killed_by:Wolf:249
+2938,kill,Shroomer,224,114,4,121,2,killed_by:Wolf:221
+2943,kill,Boar,153,111,0,83,5,killed_by:Bear:90
+2965,starvation,Fish,362,117,6,53,4,
+2976,starvation,Rabbit,60,118,1,80,2,
+3000,starvation,Parrot,378,0,0,126,7,
+3026,starvation,Rabbit,24,99,9,56,4,
+3028,kill,Tapir,79,128,0,114,8,killed_by:Jaguar:281
+3037,reproduce,Musk Ox,172,45,2,3,5,offspring:1
+3082,kill,Frog,399,72,1,41,1,killed_by:Fox:256
+3087,starvation,Lizard,329,92,8,0,0,
+3087,reproduce,Lizard,244,97,5,33,2,offspring:2
+3087,reproduce,Lizard,287,96,1,33,5,offspring:2
+3087,reproduce,Tapir,312,32,0,110,6,offspring:1
+3097,kill,Musk Ox,32,117,9,27,2,killed_by:Polar Bear:94
+3097,kill,Deer,391,65,6,23,3,killed_by:Crocodile:216
+3097,reproduce,Deer,27,45,8,23,7,offspring:1
+3097,reproduce,Frog,43,72,3,27,0,offspring:2
+3114,kill,Musk Ox,127,128,0,4,9,killed_by:Polar Bear:277
+3114,reproduce,Deer,31,96,9,31,9,offspring:1
+3120,reproduce,Elk,123,68,3,102,1,offspring:1
+3172,reproduce,Polar Bear,277,127,9,6,1,offspring:1
+3177,starvation,Sectid,6,23,5,96,4,
+3179,starvation,Rabbit,336,20,4,120,5,
+3179,reproduce,Elk,113,46,1,15,3,offspring:1
+3214,kill,Frog,252,65,9,30,2,killed_by:Fox:256
+3232,kill,Deer,4,-0,0,104,2,killed_by:Wolf:45
+3232,reproduce,Deer,322,3,8,109,9,offspring:1
+3234,reproduce,Camel,141,100,7,123,6,offspring:1
+3243,kill,Shroomer,230,15,2,90,5,killed_by:Wolf:65
+3249,starvation,Wolf,306,125,8,3,5,
+3271,starvation,Sectid,5,19,1,90,2,
+3283,kill,Monkey,61,0,0,35,9,killed_by:Polar Bear:288
+3283,reproduce,Monkey,12,29,1,34,1,offspring:1
+3283,reproduce,Monkey,26,27,3,34,9,offspring:1
+3283,reproduce,Monkey,170,10,8,21,9,offspring:1
+3283,reproduce,Monkey,176,17,2,27,4,offspring:1
+3283,reproduce,Monkey,185,30,2,31,9,offspring:1
+3283,reproduce,Monkey,190,15,4,39,6,offspring:1
+3283,reproduce,Monkey,191,18,6,24,5,offspring:1
+3283,reproduce,Monkey,298,17,8,16,3,offspring:1
+3283,reproduce,Monkey,299,19,2,27,4,offspring:1
+3283,reproduce,Monkey,348,15,5,16,7,offspring:1
+3283,reproduce,Monkey,384,11,3,24,7,offspring:1
+3283,reproduce,Monkey,392,8,1,23,1,offspring:1
+3288,starvation,Rabbit,128,105,5,67,8,
+3288,reproduce,Rabbit,52,90,2,120,5,offspring:2
+3288,reproduce,Rabbit,54,73,5,116,8,offspring:2
+3302,kill,Frog,341,69,1,37,4,killed_by:Fox:256
+3302,reproduce,Frog,131,87,1,41,0,offspring:2
+3308,reproduce,Elk,125,66,0,105,4,offspring:1
+3311,reproduce,Elk,316,51,2,98,8,offspring:1
+3317,kill,Boar,136,81,9,70,3,killed_by:Bear:267
+3317,reproduce,Boar,138,79,5,61,5,offspring:2
+3317,reproduce,Boar,166,84,6,61,7,offspring:2
+3317,reproduce,Boar,247,82,9,81,5,offspring:2
+3317,reproduce,Boar,263,93,9,47,1,offspring:2
+3317,reproduce,Boar,264,93,2,46,5,offspring:2
+3317,reproduce,Boar,265,92,7,48,0,offspring:2
+3317,reproduce,Boar,285,81,0,59,5,offspring:2
+3331,reproduce,Deer,28,100,6,37,6,offspring:1
+3337,starvation,Sectid,3,22,5,95,0,
+3354,reproduce,Camel,242,57,3,94,8,offspring:1
+3366,starvation,Parrot,160,0,0,122,6,
+3366,reproduce,Parrot,68,6,7,107,1,offspring:1
+3366,reproduce,Parrot,406,5,3,106,6,offspring:1
+3410,reproduce,Deer,183,96,0,39,0,offspring:1
+3436,reproduce,Elk,69,85,8,106,8,offspring:1
+3448,reproduce,Musk Ox,171,41,9,12,1,offspring:1
+3456,kill,Frog,341,81,0,36,2,killed_by:Fox:254
+3491,kill,Shroomer,35,114,0,113,6,killed_by:Wolf:221
+3494,reproduce,Camel,167,82,7,46,5,offspring:1
+3519,kill,Musk Ox,429,128,0,-0,1,killed_by:Polar Bear:79
+3526,reproduce,Turtle,96,13,8,23,2,offspring:1
+3530,kill,Turtle,97,85,3,41,7,killed_by:Boar:264
+3532,kill,Frog,362,65,0,29,5,killed_by:Fox:257
+3537,starvation,Lizard,330,99,4,33,4,
+3542,kill,Musk Ox,388,125,7,0,0,killed_by:Polar Bear:334
+3544,starvation,Rabbit,57,57,5,90,4,
+3554,kill,Frog,447,89,6,36,7,killed_by:Fox:254
+3574,starvation,Fish,89,72,4,89,1,
+3579,reproduce,Musk Ox,337,45,1,6,1,offspring:1
+3584,reproduce,Polar Bear,334,124,0,0,6,offspring:1
+3609,kill,Frog,60,64,1,20,1,killed_by:Fox:257
+3651,kill,Frog,131,99,3,42,8,killed_by:Fox:254
+3656,kill,Deer,144,-0,0,80,2,killed_by:Wolf:65
+3665,starvation,Arctic Fox,280,0,4,14,0,
+3694,starvation,Rabbit,382,69,9,69,6,
+3710,starvation,Parrot,318,109,9,82,6,
+3713,reproduce,Elk,122,53,9,34,0,offspring:1
+3714,reproduce,Elk,124,59,7,104,2,offspring:1
+3717,kill,Turtle,99,116,2,1,9,killed_by:Polar Bear:97
+3719,starvation,Elk,289,59,8,52,7,
+3719,starvation,Elk,290,48,6,34,2,
+3750,kill,Musk Ox,10,123,3,37,1,killed_by:Polar Bear:94
+3751,reproduce,Elk,121,49,2,17,8,offspring:1
+3765,reproduce,Monkey,178,128,0,128,0,offspring:1
+3787,kill,Turtle,100,116,2,0,0,killed_by:Polar Bear:97
+3793,reproduce,Turtle,101,77,3,78,9,offspring:1
+3799,starvation,Lizard,376,0,0,127,8,
+3799,starvation,Lizard,377,0,0,120,6,
+3800,reproduce,Parrot,66,3,7,2,8,offspring:1
+3816,reproduce,Deer,17,11,7,96,4,offspring:1
+3829,reproduce,Parrot,135,2,2,101,8,offspring:1
+3829,reproduce,Parrot,200,22,1,106,6,offspring:1
+3829,reproduce,Parrot,241,15,3,110,2,offspring:1
+3833,reproduce,Deer,322,5,4,108,9,offspring:1
+3892,kill,Boar,138,84,3,68,9,killed_by:Bear:267
+3892,reproduce,Bear,267,84,3,69,9,offspring:1
+3917,reproduce,Parrot,192,68,5,104,0,offspring:1
+3917,reproduce,Parrot,193,75,0,124,4,offspring:1
+3917,reproduce,Parrot,195,87,5,113,6,offspring:1
+3917,reproduce,Parrot,198,75,1,122,5,offspring:1
+3917,reproduce,Parrot,234,69,6,100,8,offspring:1
+3917,reproduce,Parrot,300,90,9,117,4,offspring:1
+3917,reproduce,Parrot,326,85,7,128,0,offspring:1
+3923,reproduce,Parrot,243,1,3,1,8,offspring:1
+3943,kill,Parrot,326,86,9,128,0,killed_by:Fox:258
+3946,reproduce,Parrot,199,2,1,8,6,offspring:1
+3953,starvation,Parrot,182,126,7,59,8,
+3968,kill,Boar,450,89,7,68,1,killed_by:Bear:267
+3970,reproduce,Turtle,102,86,7,103,6,offspring:1
+4016,reproduce,Musk Ox,172,53,8,2,3,offspring:1
+4017,kill,Deer,155,37,9,44,7,killed_by:Crocodile:236
+4022,kill,Deer,38,98,7,128,0,killed_by:Wolf:221
+4023,starvation,Elk,118,49,5,35,4,
+4023,reproduce,Elk,113,46,6,7,4,offspring:1
+4035,reproduce,Wolf,221,99,2,126,6,offspring:1
+4053,kill,Elk,113,46,9,7,4,killed_by:Crocodile:307
+4053,reproduce,Crocodile,307,45,7,7,2,offspring:1
+4056,kill,Rabbit,128,95,3,128,0,killed_by:Fox:258
+4066,starvation,Elk,115,57,4,47,9,
+4067,starvation,Frog,417,77,6,22,9,
+4075,starvation,Fox,257,47,2,27,4,
+4075,reproduce,Polar Bear,288,1,2,11,0,offspring:1
+4090,kill,Elk,442,119,7,22,6,killed_by:Polar Bear:277
+4092,reproduce,Crocodile,216,57,3,33,7,offspring:1
+4101,kill,Boar,136,77,6,65,7,killed_by:Bear:318
+4133,reproduce,Deer,27,41,0,24,5,offspring:1
+4133,reproduce,Deer,218,39,1,23,0,offspring:1
+4145,kill,Deer,14,27,0,78,3,killed_by:Wolf:65
+4153,starvation,Fish,78,20,2,102,9,
+4169,kill,Rabbit,52,95,6,117,2,killed_by:Wolf:221
+4185,starvation,Tapir,202,57,1,50,5,
+4185,reproduce,Tapir,92,33,8,15,5,offspring:1
+4185,reproduce,Tapir,225,44,5,24,9,offspring:1
+4185,reproduce,Tapir,304,8,7,17,5,offspring:1
+4210,kill,Elk,122,54,5,39,9,killed_by:Crocodile:113
+4213,kill,Musk Ox,134,43,2,2,1,killed_by:Crocodile:307
+4215,kill,Shroomer,226,102,7,116,2,killed_by:Wolf:155
+4224,starvation,Lizard,151,0,5,128,0,
+4241,reproduce,Deer,39,96,0,104,0,offspring:1
+4278,kill,Boar,451,85,0,56,2,killed_by:Bear:318
+4288,reproduce,Rabbit,444,78,7,105,2,offspring:2
+4288,reproduce,Rabbit,446,77,4,101,9,offspring:2
+4295,kill,Boar,459,94,6,59,0,killed_by:Bear:267
+4317,kill,Deer,22,95,1,75,3,killed_by:Jaguar:282
+4317,reproduce,Deer,11,104,0,58,6,offspring:1
+4317,reproduce,Deer,183,101,6,44,6,offspring:1
+4326,reproduce,Wolf,65,25,1,72,9,offspring:1
+4334,starvation,Wolf,358,6,3,103,2,
+4342,kill,Deer,430,97,4,101,1,killed_by:Wolf:221
+4395,reproduce,Musk Ox,171,46,7,13,1,offspring:1
+4402,kill,Rabbit,444,69,2,97,9,killed_by:Fox:258
+4426,starvation,Arctic Fox,278,99,6,36,9,
+4450,reproduce,Elk,121,40,8,6,5,offspring:1
+4451,starvation,Crocodile,259,64,1,19,3,
+4464,starvation,Arctic Fox,355,60,0,5,7,
+4470,kill,Deer,91,26,1,61,3,killed_by:Wolf:226
+4473,reproduce,Turtle,95,22,7,26,0,offspring:1
+4479,reproduce,Deer,33,78,2,109,0,offspring:1
+4479,reproduce,Deer,34,74,6,119,1,offspring:1
+4479,reproduce,Deer,366,72,5,118,9,offspring:1
+4480,reproduce,Musk Ox,337,43,3,2,0,offspring:1
+4483,kill,Elk,110,123,9,47,7,killed_by:Polar Bear:94
+4484,kill,Boar,265,92,1,31,8,killed_by:Bear:90
+4502,starvation,Arctic Fox,311,60,1,5,7,
+4519,kill,Rabbit,56,58,6,94,6,killed_by:Fox:258
+4522,reproduce,Monkey,120,64,0,119,8,offspring:1
+4522,reproduce,Monkey,331,125,5,111,5,offspring:1
+4526,kill,Frog,343,110,6,128,0,killed_by:Wolf:155
+4541,starvation,Shroomer,222,74,3,110,9,
+4558,reproduce,Musk Ox,235,43,7,9,9,offspring:1
+4579,kill,Elk,121,41,7,6,5,killed_by:Crocodile:38
+4595,kill,Deer,19,76,8,57,0,killed_by:Jaguar:282
+4640,starvation,Parrot,238,38,2,95,5,
+4649,starvation,Frog,43,72,9,8,4,
+4666,reproduce,Deer,294,25,0,112,5,offspring:1
+4666,reproduce,Deer,422,3,0,102,3,offspring:1
+4677,kill,Shroomer,232,19,2,51,9,killed_by:Wolf:226
+4708,starvation,Hawk,270,40,4,82,6,
+4710,kill,Shroomer,88,119,1,118,1,killed_by:Wolf:155
+4716,reproduce,Polar Bear,277,127,3,31,3,offspring:1
+4723,reproduce,Camel,167,78,8,35,8,offspring:1
+4735,kill,Boar,285,87,9,54,2,killed_by:Jaguar:282
+4735,reproduce,Jaguar,282,87,4,54,6,offspring:1
+4766,kill,Deer,29,97,9,112,5,killed_by:Wolf:221
+4777,starvation,Parrot,301,72,5,71,6,
+4783,kill,Elk,245,128,0,35,3,killed_by:Polar Bear:277
+4786,starvation,Lizard,77,62,8,0,0,
+4787,kill,Elk,106,128,0,23,9,killed_by:Polar Bear:265
+4791,starvation,Arctic Fox,162,77,1,30,2,
+4792,kill,Boar,461,91,7,53,9,killed_by:Bear:267
+4817,reproduce,Parrot,66,2,2,8,4,offspring:1
+4817,reproduce,Parrot,89,13,6,24,5,offspring:1
+4817,reproduce,Parrot,147,64,0,16,4,offspring:1
+4817,reproduce,Parrot,243,30,2,19,7,offspring:1
+4817,reproduce,Parrot,386,18,1,27,5,offspring:1
+4817,reproduce,Parrot,433,28,9,16,9,offspring:1
+4819,kill,Boar,458,90,7,48,8,killed_by:Jaguar:282
+4824,kill,Boar,455,94,8,59,9,killed_by:Bear:318
+4839,kill,Deer,44,5,3,56,1,killed_by:Wolf:65
+4842,starvation,Lizard,50,116,1,40,7,
+4857,reproduce,Monkey,191,64,1,22,8,offspring:1
+4869,kill,Elk,40,58,8,34,7,killed_by:Crocodile:113
+4869,kill,Deer,366,62,1,115,2,killed_by:Jaguar:281
+4881,reproduce,Lizard,345,22,4,117,4,offspring:2
+4898,kill,Musk Ox,337,45,1,2,7,killed_by:Crocodile:307
+4899,starvation,Scorpion,308,21,4,44,1,
+4934,reproduce,Camel,242,48,8,99,4,offspring:1
+4936,reproduce,Deer,130,32,0,17,4,offspring:1
+4957,starvation,Monkey,42,115,6,50,5,
+4995,reproduce,Musk Ox,172,55,8,3,2,offspring:1
+4999,starvation,Arctic Fox,220,54,1,30,2,
+5015,starvation,Parrot,357,34,2,41,6,
+5020,reproduce,Elk,114,64,0,27,0,offspring:1
+5020,reproduce,Elk,159,128,0,14,5,offspring:1
+5021,starvation,Wolf,390,39,7,81,6,
+5028,starvation,Sectid,400,37,6,97,0,
+5036,reproduce,Wolf,221,98,1,107,7,offspring:1
+5076,reproduce,Boar,247,80,4,96,0,offspring:2
+5087,kill,Deer,152,21,3,60,0,killed_by:Wolf:65
+5087,reproduce,Deer,218,39,8,25,0,offspring:1
+5087,reproduce,Deer,269,59,2,21,7,offspring:1
+5087,reproduce,Deer,421,53,2,26,2,offspring:1
+5091,kill,Elk,159,128,0,12,9,killed_by:Polar Bear:265
+5123,reproduce,Monkey,120,46,1,112,7,offspring:1
+5127,kill,Frog,396,17,3,31,8,killed_by:Wolf:226
+5128,reproduce,Polar Bear,94,127,6,40,7,offspring:1
+5130,starvation,Tapir,201,54,8,56,1,
+5138,reproduce,Elk,69,96,0,115,4,offspring:1
+5138,reproduce,Elk,137,43,8,102,4,offspring:1
+5150,kill,Boar,457,91,7,45,5,killed_by:Jaguar:311
+5160,reproduce,Turtle,98,85,1,38,6,offspring:1
+5184,kill,Elk,441,113,1,20,7,killed_by:Polar Bear:97
+5203,reproduce,Elk,112,128,0,32,0,offspring:1
+5206,kill,Elk,105,128,0,33,8,killed_by:Polar Bear:94
+5214,kill,Frog,286,128,0,108,3,killed_by:Wolf:155
+5234,kill,Musk Ox,171,52,2,15,9,killed_by:Crocodile:38
+5234,reproduce,Musk Ox,163,31,4,10,8,offspring:1
+5234,reproduce,Musk Ox,228,16,9,18,7,offspring:1
+5265,starvation,Frog,346,126,0,121,4,
+5266,starvation,Fox,254,108,2,79,7,
+5273,starvation,Wolf,251,120,8,27,1,
+5285,kill,Frog,402,6,1,23,5,killed_by:Wolf:226
+5286,starvation,Lizard,81,96,0,11,0,
+5324,starvation,Lizard,385,69,6,25,3,
+5327,reproduce,Wolf,65,25,5,61,1,offspring:1
+5330,kill,Elk,152,128,0,30,5,killed_by:Polar Bear:277
+5335,starvation,Frog,347,126,6,120,4,
+5343,starvation,Lizard,244,93,9,13,0,
+5352,kill,Frog,150,93,6,115,5,killed_by:Boar:50
+5376,starvation,Frog,8,102,3,44,1,
+5379,starvation,Snake,309,28,7,48,3,
+5390,starvation,Fox,256,98,0,62,0,
+5391,starvation,Wolf,250,26,5,87,0,
+5401,starvation,Lizard,287,114,4,27,1,
+5410,kill,Deer,393,105,1,48,7,killed_by:Jaguar:311
+5420,kill,Rabbit,78,73,3,73,8,killed_by:Wolf:44
+5420,reproduce,Rabbit,54,102,3,120,0,offspring:2
+5433,kill,Boar,166,85,6,49,3,killed_by:Bear:318
+5433,reproduce,Boar,263,93,1,44,6,offspring:2
+5433,reproduce,Boar,264,94,4,43,7,offspring:2
+5457,starvation,Wolf,292,37,0,78,8,
+5480,starvation,Lizard,174,71,2,15,9,
+5480,kill,Frog,219,24,1,18,4,killed_by:Wolf:226
+5488,starvation,Lizard,132,35,4,72,9,
+5491,reproduce,Deer,378,96,0,33,0,offspring:1
+5494,kill,Frog,82,84,4,118,4,killed_by:Boar:50
+5494,reproduce,Frog,83,73,2,124,0,offspring:2
+5494,reproduce,Frog,353,59,3,118,8,offspring:2
+5494,reproduce,Frog,354,75,0,122,1,offspring:2
+5494,reproduce,Frog,368,79,9,115,2,offspring:2
+5494,reproduce,Frog,369,81,0,123,2,offspring:2
+5494,reproduce,Frog,370,69,1,118,3,offspring:2
+5527,starvation,Scorpion,272,19,2,13,7,
+5550,reproduce,Parrot,198,96,0,128,0,offspring:1
+5554,reproduce,Crocodile,307,41,1,6,0,offspring:1
+5556,reproduce,Parrot,290,96,0,125,5,offspring:1
+5557,kill,Elk,112,128,0,14,4,killed_by:Polar Bear:343
+5561,kill,Deer,213,5,6,55,2,killed_by:Wolf:162
+5577,reproduce,Parrot,289,96,0,122,5,offspring:1
+5583,starvation,Wolf,253,35,9,87,9,
+5587,reproduce,Deer,37,96,1,128,0,offspring:1
+5614,kill,Frog,84,9,1,52,7,killed_by:Wolf:65
+5632,reproduce,Rabbit,28,64,0,109,4,offspring:2
+5651,starvation,Parrot,310,54,3,52,6,
+5679,reproduce,Elk,399,34,8,22,4,offspring:1
+5688,starvation,Elk,117,60,9,50,6,
+5722,reproduce,Monkey,278,53,8,123,6,offspring:1
+5724,reproduce,Monkey,120,30,9,111,4,offspring:1
+5724,reproduce,Camel,167,76,7,33,8,offspring:1
+5771,kill,Musk Ox,235,33,4,11,3,killed_by:Crocodile:292
+5793,starvation,Lizard,224,128,0,84,5,
+5797,kill,Frog,368,65,3,102,7,killed_by:Boar:40
+5811,kill,Elk,455,117,8,1,0,killed_by:Polar Bear:343
+5850,kill,Elk,47,112,6,27,3,killed_by:Polar Bear:334
+5855,starvation,Tapir,203,57,6,53,5,
+5882,kill,Deer,383,113,2,24,3,killed_by:Polar Bear:97
+5896,starvation,Snake,275,65,0,19,0,
+5900,reproduce,Elk,114,69,7,19,0,offspring:1
+5933,kill,Lizard,342,54,7,45,1,killed_by:Crocodile:236
+5933,reproduce,Lizard,9,15,5,13,2,offspring:2
+5933,reproduce,Lizard,86,23,6,1,2,offspring:2
+5933,reproduce,Lizard,184,11,5,10,2,offspring:2
+5933,reproduce,Lizard,296,8,1,23,1,offspring:2
+5933,reproduce,Lizard,364,19,9,31,3,offspring:2
+5939,reproduce,Elk,69,98,1,110,5,offspring:1
+5969,kill,Deer,16,37,6,39,1,killed_by:Wolf:65
+5977,reproduce,Boar,247,57,2,111,4,offspring:2
+5993,starvation,Lizard,153,113,4,44,7,
+5993,kill,Musk Ox,355,43,1,6,3,killed_by:Crocodile:307
+5993,reproduce,Musk Ox,172,58,5,8,7,offspring:1
+5993,reproduce,Musk Ox,175,14,0,42,4,offspring:1
+5993,reproduce,Musk Ox,464,20,4,5,0,offspring:1
+6015,reproduce,Deer,130,32,0,27,6,offspring:1
+6034,kill,Elk,169,128,0,49,7,killed_by:Polar Bear:94
+6043,starvation,Parrot,197,39,5,80,4,
+6068,reproduce,Turtle,102,94,0,110,8,offspring:1
+6098,reproduce,Deer,37,124,1,128,0,offspring:1
+6107,reproduce,Parrot,290,115,3,110,3,offspring:1
+6128,reproduce,Parrot,289,105,6,126,2,offspring:1
+6136,starvation,Parrot,142,70,2,49,1,
+6164,reproduce,Elk,104,126,7,57,8,offspring:1
+6164,reproduce,Elk,239,125,7,55,9,offspring:1
+6164,reproduce,Elk,328,125,4,56,5,offspring:1
+6164,reproduce,Elk,443,124,5,54,7,offspring:1
+6179,kill,Deer,37,125,5,128,0,killed_by:Jaguar:281
+6183,starvation,Monkey,359,126,4,119,5,
+6183,reproduce,Monkey,57,121,0,119,2,offspring:1
+6183,reproduce,Monkey,63,103,5,120,1,offspring:1
+6183,reproduce,Monkey,180,100,5,123,5,offspring:1
+6183,reproduce,Monkey,181,118,9,123,3,offspring:1
+6183,reproduce,Monkey,259,118,0,110,8,offspring:1
+6214,starvation,Monkey,367,126,4,119,3,
+6216,starvation,Parrot,19,67,4,3,6,
+6242,reproduce,Lizard,424,89,7,101,3,offspring:2
+6251,reproduce,Elk,388,40,0,32,0,offspring:1
+6285,reproduce,Monkey,191,64,0,25,5,offspring:1
+6321,starvation,Monkey,179,128,0,127,7,
+6323,reproduce,Monkey,42,51,6,96,4,offspring:1
+6323,reproduce,Monkey,278,55,9,126,0,offspring:1
+6325,reproduce,Monkey,120,35,3,125,0,offspring:1
+6336,kill,Elk,325,116,6,39,0,killed_by:Polar Bear:334
+6338,starvation,Monkey,168,128,0,91,3,
+6354,kill,Deer,269,50,2,22,4,killed_by:Crocodile:113
+6360,starvation,Monkey,178,128,0,128,0,
+6367,starvation,Scorpion,273,55,5,49,0,
+6400,reproduce,Parrot,198,116,6,113,2,offspring:1
+6403,starvation,Lizard,374,37,0,49,3,
+6428,kill,Shroomer,368,52,2,25,2,killed_by:Crocodile:38
+6444,reproduce,Monkey,270,64,0,23,2,offspring:1
+6463,reproduce,Rabbit,28,31,9,127,7,offspring:2
+6479,reproduce,Deer,430,113,7,126,2,offspring:1
+6480,reproduce,Elk,399,30,0,25,2,offspring:1
+6494,reproduce,Camel,341,98,6,55,4,offspring:1
+6499,reproduce,Parrot,222,-0,0,0,0,offspring:1
+6523,reproduce,Elk,450,61,4,27,6,offspring:1
+6532,kill,Deer,387,107,0,44,0,killed_by:Polar Bear:79
+6549,kill,Shroomer,402,30,7,35,1,killed_by:Wolf:65
+6549,reproduce,Wolf,65,30,9,35,7,offspring:1
+6555,starvation,Deer,20,97,4,92,3,
+6565,starvation,Elk,21,115,3,48,5,
+6576,reproduce,Boar,50,27,2,117,2,offspring:2
+6585,reproduce,Deer,33,96,0,113,6,offspring:1
+6587,starvation,Parrot,147,74,4,0,0,
+6614,reproduce,Elk,323,125,3,42,5,offspring:1
+6616,reproduce,Deer,130,20,1,25,7,offspring:1
+6622,kill,Shroomer,49,31,7,30,6,killed_by:Wolf:402
+6632,reproduce,Rabbit,112,29,8,100,5,offspring:2
+6669,kill,Monkey,164,17,2,25,2,killed_by:Fox:93
+6675,kill,Monkey,392,-0,1,-0,0,killed_by:Wolf:162
+6694,kill,Elk,323,126,0,44,4,killed_by:Polar Bear:277
+6709,kill,Shroomer,173,26,4,33,5,killed_by:Wolf:65
+6725,reproduce,Camel,167,70,9,37,9,offspring:1
+6739,reproduce,Deer,218,32,0,24,9,offspring:1
+6740,reproduce,Elk,69,96,9,107,0,offspring:1
+6750,kill,Turtle,98,93,5,38,3,killed_by:Bear:90
+6750,reproduce,Bear,90,94,0,38,8,offspring:1
+6753,kill,Deer,337,64,6,29,8,killed_by:Wolf:45
+6761,kill,Elk,239,124,8,59,7,killed_by:Polar Bear:94
+6781,kill,Parrot,222,0,0,-0,0,killed_by:Wolf:162
+6782,kill,Frog,284,14,0,38,7,killed_by:Fox:93
+6793,kill,Boar,346,95,4,33,1,killed_by:Bear:491
+6819,starvation,Snake,274,25,5,71,5,
+6850,kill,Elk,46,114,0,49,7,killed_by:Polar Bear:79
+6866,reproduce,Elk,449,32,0,93,5,offspring:1
+6878,reproduce,Boar,247,24,1,116,8,offspring:2
+6884,kill,Boar,254,88,7,32,7,killed_by:Bear:491
+6885,kill,Deer,472,16,2,21,3,killed_by:Wolf:402
+6896,kill,Musk Ox,153,59,6,17,7,killed_by:Crocodile:113
+6907,kill,Parrot,489,0,0,0,0,killed_by:Wolf:162
+6922,reproduce,Monkey,310,59,6,126,1,offspring:1
+6924,reproduce,Monkey,117,27,4,108,7,offspring:1
+6933,reproduce,Boar,251,90,1,28,2,offspring:2
+6936,reproduce,Deer,245,25,4,12,9,offspring:1
+6950,reproduce,Elk,451,42,0,15,6,offspring:1
+6963,kill,Frog,244,87,5,124,1,killed_by:Boar:470
+6965,reproduce,Elk,443,128,0,52,4,offspring:1
+7006,reproduce,Monkey,278,64,0,120,0,offspring:1
+7022,kill,Musk Ox,163,26,5,-0,0,killed_by:Crocodile:307
+7037,kill,Shroomer,480,47,3,23,6,killed_by:Crocodile:38
+7041,starvation,Tapir,426,120,8,120,9,
+7045,reproduce,Monkey,270,68,5,31,7,offspring:1
+7055,reproduce,Crocodile,307,27,0,0,6,offspring:1
+7080,kill,Shroomer,81,30,0,20,0,killed_by:Wolf:65
+7086,reproduce,Tapir,326,20,9,-0,0,offspring:1
+7087,reproduce,Deer,366,8,4,19,8,offspring:1
+7096,reproduce,Elk,388,31,0,32,5,offspring:1
+7142,kill,Lizard,468,0,0,86,2,killed_by:Fox:93
+7154,starvation,Monkey,71,110,4,72,5,
+7154,reproduce,Monkey,191,65,0,35,5,offspring:1
+7163,kill,Elk,156,126,5,53,5,killed_by:Polar Bear:334
+7170,kill,Parrot,99,43,3,128,0,killed_by:Fox:258
+7183,reproduce,Rabbit,446,97,9,125,4,offspring:2
+7189,kill,Frog,256,75,3,107,0,killed_by:Wolf:44
+7237,kill,Shroomer,219,28,2,20,6,killed_by:Wolf:402
+7250,kill,Musk Ox,106,30,6,8,0,killed_by:Crocodile:244
+7250,reproduce,Musk Ox,134,47,0,9,6,offspring:1
+7250,reproduce,Musk Ox,151,38,9,21,3,offspring:1
+7250,reproduce,Musk Ox,172,61,8,12,8,offspring:1
+7250,reproduce,Musk Ox,175,9,3,51,0,offspring:1
+7250,reproduce,Musk Ox,182,50,7,8,7,offspring:1
+7250,reproduce,Musk Ox,228,10,1,15,9,offspring:1
+7250,reproduce,Musk Ox,429,55,3,8,4,offspring:1
+7250,reproduce,Musk Ox,464,28,7,16,3,offspring:1
+7281,reproduce,Elk,399,29,2,27,2,offspring:1
+7290,kill,Frog,150,80,0,117,6,killed_by:Wolf:44
+7296,starvation,Deer,52,128,0,84,5,
+7302,starvation,Monkey,297,100,2,119,2,
+7316,kill,Elk,147,128,0,50,6,killed_by:Polar Bear:277
+7324,reproduce,Elk,450,66,3,26,6,offspring:1
+7376,kill,Frog,369,96,9,97,7,killed_by:Boar:470
+7389,reproduce,Lizard,19,96,0,110,1,offspring:2
+7440,reproduce,Rabbit,112,25,8,107,5,offspring:2
+7442,kill,Elk,472,128,0,50,6,killed_by:Polar Bear:94
+7476,starvation,Wolf,249,126,3,126,4,
+7496,starvation,Deer,202,122,9,79,8,
+7496,reproduce,Deer,430,121,4,117,3,offspring:1
+7511,kill,Lizard,285,37,6,110,7,killed_by:Fox:93
+7517,kill,Lizard,295,33,9,81,8,killed_by:Fox:258
+7520,reproduce,Elk,458,56,3,24,8,offspring:1
+7523,reproduce,Monkey,310,61,6,122,1,offspring:1
+7523,reproduce,Monkey,484,56,4,97,8,offspring:1
+7524,kill,Rabbit,14,102,9,113,3,killed_by:Wolf:44
+7525,reproduce,Monkey,117,22,3,113,5,offspring:1
+7534,kill,Deer,173,40,6,31,3,killed_by:Wolf:65
+7534,reproduce,Deer,130,9,6,19,3,offspring:1
+7534,reproduce,Deer,218,28,3,31,0,offspring:1
+7549,kill,Turtle,400,86,9,42,4,killed_by:Bear:491
+7550,reproduce,Wolf,65,40,2,31,8,offspring:1
+7568,kill,Shroomer,214,50,6,22,3,killed_by:Crocodile:113
+7582,kill,Shroomer,64,48,8,22,1,killed_by:Crocodile:38
+7667,reproduce,Elk,449,21,6,90,9,offspring:1
+7668,reproduce,Monkey,178,65,6,32,0,offspring:1
+7672,kill,Shroomer,215,45,6,23,5,killed_by:Wolf:402
+7680,starvation,Deer,31,109,9,72,8,
+7680,reproduce,Deer,82,117,9,126,6,offspring:1
+7705,kill,Rabbit,367,62,0,97,6,killed_by:Fox:93
+7705,reproduce,Rabbit,49,25,5,116,3,offspring:2
+7706,reproduce,Tapir,161,19,8,107,0,offspring:1
+7706,reproduce,Tapir,212,29,7,112,3,offspring:1
+7706,reproduce,Tapir,312,18,2,102,1,offspring:1
+7711,reproduce,Turtle,101,75,4,86,7,offspring:1
+7715,kill,Deer,18,106,4,39,6,killed_by:Polar Bear:79
+7722,kill,Deer,492,89,5,101,1,killed_by:Wolf:44
+7751,reproduce,Elk,451,46,7,15,2,offspring:1
+7762,starvation,Lizard,407,118,0,53,6,
+7763,kill,Deer,245,26,3,5,1,killed_by:Crocodile:244
+7766,reproduce,Elk,443,126,3,41,1,offspring:1
+7804,reproduce,Elk,220,96,0,116,0,offspring:1
+7827,kill,Deer,431,82,5,107,2,killed_by:Wolf:44
+7827,reproduce,Wolf,44,82,9,106,8,offspring:1
+7835,reproduce,Deer,366,20,7,24,5,offspring:1
+7920,kill,Monkey,285,70,2,117,4,killed_by:Fox:93
+7920,kill,Frog,441,83,3,117,4,killed_by:Wolf:431
+7926,starvation,Deer,183,118,4,53,8,
+7996,reproduce,Lizard,88,1,1,108,6,offspring:2
+8000,kill,Rabbit,55,81,9,119,6,killed_by:Wolf:431
+8019,reproduce,Monkey,6,64,0,28,1,offspring:1
+8034,kill,Elk,443,123,4,35,1,killed_by:Polar Bear:277
+8061,reproduce,Parrot,168,103,9,124,4,offspring:1
+8061,reproduce,Parrot,174,103,8,119,4,offspring:1
+8061,reproduce,Parrot,198,121,0,118,8,offspring:1
+8061,reproduce,Parrot,289,108,6,123,1,offspring:1
+8061,reproduce,Parrot,290,121,8,106,7,offspring:1
+8061,reproduce,Parrot,396,117,0,118,9,offspring:1
+8061,reproduce,Parrot,473,120,7,112,3,offspring:1
+8062,kill,Deer,218,30,3,26,9,killed_by:Wolf:400
+8080,kill,Rabbit,53,79,6,119,0,killed_by:Wolf:431
+8083,kill,Elk,254,55,7,12,3,killed_by:Crocodile:113
+8084,kill,Elk,492,128,0,36,4,killed_by:Polar Bear:97
+8096,reproduce,Elk,403,96,0,108,6,offspring:1
+8098,reproduce,Deer,197,118,0,111,6,offspring:1
+8109,reproduce,Camel,141,97,5,128,0,offspring:1
+8114,reproduce,Elk,124,75,3,128,0,offspring:1
+8124,reproduce,Monkey,284,27,9,107,7,offspring:1
+8125,reproduce,Elk,450,65,0,25,0,offspring:1
+8126,reproduce,Monkey,117,23,0,112,5,offspring:1
+8129,reproduce,Elk,123,76,3,128,0,offspring:1
+8129,reproduce,Elk,137,32,0,107,2,offspring:1
+8131,starvation,Monkey,331,128,0,91,3,
+8131,reproduce,Monkey,270,68,7,33,4,offspring:1
+8142,starvation,Deer,143,70,7,10,9,
+8143,reproduce,Parrot,238,64,1,28,4,offspring:1
+8151,reproduce,Monkey,483,64,0,30,7,offspring:1
+8164,kill,Shroomer,166,36,1,26,2,killed_by:Wolf:400
+8166,starvation,Frog,85,28,0,59,8,
+8166,reproduce,Frog,72,17,0,33,6,offspring:2
+8166,reproduce,Frog,394,31,8,13,9,offspring:2
+8166,reproduce,Frog,395,18,7,32,7,offspring:2
+8166,reproduce,Frog,397,22,4,43,2,offspring:2
+8166,reproduce,Frog,398,21,9,41,3,offspring:2
+8166,reproduce,Frog,401,17,6,8,4,offspring:2
+8179,reproduce,Elk,84,29,1,32,0,offspring:1
+8187,kill,Rabbit,286,46,8,104,5,killed_by:Fox:93
+8189,reproduce,Lizard,52,114,2,113,2,offspring:2
+8189,reproduce,Polar Bear,334,112,9,64,0,offspring:1
+8207,reproduce,Lizard,342,64,0,21,8,offspring:2
+8214,kill,Boar,453,91,5,75,0,killed_by:Jaguar:282
+8214,reproduce,Jaguar,282,90,9,74,5,offspring:1
+8219,kill,Elk,476,115,0,54,7,killed_by:Polar Bear:94
+8231,kill,Rabbit,445,71,6,128,0,killed_by:Wolf:44
+8239,reproduce,Camel,167,64,0,35,7,offspring:1
+8243,kill,Musk Ox,156,56,2,16,8,killed_by:Polar Bear:276
+8251,reproduce,Camel,301,32,0,117,2,offspring:1
+8269,reproduce,Parrot,66,16,2,-0,0,offspring:1
+8294,kill,Boar,171,82,8,73,3,killed_by:Jaguar:453
+8294,kill,Camel,122,69,5,36,5,killed_by:Bear:491
+8312,reproduce,Parrot,199,16,1,-0,0,offspring:1
+8321,kill,Deer,111,57,8,2,4,killed_by:Wolf:45
+8321,reproduce,Deer,130,9,7,14,2,offspring:1
+8332,kill,Frog,78,52,4,91,3,killed_by:Fox:93
+8368,kill,Deer,34,82,3,128,0,killed_by:Wolf:431
+8376,kill,Camel,148,79,6,77,6,killed_by:Jaguar:453
+8379,kill,Musk Ox,106,60,3,9,8,killed_by:Polar Bear:276
+8379,reproduce,Polar Bear,276,60,2,10,7,offspring:1
+8385,kill,Frog,152,100,1,128,0,killed_by:Boar:16
+8396,kill,Parrot,199,14,4,0,0,killed_by:Polar Bear:118
+8396,kill,Turtle,35,23,8,11,5,killed_by:Crocodile:244
+8396,reproduce,Turtle,95,16,8,31,6,offspring:1
+8396,reproduce,Turtle,96,14,8,12,4,offspring:1
+8396,reproduce,Turtle,158,9,7,45,6,offspring:1
+8396,reproduce,Turtle,315,22,5,21,4,offspring:1
+8396,reproduce,Parrot,386,14,9,-0,1,offspring:1
+8396,reproduce,Turtle,389,23,4,41,5,offspring:1
+8403,reproduce,Deer,82,118,1,121,9,offspring:1
+8411,kill,Camel,201,61,2,37,3,killed_by:Crocodile:236
+8426,kill,Monkey,170,14,4,0,0,killed_by:Wolf:402
+8426,reproduce,Wolf,402,14,8,0,0,offspring:1
+8462,reproduce,Turtle,102,84,8,121,8,offspring:1
+8468,reproduce,Elk,449,20,9,87,0,offspring:1
+8494,kill,Rabbit,54,99,3,124,4,killed_by:Boar:16
+8506,kill,Parrot,531,8,9,0,0,killed_by:Wolf:402
+8508,kill,Musk Ox,159,6,9,-0,0,killed_by:Polar Bear:288
+8521,kill,Musk Ox,172,62,4,21,7,killed_by:Polar Bear:78
+8536,kill,Shroomer,77,25,4,20,3,killed_by:Wolf:400
+8541,starvation,Fox,258,23,5,99,5,
+8545,starvation,Monkey,486,10,0,128,0,
+8553,kill,Tapir,177,128,0,128,0,killed_by:Jaguar:281
+8575,kill,Parrot,386,0,3,0,0,killed_by:Polar Bear:118
+8595,starvation,Boar,452,104,4,60,2,
+8610,kill,Parrot,66,1,2,0,0,killed_by:Polar Bear:118
+8616,starvation,Wolf,221,100,6,57,9,
+8638,starvation,Bear,268,26,9,83,5,
+8642,starvation,Parrot,195,0,0,123,1,
+8652,kill,Elk,249,55,0,23,0,killed_by:Polar Bear:276
+8665,kill,Camel,488,89,1,40,3,killed_by:Polar Bear:79
+8680,kill,Parrot,171,-0,0,2,0,killed_by:Polar Bear:118
+8713,starvation,Monkey,4,70,1,84,2,
+8720,starvation,Parrot,234,0,0,126,6,
+8723,starvation,Parrot,241,7,2,128,0,
+8725,reproduce,Monkey,284,31,0,110,8,offspring:1
+8725,reproduce,Monkey,295,23,6,114,2,offspring:1
+8757,reproduce,Monkey,37,127,1,98,0,offspring:1
+8757,reproduce,Monkey,42,107,6,117,1,offspring:1
+8757,reproduce,Monkey,57,117,3,120,2,offspring:1
+8757,reproduce,Monkey,63,118,1,110,4,offspring:1
+8757,reproduce,Monkey,259,122,5,114,5,offspring:1
+8757,reproduce,Monkey,359,111,8,122,4,offspring:1
+8757,reproduce,Monkey,477,118,5,122,6,offspring:1
+8757,reproduce,Monkey,478,113,7,125,7,offspring:1
+8757,reproduce,Monkey,479,109,0,125,5,offspring:1
+8757,reproduce,Monkey,484,107,8,117,5,offspring:1
+8761,reproduce,Musk Ox,175,7,1,64,0,offspring:1
+8764,reproduce,Tapir,207,128,0,113,3,offspring:1
+8775,age_death,Lizard,129,61,6,114,3,
+8780,kill,Boar,460,76,3,70,7,killed_by:Jaguar:282
+8785,reproduce,Deer,17,8,5,112,0,offspring:1
+8785,reproduce,Deer,32,2,9,107,8,offspring:1
+8785,reproduce,Deer,110,3,6,105,7,offspring:1
+8788,kill,Frog,83,67,1,111,6,killed_by:Wolf:431
+8793,reproduce,Turtle,447,85,4,60,9,offspring:1
+8800,starvation,Rabbit,272,6,1,128,0,
+8835,kill,Camel,133,90,1,80,0,killed_by:Jaguar:453
+8869,reproduce,Camel,242,32,0,91,9,offspring:1
+8880,starvation,Tapir,303,117,0,92,7,
+8900,kill,Frog,524,18,3,9,1,killed_by:Crocodile:244
+8900,reproduce,Fish,410,111,5,32,0,offspring:2
+8919,kill,Lizard,86,58,3,27,6,killed_by:Crocodile:236
+8921,kill,Shroomer,233,72,1,31,9,killed_by:Bear:491
+8926,reproduce,Elk,450,64,7,26,5,offspring:1
+8930,reproduce,Elk,137,31,7,107,9,offspring:1
+8931,reproduce,Boar,16,103,5,121,9,offspring:2
+8938,kill,Elk,149,74,0,83,6,killed_by:Jaguar:282
+8941,reproduce,Parrot,132,17,3,128,0,offspring:1
+8959,kill,Deer,130,17,3,7,0,killed_by:Wolf:400
+8960,reproduce,Parrot,232,-0,0,0,0,offspring:1
+8961,kill,Frog,353,59,7,125,5,killed_by:Wolf:431
+8962,reproduce,Monkey,336,0,3,-0,0,offspring:1
+8980,reproduce,Elk,84,29,8,25,4,offspring:1
+8980,reproduce,Elk,487,21,6,26,5,offspring:1
+8985,reproduce,Camel,341,98,6,53,4,offspring:1
+9050,reproduce,Wolf,400,16,3,6,0,offspring:1
+9078,kill,Elk,142,128,0,63,7,killed_by:Polar Bear:94
+9080,starvation,Deer,11,105,9,54,3,
+9080,starvation,Deer,385,67,6,0,0,
+9101,reproduce,Tapir,326,20,7,-0,0,offspring:1
+9115,kill,Tapir,326,21,2,-0,0,killed_by:Crocodile:307
+9127,starvation,Parrot,300,28,6,49,9,
+9152,reproduce,Rabbit,446,97,8,104,2,offspring:2
+9155,kill,Frog,523,19,6,-0,0,killed_by:Crocodile:307
+9162,kill,Shroomer,498,54,2,7,9,killed_by:Crocodile:38
+9179,kill,Parrot,232,-0,1,-0,0,killed_by:Wolf:45
+9185,starvation,Monkey,120,0,0,125,5,
+9186,kill,Shroomer,329,20,1,11,5,killed_by:Crocodile:244
+9187,reproduce,Monkey,6,72,3,15,0,offspring:1
+9187,reproduce,Monkey,426,72,6,15,4,offspring:1
+9187,reproduce,Monkey,499,75,6,22,1,offspring:1
+9192,kill,Rabbit,146,106,0,94,9,killed_by:Wolf:44
+9223,reproduce,Fish,80,115,7,71,0,offspring:2
+9223,reproduce,Fish,87,109,7,75,1,offspring:2
+9223,reproduce,Fish,360,120,4,67,3,offspring:2
+9223,reproduce,Fish,361,121,4,66,4,offspring:2
+9223,reproduce,Fish,412,123,0,68,1,offspring:2
+9223,reproduce,Fish,413,122,0,67,2,offspring:2
+9223,reproduce,Fish,414,121,2,67,0,offspring:2
+9223,reproduce,Fish,415,119,6,68,0,offspring:2
+9235,kill,Musk Ox,256,50,5,17,6,killed_by:Polar Bear:78
+9240,reproduce,Camel,167,62,0,28,7,offspring:1
+9242,reproduce,Deer,197,114,6,112,0,offspring:1
+9243,kill,Deer,14,15,0,23,5,killed_by:Wolf:400
+9243,reproduce,Deer,115,33,9,10,1,offspring:1
+9243,reproduce,Deer,163,21,4,17,4,offspring:1
+9243,reproduce,Deer,308,35,9,22,3,offspring:1
+9243,reproduce,Deer,366,26,3,10,9,offspring:1
+9243,reproduce,Deer,417,49,1,8,4,offspring:1
+9243,reproduce,Deer,421,39,0,18,9,offspring:1
+9243,reproduce,Deer,493,27,2,24,6,offspring:1
+9245,kill,Camel,341,98,2,51,5,killed_by:Bear:318
+9245,reproduce,Bear,318,98,3,52,3,offspring:1
+9252,reproduce,Camel,301,28,7,122,0,offspring:1
+9269,reproduce,Elk,449,23,9,90,3,offspring:1
+9312,kill,Monkey,149,0,0,-0,0,killed_by:Wolf:45
+9320,reproduce,Lizard,297,96,2,113,3,offspring:2
+9366,reproduce,Elk,98,16,7,89,7,offspring:1
+9372,reproduce,Monkey,278,28,2,128,0,offspring:1
+9376,starvation,Elk,362,75,6,42,8,
+9383,kill,Boar,264,89,6,55,5,killed_by:Bear:318
+9383,reproduce,Boar,263,92,2,60,0,offspring:2
+9383,reproduce,Boar,462,84,6,53,7,offspring:2
+9411,reproduce,Jaguar,282,79,7,82,6,offspring:1
+9412,kill,Monkey,384,0,3,0,0,killed_by:Wolf:535
+9432,kill,Monkey,336,-0,0,-0,0,killed_by:Wolf:535
+9472,starvation,Shark,261,122,5,86,9,
+9473,kill,Camel,409,79,2,87,7,killed_by:Jaguar:561
+9500,reproduce,Fish,83,103,8,19,6,offspring:2
+9500,reproduce,Fish,272,103,8,19,3,offspring:2
+9520,starvation,Fish,25,10,8,111,9,
+9542,reproduce,Tapir,59,128,0,113,0,offspring:1
+9543,starvation,Boar,274,84,8,25,5,
+9543,starvation,Boar,346,85,7,27,1,
+9584,kill,Boar,263,85,9,67,8,killed_by:Bear:341
+9590,kill,Deer,378,107,4,0,0,killed_by:Polar Bear:265
+9601,reproduce,Fish,410,107,7,10,7,offspring:2
+9635,reproduce,Monkey,185,-0,0,21,6,offspring:1
+9639,kill,Camel,534,93,7,65,0,killed_by:Jaguar:311
+9639,reproduce,Jaguar,311,93,9,64,3,offspring:1
+9644,starvation,Wolf,248,123,0,122,6,
+9656,reproduce,Parrot,2,15,5,19,1,offspring:1
+9656,reproduce,Parrot,89,14,9,30,9,offspring:1
+9656,reproduce,Parrot,243,14,5,28,4,offspring:1
+9656,reproduce,Parrot,372,27,4,21,4,offspring:1
+9656,reproduce,Parrot,377,29,0,23,1,offspring:1
+9663,starvation,Parrot,143,68,5,11,4,
+9676,reproduce,Musk Ox,175,5,1,74,0,offspring:1
+9682,kill,Deer,122,5,9,25,3,killed_by:Wolf:400
+9692,kill,Frog,401,16,6,11,5,killed_by:Crocodile:244
+9692,kill,Turtle,447,85,7,61,6,killed_by:Bear:341
+9698,reproduce,Tapir,207,128,0,118,7,offspring:1
+9702,kill,Turtle,101,79,1,76,4,killed_by:Jaguar:453
+9702,reproduce,Turtle,138,78,2,114,8,offspring:1
+9710,starvation,Parrot,406,48,6,49,5,
+9721,starvation,Parrot,376,37,0,45,4,
+9725,reproduce,Camel,323,58,7,29,1,offspring:1
+9750,reproduce,Bear,491,79,9,29,3,offspring:1
+9765,kill,Boar,264,87,1,57,0,killed_by:Jaguar:311
+9782,kill,Shroomer,441,55,8,4,0,killed_by:Crocodile:38
+9785,reproduce,Polar Bear,79,102,4,20,4,offspring:1
+9785,reproduce,Polar Bear,94,123,7,64,0,offspring:1
+9799,kill,Rabbit,385,84,4,128,0,killed_by:Wolf:44
+9870,reproduce,Camel,242,20,6,91,1,offspring:1
+9886,reproduce,Rabbit,266,65,8,116,9,offspring:2
+9917,kill,Shroomer,374,2,9,50,7,killed_by:Polar Bear:288
+9922,reproduce,Elk,150,64,0,25,9,offspring:1
+9938,kill,Frog,393,98,5,123,0,killed_by:Wolf:44
+9939,reproduce,Elk,84,31,4,15,9,offspring:1
+9939,reproduce,Elk,388,26,2,30,0,offspring:1
+9939,reproduce,Elk,399,28,3,31,9,offspring:1
+9939,reproduce,Elk,451,27,8,21,1,offspring:1
+9939,reproduce,Elk,480,27,1,26,7,offspring:1
+9939,reproduce,Elk,482,29,5,17,5,offspring:1
+9939,reproduce,Elk,487,24,5,30,2,offspring:1
+9955,starvation,Elk,475,128,0,87,2,
+9962,reproduce,Elk,450,64,0,29,3,offspring:1
+9975,reproduce,Frog,8,52,0,114,1,offspring:2
+9975,reproduce,Frog,250,96,0,111,6,offspring:2
+9975,reproduce,Frog,370,60,2,119,7,offspring:2
+9977,kill,Camel,530,57,8,28,3,killed_by:Polar Bear:78
+10007,age_death,Fish,313,56,6,69,3,
+10007,age_death,Fish,314,60,4,68,9,
+10022,kill,Shroomer,164,7,9,50,4,killed_by:Polar Bear:288
+10022,reproduce,Polar Bear,288,7,1,50,3,offspring:1
+10029,kill,Shroomer,476,6,8,22,2,killed_by:Wolf:400
+10029,age_death,Fish,319,62,2,68,7,
+10029,age_death,Fish,320,64,8,68,6,
+10044,age_death,Fish,324,70,6,50,1,
+10050,kill,Turtle,34,12,9,4,4,killed_by:Crocodile:244
+10051,reproduce,Wolf,400,8,4,21,6,offspring:1
+10068,age_death,Fish,154,61,6,60,4,
+10068,age_death,Fish,327,61,3,61,4,
+10084,age_death,Fish,165,59,5,69,0,
+10084,age_death,Fish,333,61,3,68,8,
+10095,starvation,Lizard,271,15,6,128,0,
+10096,kill,Musk Ox,355,9,6,47,6,killed_by:Polar Bear:530
+10150,starvation,Boar,251,79,4,25,0,
+10166,kill,Monkey,268,126,6,120,1,killed_by:Jaguar:281
+10201,kill,Camel,167,55,0,29,2,killed_by:Crocodile:113
+10210,starvation,Wolf,155,0,0,114,6,
+10210,kill,Deer,548,22,1,27,6,killed_by:Wolf:400
+10212,kill,Turtle,234,74,0,67,0,killed_by:Jaguar:311
+10214,reproduce,Jaguar,453,77,4,72,0,offspring:1
+10232,kill,Turtle,95,12,7,49,9,killed_by:Polar Bear:288
+10245,starvation,Fox,93,34,3,78,2,
+10279,kill,Boar,560,80,9,70,8,killed_by:Jaguar:453
+10282,kill,Tapir,59,128,0,116,8,killed_by:Jaguar:281
+10298,kill,Elk,18,51,2,6,2,killed_by:Crocodile:38
+10300,kill,Boar,462,85,8,70,9,killed_by:Bear:341
+10304,age_death,Fish,67,9,4,120,3,
+10304,age_death,Fish,217,8,7,119,9,
+10337,kill,Shroomer,390,52,2,18,9,killed_by:Crocodile:216
+10340,starvation,Parrot,233,16,3,128,0,
+10356,starvation,Rabbit,494,29,1,71,8,
+10386,kill,Deer,163,23,2,10,6,killed_by:Wolf:313
+10429,kill,Rabbit,11,97,1,94,4,killed_by:Wolf:44
+10448,starvation,Turtle,103,109,5,87,6,
+10451,starvation,Parrot,507,126,7,59,9,
+10477,starvation,Wolf,226,80,9,28,8,
+10497,kill,Shroomer,213,56,1,15,2,killed_by:Crocodile:216
+10502,age_death,Fish,240,2,9,121,1,
+10502,age_death,Fish,305,2,3,121,9,
+10502,reproduce,Fish,58,9,6,125,0,offspring:2
+10502,reproduce,Fish,223,3,8,120,6,offspring:2
+10502,reproduce,Fish,349,1,3,121,8,offspring:2
+10502,reproduce,Fish,350,0,0,128,0,offspring:2
+10502,reproduce,Fish,351,6,3,124,0,offspring:2
+10502,reproduce,Fish,352,10,3,125,5,offspring:2
+10502,reproduce,Fish,379,5,5,123,0,offspring:2
+10502,reproduce,Fish,380,11,9,124,8,offspring:2
+10502,reproduce,Fish,381,4,6,121,3,offspring:2
+10502,reproduce,Fish,427,0,9,125,4,offspring:2
+10502,reproduce,Fish,428,0,7,124,3,offspring:2
+10505,starvation,Crocodile,260,87,5,44,0,
+10519,starvation,Parrot,132,0,0,126,5,
+10523,kill,Musk Ox,219,21,5,53,1,killed_by:Polar Bear:288
+10543,kill,Deer,550,25,8,-0,0,killed_by:Wolf:313
+10560,reproduce,Turtle,102,80,0,120,0,offspring:1
+10566,starvation,Boar,20,42,0,43,3,
+10566,starvation,Fish,186,93,1,118,6,
+10586,kill,Elk,475,64,4,34,7,killed_by:Bear:90
+10591,reproduce,Musk Ox,175,3,1,82,4,offspring:1
+10597,kill,Tapir,25,126,4,127,5,killed_by:Jaguar:281
+10606,age_death,Fish,74,64,0,68,4,
+10606,age_death,Fish,262,63,0,68,7,
+10610,age_death,Fish,87,102,3,76,6,
+10616,starvation,Boar,21,41,8,44,0,
+10627,kill,Elk,510,65,4,37,4,killed_by:Bear:101
+10638,starvation,Lizard,528,93,9,24,9,
+10640,kill,Frog,72,13,4,41,5,killed_by:Wolf:400
+10655,kill,Camel,447,65,0,19,8,killed_by:Polar Bear:78
+10657,starvation,Monkey,172,126,5,102,2,
+10662,reproduce,Crocodile,236,0,8,55,7,offspring:1
+10699,starvation,Parrot,55,128,0,128,0,
+10704,age_death,Fish,75,60,0,63,8,
+10704,age_death,Fish,338,61,4,62,6,
+10704,age_death,Fish,339,59,0,63,6,
+10704,age_death,Fish,340,59,4,62,3,
+10712,reproduce,Fish,411,16,9,64,0,offspring:2
+10715,kill,Deer,33,90,6,121,8,killed_by:Wolf:44
+10715,reproduce,Wolf,44,90,7,121,3,offspring:1
+10715,reproduce,Deer,82,121,7,115,5,offspring:1
+10715,reproduce,Deer,197,121,6,113,8,offspring:1
+10716,kill,Elk,150,67,7,28,0,killed_by:Bear:90
+10716,reproduce,Bear,90,67,4,28,7,offspring:1
+10726,reproduce,Camel,323,62,9,28,3,offspring:1
+10732,reproduce,Camel,141,111,5,128,0,offspring:1
+10732,reproduce,Camel,391,116,3,111,4,offspring:1
+10732,reproduce,Camel,416,108,8,123,2,offspring:1
+10747,reproduce,Elk,137,32,0,104,3,offspring:1
+10754,starvation,Parrot,200,18,5,128,0,
+10771,kill,Elk,303,58,7,38,8,killed_by:Bear:101
+10772,kill,Boar,362,72,3,68,6,killed_by:Jaguar:453
+10772,reproduce,Boar,40,46,1,116,6,offspring:2
+10772,reproduce,Boar,239,51,8,96,5,offspring:2
+10772,reproduce,Boar,247,38,3,103,6,offspring:2
+10772,reproduce,Boar,337,39,5,116,4,offspring:2
+10775,kill,Shroomer,314,57,5,27,9,killed_by:Crocodile:113
+10775,reproduce,Frog,576,98,0,104,9,offspring:2
+10775,reproduce,Frog,577,98,4,105,9,offspring:2
+10783,kill,Turtle,148,6,6,53,7,killed_by:Crocodile:163
+10792,starvation,Parrot,238,116,5,24,2,
+10792,reproduce,Boar,129,121,8,107,7,offspring:2
+10795,kill,Turtle,158,3,4,42,6,killed_by:Polar Bear:530
+10819,kill,Deer,551,69,9,11,7,killed_by:Crocodile:216
+10848,kill,Tapir,104,4,5,0,3,killed_by:Crocodile:307
+10848,reproduce,Crocodile,307,4,3,1,4,offspring:1
+10856,kill,Camel,323,59,7,28,6,killed_by:Bear:90
+10871,reproduce,Camel,242,26,3,98,0,offspring:1
+10874,starvation,Lizard,356,51,0,45,6,
+10883,reproduce,Elk,64,23,4,95,3,offspring:1
+10883,reproduce,Elk,98,10,8,87,6,offspring:1
+10883,reproduce,Elk,449,22,4,89,9,offspring:1
+10891,starvation,Elk,114,114,5,47,8,
+10898,kill,Boar,16,126,6,126,5,killed_by:Jaguar:281
+10904,age_death,Fish,349,1,3,121,8,
+10904,age_death,Fish,350,0,0,128,0,
+10904,age_death,Fish,351,5,5,124,5,
+10904,age_death,Fish,352,8,0,128,0,
+10905,starvation,Monkey,37,127,8,62,5,
+10906,starvation,Lizard,342,76,2,25,1,
+10908,kill,Monkey,258,90,1,128,0,killed_by:Wolf:44
+10976,kill,Camel,240,57,6,21,8,killed_by:Bear:213
+10995,kill,Elk,385,60,8,22,3,killed_by:Crocodile:38
+11019,kill,Frog,8,53,4,104,2,killed_by:Boar:262
+11025,kill,Deer,14,42,0,11,3,killed_by:Wolf:313
+11035,kill,Parrot,152,21,5,128,0,killed_by:Polar Bear:118
+11068,kill,Frog,574,66,1,101,5,killed_by:Boar:550
+11079,kill,Shroomer,562,35,0,92,9,killed_by:Boar:25
+11087,starvation,Monkey,300,74,5,0,0,
+11087,starvation,Monkey,326,66,3,14,5,
+11087,starvation,Monkey,523,68,9,21,2,
+11095,kill,Shroomer,324,43,1,90,4,killed_by:Boar:239
+11121,starvation,Parrot,168,128,0,128,0,
+11147,kill,Musk Ox,195,18,2,46,7,killed_by:Polar Bear:288
+11147,reproduce,Musk Ox,71,25,5,6,1,offspring:1
+11147,reproduce,Musk Ox,134,50,4,2,2,offspring:1
+11147,reproduce,Musk Ox,151,28,4,16,9,offspring:1
+11147,reproduce,Musk Ox,182,38,8,7,3,offspring:1
+11147,reproduce,Musk Ox,228,18,5,25,9,offspring:1
+11147,reproduce,Musk Ox,429,21,6,7,9,offspring:1
+11147,reproduce,Musk Ox,461,50,4,13,7,offspring:1
+11147,reproduce,Musk Ox,464,13,6,24,4,offspring:1
+11147,reproduce,Musk Ox,468,44,1,3,2,offspring:1
+11147,reproduce,Musk Ox,471,29,2,11,0,offspring:1
+11147,reproduce,Musk Ox,495,28,8,4,6,offspring:1
+11149,kill,Shroomer,128,27,4,115,0,killed_by:Wolf:402
+11152,kill,Fish,411,0,0,50,6,killed_by:Polar Bear:334
+11161,starvation,Frog,517,0,0,36,5,
+11164,kill,Monkey,479,116,7,128,0,killed_by:Boar:470
+11176,starvation,Frog,518,10,4,31,5,
+11210,age_death,Fish,360,103,6,75,3,
+11210,age_death,Fish,361,110,5,76,1,
+11222,kill,Fish,103,0,0,48,3,killed_by:Polar Bear:334
+11223,kill,Shroomer,241,37,2,89,3,killed_by:Boar:25
+11231,starvation,Parrot,509,128,0,127,8,
+11232,starvation,Monkey,6,73,5,0,0,
+11232,reproduce,Monkey,12,67,7,39,4,offspring:1
+11252,reproduce,Crocodile,38,64,0,23,9,offspring:1
+11272,starvation,Monkey,558,30,5,128,0,
+11280,starvation,Rabbit,81,128,0,128,0,
+11280,reproduce,Rabbit,190,79,6,105,5,offspring:2
+11280,reproduce,Rabbit,441,84,8,118,6,offspring:2
+11280,reproduce,Rabbit,446,92,9,99,7,offspring:2
+11306,starvation,Boar,50,36,8,79,1,
+11310,starvation,Monkey,489,82,5,29,4,
+11312,starvation,Monkey,504,68,8,21,6,
+11313,kill,Tapir,207,127,6,128,1,killed_by:Jaguar:281
+11313,reproduce,Tapir,206,125,2,128,0,offspring:1
+11326,starvation,Lizard,52,126,7,59,7,
+11331,kill,Shroomer,224,54,9,17,6,killed_by:Polar Bear:78
+11339,starvation,Monkey,483,68,8,20,3,
+11354,kill,Deer,82,124,8,114,2,killed_by:Wolf:44
+11362,kill,Deer,60,11,5,52,0,killed_by:Wolf:400
+11362,reproduce,Deer,27,9,8,21,1,offspring:1
+11362,reproduce,Deer,115,36,7,24,4,offspring:1
+11362,reproduce,Deer,173,23,6,13,3,offspring:1
+11362,reproduce,Deer,308,29,2,31,5,offspring:1
+11362,reproduce,Deer,366,18,0,10,9,offspring:1
+11362,reproduce,Wolf,400,11,6,51,5,offspring:1
+11362,reproduce,Deer,417,47,9,16,8,offspring:1
+11362,reproduce,Deer,421,44,9,12,9,offspring:1
+11362,reproduce,Deer,493,24,6,14,3,offspring:1
+11362,reproduce,Deer,552,44,5,1,4,offspring:1
+11362,reproduce,Deer,553,20,9,15,6,offspring:1
+11381,reproduce,Lizard,149,105,7,127,4,offspring:2
+11384,starvation,Wolf,65,60,0,5,8,
+11398,kill,Shroomer,233,35,0,14,9,killed_by:Wolf:313
+11415,reproduce,Jaguar,453,76,0,55,1,offspring:1
+11422,starvation,Monkey,499,75,5,31,5,
+11424,starvation,Monkey,331,47,8,92,2,
+11426,kill,Musk Ox,99,2,0,62,0,killed_by:Polar Bear:334
+11426,reproduce,Polar Bear,334,2,4,61,2,offspring:1
+11429,kill,Camel,256,52,4,26,1,killed_by:Crocodile:113
+11429,kill,Lizard,529,14,3,41,7,killed_by:Wolf:162
+11436,kill,Shroomer,29,15,6,50,7,killed_by:Wolf:574
+11449,starvation,Monkey,426,120,4,39,9,
+11467,starvation,Parrot,290,127,7,128,0,
+11496,kill,Shroomer,485,-0,2,62,5,killed_by:Polar Bear:334
+11498,kill,Shroomer,204,51,5,30,7,killed_by:Bear:90
+11504,age_death,Fish,58,7,8,127,2,
+11504,age_death,Fish,223,3,5,120,4,
+11506,reproduce,Parrot,2,26,2,14,3,offspring:1
+11506,reproduce,Musk Ox,175,2,8,89,3,offspring:1
+11506,reproduce,Parrot,248,14,0,31,6,offspring:1
+11506,reproduce,Parrot,372,24,8,29,2,offspring:1
+11506,reproduce,Parrot,377,21,6,28,5,offspring:1
+11506,reproduce,Parrot,534,45,0,7,8,offspring:1
+11506,reproduce,Parrot,564,31,3,20,8,offspring:1
+11506,reproduce,Parrot,565,54,6,5,0,offspring:1
+11510,kill,Boar,488,88,5,88,3,killed_by:Jaguar:311
+11514,kill,Shroomer,168,52,5,20,8,killed_by:Bear:213
+11517,starvation,Monkey,386,128,0,128,0,
+11518,reproduce,Elk,513,32,0,99,8,offspring:1
+11526,kill,Rabbit,112,0,0,113,7,killed_by:Wolf:201
+11534,reproduce,Rabbit,105,21,5,85,9,offspring:2
+11535,starvation,Monkey,263,0,2,29,6,
+11535,kill,Turtle,445,12,3,41,7,killed_by:Polar Bear:530
+11535,reproduce,Turtle,96,15,1,24,5,offspring:1
+11535,reproduce,Turtle,315,18,2,22,6,offspring:1
+11535,reproduce,Turtle,389,18,0,41,5,offspring:1
+11535,reproduce,Turtle,459,30,4,32,0,offspring:1
+11551,reproduce,Wolf,313,36,2,11,9,offspring:1
+11554,kill,Frog,395,24,0,33,7,killed_by:Wolf:162
+11567,reproduce,Crocodile,244,10,6,55,8,offspring:1
+11599,reproduce,Fish,410,59,3,-0,0,offspring:2
+11601,kill,Shroomer,189,5,0,59,9,killed_by:Polar Bear:334
+11604,kill,Lizard,184,0,0,102,9,killed_by:Crocodile:236
+11604,kill,Deer,46,10,8,64,4,killed_by:Wolf:574
+11605,age_death,Fish,379,4,9,124,1,
+11605,age_death,Fish,380,9,6,128,0,
+11605,age_death,Fish,381,3,6,121,3,
+11613,kill,Boar,470,126,2,126,7,killed_by:Jaguar:281
+11615,reproduce,Elk,125,120,9,128,0,offspring:1
+11618,reproduce,Monkey,159,21,0,114,3,offspring:1
+11618,reproduce,Monkey,214,28,5,108,8,offspring:1
+11618,reproduce,Monkey,511,28,5,103,9,offspring:1
+11618,reproduce,Monkey,532,28,9,116,9,offspring:1
+11629,kill,Deer,32,0,0,101,2,killed_by:Wolf:402
+11641,reproduce,Tapir,161,16,0,104,1,offspring:1
+11641,reproduce,Tapir,312,30,6,98,3,offspring:1
+11641,reproduce,Tapir,501,26,0,119,2,offspring:1
+11666,kill,Deer,308,34,6,32,3,killed_by:Wolf:162
+11674,starvation,Parrot,289,127,6,117,2,
+11704,starvation,Monkey,270,65,6,18,5,
+11716,reproduce,Wolf,44,113,2,115,8,offspring:1
+11717,starvation,Monkey,177,128,0,128,0,
+11721,kill,Fish,336,67,4,18,3,killed_by:Crocodile:16
+11742,kill,Deer,300,53,5,12,6,killed_by:Wolf:224
+11758,kill,Shroomer,51,8,8,60,3,killed_by:Polar Bear:479
+11761,kill,Shroomer,86,2,4,92,1,killed_by:Wolf:402
+11761,reproduce,Wolf,402,2,2,92,7,offspring:1
+11765,kill,Shroomer,231,7,6,49,9,killed_by:Polar Bear:288
+11766,kill,Shroomer,235,9,0,111,0,killed_by:Wolf:201
+11768,starvation,Parrot,198,128,0,128,0,
+11769,kill,Shroomer,111,20,6,66,2,killed_by:Wolf:400
+11785,kill,Fish,541,126,5,128,0,killed_by:Polar Bear:94
+11788,starvation,Parrot,533,0,5,30,8,
+11791,reproduce,Tapir,210,52,8,-0,0,offspring:1
+11802,kill,Deer,215,107,4,119,6,killed_by:Wolf:44
+11802,kill,Deer,14,36,2,20,5,killed_by:Wolf:162
+11825,kill,Deer,226,121,6,121,6,killed_by:Wolf:172
+11833,reproduce,Monkey,12,73,6,37,0,offspring:1
+11844,starvation,Parrot,473,128,0,113,8,
+11855,kill,Monkey,221,126,2,128,0,killed_by:Polar Bear:94
+11866,kill,Deer,417,57,6,3,5,killed_by:Wolf:224
+11869,reproduce,Monkey,306,50,4,-0,0,offspring:1
+11869,reproduce,Camel,460,30,6,92,2,offspring:1
+11880,reproduce,Fish,83,55,7,-0,0,offspring:2
+11898,starvation,Monkey,185,0,5,29,7,
+11912,kill,Elk,450,40,4,43,4,killed_by:Bear:101
+11914,kill,Deer,181,6,0,81,0,killed_by:Wolf:402
+11931,starvation,Polar Bear,118,89,4,128,0,
+11945,starvation,Elk,328,126,7,103,7,
+11950,kill,Musk Ox,158,47,3,18,4,killed_by:Polar Bear:276
+11951,kill,Tapir,210,46,1,-0,0,killed_by:Crocodile:292
+11958,kill,Deer,562,34,7,8,9,killed_by:Wolf:162
+11958,reproduce,Wolf,162,34,9,9,4,offspring:1
+11960,kill,Elk,124,126,1,128,0,killed_by:Polar Bear:94
+11960,reproduce,Polar Bear,94,125,3,128,0,offspring:1
+11975,starvation,Tapir,332,0,0,126,5,
+11975,age_death,Fish,80,82,2,97,7,
+11975,age_death,Fish,404,72,3,45,1,
+11975,age_death,Fish,410,46,4,1,0,
+11975,age_death,Fish,412,123,0,76,9,
+11975,age_death,Fish,413,122,1,78,5,
+11975,age_death,Fish,414,97,0,86,5,
+11975,age_death,Fish,415,89,0,67,0,
+11975,reproduce,Fish,120,99,1,83,7,offspring:2
+11975,reproduce,Fish,208,113,6,88,4,offspring:2
+11975,reproduce,Fish,537,115,6,86,1,offspring:2
+11975,reproduce,Fish,538,120,5,80,6,offspring:2
+11975,reproduce,Fish,539,125,5,73,5,offspring:2
+11975,reproduce,Fish,540,124,8,74,5,offspring:2
+11975,reproduce,Fish,542,118,1,83,4,offspring:2
+11990,kill,Tapir,206,126,6,128,0,killed_by:Jaguar:281
+12009,kill,Monkey,114,69,4,37,5,killed_by:Crocodile:38
+12011,starvation,Fish,11,17,3,69,1,
+12013,age_death,Lizard,317,0,0,117,0,
+12030,kill,Shroomer,269,9,0,76,5,killed_by:Wolf:574
+12036,starvation,Parrot,566,0,7,37,0,
+12046,kill,Musk Ox,461,48,1,12,5,killed_by:Polar Bear:78
+12053,kill,Shroomer,392,0,2,75,7,killed_by:Wolf:426
+12054,reproduce,Deer,237,-0,0,82,6,offspring:1
+12060,reproduce,Parrot,121,-0,0,90,3,offspring:1
+12061,kill,Deer,35,107,6,126,0,killed_by:Wolf:172
+12061,reproduce,Deer,197,117,5,114,5,offspring:1
+12065,kill,Elk,123,127,2,128,0,killed_by:Polar Bear:94
+12071,kill,Deer,171,5,6,119,3,killed_by:Crocodile:236
+12071,kill,Frog,521,0,0,41,5,killed_by:Polar Bear:479
+12072,kill,Deer,110,17,1,93,7,killed_by:Wolf:201
+12072,kill,Elk,448,83,8,72,3,killed_by:Jaguar:517
+12073,kill,Musk Ox,323,31,7,13,9,killed_by:Bear:213
+12086,kill,Deer,173,32,8,0,0,killed_by:Wolf:162
+12087,kill,Monkey,348,42,4,0,0,killed_by:Wolf:313
+12087,reproduce,Monkey,127,17,0,24,3,offspring:1
+12087,reproduce,Monkey,252,10,6,24,1,offspring:1
+12088,reproduce,Parrot,188,-0,0,92,0,offspring:1
+12091,reproduce,Tapir,211,42,1,-0,0,offspring:1
+12093,reproduce,Parrot,419,107,3,128,1,offspring:1
+12093,reproduce,Parrot,474,106,6,128,2,offspring:1
+12105,kill,Lizard,128,127,7,128,0,killed_by:Polar Bear:263
+12105,reproduce,Lizard,70,106,5,128,1,offspring:2
+12162,kill,Shroomer,165,49,1,20,5,killed_by:Bear:90
+12168,kill,Parrot,565,37,2,0,0,killed_by:Crocodile:292
+12174,reproduce,Elk,512,118,4,118,9,offspring:1
+12176,age_death,Lizard,70,110,6,128,0,
+12176,reproduce,Musk Ox,143,23,8,86,7,offspring:1
+12177,kill,Deer,523,36,5,0,0,killed_by:Wolf:112
+12183,kill,Turtle,389,16,9,41,2,killed_by:Polar Bear:530
+12198,kill,Tapir,290,46,6,6,6,killed_by:Crocodile:55
+12206,reproduce,Fish,272,52,0,-0,0,offspring:2
+12210,kill,Elk,125,128,1,128,0,killed_by:Polar Bear:263
+12215,kill,Deer,237,-0,0,89,8,killed_by:Wolf:426
+12217,kill,Parrot,241,38,5,-0,0,killed_by:Wolf:112
+12217,reproduce,Bear,90,49,4,20,8,offspring:1
+12221,kill,Deer,53,93,5,122,2,killed_by:Wolf:44
+12245,kill,Fish,82,40,3,0,0,killed_by:Wolf:313
+12249,reproduce,Deer,322,0,0,96,0,offspring:1
+12252,reproduce,Camel,554,26,4,117,2,offspring:1
+12254,starvation,Rabbit,28,3,4,128,0,
+12261,reproduce,Fish,346,84,6,-0,0,offspring:2
+12282,kill,Deer,51,-0,0,87,5,killed_by:Wolf:402
+12292,reproduce,Boar,447,126,3,110,2,offspring:2
+12295,starvation,Lizard,526,126,7,59,7,
+12325,kill,Fish,83,38,8,0,0,killed_by:Wolf:313
+12328,kill,Shroomer,325,46,9,24,3,killed_by:Bear:90
+12350,kill,Elk,525,39,9,7,7,killed_by:Crocodile:55
+12350,kill,Shroomer,124,42,6,40,6,killed_by:Bear:101
+12352,kill,Musk Ox,314,40,1,5,6,killed_by:Crocodile:292
+12363,kill,Deer,4,0,0,121,8,killed_by:Crocodile:236
+12363,reproduce,Crocodile,236,0,3,121,0,offspring:1
+12363,reproduce,Deer,382,11,1,89,3,offspring:1
+12363,reproduce,Deer,420,21,9,79,0,offspring:1
+12363,reproduce,Deer,422,29,8,83,2,offspring:1
+12363,reproduce,Deer,423,30,2,93,6,offspring:1
+12377,kill,Tapir,258,128,0,125,8,killed_by:Jaguar:281
+12377,reproduce,Tapir,209,128,0,105,4,offspring:1
+12377,reproduce,Tapir,405,118,4,118,0,offspring:1
+12377,reproduce,Tapir,563,118,7,124,9,offspring:1
+12382,reproduce,Camel,242,32,0,99,8,offspring:1
+12390,kill,Elk,253,59,4,15,0,killed_by:Crocodile:216
+12405,kill,Shroomer,450,6,3,66,1,killed_by:Wolf:574
+12412,kill,Deer,552,33,9,13,9,killed_by:Wolf:224
+12423,reproduce,Monkey,26,-0,0,106,2,offspring:1
+12429,reproduce,Rabbit,367,24,3,122,3,offspring:2
+12434,reproduce,Monkey,12,95,6,39,9,offspring:1
+12454,kill,Musk Ox,182,43,6,7,0,killed_by:Polar Bear:79
+12454,kill,Deer,23,88,6,78,4,killed_by:Jaguar:517
+12457,kill,Monkey,77,122,1,127,8,killed_by:Bear:341
+12486,kill,Camel,141,122,9,128,0,killed_by:Polar Bear:263
+12531,reproduce,Musk Ox,175,7,9,96,1,offspring:1
+12542,reproduce,Parrot,433,-0,1,113,9,offspring:1
+12543,age_death,Fish,427,5,8,128,0,
+12543,age_death,Fish,428,5,5,128,0,
+12561,kill,Deer,327,96,4,128,0,killed_by:Wolf:172
+12563,kill,Musk Ox,476,9,0,73,6,killed_by:Crocodile:163
+12573,reproduce,Deer,432,84,5,64,0,offspring:1
+12588,starvation,Deer,368,110,5,85,6,
+12588,reproduce,Deer,39,73,6,102,8,offspring:1
+12588,reproduce,Deer,358,72,8,128,0,offspring:1
+12596,kill,Musk Ox,134,48,8,10,0,killed_by:Bear:210
+12600,kill,Deer,421,36,5,23,4,killed_by:Wolf:162
+12600,reproduce,Deer,115,26,2,22,4,offspring:1
+12600,reproduce,Deer,366,11,5,2,4,offspring:1
+12600,reproduce,Deer,493,18,6,21,0,offspring:1
+12600,reproduce,Deer,549,17,8,26,1,offspring:1
+12600,reproduce,Deer,553,16,3,8,7,offspring:1
+12627,starvation,Fish,544,103,5,75,2,
+12627,kill,Deer,332,-0,0,107,1,killed_by:Wolf:426
+12627,reproduce,Parrot,534,6,1,-0,0,offspring:1
+12630,reproduce,Crocodile,113,54,8,23,1,offspring:1
+12630,reproduce,Crocodile,216,62,5,18,0,offspring:1
+12630,reproduce,Crocodile,292,39,6,8,9,offspring:1
+12631,kill,Frog,250,77,0,103,3,killed_by:Wolf:44
+12643,starvation,Fish,543,100,6,59,3,
+12647,kill,Shroomer,285,52,5,39,6,killed_by:Bear:101
+12648,kill,Boar,413,126,9,126,5,killed_by:Polar Bear:94
+12659,reproduce,Parrot,121,-0,0,117,2,offspring:1
+12662,reproduce,Parrot,188,-0,0,116,3,offspring:1
+12662,reproduce,Deer,197,113,9,118,5,offspring:1
+12685,kill,Boar,72,126,1,126,6,killed_by:Jaguar:281
+12691,starvation,Fish,232,51,6,128,0,
+12698,kill,Musk Ox,104,40,7,26,2,killed_by:Bear:90
+12717,reproduce,Wolf,44,68,3,103,6,offspring:1
+12729,starvation,Parrot,100,42,6,92,0,
+12734,kill,Deer,382,20,7,82,1,killed_by:Wolf:402
+12750,reproduce,Bear,101,52,7,40,8,offspring:1
+12788,starvation,Parrot,144,26,9,51,9,
+12790,kill,Deer,36,60,7,101,1,killed_by:Wolf:44
+12803,age_death,Fish,48,60,9,59,8,
+12803,age_death,Fish,187,59,6,60,0,
+12803,age_death,Fish,344,61,3,60,9,
+12803,age_death,Fish,363,62,3,61,0,
+12803,age_death,Fish,418,60,1,61,6,
+12803,age_death,Fish,434,58,7,60,4,
+12803,age_death,Fish,435,59,2,61,1,
+12803,age_death,Fish,436,60,3,60,6,
+12803,age_death,Fish,437,56,4,60,5,
+12803,age_death,Fish,438,57,9,60,9,
+12803,age_death,Fish,439,57,2,60,3,
+12803,age_death,Fish,440,55,4,60,3,
+12803,reproduce,Fish,191,51,3,59,2,offspring:2
+12803,reproduce,Fish,274,95,3,0,2,offspring:2
+12803,reproduce,Fish,409,90,9,24,1,offspring:2
+12803,reproduce,Fish,536,52,0,60,0,offspring:2
+12811,kill,Deer,493,11,8,26,6,killed_by:Bear:213
+12813,starvation,Rabbit,369,71,4,81,2,
+12823,starvation,Fish,329,103,4,76,2,
+12843,starvation,Rabbit,49,72,4,66,5,
+12845,kill,Turtle,106,36,6,19,0,killed_by:Crocodile:336
+12852,kill,Shroomer,414,50,5,37,4,killed_by:Bear:101
+12855,starvation,Rabbit,147,39,6,84,4,
+12855,starvation,Fish,498,72,5,74,8,
+12858,kill,Monkey,107,0,3,0,0,killed_by:Wolf:313
+12861,kill,Shroomer,531,12,5,78,4,killed_by:Wolf:574
+12891,age_death,Lizard,345,28,1,89,0,
+12891,reproduce,Lizard,88,5,3,92,5,offspring:2
+12891,reproduce,Lizard,183,25,7,76,3,offspring:2
+12891,reproduce,Lizard,245,24,5,105,3,offspring:2
+12891,reproduce,Lizard,296,18,8,93,7,offspring:2
+12891,reproduce,Lizard,375,19,7,93,9,offspring:2
+12919,kill,Musk Ox,228,12,8,29,7,killed_by:Polar Bear:530
+12929,kill,Rabbit,50,33,7,32,0,killed_by:Wolf:201
+12935,reproduce,Wolf,402,21,0,89,6,offspring:1
+12935,reproduce,Wolf,574,10,5,80,0,offspring:1
+12938,kill,Parrot,534,0,0,0,2,killed_by:Wolf:313
+12939,kill,Frog,515,48,2,25,2,killed_by:Polar Bear:78
+12943,age_death,Frog,354,82,2,100,8,
+12962,reproduce,Fish,346,98,4,0,0,offspring:2
+12964,starvation,Parrot,280,41,7,88,4,
+12975,reproduce,Elk,512,118,5,121,7,offspring:1
+12978,starvation,Boar,559,71,8,53,7,
+12985,kill,Frog,577,90,6,104,6,killed_by:Wolf:172
+13013,kill,Deer,385,23,7,36,9,killed_by:Wolf:162
+13033,reproduce,Monkey,195,96,4,36,5,offspring:1
+13036,kill,Fish,384,0,0,19,9,killed_by:Wolf:112
+13040,kill,Shroomer,235,16,9,85,6,killed_by:Wolf:488
+13050,kill,Parrot,70,0,0,0,0,killed_by:Wolf:313
+13055,reproduce,Parrot,360,64,0,40,9,offspring:1
+13066,kill,Boar,412,127,2,126,2,killed_by:Jaguar:281
+13067,starvation,Lizard,275,0,4,28,8,
+13070,kill,Deer,323,74,0,59,6,killed_by:Jaguar:517
+13072,kill,Monkey,176,0,0,5,1,killed_by:Polar Bear:479
+13072,reproduce,Monkey,127,19,9,19,5,offspring:1
+13072,reproduce,Monkey,178,29,2,4,0,offspring:1
+13072,reproduce,Monkey,252,17,8,18,7,offspring:1
+13072,reproduce,Monkey,306,21,1,13,3,offspring:1
+13072,reproduce,Monkey,485,5,4,15,9,offspring:1
+13077,reproduce,Musk Ox,143,23,9,76,7,offspring:1
+13077,reproduce,Lizard,297,126,6,54,5,offspring:2
+13087,kill,Fish,60,-0,1,19,2,killed_by:Wolf:45
+13094,kill,Lizard,47,38,8,4,5,killed_by:Crocodile:55
+13096,kill,Fish,146,0,0,71,5,killed_by:Polar Bear:376
+13097,reproduce,Fish,404,96,0,7,1,offspring:2
+13103,kill,Boar,447,127,0,127,1,killed_by:Polar Bear:263
+13106,kill,Frog,519,33,9,18,5,killed_by:Wolf:201
+13109,starvation,Lizard,465,0,5,26,4,
+13113,kill,Deer,423,35,9,89,8,killed_by:Wolf:402
+13113,reproduce,Deer,13,31,8,84,2,offspring:1
+13113,reproduce,Deer,322,3,4,94,3,offspring:1
+13113,reproduce,Deer,420,25,0,74,5,offspring:1
+13123,kill,Elk,399,36,3,43,8,killed_by:Bear:53
+13124,kill,Monkey,278,98,0,107,1,killed_by:Wolf:431
+13131,kill,Deer,206,7,7,95,0,killed_by:Wolf:574
+13131,reproduce,Tapir,211,-0,0,0,0,offspring:1
+13135,kill,Frog,287,78,4,96,1,killed_by:Wolf:172
+13143,reproduce,Parrot,361,64,0,32,9,offspring:1
+13147,reproduce,Parrot,2,19,5,15,5,offspring:1
+13147,reproduce,Parrot,6,4,4,33,9,offspring:1
+13147,reproduce,Parrot,43,27,8,17,7,offspring:1
+13147,reproduce,Parrot,103,22,3,13,7,offspring:1
+13147,reproduce,Parrot,243,64,0,33,5,offspring:1
+13147,reproduce,Parrot,372,28,8,15,4,offspring:1
+13147,reproduce,Parrot,377,19,9,9,8,offspring:1
+13147,reproduce,Parrot,509,24,8,18,5,offspring:1
+13147,reproduce,Parrot,564,28,7,0,1,offspring:1
+13149,kill,Musk Ox,148,13,2,12,2,killed_by:Polar Bear:527
+13154,kill,Elk,84,37,4,12,6,killed_by:Crocodile:292
+13156,kill,Musk Ox,303,57,1,12,6,killed_by:Bear:210
+13156,kill,Shroomer,221,9,7,84,0,killed_by:Wolf:488
+13156,reproduce,Musk Ox,71,25,3,3,2,offspring:1
+13156,reproduce,Musk Ox,151,12,0,20,7,offspring:1
+13156,reproduce,Musk Ox,429,27,0,3,3,offspring:1
+13156,reproduce,Musk Ox,464,7,1,8,0,offspring:1
+13156,reproduce,Musk Ox,468,31,3,8,9,offspring:1
+13156,reproduce,Musk Ox,471,16,3,7,4,offspring:1
+13156,reproduce,Musk Ox,495,17,5,13,7,offspring:1
+13171,kill,Shroomer,518,39,8,19,0,killed_by:Crocodile:336
+13174,reproduce,Deer,432,86,8,55,6,offspring:1
+13194,reproduce,Lizard,455,64,1,35,2,offspring:2
+13203,kill,Deer,386,16,5,19,2,killed_by:Wolf:535
+13213,kill,Fish,272,0,0,1,5,killed_by:Polar Bear:79
+13217,kill,Shroomer,229,5,8,86,8,killed_by:Crocodile:163
+13217,kill,Frog,510,89,0,113,6,killed_by:Wolf:431
+13222,kill,Deer,128,12,2,7,1,killed_by:Wolf:313
+13239,age_death,Lizard,364,4,6,34,8,
+13247,kill,Musk Ox,464,8,6,9,2,killed_by:Polar Bear:479
+13249,kill,Deer,422,34,6,78,9,killed_by:Wolf:141
+13260,kill,Fish,118,0,3,-0,0,killed_by:Polar Bear:265
+13265,reproduce,Frog,87,98,5,121,6,offspring:2
+13268,kill,Shroomer,56,44,9,21,8,killed_by:Bear:90
+13271,kill,Shroomer,382,9,9,78,0,killed_by:Polar Bear:376
+13275,kill,Fish,223,45,8,8,3,killed_by:Crocodile:307
+13283,kill,Fish,181,0,0,0,3,killed_by:Polar Bear:79
+13283,reproduce,Polar Bear,79,-0,0,0,9,offspring:1
+13291,kill,Musk Ox,362,9,4,20,0,killed_by:Polar Bear:527
+13297,kill,Frog,528,83,9,119,9,killed_by:Wolf:431
+13300,kill,Shroomer,457,40,1,101,5,killed_by:Wolf:44
+13301,kill,Frog,166,20,8,11,7,killed_by:Wolf:535
+13301,reproduce,Frog,394,19,4,7,7,offspring:2
+13301,reproduce,Frog,397,15,4,16,9,offspring:2
+13307,kill,Lizard,286,128,0,128,1,killed_by:Polar Bear:94
+13316,age_death,Parrot,194,62,6,99,8,
+13318,kill,Tapir,533,-0,1,-0,1,killed_by:Polar Bear:79
+13330,reproduce,Parrot,116,109,3,125,4,offspring:1
+13330,reproduce,Parrot,174,116,4,117,7,offspring:1
+13330,reproduce,Parrot,443,125,1,108,8,offspring:1
+13330,reproduce,Parrot,505,118,3,116,9,offspring:1
+13354,reproduce,Deer,472,86,3,64,0,offspring:1
+13360,age_death,Frog,370,62,9,118,4,
+13360,reproduce,Frog,520,14,2,90,3,offspring:2
+13372,starvation,Parrot,396,109,6,88,9,
+13381,kill,Deer,115,25,9,11,7,killed_by:Wolf:535
+13381,reproduce,Deer,27,27,2,28,6,offspring:1
+13381,reproduce,Deer,152,26,2,1,8,offspring:1
+13381,reproduce,Deer,240,26,3,17,3,offspring:1
+13381,reproduce,Deer,324,13,6,1,4,offspring:1
+13381,reproduce,Deer,326,23,8,7,5,offspring:1
+13381,reproduce,Deer,366,16,7,1,7,offspring:1
+13382,kill,Deer,432,97,1,54,0,killed_by:Bear:318
+13388,kill,Shroomer,164,46,6,16,2,killed_by:Wolf:201
+13389,kill,Monkey,72,22,7,0,0,killed_by:Wolf:45
+13403,reproduce,Fish,28,107,1,1,1,offspring:2
+13403,reproduce,Fish,51,107,1,0,8,offspring:2
+13403,reproduce,Fish,82,53,4,61,2,offspring:2
+13403,reproduce,Fish,325,50,2,59,2,offspring:2
+13403,reproduce,Fish,328,54,3,61,6,offspring:2
+13403,reproduce,Fish,525,49,6,58,5,offspring:2
+13423,kill,Elk,573,28,0,25,1,killed_by:Bear:213
+13423,reproduce,Elk,130,41,3,31,4,offspring:1
+13423,reproduce,Elk,393,44,2,31,9,offspring:1
+13423,reproduce,Elk,451,20,9,10,0,offspring:1
+13423,reproduce,Elk,480,30,9,24,0,offspring:1
+13423,reproduce,Elk,482,15,3,0,0,offspring:1
+13423,reproduce,Elk,487,26,0,9,3,offspring:1
+13423,reproduce,Elk,490,31,1,27,4,offspring:1
+13423,reproduce,Elk,496,16,5,15,3,offspring:1
+13423,reproduce,Elk,569,32,0,21,3,offspring:1
+13423,reproduce,Elk,570,29,3,11,5,offspring:1
+13423,reproduce,Elk,571,27,4,7,8,offspring:1
+13423,reproduce,Elk,572,25,4,18,0,offspring:1
+13434,kill,Fish,58,58,8,7,1,killed_by:Crocodile:113
+13441,kill,Deer,27,29,8,27,0,killed_by:Wolf:162
+13446,reproduce,Musk Ox,175,5,3,104,2,offspring:1
+13475,kill,Deer,146,15,2,1,4,killed_by:Wolf:112
+13479,kill,Shroomer,41,14,7,68,7,killed_by:Polar Bear:376
+13482,kill,Deer,47,20,8,5,2,killed_by:Wolf:535
+13486,kill,Tapir,211,0,0,15,2,killed_by:Polar Bear:354
+13486,reproduce,Tapir,92,27,2,15,6,offspring:1
+13486,reproduce,Tapir,136,43,0,34,0,offspring:1
+13486,reproduce,Tapir,142,23,0,18,8,offspring:1
+13486,reproduce,Tapir,225,19,6,0,9,offspring:1
+13486,reproduce,Tapir,442,20,4,17,5,offspring:1
+13521,kill,Deer,152,29,9,3,2,killed_by:Crocodile:55
+13522,kill,Monkey,298,0,2,40,8,killed_by:Crocodile:483
+13525,starvation,Fish,184,83,2,116,9,
+13537,kill,Tapir,302,36,7,26,7,killed_by:Bear:53
+13542,kill,Deer,344,-0,0,94,9,killed_by:Wolf:574
+13556,kill,Tapir,418,0,0,18,7,killed_by:Polar Bear:354
+13560,kill,Rabbit,446,82,8,85,1,killed_by:Wolf:431
+13584,kill,Deer,23,10,7,-0,0,killed_by:Wolf:313
+13589,kill,Deer,322,-0,0,91,7,killed_by:Wolf:488
+13593,kill,Musk Ox,151,18,7,19,3,killed_by:Polar Bear:530
+13593,reproduce,Lizard,383,32,0,28,1,offspring:2
+13600,starvation,Camel,30,98,5,92,5,
+13600,age_death,Lizard,375,19,8,92,7,
+13602,reproduce,Boar,186,96,0,123,3,offspring:2
+13639,reproduce,Fish,191,32,0,45,6,offspring:2
+13673,starvation,Elk,387,128,0,66,4,
+13675,reproduce,Boar,475,30,0,118,3,offspring:2
+13678,kill,Deer,168,72,4,89,1,killed_by:Wolf:431
+13681,starvation,Frog,575,63,7,83,2,
+13694,reproduce,Parrot,361,78,8,36,4,offspring:1
+13696,starvation,Bear,267,95,0,120,0,
+13704,starvation,Monkey,295,44,9,87,5,
+13713,reproduce,Monkey,61,64,0,0,0,offspring:1
+13714,reproduce,Deer,420,25,0,70,9,offspring:1
+13716,reproduce,Bear,213,27,6,25,4,offspring:1
+13717,reproduce,Monkey,195,96,0,36,7,offspring:1
+13720,kill,Musk Ox,143,22,2,80,0,killed_by:Polar Bear:376
+13720,reproduce,Polar Bear,376,21,7,79,3,offspring:1
+13722,kill,Shroomer,58,9,9,91,2,killed_by:Crocodile:163
+13741,kill,Deer,13,30,1,63,3,killed_by:Wolf:402
+13746,kill,Musk Ox,147,15,9,12,1,killed_by:Polar Bear:265
+13760,reproduce,Elk,492,96,0,107,8,offspring:1
+13761,reproduce,Polar Bear,94,115,7,117,8,offspring:1
+13767,kill,Elk,512,115,1,116,9,killed_by:Polar Bear:94
+13792,kill,Monkey,299,44,8,128,0,killed_by:Wolf:400
+13804,kill,Musk Ox,110,10,8,86,9,killed_by:Crocodile:236
+13815,kill,Deer,345,83,4,33,0,killed_by:Bear:318
+13815,reproduce,Bear,318,84,1,34,1,offspring:1
+13836,kill,Camel,305,110,7,119,1,killed_by:Polar Bear:152
+13836,reproduce,Camel,132,97,9,124,2,offspring:1
+13836,reproduce,Camel,254,121,7,107,7,offspring:1
+13836,reproduce,Camel,260,108,3,117,3,offspring:1
+13836,reproduce,Camel,391,119,7,112,1,offspring:1
+13836,reproduce,Camel,416,97,1,123,4,offspring:1
+13842,age_death,Frog,394,21,9,7,9,
+13842,age_death,Frog,397,14,3,18,0,
+13842,age_death,Frog,398,37,6,5,4,
+13844,kill,Turtle,504,8,4,23,7,killed_by:Polar Bear:527
+13859,kill,Musk Ox,232,24,9,73,5,killed_by:Polar Bear:211
+13860,kill,Musk Ox,107,17,2,6,4,killed_by:Polar Bear:479
+13864,reproduce,Crocodile,236,10,0,87,8,offspring:1
+13866,kill,Elk,480,33,1,18,5,killed_by:Bear:213
+13872,reproduce,Elk,469,96,0,111,2,offspring:1
+13887,kill,Musk Ox,531,22,2,11,4,killed_by:Polar Bear:343
+13892,reproduce,Frog,576,96,0,107,9,offspring:2
+13894,kill,Shroomer,133,38,8,113,0,killed_by:Boar:475
+13895,kill,Shroomer,546,8,6,97,4,killed_by:Wolf:488
+13907,kill,Parrot,463,45,4,128,0,killed_by:Wolf:400
+13909,kill,Deer,565,41,3,6,7,killed_by:Wolf:162
+13909,reproduce,Deer,549,11,0,30,4,offspring:1
+13909,reproduce,Deer,553,17,7,21,6,offspring:1
+13914,kill,Deer,324,1,0,-0,0,killed_by:Wolf:112
+13939,starvation,Tapir,119,112,7,101,6,
+13945,kill,Deer,323,12,3,30,1,killed_by:Bear:41
+13945,kill,Frog,515,117,6,123,7,killed_by:Boar:186
+13961,starvation,Parrot,68,47,8,128,0,
+13964,starvation,Wolf,507,119,6,106,4,
+13974,kill,Elk,490,28,1,37,6,killed_by:Crocodile:307
+13975,kill,Turtle,315,13,0,19,0,killed_by:Polar Bear:79
+13975,reproduce,Turtle,96,20,6,20,6,offspring:1
+13975,reproduce,Turtle,199,27,0,26,0,offspring:1
+13975,reproduce,Turtle,459,41,0,27,1,offspring:1
+13982,reproduce,Deer,326,29,6,8,3,offspring:1
+13993,kill,Musk Ox,495,26,2,8,3,killed_by:Polar Bear:343
+13993,reproduce,Musk Ox,200,27,3,5,3,offspring:1
+13993,reproduce,Musk Ox,238,26,5,1,2,offspring:1
+13993,reproduce,Musk Ox,356,18,3,20,4,offspring:1
+13993,reproduce,Musk Ox,551,17,6,18,2,offspring:1
+14006,reproduce,Musk Ox,150,4,9,96,0,offspring:1
+14011,kill,Shroomer,545,26,3,81,1,killed_by:Polar Bear:376
+14026,reproduce,Frog,87,107,9,128,0,offspring:2
+14045,kill,Shroomer,212,33,4,34,6,killed_by:Bear:53
+14045,kill,Parrot,419,52,7,128,0,killed_by:Bear:341
+14052,kill,Deer,366,35,5,0,0,killed_by:Wolf:313
+14058,starvation,Parrot,290,0,0,123,6,
+14058,kill,Musk Ox,551,17,8,20,5,killed_by:Polar Bear:265
+14061,starvation,Parrot,125,0,0,123,0,
+14061,reproduce,Deer,231,122,0,105,0,offspring:1
+14084,kill,Monkey,543,58,6,8,2,killed_by:Crocodile:389
+14109,age_death,Lizard,296,29,3,86,8,
+14115,kill,Boar,129,51,0,127,0,killed_by:Bear:341
+14115,reproduce,Elk,65,122,1,119,3,offspring:1
+14115,reproduce,Bear,341,51,0,126,3,offspring:1
+14116,kill,Shroomer,48,29,2,78,7,killed_by:Polar Bear:376
+14123,kill,Deer,472,85,9,72,3,killed_by:Jaguar:282
+14128,reproduce,Monkey,180,128,0,128,0,offspring:1
+14129,kill,Elk,458,43,5,36,9,killed_by:Bear:90
+14134,reproduce,Wolf,112,4,6,3,5,offspring:1
+14134,reproduce,Wolf,162,41,1,18,3,offspring:1
+14134,reproduce,Wolf,313,36,1,1,4,offspring:1
+14169,kill,Lizard,124,0,0,113,9,killed_by:Wolf:574
+14186,kill,Parrot,385,128,0,128,0,killed_by:Jaguar:281
+14193,starvation,Rabbit,123,20,5,116,8,
+14194,kill,Elk,218,53,4,128,0,killed_by:Bear:341
+14214,reproduce,Deer,197,113,4,114,2,offspring:1
+14215,starvation,Parrot,131,103,7,99,0,
+14227,kill,Tapir,209,128,0,96,0,killed_by:Polar Bear:263
+14227,reproduce,Tapir,405,126,4,112,8,offspring:1
+14227,reproduce,Tapir,563,112,6,126,2,offspring:1
+14229,starvation,Parrot,121,0,0,128,0,
+14232,starvation,Wolf,45,58,1,3,8,
+14235,starvation,Jaguar,378,55,3,49,7,
+14235,kill,Deer,11,26,7,72,8,killed_by:Wolf:402
+14241,kill,Turtle,96,17,5,20,3,killed_by:Polar Bear:530
+14245,kill,Shroomer,497,9,8,19,0,killed_by:Polar Bear:354
+14249,kill,Lizard,314,0,0,114,2,killed_by:Wolf:574
+14249,reproduce,Monkey,421,96,0,39,6,offspring:1
+14254,reproduce,Parrot,126,24,6,121,3,offspring:1
+14254,reproduce,Parrot,188,27,4,107,6,offspring:1
+14258,reproduce,Parrot,448,-0,0,79,2,offspring:1
+14264,kill,Monkey,232,127,9,128,0,killed_by:Jaguar:281
+14268,kill,Rabbit,266,73,1,128,0,killed_by:Wolf:431
+14276,starvation,Parrot,433,0,0,122,9,
+14284,kill,Turtle,459,41,3,27,2,killed_by:Crocodile:336
+14299,kill,Shroomer,544,-0,6,86,3,killed_by:Wolf:488
+14322,kill,Parrot,6,-0,0,20,7,killed_by:Crocodile:483
+14326,starvation,Monkey,521,121,9,69,9,
+14334,kill,Elk,353,12,5,38,3,killed_by:Crocodile:307
+14335,kill,Boar,454,55,4,95,9,killed_by:Jaguar:311
+14335,reproduce,Jaguar,311,56,2,95,6,offspring:1
+14341,kill,Frog,559,15,9,11,3,killed_by:Wolf:112
+14341,reproduce,Frog,280,31,9,0,7,offspring:2
+14342,kill,Deer,237,128,0,124,5,killed_by:Jaguar:281
+14361,kill,Musk Ox,110,-0,1,97,1,killed_by:Crocodile:163
+14361,reproduce,Musk Ox,175,8,8,111,0,offspring:1
+14362,kill,Parrot,436,0,0,19,8,killed_by:Crocodile:483
+14363,reproduce,Deer,114,28,5,69,2,offspring:1
+14363,reproduce,Deer,317,23,6,93,8,offspring:1
+14368,kill,Deer,60,21,9,23,8,killed_by:Wolf:162
+14380,reproduce,Monkey,195,93,9,40,3,offspring:1
+14426,starvation,Rabbit,105,47,6,80,6,
+14428,kill,Deer,173,81,1,112,6,killed_by:Wolf:431
+14428,reproduce,Deer,39,74,4,111,4,offspring:1
+14428,reproduce,Deer,91,68,7,108,3,offspring:1
+14428,reproduce,Deer,358,74,4,113,8,offspring:1
+14428,reproduce,Deer,430,85,7,108,7,offspring:1
+14428,reproduce,Wolf,431,80,8,113,1,offspring:1
+14453,kill,Frog,522,4,7,13,3,killed_by:Wolf:107
+14455,kill,Camel,254,119,3,109,6,killed_by:Polar Bear:94
+14457,reproduce,Monkey,250,31,3,19,2,offspring:1
+14463,starvation,Tapir,408,102,6,103,7,
+14475,kill,Deer,348,15,2,18,0,killed_by:Wolf:480
+14483,kill,Musk Ox,71,23,5,2,9,killed_by:Polar Bear:479
+14487,kill,Deer,240,27,9,13,6,killed_by:Wolf:112
+14489,kill,Musk Ox,106,14,9,21,5,killed_by:Polar Bear:527
+14489,age_death,Lizard,424,103,7,94,5,
+14489,age_death,Lizard,425,63,5,119,5,
+14491,kill,Frog,412,10,7,73,8,killed_by:Crocodile:322
+14501,reproduce,Frog,275,6,9,77,7,offspring:2
+14501,reproduce,Frog,520,16,6,80,2,offspring:2
+14505,reproduce,Parrot,160,32,0,100,0,offspring:1
+14508,kill,Elk,571,34,5,11,3,killed_by:Bear:213
+14513,starvation,Monkey,5,28,6,48,6,
+14528,kill,Deer,197,115,4,108,8,killed_by:Polar Bear:152
+14530,reproduce,Frog,516,68,7,41,6,offspring:2
+14531,reproduce,Rabbit,31,30,4,85,1,offspring:2
+14539,kill,Deer,212,69,5,115,4,killed_by:Wolf:551
+14583,reproduce,Deer,326,28,7,9,1,offspring:1
+14633,kill,Deer,366,64,2,113,3,killed_by:Wolf:431
+14636,starvation,Monkey,35,0,0,128,0,
+14640,starvation,Parrot,157,27,7,47,4,
+14642,reproduce,Fish,54,1,0,126,6,offspring:2
+14645,starvation,Fish,189,103,9,101,9,
+14653,kill,Musk Ox,429,19,3,3,5,killed_by:Polar Bear:343
+14653,reproduce,Musk Ox,468,26,2,10,9,offspring:1
+14653,reproduce,Musk Ox,471,19,3,1,5,offspring:1
+14660,reproduce,Monkey,413,4,0,0,0,offspring:1
+14662,reproduce,Crocodile,163,3,8,101,3,offspring:1
+14662,reproduce,Deer,231,128,0,113,0,offspring:1
+14664,kill,Elk,205,9,3,65,6,killed_by:Crocodile:322
+14671,kill,Shroomer,392,20,4,20,0,killed_by:Polar Bear:265
+14672,kill,Lizard,383,0,0,113,1,killed_by:Wolf:201
+14693,starvation,Parrot,135,72,4,71,8,
+14701,kill,Boar,186,127,0,126,7,killed_by:Jaguar:281
+14708,reproduce,Elk,417,128,0,115,9,offspring:1
+14713,kill,Deer,17,51,8,103,9,killed_by:Wolf:400
+14717,kill,Deer,91,67,1,120,5,killed_by:Wolf:551
+14720,reproduce,Musk Ox,185,25,2,100,7,offspring:1
+14725,kill,Frog,543,13,0,70,2,killed_by:Wolf:488
+14743,kill,Musk Ox,382,4,4,96,5,killed_by:Crocodile:163
+14746,kill,Camel,335,45,4,115,7,killed_by:Bear:504
+14746,reproduce,Camel,75,26,3,86,2,offspring:1
+14746,reproduce,Camel,242,15,3,93,2,offspring:1
+14746,reproduce,Camel,264,20,3,88,3,offspring:1
+14746,reproduce,Camel,554,26,6,119,6,offspring:1
+14752,kill,Elk,130,39,4,42,0,killed_by:Bear:53
+14755,starvation,Parrot,86,0,0,121,1,
+14766,kill,Elk,393,42,7,44,4,killed_by:Bear:90
+14776,starvation,Parrot,541,0,0,128,0,
+14779,kill,Musk Ox,96,20,8,2,2,killed_by:Polar Bear:79
+14785,kill,Elk,62,79,9,114,1,killed_by:Crocodile:244
+14803,reproduce,Fish,404,96,3,7,2,offspring:2
+14805,kill,Frog,296,9,6,65,4,killed_by:Wolf:488
+14805,reproduce,Parrot,126,28,0,114,1,offspring:1
+14809,reproduce,Parrot,448,17,9,110,2,offspring:1
+14810,starvation,Jaguar,320,126,6,76,9,
+14818,reproduce,Monkey,214,30,6,102,6,offspring:1
+14818,reproduce,Monkey,230,30,8,105,6,offspring:1
+14818,reproduce,Monkey,233,24,9,106,3,offspring:1
+14818,reproduce,Monkey,499,31,3,99,1,offspring:1
+14841,kill,Elk,388,10,3,40,2,killed_by:Crocodile:307
+14861,kill,Monkey,413,0,0,0,0,killed_by:Wolf:480
+14892,kill,Deer,131,34,5,11,0,killed_by:Wolf:162
+14894,kill,Musk Ox,512,14,4,22,4,killed_by:Polar Bear:354
+14894,reproduce,Musk Ox,200,29,4,1,3,offspring:1
+14904,kill,Musk Ox,356,21,0,27,6,killed_by:Polar Bear:530
+14907,reproduce,Musk Ox,150,7,9,97,3,offspring:1
+14913,kill,Monkey,12,128,0,126,2,killed_by:Crocodile:38
+14924,age_death,Lizard,9,0,0,15,3,
+14930,reproduce,Monkey,47,96,0,39,0,offspring:1
+14965,kill,Monkey,331,61,1,116,1,killed_by:Jaguar:311
+14976,reproduce,Monkey,15,7,4,49,8,offspring:1
+14976,reproduce,Monkey,198,5,2,48,9,offspring:1
+14993,kill,Monkey,452,128,0,126,3,killed_by:Crocodile:38
+14999,kill,Camel,291,68,6,110,5,killed_by:Crocodile:244
+14999,reproduce,Crocodile,244,69,4,110,7,offspring:1
+15005,kill,Boar,370,126,5,126,6,killed_by:Jaguar:281
+15009,age_death,Monkey,180,128,0,128,2,
+15020,reproduce,Parrot,188,32,0,99,8,offspring:1
+15045,kill,Deer,358,70,6,99,8,killed_by:Wolf:431
+15045,reproduce,Deer,39,55,6,118,4,offspring:1
+15056,starvation,Rabbit,171,20,4,119,7,
+15056,reproduce,Parrot,160,32,0,100,1,offspring:1
+15060,kill,Musk Ox,150,8,7,98,2,killed_by:Crocodile:314
+15066,reproduce,Tapir,225,14,5,-0,0,offspring:1
+15079,reproduce,Lizard,533,23,4,22,4,offspring:2
+15111,kill,Deer,326,37,6,0,6,killed_by:Bear:213
+15113,kill,Tapir,546,128,0,126,5,killed_by:Crocodile:38
+15113,reproduce,Crocodile,38,128,0,125,8,offspring:1
+15117,kill,Camel,166,125,8,114,6,killed_by:Polar Bear:94
+15121,age_death,Parrot,193,81,0,92,5,
+15122,reproduce,Crocodile,55,65,0,0,5,offspring:1
+15124,kill,Musk Ox,147,32,3,11,0,killed_by:Polar Bear:479
+15132,kill,Elk,24,74,3,110,6,killed_by:Crocodile:244
+15132,reproduce,Elk,65,119,1,122,0,offspring:1
+15149,kill,Musk Ox,299,18,0,24,5,killed_by:Polar Bear:527
+15156,reproduce,Frog,577,22,3,6,8,offspring:2
+15177,starvation,Parrot,174,98,7,112,2,
+15191,kill,Shroomer,444,37,4,119,1,killed_by:Bear:504
+15193,kill,Camel,260,112,1,122,9,killed_by:Polar Bear:152
+15194,reproduce,Boar,475,32,0,118,1,offspring:2
+15195,kill,Elk,398,128,0,127,5,killed_by:Crocodile:35
+15202,kill,Monkey,179,111,5,128,0,killed_by:Jaguar:282
+15221,starvation,Rabbit,350,44,3,73,2,
+15221,reproduce,Rabbit,273,86,2,67,1,offspring:2
+15221,reproduce,Rabbit,342,91,5,104,1,offspring:2
+15226,kill,Frog,68,30,6,-0,0,killed_by:Wolf:162
+15230,reproduce,Elk,492,96,0,115,2,offspring:1
+15233,kill,Tapir,405,128,0,127,5,killed_by:Crocodile:38
+15242,reproduce,Fish,45,0,2,126,7,offspring:2
+15242,reproduce,Fish,378,0,9,126,5,offspring:2
+15244,kill,Monkey,222,113,1,128,0,killed_by:Jaguar:282
+15247,kill,Frog,48,0,0,99,7,killed_by:Crocodile:163
+15252,reproduce,Frog,275,3,9,74,5,offspring:2
+15252,reproduce,Frog,520,15,6,73,9,offspring:2
+15254,reproduce,Fish,191,32,0,44,3,offspring:2
+15263,reproduce,Deer,231,127,4,107,3,offspring:1
+15277,kill,Monkey,497,31,0,0,0,killed_by:Wolf:480
+15295,kill,Tapir,29,115,8,128,0,killed_by:Jaguar:282
+15295,reproduce,Tapir,249,96,1,120,6,offspring:1
+15295,reproduce,Tapir,563,119,6,119,5,offspring:1
+15298,starvation,Fish,465,116,3,18,7,
+15298,kill,Turtle,169,109,6,124,4,killed_by:Jaguar:323
+15298,reproduce,Turtle,102,83,9,111,5,offspring:1
+15298,reproduce,Turtle,138,76,1,100,1,offspring:1
+15298,reproduce,Turtle,170,90,5,117,5,offspring:1
+15298,reproduce,Turtle,401,86,9,116,1,offspring:1
+15298,reproduce,Turtle,503,69,5,94,8,offspring:1
+15311,reproduce,Parrot,434,96,0,58,6,offspring:1
+15312,kill,Rabbit,441,13,9,72,8,killed_by:Wolf:172
+15313,kill,Monkey,359,128,0,128,0,killed_by:Crocodile:38
+15323,starvation,Fish,427,113,5,3,1,
+15323,starvation,Fish,519,118,5,8,7,
+15325,reproduce,Rabbit,37,87,4,96,2,offspring:2
+15328,starvation,Fish,447,117,5,27,1,
+15330,reproduce,Frog,124,78,9,35,9,offspring:2
+15330,reproduce,Frog,385,75,3,38,8,offspring:2
+15340,kill,Musk Ox,471,20,2,-0,0,killed_by:Polar Bear:343
+15343,reproduce,Fish,54,1,6,125,9,offspring:2
+15354,reproduce,Deer,70,97,6,61,3,offspring:1
+15356,reproduce,Parrot,126,25,2,122,4,offspring:1
+15358,kill,Boar,396,115,9,126,1,killed_by:Jaguar:282
+15358,reproduce,Jaguar,282,116,1,126,7,offspring:1
+15360,kill,Deer,22,36,1,93,7,killed_by:Wolf:241
+15362,reproduce,Musk Ox,238,26,7,3,9,offspring:1
+15363,reproduce,Elk,69,83,1,64,0,offspring:1
+15390,starvation,Parrot,235,98,6,113,4,
+15390,kill,Camel,344,93,6,119,9,killed_by:Bear:341
+15390,reproduce,Camel,391,118,6,113,5,offspring:1
+15390,reproduce,Camel,416,96,2,122,4,offspring:1
+15392,kill,Frog,520,8,1,72,8,killed_by:Wolf:172
+15399,kill,Deer,187,12,6,81,3,killed_by:Crocodile:236
+15403,reproduce,Fish,110,96,6,8,1,offspring:2
+15406,kill,Musk Ox,238,27,1,5,2,killed_by:Polar Bear:79
+15423,kill,Musk Ox,468,25,1,7,9,killed_by:Polar Bear:265
+15444,kill,Frog,428,37,6,0,0,killed_by:Wolf:162
+15460,reproduce,Polar Bear,263,127,8,84,6,offspring:1
+15461,starvation,Parrot,360,72,5,67,8,
+15462,kill,Turtle,143,36,3,24,8,killed_by:Crocodile:336
+15465,kill,Shroomer,237,30,9,90,8,killed_by:Wolf:241
+15475,reproduce,Elk,368,121,0,117,2,offspring:1
+15483,kill,Turtle,207,7,5,39,3,killed_by:Crocodile:307
+15485,kill,Frog,87,123,6,128,0,killed_by:Jaguar:326
+15485,kill,Deer,430,83,2,106,1,killed_by:Wolf:431
+15504,reproduce,Fish,404,96,4,7,1,offspring:2
+15510,kill,Frog,305,104,5,112,4,killed_by:Jaguar:323
+15513,kill,Fish,346,128,0,79,2,killed_by:Polar Bear:97
+15521,reproduce,Polar Bear,376,14,3,90,1,offspring:1
+15522,starvation,Parrot,437,27,0,51,5,
+15537,starvation,Lizard,297,128,0,79,8,
+15537,kill,Fish,470,128,0,80,2,killed_by:Polar Bear:174
+15538,starvation,Fish,51,126,4,51,9,
+15544,kill,Frog,393,0,0,82,7,killed_by:Wolf:172
+15548,starvation,Fish,28,114,1,47,7,
+15552,starvation,Monkey,485,0,4,35,8,
+15555,kill,Elk,459,128,0,120,6,killed_by:Jaguar:281
+15555,kill,Rabbit,367,43,2,128,0,killed_by:Crocodile:412
+15561,kill,Deer,165,0,0,31,1,killed_by:Crocodile:483
+15562,reproduce,Polar Bear,94,122,9,109,9,offspring:1
+15571,kill,Turtle,489,9,8,23,1,killed_by:Polar Bear:354
+15573,kill,Turtle,286,20,9,20,0,killed_by:Polar Bear:530
+15583,kill,Fish,289,128,0,78,6,killed_by:Polar Bear:97
+15604,reproduce,Deer,39,33,8,128,0,offspring:1
+15607,kill,Fish,381,128,0,78,8,killed_by:Polar Bear:174
+15612,kill,Shroomer,267,20,7,87,3,killed_by:Polar Bear:179
+15613,starvation,Monkey,27,108,0,0,0,
+15616,reproduce,Bear,341,90,9,121,7,offspring:1
+15620,starvation,Fish,327,123,0,53,0,
+15620,kill,Monkey,15,9,7,56,7,killed_by:Crocodile:322
+15621,starvation,Bear,491,58,9,54,1,
+15621,reproduce,Musk Ox,185,21,5,92,7,offspring:1
+15628,starvation,Fish,476,119,7,34,0,
+15631,age_death,Parrot,196,78,9,69,5,
+15642,starvation,Parrot,505,101,1,100,7,
+15642,kill,Frog,129,6,0,88,4,killed_by:Wolf:172
+15653,kill,Fish,120,128,0,77,6,killed_by:Polar Bear:97
+15656,reproduce,Musk Ox,49,18,9,6,0,offspring:1
+15656,reproduce,Musk Ox,498,51,5,9,7,offspring:1
+15657,kill,Frog,205,35,7,12,8,killed_by:Wolf:480
+15658,kill,Deer,317,30,0,78,2,killed_by:Wolf:241
+15666,kill,Frog,515,50,9,8,3,killed_by:Wolf:162
+15672,starvation,Parrot,2,118,4,13,4,
+15675,reproduce,Wolf,431,81,3,111,2,offspring:1
+15676,kill,Elk,487,34,3,10,1,killed_by:Bear:213
+15677,kill,Fish,445,128,0,77,4,killed_by:Polar Bear:174
+15680,kill,Deer,176,76,1,0,0,killed_by:Crocodile:55
+15681,starvation,Fish,333,76,9,65,7,
+15681,kill,Tapir,304,-0,0,33,9,killed_by:Crocodile:483
+15685,reproduce,Parrot,215,105,2,123,6,offspring:1
+15685,reproduce,Parrot,384,110,7,102,0,offspring:1
+15685,reproduce,Parrot,448,110,6,103,2,offspring:1
+15690,starvation,Fish,59,122,1,128,0,
+15695,reproduce,Monkey,66,112,9,120,1,offspring:1
+15695,reproduce,Monkey,117,122,9,128,0,offspring:1
+15695,reproduce,Monkey,159,101,0,117,5,offspring:1
+15695,reproduce,Monkey,310,105,1,110,8,offspring:1
+15695,reproduce,Monkey,477,101,9,116,8,offspring:1
+15695,reproduce,Monkey,484,97,4,102,8,offspring:1
+15697,kill,Camel,446,114,0,109,9,killed_by:Polar Bear:405
+15698,starvation,Fish,234,93,8,82,4,
+15699,starvation,Fish,560,99,7,120,7,
+15701,reproduce,Frog,579,32,0,106,2,offspring:2
+15708,starvation,Fish,548,100,3,122,7,
+15708,reproduce,Elk,557,-0,0,119,9,offspring:1
+15709,starvation,Fish,271,79,8,62,9,
+15712,starvation,Fish,274,125,0,37,7,
+15712,starvation,Fish,567,97,2,104,0,
+15713,starvation,Fish,217,107,2,115,3,
+15714,starvation,Fish,390,76,8,62,2,
+15715,kill,Elk,189,119,4,117,8,killed_by:Jaguar:326
+15716,starvation,Fish,167,104,6,113,0,
+15717,starvation,Fish,155,97,6,92,3,
+15717,kill,Turtle,138,74,8,101,6,killed_by:Crocodile:244
+15719,kill,Turtle,413,90,5,115,9,killed_by:Bear:341
+15723,starvation,Fish,355,111,3,121,3,
+15725,starvation,Fish,268,110,7,121,3,
+15726,starvation,Tapir,269,126,5,72,4,
+15730,starvation,Fish,319,91,7,87,7,
+15731,reproduce,Rabbit,31,23,3,69,8,offspring:2
+15732,kill,Camel,140,87,6,128,0,killed_by:Bear:48
+15743,reproduce,Deer,146,24,0,61,5,offspring:1
+15743,reproduce,Deer,553,15,3,38,6,offspring:1
+15744,starvation,Fish,395,94,2,125,2,
+15748,starvation,Fish,374,79,2,59,1,
+15748,reproduce,Fish,436,96,0,9,2,offspring:2
+15750,starvation,Fish,18,93,1,123,4,
+15771,kill,Deer,133,114,4,121,3,killed_by:Jaguar:323
+15775,kill,Frog,429,39,5,4,9,killed_by:Wolf:480
+15778,reproduce,Crocodile,483,1,7,32,0,offspring:1
+15781,kill,Deer,222,36,0,128,0,killed_by:Bear:504
+15788,reproduce,Monkey,99,29,2,120,0,offspring:1
+15788,reproduce,Monkey,233,29,2,100,8,offspring:1
+15790,kill,Musk Ox,185,21,2,95,2,killed_by:Polar Bear:179
+15795,starvation,Lizard,104,121,5,55,6,
+15795,reproduce,Musk Ox,200,29,9,4,7,offspring:1
+15800,starvation,Fish,462,99,2,109,0,
+15800,kill,Elk,98,-0,0,82,3,killed_by:Crocodile:236
+15807,kill,Camel,193,119,9,117,3,killed_by:Polar Bear:94
+15811,kill,Elk,496,13,0,37,8,killed_by:Polar Bear:527
+15812,reproduce,Musk Ox,414,26,6,5,0,offspring:1
+15814,starvation,Lizard,100,126,5,65,1,
+15827,starvation,Boar,154,106,7,91,3,
+15832,kill,Tapir,528,79,1,0,0,killed_by:Crocodile:55
+15832,kill,Frog,280,39,9,14,9,killed_by:Wolf:162
+15832,reproduce,Frog,85,20,2,39,9,offspring:2
+15837,starvation,Fish,93,101,2,111,8,
+15841,reproduce,Rabbit,352,78,3,97,2,offspring:2
+15842,kill,Monkey,471,128,0,123,2,killed_by:Crocodile:38
+15842,reproduce,Fish,121,0,3,125,1,offspring:2
+15842,reproduce,Fish,130,0,2,126,0,offspring:2
+15842,reproduce,Fish,335,0,5,124,2,offspring:2
+15842,reproduce,Fish,382,1,4,124,7,offspring:2
+15852,kill,Frog,576,94,8,97,6,killed_by:Wolf:441
+15864,reproduce,Deer,231,122,9,111,4,offspring:1
+15885,kill,Deer,419,101,4,108,8,killed_by:Wolf:431
+15885,reproduce,Elk,137,26,8,104,7,offspring:1
+15885,reproduce,Elk,219,30,7,122,0,offspring:1
+15885,reproduce,Elk,340,27,3,97,2,offspring:1
+15885,reproduce,Elk,357,30,1,98,6,offspring:1
+15885,reproduce,Elk,513,28,3,121,1,offspring:1
+15885,reproduce,Elk,558,28,1,118,9,offspring:1
+15890,kill,Monkey,117,128,2,128,1,killed_by:Jaguar:311
+15891,kill,Deer,70,93,7,65,7,killed_by:Jaguar:517
+15895,reproduce,Rabbit,123,15,0,68,2,offspring:2
+15897,kill,Musk Ox,240,9,7,90,1,killed_by:Crocodile:314
+15900,starvation,Monkey,61,112,3,0,4,
+15906,kill,Elk,145,72,2,76,0,killed_by:Crocodile:415
+15907,reproduce,Frog,577,11,0,7,9,offspring:2
+15933,reproduce,Elk,65,118,5,122,4,offspring:1
+15945,kill,Deer,290,100,9,100,8,killed_by:Wolf:441
+15951,kill,Elk,65,118,1,122,7,killed_by:Jaguar:282
+15952,kill,Musk Ox,11,31,1,4,1,killed_by:Polar Bear:479
+15958,kill,Musk Ox,49,17,6,7,6,killed_by:Polar Bear:343
+15961,kill,Lizard,253,0,0,114,3,killed_by:Wolf:172
+15975,kill,Monkey,285,37,2,32,4,killed_by:Crocodile:336
+15976,reproduce,Turtle,199,28,7,34,5,offspring:1
+15977,starvation,Fish,95,97,3,122,9,
+15982,reproduce,Deer,58,57,2,11,3,offspring:1
+15988,kill,Deer,553,15,5,42,8,killed_by:Crocodile:307
+15990,starvation,Parrot,564,88,7,0,0,
+16000,reproduce,Crocodile,236,2,9,81,0,offspring:1
+16031,kill,Musk Ox,437,27,5,3,3,killed_by:Polar Bear:79
+16033,reproduce,Monkey,111,32,0,29,0,offspring:1
+16045,age_death,Parrot,192,62,3,74,8,
+16050,reproduce,Parrot,369,61,3,-0,0,offspring:1
+16051,kill,Musk Ox,29,14,9,6,5,killed_by:Polar Bear:265
+16058,reproduce,Parrot,329,62,4,-0,0,offspring:1
+16062,reproduce,Deer,168,19,9,32,0,offspring:1
+16062,reproduce,Deer,363,36,2,76,1,offspring:1
+16079,kill,Frog,21,98,6,123,9,killed_by:Boar:262
+16079,reproduce,Parrot,119,7,1,61,2,offspring:1
+16079,reproduce,Frog,375,97,0,118,0,offspring:2
+16082,kill,Camel,23,105,0,126,4,killed_by:Polar Bear:152
+16142,starvation,Lizard,194,40,6,50,0,
+16163,reproduce,Crocodile,163,0,7,123,4,offspring:1
+16164,reproduce,Elk,69,89,7,59,6,offspring:1
+16182,kill,Deer,547,104,7,87,7,killed_by:Wolf:441
+16199,reproduce,Bear,213,27,9,16,0,offspring:1
+16204,kill,Elk,238,-0,0,123,6,killed_by:Crocodile:271
+16209,reproduce,Parrot,324,23,7,120,9,offspring:1
+16213,starvation,Lizard,466,0,0,21,0,
+16214,kill,Camel,521,10,4,89,8,killed_by:Crocodile:487
+16219,reproduce,Monkey,252,60,8,-0,0,offspring:1
+16223,kill,Elk,365,78,9,100,7,killed_by:Crocodile:244
+16244,kill,Lizard,203,0,0,21,1,killed_by:Wolf:224
+16244,reproduce,Lizard,212,33,4,24,1,offspring:2
+16244,reproduce,Lizard,533,60,4,21,2,offspring:2
+16250,kill,Elk,464,27,4,21,3,killed_by:Bear:567
+16256,kill,Deer,8,2,1,29,8,killed_by:Crocodile:430
+16260,reproduce,Elk,134,96,9,115,0,offspring:1
+16267,reproduce,Parrot,215,96,3,128,0,offspring:1
+16269,kill,Camel,132,94,5,127,0,killed_by:Bear:341
+16274,kill,Elk,570,26,4,19,7,killed_by:Bear:213
+16274,reproduce,Elk,229,2,4,3,7,offspring:1
+16274,reproduce,Elk,364,6,2,2,1,offspring:1
+16274,reproduce,Elk,422,32,0,26,1,offspring:1
+16274,reproduce,Elk,451,25,4,12,1,offspring:1
+16274,reproduce,Elk,482,11,8,1,2,offspring:1
+16276,reproduce,Elk,368,124,0,118,2,offspring:1
+16283,kill,Elk,515,111,2,121,3,killed_by:Jaguar:326
+16294,kill,Frog,30,98,3,92,5,killed_by:Wolf:431
+16303,kill,Elk,118,24,6,20,5,killed_by:Polar Bear:530
+16323,kill,Elk,449,36,7,112,1,killed_by:Bear:504
+16336,kill,Elk,368,123,2,117,2,killed_by:Jaguar:281
+16340,starvation,Jaguar,453,64,1,75,8,
+16356,kill,Frog,275,4,0,76,5,killed_by:Crocodile:236
+16361,reproduce,Jaguar,323,113,3,124,9,offspring:1
+16363,kill,Elk,221,32,2,40,0,killed_by:Bear:90
+16363,reproduce,Deer,495,10,1,96,1,offspring:1
+16366,reproduce,Monkey,511,54,8,128,0,offspring:1
+16368,kill,Camel,391,125,3,110,3,killed_by:Polar Bear:405
+16369,reproduce,Elk,417,128,0,110,8,offspring:1
+16372,starvation,Monkey,306,99,4,0,0,
+16391,reproduce,Camel,416,96,0,128,0,offspring:1
+16398,kill,Deer,171,94,6,75,3,killed_by:Wolf:44
+16403,kill,Lizard,467,99,5,128,0,killed_by:Bear:48
+16403,kill,Deer,495,10,1,96,8,killed_by:Crocodile:314
+16407,kill,Shroomer,559,26,2,96,3,killed_by:Polar Bear:179
+16416,kill,Turtle,52,18,8,18,5,killed_by:Polar Bear:354
+16439,kill,Camel,416,98,0,128,0,killed_by:Polar Bear:334
+16439,reproduce,Camel,3,79,0,111,7,offspring:1
+16439,reproduce,Camel,139,83,5,120,4,offspring:1
+16439,reproduce,Camel,156,68,0,104,9,offspring:1
+16439,reproduce,Camel,293,73,6,85,4,offspring:1
+16439,reproduce,Polar Bear,334,97,1,128,0,offspring:1
+16458,kill,Shroomer,458,13,8,37,5,killed_by:Polar Bear:527
+16461,kill,Frog,577,12,1,6,6,killed_by:Wolf:224
+16463,reproduce,Tapir,92,21,7,26,3,offspring:1
+16463,reproduce,Tapir,142,38,6,23,2,offspring:1
+16463,reproduce,Tapir,225,4,0,9,4,offspring:1
+16463,reproduce,Tapir,442,26,7,28,9,offspring:1
+16463,reproduce,Tapir,457,24,0,28,1,offspring:1
+16465,kill,Camel,418,113,0,117,6,killed_by:Jaguar:323
+16465,reproduce,Deer,231,124,6,105,8,offspring:1
+16473,kill,Monkey,396,102,1,128,0,killed_by:Bear:48
+16476,kill,Elk,339,9,1,72,2,killed_by:Crocodile:236
+16493,reproduce,Musk Ox,13,25,1,6,2,offspring:1
+16498,starvation,Polar Bear,406,87,9,26,0,
+16500,reproduce,Crocodile,244,82,4,105,7,offspring:1
+16511,kill,Camel,222,102,2,128,0,killed_by:Polar Bear:193
+16523,reproduce,Tapir,463,128,0,118,4,offspring:1
+16526,kill,Deer,232,127,5,117,5,killed_by:Jaguar:311
+16542,kill,Turtle,494,85,3,104,7,killed_by:Crocodile:244
+16548,starvation,Parrot,372,58,4,90,2,
+16555,reproduce,Monkey,284,17,8,50,9,offspring:1
+16555,reproduce,Monkey,424,18,0,53,6,offspring:1
+16557,kill,Elk,492,84,1,114,4,killed_by:Polar Bear:78
+16557,reproduce,Polar Bear,78,84,4,115,2,offspring:1
+16557,reproduce,Musk Ox,498,60,2,11,3,offspring:1
+16583,reproduce,Deer,58,51,5,13,3,offspring:1
+16585,kill,Frog,120,2,0,1,2,killed_by:Wolf:224
+16596,kill,Monkey,111,17,5,0,0,killed_by:Wolf:107
+16614,reproduce,Monkey,99,61,3,128,0,offspring:1
+16620,kill,Deer,387,-0,0,46,7,killed_by:Crocodile:307
+16625,kill,Musk Ox,471,24,5,6,3,killed_by:Polar Bear:343
+16630,reproduce,Crocodile,336,27,7,27,5,offspring:1
+16632,reproduce,Lizard,183,-0,0,82,9,offspring:2
+16643,kill,Rabbit,81,0,0,89,3,killed_by:Wolf:241
+16651,starvation,Parrot,506,128,0,108,2,
+16657,kill,Lizard,183,0,0,84,6,killed_by:Wolf:488
+16661,reproduce,Monkey,26,-0,0,84,9,offspring:1
+16662,reproduce,Monkey,425,-0,0,85,6,offspring:1
+16663,reproduce,Deer,168,15,8,25,6,offspring:1
+16673,reproduce,Frog,86,-0,0,86,3,offspring:2
+16681,kill,Frog,129,10,3,-0,0,killed_by:Wolf:107
+16682,kill,Fish,191,2,1,88,6,killed_by:Bear:53
+16695,kill,Deer,549,0,0,40,4,killed_by:Crocodile:430
+16700,kill,Turtle,170,94,1,112,1,killed_by:Polar Bear:240
+16702,kill,Turtle,266,82,4,123,5,killed_by:Polar Bear:78
+16703,kill,Musk Ox,71,31,1,1,9,killed_by:Polar Bear:479
+16717,kill,Musk Ox,200,31,1,10,4,killed_by:Polar Bear:79
+16722,reproduce,Rabbit,190,128,0,0,0,offspring:2
+16723,kill,Rabbit,345,4,4,91,0,killed_by:Wolf:241
+16731,reproduce,Rabbit,360,6,2,63,4,offspring:2
+16736,kill,Musk Ox,546,18,5,2,5,killed_by:Polar Bear:265
+16753,kill,Monkey,478,110,5,128,0,killed_by:Polar Bear:334
+16758,starvation,Parrot,361,65,7,0,0,
+16768,reproduce,Monkey,47,93,7,31,1,offspring:1
+16768,reproduce,Monkey,195,94,1,31,3,offspring:1
+16772,kill,Frog,560,98,5,111,7,killed_by:Polar Bear:240
+16772,reproduce,Frog,534,117,8,124,5,offspring:2
+16780,starvation,Parrot,60,8,1,128,0,
+16791,kill,Fish,286,-0,0,127,6,killed_by:Crocodile:271
+16795,reproduce,Musk Ox,414,28,2,7,8,offspring:1
+16805,kill,Tapir,154,1,1,12,0,killed_by:Crocodile:483
+16820,kill,Tapir,463,127,9,117,0,killed_by:Crocodile:38
+16823,kill,Fish,308,128,0,0,4,killed_by:Polar Bear:97
+16823,kill,Parrot,443,113,4,128,0,killed_by:Polar Bear:334
+16830,starvation,Frog,291,86,4,47,4,
+16830,reproduce,Frog,124,85,1,31,9,offspring:2
+16830,reproduce,Frog,516,128,0,39,6,offspring:2
+16831,reproduce,Frog,51,14,0,27,1,offspring:2
+16835,starvation,Tapir,181,65,2,68,3,
+16842,kill,Frog,375,101,0,113,0,killed_by:Polar Bear:240
+16860,kill,Tapir,528,16,3,29,9,killed_by:Crocodile:317
+16861,reproduce,Musk Ox,298,1,7,101,2,offspring:1
+16868,kill,Elk,451,37,0,12,0,killed_by:Bear:213
+16869,kill,Deer,267,120,4,108,2,killed_by:Jaguar:281
+16873,reproduce,Fish,32,115,7,96,4,offspring:2
+16873,reproduce,Fish,251,109,7,101,4,offspring:2
+16873,reproduce,Fish,380,115,2,98,8,offspring:2
+16877,kill,Elk,422,39,5,23,1,killed_by:Bear:567
+16881,age_death,Lizard,88,68,3,123,6,
+16891,starvation,Parrot,356,119,0,54,4,
+16891,starvation,Fish,539,89,9,90,7,
+16893,kill,Rabbit,190,128,0,6,8,killed_by:Polar Bear:97
+16893,kill,Lizard,481,116,5,128,0,killed_by:Polar Bear:334
+16901,kill,Tapir,566,102,7,110,4,killed_by:Jaguar:326
+16914,reproduce,Boar,72,29,2,122,7,offspring:2
+16914,reproduce,Boar,239,26,6,118,7,offspring:2
+16916,kill,Lizard,50,128,0,116,4,killed_by:Crocodile:216
+16925,kill,Tapir,225,4,4,6,7,killed_by:Crocodile:483
+16937,kill,Rabbit,553,128,0,10,7,killed_by:Polar Bear:174
+16944,kill,Tapir,320,102,6,115,6,killed_by:Jaguar:323
+16944,reproduce,Tapir,563,128,0,117,9,offspring:1
+16958,kill,Turtle,199,29,6,37,1,killed_by:Bear:90
+16960,kill,Frog,466,128,0,33,9,killed_by:Polar Bear:263
+16965,reproduce,Elk,69,93,3,59,7,offspring:1
+16967,kill,Frog,516,128,0,34,4,killed_by:Crocodile:292
+16969,starvation,Fish,209,53,5,4,0,
+16982,reproduce,Boar,247,88,3,64,0,offspring:2
+16983,kill,Elk,137,20,9,104,5,killed_by:Bear:504
+16985,kill,Parrot,215,120,4,128,0,killed_by:Polar Bear:334
+16985,reproduce,Parrot,184,72,6,114,3,offspring:1
+16985,reproduce,Parrot,508,75,0,99,8,offspring:1
+16986,kill,Rabbit,360,7,5,68,9,killed_by:Crocodile:322
+16993,kill,Elk,543,91,2,105,4,killed_by:Polar Bear:152
+16995,kill,Deer,145,54,5,19,7,killed_by:Bear:318
+17002,kill,Deer,143,14,9,62,6,killed_by:Wolf:402
+17002,reproduce,Deer,146,14,7,58,3,offspring:1
+17003,kill,Elk,482,15,0,4,3,killed_by:Polar Bear:530
+17005,reproduce,Parrot,119,10,8,64,0,offspring:1
+17005,reproduce,Parrot,324,16,5,111,4,offspring:1
+17007,kill,Frog,521,128,0,34,4,killed_by:Crocodile:292
+17018,kill,Tapir,419,128,0,126,5,killed_by:Jaguar:311
+17039,kill,Elk,557,0,0,128,0,killed_by:Crocodile:271
+17040,starvation,Jaguar,561,111,7,68,1,
+17040,reproduce,Jaguar,311,127,2,125,8,offspring:1
+17045,starvation,Parrot,10,120,3,54,5,
+17049,kill,Shroomer,169,19,1,93,4,killed_by:Crocodile:314
+17049,kill,Tapir,442,15,9,19,5,killed_by:Crocodile:317
+17055,kill,Monkey,447,121,4,128,0,killed_by:Polar Bear:334
+17066,reproduce,Deer,231,125,7,111,4,offspring:1
+17071,kill,Rabbit,95,123,1,0,0,killed_by:Polar Bear:97
+17075,reproduce,Elk,229,1,4,2,0,offspring:1
+17075,reproduce,Elk,364,2,5,0,5,offspring:1
+17076,kill,Camel,104,91,7,121,8,killed_by:Bear:48
+17082,kill,Deer,559,18,8,58,0,killed_by:Wolf:402
+17097,kill,Elk,27,21,8,99,5,killed_by:Polar Bear:179
+17098,kill,Tapir,388,128,0,126,2,killed_by:Jaguar:311
+17099,starvation,Parrot,427,128,0,122,8,
+17100,reproduce,Parrot,188,29,9,107,8,offspring:1
+17107,kill,Deer,296,128,0,119,7,killed_by:Polar Bear:405
+17115,reproduce,Bear,504,20,7,107,3,offspring:1
+17117,reproduce,Bear,341,85,0,106,8,offspring:1
+17119,kill,Frog,23,128,0,122,8,killed_by:Jaguar:458
+17125,kill,Monkey,477,123,3,128,0,killed_by:Polar Bear:334
+17128,reproduce,Deer,5,41,4,126,6,offspring:1
+17129,starvation,Fish,62,5,6,68,4,
+17133,kill,Turtle,401,70,2,104,8,killed_by:Crocodile:576
+17136,reproduce,Parrot,571,30,2,96,0,offspring:1
+17138,kill,Frog,51,12,5,20,2,killed_by:Polar Bear:527
+17144,kill,Tapir,563,128,0,123,0,killed_by:Jaguar:458
+17149,kill,Shroomer,255,17,5,37,0,killed_by:Bear:41
+17160,kill,Monkey,250,100,6,61,9,killed_by:Wolf:531
+17176,reproduce,Parrot,507,32,0,104,2,offspring:1
+17179,reproduce,Monkey,421,96,1,30,1,offspring:1
+17184,reproduce,Deer,58,52,8,14,4,offspring:1
+17187,kill,Monkey,198,10,6,75,7,killed_by:Crocodile:236
+17190,kill,Musk Ox,414,30,6,11,6,killed_by:Polar Bear:354
+17195,kill,Monkey,159,127,0,128,0,killed_by:Polar Bear:334
+17200,kill,Camel,3,89,2,118,4,killed_by:Polar Bear:240
+17201,kill,Parrot,384,128,0,126,0,killed_by:Crocodile:216
+17220,reproduce,Musk Ox,544,35,4,90,6,offspring:1
+17239,kill,Monkey,445,45,8,10,5,killed_by:Wolf:224
+17239,reproduce,Monkey,99,92,0,128,0,offspring:1
+17240,kill,Boar,40,83,3,117,4,killed_by:Bear:222
+17254,kill,Deer,231,128,0,109,4,killed_by:Jaguar:281
+17264,reproduce,Deer,168,24,0,17,3,offspring:1
+17267,kill,Elk,568,21,1,41,7,killed_by:Bear:41
+17282,kill,Deer,5,32,0,126,1,killed_by:Wolf:574
+17299,reproduce,Turtle,503,71,9,91,8,offspring:1
+17302,kill,Monkey,70,6,7,45,4,killed_by:Crocodile:307
+17321,kill,Elk,429,128,0,126,2,killed_by:Crocodile:216
+17322,kill,Boar,262,126,8,126,6,killed_by:Polar Bear:334
+17322,kill,Monkey,26,8,5,84,0,killed_by:Crocodile:487
+17328,kill,Camel,462,76,9,107,7,killed_by:Polar Bear:78
+17331,starvation,Parrot,126,9,5,112,3,
+17331,reproduce,Parrot,217,5,6,108,7,offspring:1
+17335,kill,Musk Ox,13,27,1,7,9,killed_by:Polar Bear:343
+17340,kill,Deer,304,3,3,15,8,killed_by:Polar Bear:527
+17342,starvation,Deer,315,43,2,49,5,
+17345,kill,Turtle,102,79,3,119,3,killed_by:Bear:222
+17349,kill,Parrot,103,-0,0,46,1,killed_by:Crocodile:430
+17354,kill,Musk Ox,194,28,0,6,9,killed_by:Polar Bear:479
+17355,kill,Frog,370,88,2,44,6,killed_by:Wolf:531
+17360,starvation,Parrot,359,127,7,128,0,
+17362,kill,Rabbit,123,0,0,52,9,killed_by:Wolf:241
+17366,kill,Lizard,455,0,0,45,8,killed_by:Bear:101
+17373,reproduce,Crocodile,38,120,2,112,7,offspring:1
+17374,kill,Elk,151,88,1,104,1,killed_by:Jaguar:326
+17383,kill,Deer,471,58,7,15,7,killed_by:Wolf:224
+17405,reproduce,Monkey,511,107,6,128,0,offspring:1
+17417,reproduce,Frog,331,76,0,37,0,offspring:2
+17417,reproduce,Frog,385,78,5,36,9,offspring:2
+17417,reproduce,Frog,452,67,6,38,9,offspring:2
+17419,starvation,Lizard,4,72,6,69,8,
+17423,kill,Boar,25,62,1,90,1,killed_by:Crocodile:576
+17425,reproduce,Frog,578,96,0,128,0,offspring:2
+17432,kill,Elk,229,2,8,0,1,killed_by:Crocodile:483
+17432,reproduce,Elk,386,31,6,17,4,offspring:1
+17438,starvation,Rabbit,273,108,2,39,1,
+17440,reproduce,Camel,156,73,3,99,3,offspring:1
+17440,reproduce,Camel,293,81,4,88,4,offspring:1
+17441,kill,Elk,417,128,0,126,7,killed_by:Crocodile:216
+17449,starvation,Parrot,176,61,3,0,0,

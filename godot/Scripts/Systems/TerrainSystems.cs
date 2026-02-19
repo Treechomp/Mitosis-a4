@@ -122,7 +122,16 @@ public sealed class TerrainDiscomfortSystem : ISystem
                         energy.RegenCooldown = 40; // Suppress regen while drowning/suffocating
 
                         if (energy.IsDead)
+                        {
                             _toKill.Add(entity);
+                            if (em.HasComponents(entity, ComponentFlags.Species))
+                            {
+                                ref var sp = ref em.Species[entity];
+                                string cause = isDrowning ? "drowning" : "suffocation";
+                                EcosystemLogger.Instance?.LogEnvironmentDeath(
+                                    sp.SpeciesId, entity, pos.X, pos.Y, cause);
+                            }
+                        }
                     }
                 }
                 else
