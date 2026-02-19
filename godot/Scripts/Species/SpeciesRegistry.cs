@@ -283,7 +283,8 @@ public static class SpeciesRegistry
             BaseWanderSpeed = 0.06f,
             DirectionChangeChance = 0.01f,
 
-            // Combat
+            // Combat — coordinated pack hunting with leader/flanker/disruptor roles
+            HuntingTactic = HuntingTactic.PackCoordinated,
             HuntRange = 12f,
             AttackRange = 0.8f,
             AttackPower = 30f,
@@ -379,7 +380,8 @@ public static class SpeciesRegistry
             BaseWanderSpeed = 0.05f,
             DirectionChangeChance = 0.012f,
 
-            // Combat - smaller, faster attacks
+            // Combat — solitary direct-chase hunter
+            HuntingTactic = HuntingTactic.Solo,
             HuntRange = 8f,
             AttackRange = 0.6f,
             AttackPower = 20f,
@@ -465,7 +467,8 @@ public static class SpeciesRegistry
             BaseWanderSpeed = 0.02f,
             DirectionChangeChance = 0.003f,
 
-            // Combat - powerful bite, slow attack
+            // Combat — ambush predator: stealth + explosive pounce
+            HuntingTactic = HuntingTactic.Ambush,
             HuntRange = 6f,
             AttackRange = 1.2f,
             AttackPower = 50f,
@@ -661,7 +664,8 @@ public static class SpeciesRegistry
             BaseWanderSpeed = 0.04f,
             DirectionChangeChance = 0.005f,
 
-            // Combat - powerful bite
+            // Combat — solo aquatic predator, direct chase
+            HuntingTactic = HuntingTactic.Solo,
             HuntRange = 14f,
             AttackRange = 1.2f,
             AttackPower = 45f,
@@ -992,7 +996,8 @@ public static class SpeciesRegistry
             BaseWanderSpeed = 0.035f,
             DirectionChangeChance = 0.008f,
 
-            // Combat - aggressive omnivore that fights back
+            // Combat — pack-coordinated omnivore
+            HuntingTactic = HuntingTactic.PackCoordinated,
             HuntRange = 6f,
             AttackRange = 0.7f,
             AttackPower = 18f,
@@ -1086,7 +1091,8 @@ public static class SpeciesRegistry
             BaseWanderSpeed = 0.02f,
             DirectionChangeChance = 0.004f,
 
-            // Combat - devastating attacks
+            // Combat — solo apex predator, direct chase
+            HuntingTactic = HuntingTactic.Solo,
             HuntRange = 10f,
             AttackRange = 1.5f,
             AttackPower = 60f,
@@ -1162,7 +1168,8 @@ public static class SpeciesRegistry
             BaseWanderSpeed = 0.06f,
             DirectionChangeChance = 0.008f,
 
-            // Combat - fast strikes on small prey
+            // Combat — solo aerial hunter, dive strikes
+            HuntingTactic = HuntingTactic.Solo,
             HuntRange = 15f,
             AttackRange = 0.8f,
             AttackPower = 22f,
@@ -1319,7 +1326,8 @@ public static class SpeciesRegistry
             BaseWanderSpeed = 0.02f,
             DirectionChangeChance = 0.005f,
 
-            // Combat - venomous ambush
+            // Combat — ambush predator with venom
+            HuntingTactic = HuntingTactic.Ambush,
             HuntRange = 5f,
             AttackRange = 0.6f,
             AttackPower = 15f,
@@ -1501,7 +1509,8 @@ public static class SpeciesRegistry
             BaseWanderSpeed = 0.03f,
             DirectionChangeChance = 0.008f,
 
-            // Combat - fast strike stealth hunter
+            // Combat — ambush stealth hunter with venom
+            HuntingTactic = HuntingTactic.Ambush,
             HuntRange = 6f,
             AttackRange = 0.8f,
             AttackPower = 18f,
@@ -1688,7 +1697,8 @@ public static class SpeciesRegistry
             BaseWanderSpeed = 0.02f,
             DirectionChangeChance = 0.004f,
 
-            // Combat - devastating
+            // Combat — solo apex predator
+            HuntingTactic = HuntingTactic.Solo,
             HuntRange = 12f,
             AttackRange = 1.5f,
             AttackPower = 55f,
@@ -1776,7 +1786,8 @@ public static class SpeciesRegistry
             BaseWanderSpeed = 0.05f,
             DirectionChangeChance = 0.012f,
 
-            // Combat - small, fast
+            // Combat — solo arctic hunter
+            HuntingTactic = HuntingTactic.Solo,
             HuntRange = 8f,
             AttackRange = 0.6f,
             AttackPower = 18f,
@@ -2107,7 +2118,8 @@ public static class SpeciesRegistry
             BaseWanderSpeed = 0.04f,
             DirectionChangeChance = 0.006f,
 
-            // Combat - ambush predator with jungle stealth
+            // Combat — ambush predator with jungle stealth
+            HuntingTactic = HuntingTactic.Ambush,
             HuntRange = 10f,
             AttackRange = 1.0f,
             AttackPower = 45f,
@@ -2383,11 +2395,22 @@ public static class SpeciesRegistry
             TerraformStrength = 0.03f,
             TerraformCooldown = 8,
 
-            // AoE attack — scales with growth (large Shroomers have huge AoE)
+            // AoE attack — quadratic growth scaling: weak at birth, devastating when mature
+            // Scale 1.0: radius 2 × 1^2 = 2, damage 3 × 1^2 = 3  (barely noticeable)
+            // Scale 2.0: radius 2 × 4 = 8,   damage 3 × 4 = 12   (moderate threat)
+            // Scale 3.0: radius 2 × 9 = 18,  damage 3 × 9 = 27   (area denial)
+            // Scale 4.0: radius 2 × 16 = 32, damage 3 × 16 = 48  (devastation zone)
             HasAoEAttack = true,
-            AoEAttackRadius = 3f,   // Base radius, scales with CurrentScale
-            AoEAttackDamage = 8f,   // Base damage, scales with CurrentScale
-            AoEAttackCooldown = 40,
+            AoEAttackRadius = 2f,        // Lower base radius (grows quadratically)
+            AoEAttackDamage = 3f,        // Lower base damage (grows quadratically)
+            AoEAttackCooldown = 50,      // Base cooldown (used for combat pulses)
+            AoEPassiveCooldown = 200,    // Slow passive pulses (every 10s at 20 TPS)
+            AoECombatCooldown = 50,      // Faster reactive pulses when attacked
+            AoEGrowthExponent = 2.0f,    // Quadratic: weak at birth, devastating at 4× scale
+
+            // Thorn defense — growth-scaled counter-damage on melee attackers
+            ThornDamageBase = 1.5f,      // Low base thorn (scales quadratically with growth)
+            ThornGrowthExponent = 2.0f,  // Scale 1: 1.5 dmg, Scale 2: 6 dmg, Scale 4: 24 dmg
 
             // Trophic - medium-small fungi (huntable, spores are edible)
             BodyMass = 2.5f,
@@ -2525,6 +2548,7 @@ public static class SpeciesRegistry
 
             // Trophic - tiny insects, hunt in packs — eat anything that moves
             // No PreferredPrey: Sectids are pure opportunists, targeting nearest viable prey
+            HuntingTactic = HuntingTactic.Swarm,  // Colony-wide rush, no retreat, count all same-species
             SwarmHunter = true,            // Colony-wide bravery, can target predators
             BodyMass = 0.5f,
             SoloHuntMaxRatio = 2.5f,       // Solo: prey up to mass 1.25 (rabbits)

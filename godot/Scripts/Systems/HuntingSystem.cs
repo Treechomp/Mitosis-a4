@@ -117,7 +117,7 @@ public sealed class HuntingSystem : ISystem
                 predator.PhaseTimer--;
 
             // Passive stealth accumulation for ambush predators (builds while idle/wandering)
-            if (speciesDef.IsAmbushPredator && !predator.HasTarget && predator.PounceTimer <= 0)
+            if (speciesDef.HuntingTactic == HuntingTactic.Ambush && !predator.HasTarget && predator.PounceTimer <= 0)
             {
                 float currentSpd = 0f;
                 if (em.HasComponents(entity, ComponentFlags.Velocity))
@@ -212,7 +212,7 @@ public sealed class HuntingSystem : ISystem
                 discomfortRatio = discomfort.Ratio;
                 float discomfortTolerance = urgency;
                 // Swarm hunters commit harder to hunts — relentless pursuit
-                if (speciesDef.SwarmHunter && predator.HasTarget)
+                if (speciesDef.IsSwarmHunter && predator.HasTarget)
                     discomfortTolerance += 0.5f;
                 if (discomfort.ExceedsThreshold && discomfortRatio > discomfortTolerance + 0.3f)
                 {
@@ -318,7 +318,7 @@ public sealed class HuntingSystem : ISystem
                 // Calculate effective hunting mass (solo or pack)
                 float effectiveMass = speciesDef.BodyMass;
                 float maxHuntRatio = speciesDef.SoloHuntMaxRatio;
-                bool isSwarm = speciesDef.SwarmHunter;
+                bool isSwarm = speciesDef.IsSwarmHunter;
                 if (isPack)
                 {
                     // Count nearby pack/swarm members for effective mass
@@ -473,7 +473,7 @@ public sealed class HuntingSystem : ISystem
 
                     // Swarm hunters can track any living creature
                     bool isTrackable = em.HasComponents(preyEntity, ComponentFlags.Prey);
-                    if (!isTrackable && speciesDef.SwarmHunter)
+                    if (!isTrackable && speciesDef.IsSwarmHunter)
                         isTrackable = em.HasComponents(preyEntity, ComponentFlags.Energy | ComponentFlags.Species);
                     if (!isTrackable)
                         continue;
@@ -539,7 +539,7 @@ public sealed class HuntingSystem : ISystem
                 float huntAgility = Math.Clamp(1.5f / speciesDef.BodyMass, 0.25f, 1f);
 
                 // === AMBUSH STEALTH UPDATE ===
-                bool isAmbush = speciesDef.IsAmbushPredator;
+                bool isAmbush = speciesDef.HuntingTactic == HuntingTactic.Ambush;
                 if (isAmbush)
                 {
                     // Tick down pounce timer
@@ -592,14 +592,16 @@ public sealed class HuntingSystem : ISystem
                         preyEnergy.Current -= predator.AttackPower * attackMult;
                         preyEnergy.RegenCooldown = 60; // 3s combat cooldown at 20 TPS
 
-                        // Shroomer toxic thorns — attackers take damage scaling with growth
+                        // Thorn defense — attackers take growth-scaled counter-damage
                         if (em.HasComponents(predator.TargetEntity, ComponentFlags.Growth | ComponentFlags.Species))
                         {
                             ref var preySpecies = ref em.Species[predator.TargetEntity];
-                            if (preySpecies.Type == SpeciesType.Shroomer)
+                            var preyDef = SpeciesRegistry.GetById(preySpecies.SpeciesId);
+                            if (preyDef.ThornDamageBase > 0f)
                             {
                                 ref var growth = ref em.Growths[predator.TargetEntity];
-                                float thornDamage = 3f * growth.CurrentScale;
+                                float thornDamage = preyDef.ThornDamageBase *
+                                    MathF.Pow(growth.CurrentScale, preyDef.ThornGrowthExponent);
                                 if (em.HasComponents(entity, ComponentFlags.Energy))
                                 {
                                     ref var predEnergy = ref em.Energies[entity];
@@ -693,7 +695,7 @@ public sealed class HuntingSystem : ISystem
 
                     // After attacking, only disruptors retreat (to continue harassment cycle)
                     // Swarm hunters never retreat — they just keep biting
-                    if (isPack && !speciesDef.SwarmHunter
+                    if (isPack && speciesDef.HuntingTactic == HuntingTactic.PackCoordinated
                         && predator.Role == PackRole.Disruptor
                         && predator.Phase == PackPhase.Disrupting)
                     {
@@ -711,72 +713,46 @@ public sealed class HuntingSystem : ISystem
 
                     float huntSpeed = speciesDef.BaseHuntSpeed * speedMultiplier;
 
-                    // === AMBUSH HUNTING MOVEMENT ===
-                    if (isAmbush && !isPack)
+                    // === TACTIC-BASED MOVEMENT DISPATCH ===
+                    switch (speciesDef.HuntingTactic)
                     {
-                        float pounceRangeSq = speciesDef.PounceRange * speciesDef.PounceRange;
+                        case HuntingTactic.Ambush:
+                            ApplyAmbushMovement(ref vel, ref predator, dx, dy, distSq,
+                                huntSpeed, huntAgility, speedMultiplier, speciesDef);
+                            break;
 
-                        if (predator.PounceTimer > 0)
+                        case HuntingTactic.Swarm:
                         {
-                            // POUNCING: explosive burst toward prey
-                            var dir = MathUtils.Normalize(dx, dy);
-                            float pounceSpeed = speciesDef.BaseHuntSpeed * speciesDef.PounceSpeedMult * speedMultiplier;
-                            // During pounce, snap hard toward target (high agility override)
-                            BlendVelocity(ref vel, dir.X * pounceSpeed, dir.Y * pounceSpeed, 0.8f);
-                        }
-                        else if (predator.Stealth >= speciesDef.PounceStealthThreshold && distSq <= pounceRangeSq)
-                        {
-                            // TRIGGER POUNCE: within range and stealthed enough
-                            predator.PounceTimer = speciesDef.PounceDuration;
-                            predator.Stealth = 0f; // Stealth breaks on pounce
-
-                            var dir = MathUtils.Normalize(dx, dy);
-                            float pounceSpeed = speciesDef.BaseHuntSpeed * speciesDef.PounceSpeedMult * speedMultiplier;
-                            BlendVelocity(ref vel, dir.X * pounceSpeed, dir.Y * pounceSpeed, 0.8f);
-                        }
-                        else if (predator.Stealth > 0.1f)
-                        {
-                            // STALKING: approach slowly to maintain/build stealth
-                            var dir = MathUtils.Normalize(dx, dy);
-                            float stalkSpeed = speciesDef.BaseHuntSpeed * speciesDef.AmbushSpeedThreshold * 0.9f;
-                            BlendVelocity(ref vel, dir.X * stalkSpeed, dir.Y * stalkSpeed, huntAgility * 0.5f);
-                        }
-                        else
-                        {
-                            // NO STEALTH: chase openly (post-pounce or stealth broke)
-                            var dir = MathUtils.Normalize(dx, dy);
-                            BlendVelocity(ref vel, dir.X * huntSpeed, dir.Y * huntSpeed, huntAgility);
-                        }
-                    }
-                    // Pack tactics based on role and phase
-                    else if (isPack && predator.Role != PackRole.None)
-                    {
-                        // Swarm hunters (small body mass) skip positioning/retreat tactics
-                        // and just rush directly — prey doesn't flee from them anyway
-                        if (speciesDef.BodyMass < 1.0f)
-                        {
-                            // Direct swarm chase — all rush together
+                            // Direct swarm chase — all rush together, no retreat
                             var dir = MathUtils.Normalize(dx, dy);
                             float swarmSpeed = huntSpeed * 1.2f;
                             BlendVelocity(ref vel, dir.X * swarmSpeed, dir.Y * swarmSpeed, huntAgility);
+                            break;
                         }
-                        else
+
+                        case HuntingTactic.PackCoordinated when isPack && predator.Role != PackRole.None:
                         {
-                            // Check if prey is isolated from herd
+                            // Coordinated pack: leader/flanker/disruptor roles
                             bool preyIsolated = IsPreyIsolated(predator.TargetEntity, em);
-                            ApplyPackTactics(entity, ref pos, ref vel, ref predator, preyPos.X, preyPos.Y, dist, huntSpeed, em, preyIsolated, speciesDef, huntAgility);
+                            ApplyPackTactics(entity, ref pos, ref vel, ref predator,
+                                preyPos.X, preyPos.Y, dist, huntSpeed, em,
+                                preyIsolated, speciesDef, huntAgility);
+                            break;
                         }
-                    }
-                    else
-                    {
-                        // Solo hunting - direct chase
-                        var dir = MathUtils.Normalize(dx, dy);
-                        BlendVelocity(ref vel, dir.X * huntSpeed, dir.Y * huntSpeed, huntAgility);
+
+                        default:
+                        {
+                            // Solo / PackCoordinated without pack — direct chase
+                            var dir = MathUtils.Normalize(dx, dy);
+                            BlendVelocity(ref vel, dir.X * huntSpeed, dir.Y * huntSpeed, huntAgility);
+                            break;
+                        }
                     }
 
                     // Land predators steer around water during pursuit
                     // Ambush predators skip water avoidance when stalking or pouncing
-                    if (!speciesDef.SemiAquatic && !(isAmbush && (predator.Stealth > 0.1f || predator.PounceTimer > 0)))
+                    bool skipWaterAvoid = isAmbush && (predator.Stealth > 0.1f || predator.PounceTimer > 0);
+                    if (!speciesDef.SemiAquatic && !skipWaterAvoid)
                         SteerAroundWater(ref vel, pos.X, pos.Y);
                 }
             }
@@ -1109,6 +1085,49 @@ public sealed class HuntingSystem : ISystem
                 var defDir = MathUtils.Normalize(dx, dy);
                 BlendVelocity(ref vel, defDir.X * speed, defDir.Y * speed, agility);
                 break;
+        }
+    }
+
+    /// <summary>
+    /// Ambush hunting movement: stalk → build stealth → pounce burst.
+    /// Separates ambush behavior into its own method for clean tactic dispatch.
+    /// </summary>
+    private static void ApplyAmbushMovement(ref Velocity vel, ref Predator predator,
+        float dx, float dy, float distSq,
+        float huntSpeed, float huntAgility, float speedMultiplier,
+        SpeciesDefinition speciesDef)
+    {
+        float pounceRangeSq = speciesDef.PounceRange * speciesDef.PounceRange;
+
+        if (predator.PounceTimer > 0)
+        {
+            // POUNCING: explosive burst toward prey
+            var dir = MathUtils.Normalize(dx, dy);
+            float pounceSpeed = speciesDef.BaseHuntSpeed * speciesDef.PounceSpeedMult * speedMultiplier;
+            BlendVelocity(ref vel, dir.X * pounceSpeed, dir.Y * pounceSpeed, 0.8f);
+        }
+        else if (predator.Stealth >= speciesDef.PounceStealthThreshold && distSq <= pounceRangeSq)
+        {
+            // TRIGGER POUNCE: within range and stealthed enough
+            predator.PounceTimer = speciesDef.PounceDuration;
+            predator.Stealth = 0f;
+
+            var dir = MathUtils.Normalize(dx, dy);
+            float pounceSpeed = speciesDef.BaseHuntSpeed * speciesDef.PounceSpeedMult * speedMultiplier;
+            BlendVelocity(ref vel, dir.X * pounceSpeed, dir.Y * pounceSpeed, 0.8f);
+        }
+        else if (predator.Stealth > 0.1f)
+        {
+            // STALKING: approach slowly to maintain/build stealth
+            var dir = MathUtils.Normalize(dx, dy);
+            float stalkSpeed = speciesDef.BaseHuntSpeed * speciesDef.AmbushSpeedThreshold * 0.9f;
+            BlendVelocity(ref vel, dir.X * stalkSpeed, dir.Y * stalkSpeed, huntAgility * 0.5f);
+        }
+        else
+        {
+            // NO STEALTH: chase openly (post-pounce or stealth broke)
+            var dir = MathUtils.Normalize(dx, dy);
+            BlendVelocity(ref vel, dir.X * huntSpeed, dir.Y * huntSpeed, huntAgility);
         }
     }
 

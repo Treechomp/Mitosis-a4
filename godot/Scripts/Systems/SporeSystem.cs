@@ -371,10 +371,12 @@ public sealed class SporeSystem : ISystem
             ref var growth = ref em.Growths[entity];
             if (growth.CurrentScale < speciesDef.AoEMinScale) continue; // Only mature shroomers attack
 
-            // AoE pulse interval: normal rate on timer, double rate when in combat (reactive defense)
-            int aoeInterval = speciesDef.AoEAttackCooldown;
-            if (em.HasComponents(entity, ComponentFlags.Energy) && em.Energies[entity].RegenCooldown > 0)
-                aoeInterval = Math.Max(1, aoeInterval / 2);
+            // AoE pulse interval: slow passive pulses, faster reactive pulses when in combat
+            bool inCombat = em.HasComponents(entity, ComponentFlags.Energy) && em.Energies[entity].RegenCooldown > 0;
+            int aoeInterval = inCombat
+                ? speciesDef.EffectiveAoECombatCooldown
+                : speciesDef.EffectiveAoEPassiveCooldown;
+            aoeInterval = Math.Max(1, aoeInterval);
             if (em.HasComponents(entity, ComponentFlags.Age))
             {
                 ref var age = ref em.Ages[entity];
@@ -382,8 +384,11 @@ public sealed class SporeSystem : ISystem
             }
 
             ref var pos = ref em.Positions[entity];
-            float aoeRadius = speciesDef.AoEAttackRadius * growth.CurrentScale;
-            float aoeDamage = speciesDef.AoEAttackDamage * growth.CurrentScale;
+            // Growth-based scaling: base * (scale ^ exponent)
+            // With exponent > 1, small Shroomers are weak, large ones are devastating
+            float growthFactor = MathF.Pow(growth.CurrentScale, speciesDef.AoEGrowthExponent);
+            float aoeRadius = speciesDef.AoEAttackRadius * growthFactor;
+            float aoeDamage = speciesDef.AoEAttackDamage * growthFactor;
 
             _spatialHash.QueryRadius(pos.X, pos.Y, aoeRadius, _nearbyBuffer);
 

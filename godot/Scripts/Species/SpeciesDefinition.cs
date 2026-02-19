@@ -38,6 +38,11 @@ public sealed class SpeciesDefinition
     public float RoamSpeedMultiplier { get; init; } = 1.5f;
 
     // === COMBAT (Predators) ===
+
+    /// <summary>Primary hunting tactic for this species. Determines movement patterns,
+    /// coordination behavior, and engagement style during hunts.</summary>
+    public HuntingTactic HuntingTactic { get; init; } = HuntingTactic.Solo;
+
     public float HuntRange { get; init; } = 12f;
     public float AttackRange { get; init; } = 0.8f;
     public float AttackPower { get; init; } = 30f;
@@ -277,6 +282,27 @@ public sealed class SpeciesDefinition
     public float AoEAttackDamage { get; init; } = 8f;
     public int AoEAttackCooldown { get; init; } = 40;
 
+    /// <summary>AoE cooldown when passive (not in combat). Higher = less frequent passive pulses.
+    /// Defaults to AoEAttackCooldown if not set (0).</summary>
+    public int AoEPassiveCooldown { get; init; } = 0;
+
+    /// <summary>AoE cooldown when in combat (being attacked). Lower = more frequent reactive pulses.
+    /// Defaults to AoEAttackCooldown/2 if not set (0).</summary>
+    public int AoECombatCooldown { get; init; } = 0;
+
+    /// <summary>Exponent for growth-based AoE scaling. Higher = more dramatic growth curve.
+    /// Damage/radius scale as: base * (CurrentScale ^ AoEGrowthExponent).
+    /// Default 1.0 = linear scaling. 2.0 = quadratic (weak at birth, devastating when mature).</summary>
+    public float AoEGrowthExponent { get; init; } = 1.0f;
+
+    /// <summary>Base thorn damage per melee hit when attacked. Scales with growth.
+    /// 0 = no thorn defense.</summary>
+    public float ThornDamageBase { get; init; } = 0f;
+
+    /// <summary>Growth exponent for thorn damage scaling.
+    /// Thorn damage = ThornDamageBase * (CurrentScale ^ ThornGrowthExponent).</summary>
+    public float ThornGrowthExponent { get; init; } = 1.0f;
+
     // === GROWTH (Shroomers, Faelings) ===
     /// <summary>Max growth scale multiplier. 0 or negative = no growth component.</summary>
     public float GrowthMaxScale { get; init; } = 0f;
@@ -348,5 +374,13 @@ public sealed class SpeciesDefinition
     public bool IsPredator => Diet == DietType.Carnivore || Diet == DietType.Omnivore;
     public bool IsPrey => Diet == DietType.Herbivore || Diet == DietType.Omnivore || Diet == DietType.Terraformer;
     public bool HasGrowth => GrowthMaxScale > 0f;
-    public bool IsAmbushPredator => AmbushStealthGain > 0f;
+    public bool IsAmbushPredator => HuntingTactic == HuntingTactic.Ambush || AmbushStealthGain > 0f;
+    public bool IsSwarmHunter => HuntingTactic == HuntingTactic.Swarm || SwarmHunter;
+    public bool IsPackCoordinated => HuntingTactic == HuntingTactic.PackCoordinated;
+
+    /// <summary>Effective passive AoE cooldown (uses AoEPassiveCooldown if set, otherwise AoEAttackCooldown * 3).</summary>
+    public int EffectiveAoEPassiveCooldown => AoEPassiveCooldown > 0 ? AoEPassiveCooldown : AoEAttackCooldown * 3;
+
+    /// <summary>Effective combat AoE cooldown (uses AoECombatCooldown if set, otherwise AoEAttackCooldown).</summary>
+    public int EffectiveAoECombatCooldown => AoECombatCooldown > 0 ? AoECombatCooldown : AoEAttackCooldown;
 }

@@ -4,6 +4,18 @@ using Godot;
 namespace Mitosis.Components;
 
 /// <summary>
+/// Primary hunting tactic for a predator species.
+/// Determines movement patterns, coordination, and engagement behavior.
+/// </summary>
+public enum HuntingTactic : byte
+{
+    Solo = 0,             // Direct chase, no coordination (Fox, Bear, Hawk)
+    PackCoordinated = 1,  // Leader/flanker/disruptor roles with phases (Wolf, Boar)
+    Swarm = 2,            // Colony-wide rush, no retreat, count all nearby same-species (Sectid)
+    Ambush = 3            // Stealth accumulation → pounce burst (Crocodile, Jaguar, Snake, Scorpion)
+}
+
+/// <summary>
 /// Pack hunting role for coordinated attacks.
 /// </summary>
 public enum PackRole : byte
