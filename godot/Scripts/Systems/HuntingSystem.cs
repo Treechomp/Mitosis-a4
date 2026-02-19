@@ -143,9 +143,14 @@ public sealed class HuntingSystem : ISystem
                 }
             }
 
-            // Clear target if dead
+            // Clear target if dead (killed by another predator or other cause)
             if (predator.HasTarget && !em.IsAlive(predator.TargetEntity))
             {
+                if (em.HasComponents(entity, ComponentFlags.Species))
+                {
+                    ref var sp = ref em.Species[entity];
+                    EcosystemLogger.Instance?.LogHuntFail(sp.SpeciesId, entity, pos.X, pos.Y, "target_died");
+                }
                 predator.TargetEntity = -1;
                 predator.Phase = PackPhase.Idle;
                 predator.Role = PackRole.None;
@@ -160,6 +165,11 @@ public sealed class HuntingSystem : ISystem
                 float abandonDistSq = MathUtils.DistanceSquared(pos.X, pos.Y, targetPos.X, targetPos.Y);
                 if (abandonDistSq > abandonRange * abandonRange)
                 {
+                    if (em.HasComponents(entity, ComponentFlags.Species))
+                    {
+                        ref var sp = ref em.Species[entity];
+                        EcosystemLogger.Instance?.LogHuntFail(sp.SpeciesId, entity, pos.X, pos.Y, "prey_escaped");
+                    }
                     predator.TargetEntity = -1;
                     predator.Phase = PackPhase.Idle;
                     predator.Role = PackRole.None;
@@ -203,6 +213,11 @@ public sealed class HuntingSystem : ISystem
                 float discomfortTolerance = urgency;
                 if (discomfort.ExceedsThreshold && discomfortRatio > discomfortTolerance + 0.3f)
                 {
+                    if (predator.HasTarget && em.HasComponents(entity, ComponentFlags.Species))
+                    {
+                        ref var sp = ref em.Species[entity];
+                        EcosystemLogger.Instance?.LogHuntFail(sp.SpeciesId, entity, pos.X, pos.Y, "discomfort");
+                    }
                     predator.TargetEntity = -1;
                     predator.Phase = PackPhase.Idle;
                     continue;
@@ -415,6 +430,16 @@ public sealed class HuntingSystem : ISystem
                 if (bestPrey >= 0)
                 {
                     predator.TargetEntity = bestPrey;
+                    // Log hunt start
+                    if (em.HasComponents(entity, ComponentFlags.Species) &&
+                        em.HasComponents(bestPrey, ComponentFlags.Species))
+                    {
+                        ref var predSp = ref em.Species[entity];
+                        ref var preySp = ref em.Species[bestPrey];
+                        EcosystemLogger.Instance?.LogHuntStart(
+                            predSp.SpeciesId, preySp.SpeciesId,
+                            entity, bestPrey, pos.X, pos.Y);
+                    }
                     if (isPack)
                     {
                         _groupTargets[groupId] = bestPrey;

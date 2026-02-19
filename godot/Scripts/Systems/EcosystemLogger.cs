@@ -125,6 +125,35 @@ public sealed class EcosystemLogger : ISystem
         _latestEventLog.WriteLine(line);
     }
 
+    /// <summary>Log a drowning or suffocation death.</summary>
+    public void LogEnvironmentDeath(int speciesId, int entityId, float x, float y, string cause)
+    {
+        var name = SpeciesRegistry.GetById(speciesId)?.Name ?? speciesId.ToString();
+        var line = $"{_tick},environment_death,{name},{entityId},{x:F1},{y:F1},{cause}";
+        _eventLog.WriteLine(line);
+        _latestEventLog.WriteLine(line);
+    }
+
+    /// <summary>Log a hunt attempt (target acquired). Paired with kill or hunt_fail to track success rate.</summary>
+    public void LogHuntStart(int predatorSpeciesId, int preySpeciesId, int predatorId, int preyId,
+                              float predX, float predY)
+    {
+        var predName = SpeciesRegistry.GetById(predatorSpeciesId)?.Name ?? predatorSpeciesId.ToString();
+        var preyName = SpeciesRegistry.GetById(preySpeciesId)?.Name ?? preySpeciesId.ToString();
+        var line = $"{_tick},hunt_start,{predName},{predatorId},{predX:F1},{predY:F1},target:{preyName}:{preyId}";
+        _eventLog.WriteLine(line);
+        _latestEventLog.WriteLine(line);
+    }
+
+    /// <summary>Log a failed hunt (target lost/escaped/abandoned).</summary>
+    public void LogHuntFail(int predatorSpeciesId, int predatorId, float x, float y, string reason)
+    {
+        var predName = SpeciesRegistry.GetById(predatorSpeciesId)?.Name ?? predatorSpeciesId.ToString();
+        var line = $"{_tick},hunt_fail,{predName},{predatorId},{x:F1},{y:F1},{reason}";
+        _eventLog.WriteLine(line);
+        _latestEventLog.WriteLine(line);
+    }
+
     /// <summary>Log a spore creation.</summary>
     public void LogSporeCreated(float x, float y)
     {
