@@ -278,30 +278,32 @@ public sealed class SpeciesDefinition
 
     // === AOE ATTACK (Shroomers) ===
     public bool HasAoEAttack { get; init; } = false;
+
+    /// <summary>Maximum AoE radius at full growth. At birth, radius = this * AoEMinScaleFactor.</summary>
     public float AoEAttackRadius { get; init; } = 3f;
+
+    /// <summary>Maximum AoE damage at full growth. At birth, damage = this * AoEMinScaleFactor.</summary>
     public float AoEAttackDamage { get; init; } = 8f;
+
+    /// <summary>Base AoE cooldown (used as fallback). See AoEPassiveCooldown/AoECombatCooldown.</summary>
     public int AoEAttackCooldown { get; init; } = 40;
 
     /// <summary>AoE cooldown when passive (not in combat). Higher = less frequent passive pulses.
-    /// Defaults to AoEAttackCooldown if not set (0).</summary>
+    /// Defaults to AoEAttackCooldown * 3 if not set (0).</summary>
     public int AoEPassiveCooldown { get; init; } = 0;
 
     /// <summary>AoE cooldown when in combat (being attacked). Lower = more frequent reactive pulses.
-    /// Defaults to AoEAttackCooldown/2 if not set (0).</summary>
+    /// Defaults to AoEAttackCooldown if not set (0).</summary>
     public int AoECombatCooldown { get; init; } = 0;
 
-    /// <summary>Exponent for growth-based AoE scaling. Higher = more dramatic growth curve.
-    /// Damage/radius scale as: base * (CurrentScale ^ AoEGrowthExponent).
-    /// Default 1.0 = linear scaling. 2.0 = quadratic (weak at birth, devastating when mature).</summary>
-    public float AoEGrowthExponent { get; init; } = 1.0f;
+    /// <summary>Minimum AoE scaling factor at birth (fraction of max radius/damage).
+    /// 0.1 = 10% of max values at initial growth scale. Growth follows an S-curve
+    /// (smoothstep) from this floor to 1.0 at max growth scale.</summary>
+    public float AoEMinScaleFactor { get; init; } = 0.1f;
 
-    /// <summary>Base thorn damage per melee hit when attacked. Scales with growth.
+    /// <summary>Base thorn damage per melee hit when attacked. Scales with growth via S-curve.
     /// 0 = no thorn defense.</summary>
     public float ThornDamageBase { get; init; } = 0f;
-
-    /// <summary>Growth exponent for thorn damage scaling.
-    /// Thorn damage = ThornDamageBase * (CurrentScale ^ ThornGrowthExponent).</summary>
-    public float ThornGrowthExponent { get; init; } = 1.0f;
 
     // === GROWTH (Shroomers, Faelings) ===
     /// <summary>Max growth scale multiplier. 0 or negative = no growth component.</summary>
@@ -369,6 +371,21 @@ public sealed class SpeciesDefinition
         if (TerrainComfortModifiers != null && TerrainComfortModifiers.TryGetValue(tile, out float mod))
             return mod;
         return 0f;
+    }
+
+    /// <summary>
+    /// Get the growth scaling factor for AoE/thorn damage using an S-curve (smoothstep).
+    /// Returns a value between AoEMinScaleFactor (at InitialScale) and 1.0 (at GrowthMaxScale).
+    /// Shape: slow increase at birth → growth spurt mid-life → tapering toward elder age.
+    /// </summary>
+    public float GetGrowthScalingFactor(float currentScale)
+    {
+        if (GrowthMaxScale <= InitialScale) return 1f;
+        float t = (currentScale - InitialScale) / (GrowthMaxScale - InitialScale);
+        if (t < 0f) t = 0f; else if (t > 1f) t = 1f;
+        // Smoothstep: S-curve with slow start, steep middle, tapering end
+        float s = t * t * (3f - 2f * t);
+        return AoEMinScaleFactor + (1f - AoEMinScaleFactor) * s;
     }
 
     public bool IsPredator => Diet == DietType.Carnivore || Diet == DietType.Omnivore;

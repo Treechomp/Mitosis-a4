@@ -384,9 +384,8 @@ public sealed class SporeSystem : ISystem
             }
 
             ref var pos = ref em.Positions[entity];
-            // Growth-based scaling: base * (scale ^ exponent)
-            // With exponent > 1, small Shroomers are weak, large ones are devastating
-            float growthFactor = MathF.Pow(growth.CurrentScale, speciesDef.AoEGrowthExponent);
+            // S-curve growth scaling: slow at birth → growth spurt mid-life → tapering at elder
+            float growthFactor = speciesDef.GetGrowthScalingFactor(growth.CurrentScale);
             float aoeRadius = speciesDef.AoEAttackRadius * growthFactor;
             float aoeDamage = speciesDef.AoEAttackDamage * growthFactor;
 

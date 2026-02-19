@@ -2395,22 +2395,27 @@ public static class SpeciesRegistry
             TerraformStrength = 0.03f,
             TerraformCooldown = 8,
 
-            // AoE attack — quadratic growth scaling: weak at birth, devastating when mature
-            // Scale 1.0: radius 2 × 1^2 = 2, damage 3 × 1^2 = 3  (barely noticeable)
-            // Scale 2.0: radius 2 × 4 = 8,   damage 3 × 4 = 12   (moderate threat)
-            // Scale 3.0: radius 2 × 9 = 18,  damage 3 × 9 = 27   (area denial)
-            // Scale 4.0: radius 2 × 16 = 32, damage 3 × 16 = 48  (devastation zone)
+            // AoE attack — S-curve growth scaling (smoothstep):
+            //   Radius/damage = max_value * (minFactor + (1-minFactor) * smoothstep(t))
+            //   where t = (scale - 1.0) / (4.0 - 1.0), smoothstep = t²(3-2t)
+            // Scale 1.0 (birth):  factor=0.08  → radius 2,   damage 2.4   (nearly harmless)
+            // Scale 1.5:          factor=0.09  → radius 2.3,  damage 2.7  (still weak)
+            // Scale 2.5 (mid):    factor=0.50  → radius 12.5, damage 15   (growth spurt)
+            // Scale 3.5:          factor=0.91  → radius 22.8, damage 27.3 (powerful)
+            // Scale 4.0 (elder):  factor=1.00  → radius 25,   damage 30   (max, tapers)
             HasAoEAttack = true,
-            AoEAttackRadius = 2f,        // Lower base radius (grows quadratically)
-            AoEAttackDamage = 3f,        // Lower base damage (grows quadratically)
-            AoEAttackCooldown = 50,      // Base cooldown (used for combat pulses)
-            AoEPassiveCooldown = 200,    // Slow passive pulses (every 10s at 20 TPS)
-            AoECombatCooldown = 50,      // Faster reactive pulses when attacked
-            AoEGrowthExponent = 2.0f,    // Quadratic: weak at birth, devastating at 4× scale
+            AoEAttackRadius = 25f,       // Max radius at full growth
+            AoEAttackDamage = 30f,       // Max damage at full growth
+            AoEAttackCooldown = 60,      // Base cooldown (used for combat pulses)
+            AoEPassiveCooldown = 350,    // Slow passive pulses (every 17.5s at 20 TPS)
+            AoECombatCooldown = 60,      // Reactive pulses when attacked (3s)
+            AoEMinScaleFactor = 0.08f,   // 8% of max at birth → S-curve → 100% at max
 
-            // Thorn defense — growth-scaled counter-damage on melee attackers
-            ThornDamageBase = 1.5f,      // Low base thorn (scales quadratically with growth)
-            ThornGrowthExponent = 2.0f,  // Scale 1: 1.5 dmg, Scale 2: 6 dmg, Scale 4: 24 dmg
+            // Thorn defense — S-curve growth-scaled counter-damage on melee attackers
+            // Scale 1.0: 20 * 0.08 = 1.6 dmg/hit  (barely stings)
+            // Scale 2.5: 20 * 0.50 = 10 dmg/hit   (serious deterrent)
+            // Scale 4.0: 20 * 1.00 = 20 dmg/hit   (lethal to small attackers)
+            ThornDamageBase = 20f,       // Max thorn damage (scaled by same S-curve)
 
             // Trophic - medium-small fungi (huntable, spores are edible)
             BodyMass = 2.5f,

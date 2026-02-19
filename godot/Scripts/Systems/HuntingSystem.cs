@@ -213,7 +213,7 @@ public sealed class HuntingSystem : ISystem
                 float discomfortTolerance = urgency;
                 // Swarm hunters commit harder to hunts — relentless pursuit
                 if (speciesDef.IsSwarmHunter && predator.HasTarget)
-                    discomfortTolerance += 0.5f;
+                    discomfortTolerance += 0.8f;
                 if (discomfort.ExceedsThreshold && discomfortRatio > discomfortTolerance + 0.3f)
                 {
                     if (predator.HasTarget && em.HasComponents(entity, ComponentFlags.Species))
@@ -223,8 +223,9 @@ public sealed class HuntingSystem : ISystem
                     }
                     predator.TargetEntity = -1;
                     predator.Phase = PackPhase.Idle;
-                    // Suppress re-acquisition to prevent find→abandon→find spam loop
-                    predator.PhaseTimer = 40;
+                    // Suppress re-acquisition: longer for swarm hunters to prevent
+                    // target fixation (find→abandon→retarget same prey loop)
+                    predator.PhaseTimer = speciesDef.IsSwarmHunter ? 120 : 60;
                     continue;
                 }
             }
@@ -405,6 +406,17 @@ public sealed class HuntingSystem : ISystem
                         float terrainPenalty = preyTile.GetAvoidanceWeight() * 50f;
                         terrainPenalty *= (1f - urgency * 0.7f);
                         score += terrainPenalty;
+
+                        // Species-specific terrain comfort: heavily penalize prey on tiles
+                        // the hunter finds uncomfortable. Prevents chasing into enemy terrain
+                        // (e.g. Sectids chasing Monkeys deep into Wetland).
+                        float comfortPenalty = speciesDef.GetTerrainComfortModifier(preyTile);
+                        if (comfortPenalty > 0f)
+                        {
+                            // Scale: +3 comfort → +60 score, +6 comfort → +120 score
+                            // Urgency reduces penalty (desperate hunters tolerate more)
+                            score += comfortPenalty * 20f * (1f - urgency * 0.5f);
+                        }
 
                         // Land predators reject targets across water
                         if (!speciesDef.SemiAquatic)
@@ -600,8 +612,8 @@ public sealed class HuntingSystem : ISystem
                             if (preyDef.ThornDamageBase > 0f)
                             {
                                 ref var growth = ref em.Growths[predator.TargetEntity];
-                                float thornDamage = preyDef.ThornDamageBase *
-                                    MathF.Pow(growth.CurrentScale, preyDef.ThornGrowthExponent);
+                                float thornFactor = preyDef.GetGrowthScalingFactor(growth.CurrentScale);
+                                float thornDamage = preyDef.ThornDamageBase * thornFactor;
                                 if (em.HasComponents(entity, ComponentFlags.Energy))
                                 {
                                     ref var predEnergy = ref em.Energies[entity];
