@@ -19,7 +19,7 @@ public sealed class WorldManager
     private readonly TerrainGenerator _generator;
     public readonly SpatialHash SpatialHash;
 
-    public WorldManager(int chunkSize = 32, int worldSizeChunks = 24, int seed = 42)
+    public WorldManager(int chunkSize, int worldSizeChunks, int seed)
     {
         ChunkSize = chunkSize;
         WorldSizeChunks = worldSizeChunks;

@@ -10,39 +10,64 @@ namespace Mitosis.Systems;
 
 /// <summary>
 /// Logs ecosystem events (births, deaths, kills, starvation, population snapshots)
-/// to a CSV file for analysis. Intended for the debug branch only.
+/// to CSV files for analysis. Intended for the debug branch only.
+///
+/// Logs are written to res://logs/ (the godot/logs/ directory in the project).
+/// Two sets of files are created:
+///   - Timestamped files: events_YYYYMMDD_HHmmss.csv, population_YYYYMMDD_HHmmss.csv
+///   - Latest files: latest_events.csv, latest_population.csv (always the current run)
+/// Use the "latest" files for quick access — they're overwritten each run.
 /// </summary>
 public sealed class EcosystemLogger : ISystem
 {
     /// <summary>Global instance for easy access from other systems. Null when logging disabled.</summary>
     public static EcosystemLogger? Instance { get; private set; }
 
+    /// <summary>Full OS path to the log directory, printed at startup for easy access.</summary>
+    public static string? LogDirectory { get; private set; }
+
     private readonly StreamWriter _eventLog;
     private readonly StreamWriter _popLog;
+    private readonly StreamWriter _latestEventLog;
+    private readonly StreamWriter _latestPopLog;
     private readonly Dictionary<int, int> _speciesCounts = new();
     private int _tick;
 
     // Snapshot interval in ticks (every 100 ticks = 5 seconds at 20 TPS)
     private const int SnapshotInterval = 100;
 
-    public EcosystemLogger(string logDir = "user://ecosystem_logs")
+    public EcosystemLogger(string logDir = "res://logs")
     {
-        // Resolve Godot user:// path
+        // Resolve Godot path to OS path (res:// = project directory)
         string resolvedDir = ProjectSettings.GlobalizePath(logDir);
         Directory.CreateDirectory(resolvedDir);
+        LogDirectory = resolvedDir;
 
         string timestamp = DateTime.Now.ToString("yyyyMMdd_HHmmss");
 
+        // Timestamped files (archived per run)
         _eventLog = new StreamWriter(Path.Combine(resolvedDir, $"events_{timestamp}.csv"));
         _eventLog.WriteLine("tick,event,species,entity_id,x,y,detail");
         _eventLog.AutoFlush = true;
 
         _popLog = new StreamWriter(Path.Combine(resolvedDir, $"population_{timestamp}.csv"));
-        // Header written on first snapshot (once we know species list)
         _popLog.AutoFlush = true;
 
+        // Latest files (overwritten each run — always the current session)
+        _latestEventLog = new StreamWriter(Path.Combine(resolvedDir, "latest_events.csv"));
+        _latestEventLog.WriteLine("tick,event,species,entity_id,x,y,detail");
+        _latestEventLog.AutoFlush = true;
+
+        _latestPopLog = new StreamWriter(Path.Combine(resolvedDir, "latest_population.csv"));
+        _latestPopLog.AutoFlush = true;
+
         Instance = this;
-        GD.Print($"EcosystemLogger: writing to {resolvedDir}");
+
+        GD.Print("=========================================");
+        GD.Print($"  ECOSYSTEM LOGS: {resolvedDir}");
+        GD.Print($"  Quick access:   latest_events.csv");
+        GD.Print($"                  latest_population.csv");
+        GD.Print("=========================================");
     }
 
     public void Process(EntityManager em)
@@ -57,21 +82,27 @@ public sealed class EcosystemLogger : ISystem
     public void LogBirth(int speciesId, int entityId, float x, float y, string detail = "")
     {
         var name = SpeciesRegistry.GetById(speciesId)?.Name ?? speciesId.ToString();
-        _eventLog.WriteLine($"{_tick},birth,{name},{entityId},{x:F1},{y:F1},{detail}");
+        var line = $"{_tick},birth,{name},{entityId},{x:F1},{y:F1},{detail}";
+        _eventLog.WriteLine(line);
+        _latestEventLog.WriteLine(line);
     }
 
     /// <summary>Log a death from old age.</summary>
     public void LogAgeDeath(int speciesId, int entityId, float x, float y)
     {
         var name = SpeciesRegistry.GetById(speciesId)?.Name ?? speciesId.ToString();
-        _eventLog.WriteLine($"{_tick},age_death,{name},{entityId},{x:F1},{y:F1},");
+        var line = $"{_tick},age_death,{name},{entityId},{x:F1},{y:F1},";
+        _eventLog.WriteLine(line);
+        _latestEventLog.WriteLine(line);
     }
 
     /// <summary>Log a starvation death.</summary>
     public void LogStarvation(int speciesId, int entityId, float x, float y)
     {
         var name = SpeciesRegistry.GetById(speciesId)?.Name ?? speciesId.ToString();
-        _eventLog.WriteLine($"{_tick},starvation,{name},{entityId},{x:F1},{y:F1},");
+        var line = $"{_tick},starvation,{name},{entityId},{x:F1},{y:F1},";
+        _eventLog.WriteLine(line);
+        _latestEventLog.WriteLine(line);
     }
 
     /// <summary>Log a predation kill.</summary>
@@ -80,26 +111,34 @@ public sealed class EcosystemLogger : ISystem
     {
         var predName = SpeciesRegistry.GetById(predatorSpeciesId)?.Name ?? predatorSpeciesId.ToString();
         var preyName = SpeciesRegistry.GetById(preySpeciesId)?.Name ?? preySpeciesId.ToString();
-        _eventLog.WriteLine($"{_tick},kill,{preyName},{preyId},{x:F1},{y:F1},killed_by:{predName}:{predatorId}");
+        var line = $"{_tick},kill,{preyName},{preyId},{x:F1},{y:F1},killed_by:{predName}:{predatorId}";
+        _eventLog.WriteLine(line);
+        _latestEventLog.WriteLine(line);
     }
 
     /// <summary>Log a reproduction event.</summary>
     public void LogReproduction(int speciesId, int parentId, float x, float y, int offspringCount)
     {
         var name = SpeciesRegistry.GetById(speciesId)?.Name ?? speciesId.ToString();
-        _eventLog.WriteLine($"{_tick},reproduce,{name},{parentId},{x:F1},{y:F1},offspring:{offspringCount}");
+        var line = $"{_tick},reproduce,{name},{parentId},{x:F1},{y:F1},offspring:{offspringCount}";
+        _eventLog.WriteLine(line);
+        _latestEventLog.WriteLine(line);
     }
 
     /// <summary>Log a spore creation.</summary>
     public void LogSporeCreated(float x, float y)
     {
-        _eventLog.WriteLine($"{_tick},spore_created,Shroomer,-1,{x:F1},{y:F1},");
+        var line = $"{_tick},spore_created,Shroomer,-1,{x:F1},{y:F1},";
+        _eventLog.WriteLine(line);
+        _latestEventLog.WriteLine(line);
     }
 
     /// <summary>Log a spore maturing into a Shroomer.</summary>
     public void LogSporeMatured(float x, float y)
     {
-        _eventLog.WriteLine($"{_tick},spore_matured,Shroomer,-1,{x:F1},{y:F1},");
+        var line = $"{_tick},spore_matured,Shroomer,-1,{x:F1},{y:F1},";
+        _eventLog.WriteLine(line);
+        _latestEventLog.WriteLine(line);
     }
 
     private bool _headerWritten;
@@ -126,6 +165,7 @@ public sealed class EcosystemLogger : ISystem
             foreach (var name in _speciesNames)
                 header += $",{name}";
             _popLog.WriteLine(header);
+            _latestPopLog.WriteLine(header);
             _headerWritten = true;
         }
 
@@ -138,11 +178,14 @@ public sealed class EcosystemLogger : ISystem
             line += $",{count}";
         }
         _popLog.WriteLine(line);
+        _latestPopLog.WriteLine(line);
     }
 
     public void Close()
     {
         _eventLog.Dispose();
         _popLog.Dispose();
+        _latestEventLog.Dispose();
+        _latestPopLog.Dispose();
     }
 }

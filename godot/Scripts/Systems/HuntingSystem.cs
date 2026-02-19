@@ -580,11 +580,11 @@ public sealed class HuntingSystem : ISystem
                             {
                                 ref var predSp = ref em.Species[entity];
                                 ref var preySp = ref em.Species[predator.TargetEntity];
-                                ref var preyPos = ref em.Positions[predator.TargetEntity];
+                                ref var killPos = ref em.Positions[predator.TargetEntity];
                                 EcosystemLogger.Instance?.LogKill(
                                     predSp.SpeciesId, preySp.SpeciesId,
                                     entity, predator.TargetEntity,
-                                    preyPos.X, preyPos.Y);
+                                    killPos.X, killPos.Y);
                             }
 
                             // Nutrition scales with prey mass (and growth for Shroomers)

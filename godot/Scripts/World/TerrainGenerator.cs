@@ -24,7 +24,7 @@ public sealed class TerrainGenerator
     private RiverMapper? _riverMapper;
     private int _worldSizeTiles = 512; // Updated by PrecomputeRivers
 
-    public TerrainGenerator(int seed = 42)
+    public TerrainGenerator(int seed)
     {
         _seed = seed;
 
