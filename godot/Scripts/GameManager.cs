@@ -25,6 +25,7 @@ public partial class GameManager : Node2D
     [Export] public int WorldSeed = 0;
     [Export] public int TileSize = 16;
     [Export] public int TargetTPS = 20;
+    [Export] public bool EnableStatisticalSim = false;  // Toggle statistical sim from inspector
     [Export] public int MaxPopulation = 2000;  // DEBUG: cap at 2000 (2500+ causes FPS drop)
     [Export] public int InitialPopulation = 500;  // DEBUG: standardized debug population
     [Export] public float HerbivoreRatio = 0.85f;
@@ -145,9 +146,9 @@ public partial class GameManager : Node2D
         _crystalSystem = new CrystalSystem(_worldManager, spatialHash, MaxPopulation);
         _systems.Add(_crystalSystem);
 
-        // DEBUG: StatisticalSimSystem disabled — everything runs as entities
-        // _statSimSystem = new StatisticalSimSystem(
-        //     _worldManager, _entityFactory, spatialHash, MaxPopulation, ChunkSize);
+        if (EnableStatisticalSim)
+            _statSimSystem = new StatisticalSimSystem(
+                _worldManager, _entityFactory, spatialHash, MaxPopulation, ChunkSize);
 
         // DEBUG: Ecosystem logger — writes CSV logs to godot/logs/ (see latest_events.csv, latest_population.csv)
         _ecosystemLogger = new EcosystemLogger();
