@@ -306,10 +306,10 @@ is hardcoded.
 - **Survival**: 180 max hunger, 0.08 decay/tick (high metabolism), 15000 lifespan, mature at 1000
 - **Social**: Loose herds of ~4, low cohesion (0.015), low affinity (0.4)
 - **Fear**: Very skittish - threshold 30, accumulation 10/tick, **panic** response, long vigilance (200 ticks)
-- **Reproduction**: Breeds in pairs - **600 tick cooldown**, **2 offspring**, costs 45 hunger + 30 energy
+- **Reproduction**: Breeds in pairs - **800 tick cooldown**, **2 offspring**, costs 55 hunger + 35 energy
 - **Terrain**: Faster in forest (1.2x), roams shorter distances (40), high grazing pressure (2.0)
 - **Body mass**: 1.0 (huntable by all predators)
-- **Visual**: Brown circle, size 5
+- **Visual**: Brown teardrop, size 5
 
 #### Wolf
 - **Role**: Pack hunter, apex predator of the grasslands
@@ -392,7 +392,8 @@ is hardcoded.
 - **Feeding**: **No tile feeding** (`CanGraze = false`, no `FeedTiles`). Sectids must hunt to survive.
 - **Spawns on**: Arid, Sand tiles only
 - **Terrain**: Fast on arid (1.2x), very slow on wetland (0.4x)
-- **Body mass**: 0.5, pack exponent 0.8 (swarm of 8: effective mass 3.03, swarm of 15: 5.18)
+- **Body mass**: 0.5, SoloHuntMaxRatio 2.5, pack exponent 0.8
+  (swarm of 3: max prey 3.0, swarm of 8: max prey 6.6, swarm of 12: max prey 9.2)
 - **Visual**: Amber star, size 5
 
 #### Faeling (Crystal Faction)
@@ -437,12 +438,13 @@ Faction Combat:
 
 Predators can only hunt prey up to a mass ratio limit:
 - **Solo**: `prey.BodyMass <= predator.BodyMass * SoloHuntMaxRatio`
-- **Pack**: Effective mass = `baseMass * (packSize ^ PackHuntMassExponent)`
+- **Pack**: `prey.BodyMass <= baseMass * (packSize ^ PackHuntMassExponent) * SoloHuntMaxRatio`
 
 Examples:
 - Fox (mass 2.0, ratio 1.0) can solo hunt Rabbit (1.0) but NOT Deer (4.0)
 - Wolf (mass 3.5, ratio 1.2) can solo hunt up to mass 4.2 (barely gets Deer)
-- Wolf pack of 3: effective mass = 3.5 * 3^0.7 = 7.8, easily hunts Deer
+- Wolf pack of 3: max prey mass = 3.5 * 3^0.7 * 1.2 = 9.4, easily hunts Deer
+- Sectid swarm of 8: max prey mass = 0.5 * 8^0.8 * 2.5 = 6.6, can take wolves
 
 ---
 
@@ -1047,12 +1049,12 @@ The three factions create a dynamic terraforming conflict:
 | Species | Color | Shape | Base Size |
 |---------|-------|-------|-----------|
 | Deer | Green (0.4, 1, 0.4) | Circle | 8 |
-| Rabbit | Brown (0.6, 0.5, 0.4) | Circle | 5 |
+| Rabbit | Brown (0.6, 0.5, 0.4) | Teardrop | 5 |
 | Wolf | Gray (0.6, 0.6, 0.6) | Triangle | 10 |
 | Fox | Orange (1, 0.5, 0.2) | Triangle | 7 |
-| Crocodile | Dark green (0.3, 0.5, 0.3) | Triangle | 14 |
-| Shroomer | Purple (0.55, 0.23, 0.78) | Circle | 9 (grows to 4x) |
-| Sectid | Amber (0.86, 0.55, 0.16) | Triangle | 5 |
+| Crocodile | Dark green (0.3, 0.5, 0.3) | Fangs | 14 |
+| Shroomer | Purple (0.55, 0.23, 0.78) | Mushroom | 9 (grows to 4x) |
+| Sectid | Amber (0.86, 0.55, 0.16) | Star | 5 |
 | Faeling | Teal (0.24, 0.86, 0.78) | Square | 8 (grows to 2.5x) |
 | Crystal | Teal (0.1, 1, 0.9) | Diamond | Special |
 | Nest | Brown (0.6, 0.4, 0.2) | Square | 9-15 (by stage) |
