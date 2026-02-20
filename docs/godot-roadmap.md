@@ -82,14 +82,14 @@
 - [x] HerdingSystem - flocking, cohesion, alignment, leader election, group management, **skip when IsEscaping**
 - [x] SeparationSystem - same-species collision avoidance
 - [x] CollisionSystem - physical overlap resolution (all entities)
-- [x] HuntingSystem - **mass-based agility**, pack coordination, **coordinated flanking (Leader/Flanker/Disruptor roles, convergence triggers)**, **ambush hunting (stealth, stalking, pounce burst)**, food sharing
+- [x] HuntingSystem - **HuntingTactic enum** (Solo/PackCoordinated/Swarm/Ambush), **per-species tactic assignment**, mass-based agility, pack coordination, **coordinated flanking (Leader/Flanker/Disruptor roles, convergence triggers)**, **ambush hunting (stealth, stalking, pounce burst)**, **swarm tactic (Sectids)**, **species-specific terrain comfort in target selection**, food sharing
 - [x] FleeingSystem - prey escape with fear integration, 4 response types, **mass-based agility**, **stealth-aware detection (stealthed predators reduce effective flee range by up to 90%)**
 - [x] AgingSystem - maturity, natural death
 - [x] ReproductionSystem - species-aware offspring spawning with population cap
 - [x] LODSystem - 4-tier distance-based simulation detail
 - [x] TerraformSystem - faction tile modification (wetter/drier/balanced)
 - [x] NestSystem - Sectid nest breeding, food delivery, colony expansion
-- [x] SporeSystem - Shroomer spore lifecycle, growth, AoE attacks
+- [x] SporeSystem - Shroomer spore lifecycle, growth, **S-curve AoE attacks** (smoothstep scaling), **thorn defense**
 - [x] CrystalSystem - Faeling crystal management, ranged attacks, power inheritance
 - [ ] Missing: TerritorySystem
 - [ ] Missing: StatisticalSimSystem (chunk-level populations)
@@ -416,8 +416,10 @@ Shared work needed before/during species expansion:
 - [x] Added Shroomer to SpeciesRegistry (Terraformer diet, Herd social)
 - [x] SporeSystem: Mature shroomers spread spores on wet terrain
 - [x] Spore lifecycle: moisture accumulation on wet tiles, withering on dry, transformation
-- [x] Growth system: continuous scale increase up to 4x, affects AoE
-- [x] AoE attack: periodic splash damage scaling with growth, targets Sectids/Faelings
+- [x] Growth system: continuous scale increase up to 4x, affects AoE and HP
+- [x] AoE attack: S-curve (smoothstep) growth scaling — nearly harmless at birth, devastating
+  at maturity. Passive pulse every 350 ticks, combat pulse every 60 ticks.
+- [x] Thorn defense: melee attackers take growth-scaled counter-damage (1.6→20 dmg/hit)
 - [x] Terraform: Wetter direction (shifts tiles toward Wetland)
 - [x] Feeds on Wetland/Forest tiles
 - [x] Freeze fear response (plays dead when threatened)
@@ -427,7 +429,8 @@ Shared work needed before/during species expansion:
 - [x] NestSystem: 3-stage nests convert food into larvae
 - [x] Food delivery: FoodCarrier component, Sectids carry kills to nests
 - [x] Colony expansion: nests found new nests nearby or distant colonies
-- [x] Pack hunting: Sectids hunt spores and small prey in packs
+- [x] HuntingTactic: Swarm — colony-wide rush, no retreat, targets any living creature
+- [x] Species-specific terrain comfort penalty in target selection
 - [x] Terraform: Drier direction (shifts tiles toward Arid)
 - [x] Hunts for food (no tile feeding — must hunt to survive)
 
@@ -436,17 +439,27 @@ Shared work needed before/during species expansion:
 - [x] CrystalSystem: crystals spawn/respawn linked Faelings
 - [x] Power system: gains power from kills and tile restoration
 - [x] Power inheritance: 50% passes to crystal on death, then to next Faeling
-- [x] Ranged attack: targets Sectids/Shroomers at 8 tile range
-- [x] Immune to starvation and predator hunting
+- [x] Ranged attack: targets Sectids/Shroomers at 12 tile range, 12 damage, 20 tick cooldown
+- [x] Terrain-seeking patrol AI: samples 8 directions, roams toward damaged terrain
+- [x] Immune to starvation, predator hunting, and terrain discomfort
 - [x] Terraform: Balanced direction (shifts extremes toward Grass)
 - [x] Growth system: up to 2.5x scale, boosted by power
 
 ### 4.4 Faction Interactions - COMPLETE
 - [x] Faeling ranged attacks target Sectids and Shroomers
-- [x] Shroomer AoE attacks target Sectids and Faelings
-- [x] Sectids hunt spores (Shroomer offspring)
+- [x] Shroomer AoE attacks target Sectids and Faelings (S-curve scaling)
+- [x] Sectids hunt spores (Shroomer offspring) and any living creature via swarm tactic
 - [x] Competing terraforming: wet vs dry vs balanced creates dynamic terrain conflict
 - [ ] Not implemented: DecomposerSystem, formal territory conflict system
+
+### 4.5 Hunting System Refactoring - COMPLETE
+- [x] HuntingTactic enum: Solo, PackCoordinated, Swarm, Ambush
+- [x] Clean tactic-based movement dispatch (switch instead of scattered boolean checks)
+- [x] Per-species hunting behavior assignment in SpeciesRegistry (13 predator species)
+- [x] Species-specific terrain comfort penalty in target selection
+- [x] Anti-target-fixation: longer suppress timers after discomfort abandon (120 ticks swarm)
+- [x] Extracted ApplyAmbushMovement as dedicated method
+- [x] Thorn damage data-driven via SpeciesDefinition (ThornDamageBase, S-curve scaling)
 
 ---
 

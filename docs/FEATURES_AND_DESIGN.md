@@ -365,35 +365,45 @@ is hardcoded.
 - **Feeding**: On Wetland and Forest tiles, 0.5 nutrition
 - **Spore reproduction**: 0.03% chance/tick when mature, hungry >50%, on wet tile.
   Costs 15% max hunger. Spreads 2 spores within 8 tile radius.
-- **AoE attack**: When grown >= 1.5x scale, periodic splash damage (8 dmg, radius 3,
-  cooldown 40 ticks). Scales with growth. Targets Sectids and Faelings only.
+- **AoE attack**: S-curve growth scaling (smoothstep). At birth (scale 1.0): radius 2,
+  damage 2.4 (nearly harmless). At max growth (scale 4.0): radius 25, damage 30
+  (devastating area denial). Passive pulse every 350 ticks (17.5s), combat pulse every
+  60 ticks (3s) when attacked. Targets Sectids and Faelings only.
+- **Thorn defense**: Melee attackers take counter-damage scaled by same S-curve.
+  At birth: 1.6 dmg/hit. At max growth: 20 dmg/hit (lethal to small attackers).
 - **Spawns on**: Wetland, Forest tiles only
 - **Terrain**: Fast on wetland (1.2x), very slow on arid (0.4x)
-- **Visual**: Purple circle, size 9
+- **Visual**: Purple mushroom, size 9
 
 #### Sectid (Insect Faction)
 - **Role**: Fast swarming terraformer, dries terrain toward Arid
-- **Speed**: 0.06 wander (fastest faction), 0.11 hunt speed
-- **Combat**: 8 range, 0.5 attack range, **12 damage**, 12 tick cooldown
+- **Speed**: 0.06 wander (fastest faction), 0.13 hunt speed (fast closing)
+- **Hunting tactic**: `Swarm` — colony-wide rush, no retreat, counts all nearby same-species
+  for effective mass. Can target any living creature including predators.
+- **Combat**: 12 range, 0.5 attack range, **16 damage**, 10 tick cooldown
 - **Survival**: 165 max hunger, **0.05 decay/tick**, **25000 lifespan**, mature at 800
 - **Fear**: Threshold 40, fast accumulation (8/tick), **panic** response
 - **Social**: Packs of ~8, high cohesion (0.035), high affinity (0.8), 90% pack hunter chance
 - **Terraforming**: Drier direction, radius 1.5, strength 0.04, cooldown 6 ticks
+- **Discomfort**: High tolerance (120 threshold, +0.8 swarm bonus when hunting).
+  Species-specific terrain penalty in target selection prevents chasing into enemy biomes.
 - **Nest reproduction**: NestBreeder flag. Cannot reproduce normally. Carries food to nests.
   Max carry 5 food, delivery range 4 tiles, **carrying speed 0.11** (faster than hunt speed).
 - **Feeding**: **No tile feeding** (`CanGraze = false`, no `FeedTiles`). Sectids must hunt to survive.
 - **Spawns on**: Arid, Sand tiles only
 - **Terrain**: Fast on arid (1.2x), very slow on wetland (0.4x)
-- **Body mass**: 0.5 (individually weak, strong in packs)
-- **Visual**: Amber triangle, size 5
+- **Body mass**: 0.5, pack exponent 0.8 (swarm of 8: effective mass 3.03, swarm of 15: 5.18)
+- **Visual**: Amber star, size 5
 
 #### Faeling (Crystal Faction)
 - **Role**: Solitary guardian terraformer, balances terrain toward Grass
-- **Speed**: 0.07 wander (fastest of all factions)
-- **Combat**: Ranged attack - 8 range, 10 base damage, 30 tick cooldown. Targets Sectids and Shroomers.
+- **Speed**: 0.09 wander (fastest of all factions), patrols toward damaged terrain
+- **Combat**: Ranged attack - 12 range, 12 base damage, 20 tick cooldown. Targets Sectids and Shroomers.
 - **Survival**: **Immune to starvation**. 195 max hunger (always full), 0 decay. 150 energy. 60000 lifespan.
 - **Unhuntable**: Cannot be targeted by predators (wolves, foxes, etc.)
 - **Fear**: Effectively fearless (threshold 999, accumulation 0)
+- **Terrain-seeking AI**: Samples 8 compass directions, roams toward most damaged (non-Grass) terrain.
+  Immune to terrain discomfort (threshold 999) — walks INTO damaged zones to restore them.
 - **Growth**: Up to 2.5x scale at rate 0.00003/tick
 - **Power system**: Gains power from kills (+5) and tile restoration (+0.2). Power boosts
   growth rate (+1% per point) and ranged damage (+0.5 per point). On death, 50% of power
@@ -572,8 +582,19 @@ The primary movement behavior for creatures not actively hunting or fleeing:
 **File**: `Scripts/Systems/HuntingSystem.cs`
 **Components**: Position, Predator, Hunger
 
-The most complex system. Handles solo hunting, pack coordination with flanking tactics,
-ambush hunting with stealth mechanics, and kill nutrition distribution.
+The most complex system. Handles four distinct hunting tactics via the `HuntingTactic`
+enum, each with different movement patterns and coordination behavior.
+
+**Hunting tactics** (`HuntingTactic` enum):
+| Tactic | Species | Behavior |
+|--------|---------|----------|
+| Solo | Fox, Bear, Hawk, Shark, Polar Bear, Arctic Fox | Direct chase, no coordination |
+| PackCoordinated | Wolf, Boar | Leader/flanker/disruptor roles with phases |
+| Swarm | Sectid | Colony-wide rush, no retreat, count all same-species |
+| Ambush | Crocodile, Jaguar, Snake, Scorpion | Stealth accumulation → pounce burst |
+
+Movement dispatch uses a clean `switch (speciesDef.HuntingTactic)` block, with each
+tactic handled by a dedicated method (`ApplyPackTactics`, `ApplyAmbushMovement`, etc.).
 
 **Mass-based direction blending**: All velocity changes in hunting use
 `agility = Clamp(1.5 / bodyMass, 0.25, 1.0)`. Lighter creatures snap to new directions
@@ -586,9 +607,12 @@ Higher urgency = longer effective range and faster movement.
 **Target selection**:
 1. Spatial hash query within effective hunt range
 2. Filter: must have Prey component, mass within huntable ratio, not unhuntable
-3. Score: distance (closer = better) + terrain penalty + preferred prey bias
-4. Land predators reject targets across water (>15% water fraction on path)
-5. Pack members share targets via group target dict
+3. Score: distance (closer = better) + generic terrain penalty + preferred prey bias
+4. **Species-specific terrain comfort penalty**: prey on tiles the hunter finds
+   uncomfortable gets a large score penalty (e.g. Sectids avoid targeting prey in Wetland).
+   Scaled by urgency — desperate hunters tolerate more.
+5. Land predators reject targets across water (>15% water fraction on path)
+6. Pack members share targets via group target dict
 
 **Pursuit**:
 - Speed: `BaseHuntSpeed * (1 + urgency * 0.5)`
@@ -642,13 +666,16 @@ all group members via `_groupConverging` dictionary in the first pass.
 - Two flankers spread to opposite sides using perpendicular offset (3-tile spread)
 - Side determination: cross product of relative position vs attack axis
 
-**Swarm exception**: Species with BodyMass < 1.0 (Sectids) skip tactical positioning
-and use direct swarm rush at 1.2x speed instead.
+**Swarm tactic**: Species with `HuntingTactic.Swarm` (Sectids) skip tactical positioning
+entirely and use direct swarm rush at 1.2x speed. They never retreat, count all nearby
+same-species for effective mass (colony-wide bravery), and can target any living creature
+including predators. Post-discomfort suppress timer is 120 ticks (vs 60 for others) to
+prevent target fixation loops.
 
-#### 5.7.2 Ambush Hunting (Crocodiles)
+#### 5.7.2 Ambush Hunting (Crocodiles, Jaguars, Snakes, Scorpions)
 
 Ambush predators use a stealth mechanic to approach prey undetected, then trigger
-a devastating pounce burst. Activated for any species with `AmbushStealthGain > 0`.
+a devastating pounce burst. Activated for species with `HuntingTactic.Ambush`.
 
 **Stealth accumulation** (`Predator.Stealth`, 0.0 to 1.0):
 - **Gain**: When moving at or below `AmbushSpeedThreshold` fraction of BaseHuntSpeed.
@@ -902,13 +929,21 @@ Shroomers reproduce by spreading spores that grow on wet terrain.
 **Shroomer growth**:
 - Grows continuously: `CurrentScale += GrowthRate` each tick (capped at `MaxScale`)
 - Visual size: `baseSize * currentScale`
-- Growth unlocks AoE attack at 1.5x scale
+- HP scales with growth (max energy × current scale)
+- Growth unlocks AoE attack at 1.0x scale (active from birth, but very weak)
 
-**AoE attack** (grown Shroomers):
-- Periodic: fires when `age % AoEAttackCooldown == 0`
-- Radius: `AoEAttackRadius * CurrentScale` (grows with size)
-- Damage: `AoEAttackDamage * CurrentScale` (grows with size)
+**AoE attack** (S-curve growth scaling via smoothstep):
+- Scaling: `factor = AoEMinScaleFactor + (1 - AoEMinScaleFactor) * smoothstep(t)`
+  where `t = (currentScale - 1) / (maxScale - 1)`, smoothstep = `t²(3-2t)`
+- Radius: `AoEAttackRadius * factor` (25 max → 2 at birth, 25 at full growth)
+- Damage: `AoEAttackDamage * factor` (30 max → 2.4 at birth, 30 at full growth)
+- **Passive pulse**: every 350 ticks (17.5s) — slow background radiation
+- **Combat pulse**: every 60 ticks (3s) — reactive defense when being attacked
 - Targets: Faelings and Sectids only (enemy terraformers, NOT other Shroomers or spores)
+
+**Thorn defense** (melee counter-damage):
+- Attackers take `ThornDamageBase * growthFactor` damage per hit (same S-curve)
+- At birth: 1.6 dmg/hit (barely stings). At max: 20 dmg/hit (lethal to small attackers)
 
 ### 6.2 Sectid / Nest System
 
@@ -967,7 +1002,7 @@ Faelings are spawned by crystals and gain power over their lifetime.
 - Power compounds across generations (lineage gets stronger over time)
 
 **Ranged attack**:
-- Range: 8 tiles, base damage: 10, cooldown: 30 ticks
+- Range: 12 tiles, base damage: 12, cooldown: 20 ticks
 - Targets nearest Sectid or Shroomer within range (NOT other Faelings, NOT spores)
 - On kill: gain `PowerPerKill` (5), increment kill count
 
