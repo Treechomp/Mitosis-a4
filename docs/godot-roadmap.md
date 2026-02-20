@@ -487,9 +487,39 @@ Implemented:
 - [x] CountFeedTiles for faction species carrying capacity
 
 Remaining:
-- [ ] Population monitoring: log per-species counts every N ticks for balance verification
+- [x] Population monitoring: EcosystemLogger tracks per-species counts every 100 ticks,
+  event-level CSV logging (births, deaths, kills, hunts, spores, environment deaths),
+  and real-time debug overlay with per-species population display
 - [ ] Smoother materialization (currently spawns all entities in tight cluster)
 - [ ] Validate statistical sim produces similar outcomes to entity sim over time
+
+### 5.1b Ecosystem Logging — IMPLEMENTED
+
+`EcosystemLogger` provides comprehensive event and population tracking for balance
+analysis and sim validation. Integrated across all major systems.
+
+**Output files** (written to `logs/` directory):
+- `events_YYYYMMDD_HHmmss.csv` — per-event log (tick, event, species, entity_id, x, y, detail)
+- `population_YYYYMMDD_HHmmss.csv` — per-species counts every 100 ticks
+- `latest_events.csv` / `latest_population.csv` — quick-access copies
+
+**Tracked events:**
+- `reproduce` — births with offspring count
+- `kill` — predation with predator/prey species and IDs
+- `hunt_start` / `hunt_fail` — hunting lifecycle with failure reasons
+- `starvation` / `age_death` — natural death causes
+- `environment_death` — drowning/suffocation
+- `spore_created` / `spore_matured` — Shroomer spore lifecycle
+
+**Integration points:**
+HuntingSystem, ReproductionSystem, SurvivalSystems (Hunger/Aging), SporeSystem,
+TerrainSystems, CrystalSystem, NestSystem all call EcosystemLogger methods.
+
+**Debug overlay** (GameManager):
+- Real-time per-species population counts (updated every 0.5s)
+- Category totals (Herbivores, Predators, Shroomers, Sectids, Faelings)
+- Nearby entity count + distant statistical population
+- Per-system profiling toggle (F3)
 
 ### 5.2 LOD Gating — REVISED
 
@@ -577,7 +607,8 @@ To improve consistency:
 - [ ] Model spore lifecycle statistically (spread rate × survival rate × maturation rate)
 
 ### 5.5 Performance Profiling
-- [ ] Add per-system timing to debug overlay
+- [x] Add per-system timing to debug overlay (F3 toggle, sorted by cost with bar charts,
+  includes per-system ms and percentage of frame time via Stopwatch instrumentation)
 - [ ] Identify hotspots in each system
 - [ ] Profile memory allocation patterns
 - [ ] Test with 5K, 10K, 20K entities
