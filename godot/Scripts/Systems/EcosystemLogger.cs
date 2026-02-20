@@ -170,6 +170,30 @@ public sealed class EcosystemLogger : ISystem
         _latestEventLog.WriteLine(line);
     }
 
+    // --- Statistical sim aggregate events ---
+    // These log population-level births/deaths from StatisticalSimSystem.
+    // Position is chunk center; entity_id is -1; count is in the detail field.
+
+    /// <summary>Log aggregate births from the statistical sim.</summary>
+    public void LogStatBirths(int speciesId, int count, float chunkCenterX, float chunkCenterY)
+    {
+        if (count <= 0) return;
+        var name = SpeciesRegistry.GetById(speciesId)?.Name ?? speciesId.ToString();
+        var line = $"{_tick},stat_birth,{name},-1,{chunkCenterX:F1},{chunkCenterY:F1},count:{count}";
+        _eventLog.WriteLine(line);
+        _latestEventLog.WriteLine(line);
+    }
+
+    /// <summary>Log aggregate deaths from the statistical sim, split by cause.</summary>
+    public void LogStatDeaths(int speciesId, int count, float chunkCenterX, float chunkCenterY, string cause)
+    {
+        if (count <= 0) return;
+        var name = SpeciesRegistry.GetById(speciesId)?.Name ?? speciesId.ToString();
+        var line = $"{_tick},stat_{cause},{name},-1,{chunkCenterX:F1},{chunkCenterY:F1},count:{count}";
+        _eventLog.WriteLine(line);
+        _latestEventLog.WriteLine(line);
+    }
+
     private bool _headerWritten;
     private List<string>? _speciesNames;
 

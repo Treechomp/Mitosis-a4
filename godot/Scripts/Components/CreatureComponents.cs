@@ -193,9 +193,9 @@ public struct SimulationLOD
     /// </summary>
     public static LODLevel GetLevelForDistance(float distance)
     {
-        if (distance < 50f) return LODLevel.Full;        // ~1.5 chunks
-        if (distance < 100f) return LODLevel.Reduced;    // ~3 chunks
-        if (distance < 200f) return LODLevel.Statistical; // ~6 chunks
+        if (distance < 25f) return LODLevel.Full;        // <1 chunk
+        if (distance < 50f) return LODLevel.Reduced;     // ~1.5 chunks
+        if (distance < 100f) return LODLevel.Statistical; // ~3 chunks
         return LODLevel.Aggregate;
     }
 }

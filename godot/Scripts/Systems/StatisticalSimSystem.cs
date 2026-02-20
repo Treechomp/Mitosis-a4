@@ -46,7 +46,7 @@ public sealed class StatisticalSimSystem : ISystem
     private int _tickCounter;
 
     /// <summary>Distance threshold in tiles. Chunks beyond this use statistical sim.</summary>
-    private const float StatisticalDistanceThreshold = 100f; // matches LODLevel.Statistical
+    private const float StatisticalDistanceThreshold = 50f; // ~1.5 chunks; 9/81 entity in 9x9 world
 
     /// <summary>How often (in ticks) to run the statistical population update.</summary>
     private const int StatisticalTickInterval = 30;
@@ -418,6 +418,35 @@ public sealed class StatisticalSimSystem : ISystem
             pop.FractionalDeaths = deaths - intDeaths;
 
             pop.Count = Math.Max(0, pop.Count + intBirths - intDeaths);
+
+            // Log aggregate events for auditing
+            var logger = EcosystemLogger.Instance;
+            if (logger != null && (intBirths > 0 || intDeaths > 0))
+            {
+                float cx = (chunkX + 0.5f) * _chunkSize;
+                float cy = (chunkY + 0.5f) * _chunkSize;
+
+                if (intBirths > 0)
+                    logger.LogStatBirths(sid, intBirths, cx, cy);
+
+                if (intDeaths > 0 && totalDeathRate > 0)
+                {
+                    // Split deaths proportionally by cause
+                    float naturalFrac = naturalDeathRate / totalDeathRate;
+                    float starvationFrac = starvationRate / totalDeathRate;
+                    // predation gets the remainder to avoid rounding drift
+                    int naturalDeaths = (int)(intDeaths * naturalFrac + 0.5f);
+                    int starvationDeaths = (int)(intDeaths * starvationFrac + 0.5f);
+                    int predationDeaths = intDeaths - naturalDeaths - starvationDeaths;
+
+                    // Clamp: rounding can overshoot by 1
+                    if (predationDeaths < 0) { predationDeaths = 0; naturalDeaths = intDeaths - starvationDeaths; }
+
+                    logger.LogStatDeaths(sid, naturalDeaths, cx, cy, "age_death");
+                    logger.LogStatDeaths(sid, starvationDeaths, cx, cy, "starvation");
+                    logger.LogStatDeaths(sid, predationDeaths, cx, cy, "kill");
+                }
+            }
 
             // Hard per-chunk cap: no species should exceed 2x carrying capacity
             // (in entity sim, spatial density + food depletion enforce this naturally)
