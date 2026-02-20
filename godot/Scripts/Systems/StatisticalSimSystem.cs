@@ -322,6 +322,7 @@ public sealed class StatisticalSimSystem : ISystem
         // Count herbivores and predators for interaction
         int totalHerbivores = 0;
         int totalPredators = 0;
+        float totalPredatorDemand = 0; // total hunger drain per tick across all predators
         _keyBuffer.Clear();
         _keyBuffer.AddRange(popData.Populations.Keys);
 
@@ -331,7 +332,10 @@ public sealed class StatisticalSimSystem : ISystem
             if (speciesDef == null) continue;
             var pop = popData.Populations[sid];
             if (speciesDef.IsPredator)
+            {
                 totalPredators += pop.Count;
+                totalPredatorDemand += pop.Count * speciesDef.HungerDecayRate;
+            }
             else if (speciesDef.Diet != DietType.Terraformer)
                 totalHerbivores += pop.Count; // Don't count terraformers — they aren't typical prey
         }
@@ -394,15 +398,15 @@ public sealed class StatisticalSimSystem : ISystem
 
             // Predation deaths (herbivores only)
             float predationRate = 0;
-            if (!speciesDef.IsPredator && totalPredators > 0 && totalHerbivores > 0)
+            if (!speciesDef.IsPredator && totalPredatorDemand > 0 && totalHerbivores > 0)
             {
-                // Simplified: predators kill at a rate proportional to predator/prey ratio
-                // Each predator needs ~1 kill per (MaxHunger/EffectiveNutrition * HungerDecayRate^-1) ticks
-                float killsPerPredatorPerTick = speciesDef.HungerDecayRate /
-                    MathF.Max(1f, speciesDef.EffectiveNutrition * 0.5f);
-                // Distribute predation across all herbivore species proportionally
-                float preyShareFraction = totalHerbivores > 0 ? (float)pop.Count / totalHerbivores : 0;
-                predationRate = totalPredators * killsPerPredatorPerTick * preyShareFraction;
+                // Predators collectively need totalPredatorDemand nutrition per tick.
+                // Each kill of this prey species provides EffectiveNutrition worth of food.
+                // Distribute kills across prey species proportionally by count.
+                float killsNeededPerTick = totalPredatorDemand /
+                    MathF.Max(1f, speciesDef.EffectiveNutrition);
+                float preyShareFraction = (float)pop.Count / totalHerbivores;
+                predationRate = killsNeededPerTick * preyShareFraction;
             }
 
             float totalDeathRate = naturalDeathRate + starvationRate + predationRate;
@@ -495,12 +499,11 @@ public sealed class StatisticalSimSystem : ISystem
                 else
                     pop.AverageHungerRatio = MathF.Max(0f, pop.AverageHungerRatio - 0.02f);
             }
-            else if (speciesDef.Diet == DietType.Terraformer)
+            else if (speciesDef.FeedTiles != null && speciesDef.FeedTiles.Count > 0
+                     && speciesDef.FeedNutrition > 0)
             {
-                // Faction terraformers feed from specific tile types (FeedTiles).
-                // Estimate food availability: count matching tiles in the chunk vs population.
+                // FeedTile species (Fish, Terraformers, etc.): hunger based on feed tile availability.
                 float feedTileCount = CountFeedTiles(speciesDef, chunkX, chunkY);
-                // Each terraformer needs ~1 feed tile to sustain (FeedNutrition offsets HungerDecayRate)
                 float tilesPerCreature = feedTileCount / MathF.Max(1f, pop.Count);
                 if (tilesPerCreature > 2f)
                     pop.AverageHungerRatio = MathF.Min(1f, pop.AverageHungerRatio + 0.01f);
@@ -530,43 +533,50 @@ public sealed class StatisticalSimSystem : ISystem
 
     /// <summary>
     /// Estimate carrying capacity for a species in a chunk.
+    /// Computes capacity from all applicable food sources and returns the highest,
+    /// so omnivores (e.g. Boar: CanGraze + IsPredator) benefit from multiple diets.
     /// </summary>
     private float EstimateCarryingCapacity(SpeciesDefinition species, ChunkPopulationData popData,
                                              int chunkX, int chunkY)
     {
-        if (species.CanGraze)
+        float grazerCap = 0;
+        float feedTileCap = 0;
+        float predatorCap = 0;
+
+        // Grazer capacity: based on tile nutrition supply vs consumption rate
+        if (species.CanGraze && popData.GrazeableTileCount > 0)
         {
-            // Herbivore carrying capacity: based on nutrition supply vs consumption
-            // Each tile regenerates RegenerationRate per tick
-            // Each herbivore consumes HungerDecayRate per tick
-            if (popData.GrazeableTileCount == 0) return 0;
             float supplyPerTick = popData.GrazeableTileCount * Chunk.RegenerationRate;
             float demandPerIndividual = species.HungerDecayRate / species.GrazeNutrition;
-            return supplyPerTick / MathF.Max(0.001f, demandPerIndividual);
+            grazerCap = supplyPerTick / MathF.Max(0.001f, demandPerIndividual);
         }
 
-        if (species.IsPredator)
-        {
-            // Predator capacity: roughly 1 predator per 5 prey
-            return popData.TotalCount * 0.15f;
-        }
-
-        // Faction terraformers: capacity based on feed tile availability
-        if (species.Diet == DietType.Terraformer)
+        // FeedTile capacity: for species that feed from specific tile types (Fish, Terraformers)
+        if (species.FeedTiles != null && species.FeedTiles.Count > 0 && species.FeedNutrition > 0)
         {
             float feedTiles = CountFeedTiles(species, chunkX, chunkY);
-            // Each terraformer needs feed tiles proportional to hunger drain vs feed rate
-            // FeedNutrition is gained per tick on a feed tile, HungerDecayRate is lost per tick
-            // So a creature needs to be on a feed tile (HungerDecayRate / FeedNutrition) of the time
-            float feedRatio = species.FeedNutrition > 0
+            float feedRatio = species.HungerDecayRate > 0
                 ? species.HungerDecayRate / species.FeedNutrition
-                : 1f;
-            // Each creature effectively occupies feedRatio tiles worth of capacity
-            return feedTiles / MathF.Max(0.5f, feedRatio);
+                : 0.1f; // Near-zero decay (e.g. Faeling) still needs some tiles
+            feedTileCap = feedTiles / MathF.Max(0.5f, feedRatio);
         }
 
-        // Other: small steady population
-        return 10f;
+        // Predator capacity: based on herbivore count only (not total population)
+        if (species.IsPredator)
+        {
+            int herbivoreCount = 0;
+            foreach (var (sid, pop) in popData.Populations)
+            {
+                var def = SpeciesRegistry.GetById(sid);
+                if (def != null && !def.IsPredator && def.Diet != DietType.Terraformer)
+                    herbivoreCount += pop.Count;
+            }
+            predatorCap = herbivoreCount * 0.2f; // ~1 predator per 5 herbivores
+        }
+
+        // Use the highest applicable capacity (omnivores benefit from multiple food sources)
+        float cap = MathF.Max(grazerCap, MathF.Max(predatorCap, feedTileCap));
+        return cap > 0 ? cap : 10f; // fallback for species with no recognized food source
     }
 
     /// <summary>
