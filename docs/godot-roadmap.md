@@ -92,7 +92,7 @@
 - [x] SporeSystem - Shroomer spore lifecycle, growth, **S-curve AoE attacks** (smoothstep scaling), **thorn defense**
 - [x] CrystalSystem - Faeling crystal management, ranged attacks, power inheritance
 - [ ] Missing: TerritorySystem
-- [ ] Missing: StatisticalSimSystem (chunk-level populations)
+- [x] StatisticalSimSystem (chunk-level populations)
 
 #### Fear & Threat Response (100% Complete)
 - [x] Fear component with accumulation/decay
@@ -569,19 +569,33 @@ Multiple layers of population control prevent runaway growth:
    hard cap at `PreferredGroupSize * 2` same-species nearby
 
 **Statistical-level (distant chunks):**
-1. **Carrying capacity** — per-species, per-chunk based on actual food availability:
-   - Herbivores: `(GrazeableTileCount * RegenerationRate) / (HungerDecayRate / GrazeNutrition)`
-   - Predators: `totalHerbivores * 0.15` (1 predator per ~7 prey)
-   - Terraformers: `CountFeedTiles() / (HungerDecayRate / FeedNutrition)` (actual tile scan)
-2. **Density suppression** — linear ramp from 50% to 100% of carrying capacity
-3. **Zero-capacity starvation** — when `carryingCapacity <= 0`: births = 0, hunger drops rapidly
-4. **Hard per-chunk cap** — `min(pop.Count, carryingCapacity * 2)` safety net
-5. **Hunger model** — per-species hunger drift based on food availability:
-   - Herbivores: supply vs demand comparison (demand = count × HungerDecayRate / GrazeNutrition)
+1. **Carrying capacity** — per-species, per-chunk based on actual food availability.
+   Computes all applicable food-source capacities and returns the max, so omnivores
+   (Boar: CanGraze + IsPredator) benefit from multiple diets:
+   - Grazers: `(GrazeableTileCount * RegenerationRate) / (HungerDecayRate / GrazeNutrition)`
+   - FeedTile species (Fish, Terraformers): `CountFeedTiles() / (HungerDecayRate / FeedNutrition)`
+   - Predators: `totalHerbivores * 0.2` (1 predator per 5 herbivores, herbivore count only)
+   - Omnivores: `max(grazerCap, predatorCap)`
+2. **Predation model** — accumulates total predator hunger demand across all predator species,
+   then distributes kills across prey proportionally by count and inversely by prey nutrition value
+3. **Density suppression** — linear ramp from 50% to 100% of carrying capacity
+4. **Zero-capacity starvation** — when `carryingCapacity <= 0`: births = 0, hunger drops rapidly
+5. **Hard per-chunk cap** — `min(pop.Count, carryingCapacity * 2)` safety net
+6. **Hunger model** — per-species hunger drift based on food availability:
+   - Grazers: supply vs demand comparison (demand = count × HungerDecayRate / GrazeNutrition)
    - Predators: prey/predator ratio check
-   - Terraformers: feed tile count vs population (actual chunk tile scan)
+   - FeedTile species (Fish, Terraformers): feed tile count vs population (actual chunk tile scan)
 
 ### 5.4 Known Issues & Remaining Work
+
+**Fixed (Feb 2026):**
+- [x] Predation formula was using prey's HungerDecayRate instead of predator demand — now
+  accumulates total predator hunger demand and distributes kills by prey nutrition value
+- [x] Predator carrying capacity used TotalCount (including predators) — now herbivore-only
+- [x] Fish (FeedTile herbivore) fell through all code paths — got hardcoded capacity of 10
+  and zero hunger updates; now has FeedTile-based capacity and hunger model
+- [x] Boar (omnivore) only got predator capacity despite CanGraze=true — capacity now uses
+  max of all applicable food sources
 
 **Observed behavior that still needs investigation:**
 - Rabbits tend to die within seconds of simulation start — may indicate balance issue
@@ -606,14 +620,36 @@ To improve consistency:
 - [ ] Add migration model (species moving between adjacent statistical chunks)
 - [ ] Model spore lifecycle statistically (spread rate × survival rate × maturation rate)
 
-### 5.5 Performance Profiling
+### 5.5 Terraformer Statistical Simulation (Priority: LOW — Needs Design)
+
+Faction species (Shroomer, Sectid, Faeling) are deliberately excluded from statistical
+aggregation because their reproduction is tied to spatial structures (spores, nests, crystals)
+that can't be reduced to simple birth/death rates. The risk of including them: statistical sim
+becomes a growth incubator, removing the resource constraints that keep factions balanced.
+
+**Current approach:** Faction creatures stay as live entities in distant chunks. LOD gating
+already reduces their AI cost. Structures (nests, crystals, spores) are cheap (no AI,
+no movement). Statistical terraforming handles tile changes.
+
+**Future approach if needed:** Freeze-on-aggregate — snapshot faction populations when chunk
+goes distant, pause all activity, restore exactly on materialization. No growth, no death,
+just stasis. Simpler and safer than getting the dynamics wrong.
+
+**Why full statistical simulation is hard per-faction:**
+| Species | Reproduction | Key Constraint | Statistical Risk |
+|---------|-------------|----------------|-----------------|
+| Shroomer | Spore launch → land → grow | Spores must land on viable wet terrain, survive growth phase | Bypasses spatial dispersal + growth mortality |
+| Sectid | Nest queen lays eggs | Nest needs food supply from hunting; nest is attackable | Bypasses nest vulnerability + food requirement |
+| Faeling | Crystal spawns guardians | Crystals are fixed structures; Faelings don't breed | Decoupling from crystals creates free population |
+
+### 5.6 Performance Profiling
 - [x] Add per-system timing to debug overlay (F3 toggle, sorted by cost with bar charts,
   includes per-system ms and percentage of frame time via Stopwatch instrumentation)
 - [ ] Identify hotspots in each system
 - [ ] Profile memory allocation patterns
 - [ ] Test with 5K, 10K, 20K entities
 
-### 5.6 Optimization Targets
+### 5.7 Optimization Targets
 Based on profiling:
 - [ ] SpatialHash optimization if needed
 - [ ] Consider SIMD for position updates
