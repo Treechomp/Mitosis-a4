@@ -349,3 +349,246 @@ The statistical sim produces a **Shroomer monoculture** with a thin herbivore la
 4. **Species-specific carrying capacity** — replace the flat `0.15f` predator ratio with per-species capacity based on diet, hunting efficiency, and prey availability.
 
 5. **Aquatic species audit** — verify that Fish carrying capacity counts water tiles correctly.
+
+---
+
+# Sessions 15-18: Post-Fix Validation (Feb 21)
+
+**Date:** 2026-02-21
+**Sessions analyzed:** 15-18
+**Purpose:** Validate whether fixes from commits `da95d74`, `c1ea121`, `294be57` resolved the issues found in Sessions 11-14
+
+## Test Matrix
+
+| Session | Timestamp | Mode | Ticks | Events | Start Pop | Final Pop | Shroomer % |
+|---------|-----------|------|-------|--------|-----------|-----------|------------|
+| S15 | 073456 | Entity | 39,432 | 22,924 | 574 | ~1,996 | **35%** |
+| S16 | 081050 | Entity | 38,525 | 20,855 | 589 | ~2,000 | **37.5%** |
+| S17 | 084402 | **Statistical** | 31,721 | 31,087 | 128 | ~2,000 | **96%** |
+| S18 | 091049 | **Statistical** | 24,943 | 11,977 | 132 | ~1,938 | **94%** |
+
+**Key change from S11-S14:** Event logging is now active in StatisticalSimSystem (fix `da95d74`), enabling direct audit of stat sim birth/death decisions. S17 and S18 event logs contain `stat_birth`, `stat_age_death`, `stat_kill`, and `stat_starvation` events.
+
+---
+
+## CRITICAL: Shroomer Monoculture is Worse, Not Better
+
+The fixes improved some aspects (event visibility, Fish/omnivore bugs) but the core Shroomer dominance problem has **intensified**:
+
+| Metric | S11-14 (pre-fix) | S15-18 (post-fix) | Trend |
+|--------|:-:|:-:|:-:|
+| Shroomer % (entity sim) | 15% | 35-37.5% | Worsened (2.3x) |
+| Shroomer % (stat sim) | 45-51% | **94-96%** | **Worsened (1.9x)** |
+| Shroomer amplification (stat/entity ratio) | 3.0-3.4x | **2.5-2.7x** | Slightly improved |
+| Species extinct (entity sim) | 7-9/28 | 8-11/28 | Similar |
+| Species extinct (stat sim) | N/A (no data) | **13-20/28** | Severe |
+
+The stat-to-entity amplification ratio is slightly lower (2.5-2.7x vs 3.0-3.4x), but both baselines are much higher, likely due to different world seeds or configuration changes.
+
+---
+
+## 9. Event-Level Confirmation of Stat Sim Behavior
+
+### 9.1 Event Type Distribution (Stat Sim Sessions)
+
+S17 and S18 now log stat sim events. The event composition confirms the two-tier architecture:
+
+**Session 17 (31,087 total events):**
+
+| Event Type | Count | % |
+|---|---:|---:|
+| stat_age_death | 5,988 | 19.3% |
+| stat_birth | 5,842 | 18.8% |
+| stat_kill | 4,665 | 15.0% |
+| spore_created | 4,438 | 14.3% |
+| reproduce | 3,985 | 12.8% |
+| spore_matured | 3,415 | 11.0% |
+| starvation | 1,202 | 3.9% |
+| stat_starvation | 498 | 1.6% |
+| environment_death | 331 | 1.1% |
+| hunt_start | 290 | 0.9% |
+| kill | 246 | 0.8% |
+| hunt_fail | 118 | 0.4% |
+| age_death | 69 | 0.2% |
+
+Stat events account for 54.7% of S17 events. No `aggregate` or `deaggregate` events exist.
+
+**Session 18 (11,977 total events):**
+
+| Event Type | Count | % |
+|---|---:|---:|
+| spore_created | 2,888 | 24.1% |
+| reproduce | 2,653 | 22.2% |
+| spore_matured | 2,290 | 19.1% |
+| stat_age_death | 1,309 | 10.9% |
+| stat_birth | 1,060 | 8.9% |
+| stat_kill | 607 | 5.1% |
+| stat_starvation | 474 | 4.0% |
+| starvation | 293 | 2.4% |
+| environment_death | 223 | 1.9% |
+| hunt_fail | 80 | 0.7% |
+| hunt_start | 48 | 0.4% |
+| kill | 43 | 0.4% |
+| age_death | 9 | 0.1% |
+
+### 9.2 Shroomer Has Zero Stat Events
+
+Confirmed in both S17 and S18: **every Shroomer event is a real entity event**. Zero `stat_birth`, `stat_death`, `stat_kill`, or `stat_starvation` for Shroomer. This is the designed behavior (terraformers excluded from aggregation) but it's the root cause of the monoculture.
+
+### 9.3 Stat Sim Species Breakdown (S17)
+
+Species can be categorized by their stat-simulation percentage:
+
+| % Stat-Simulated | Species |
+|:-:|---|
+| 100% | Fish, Parrot, Snake, Tapir |
+| 93-98% | Deer, Elk, Turtle, Fox |
+| 78-88% | Arctic Fox, Camel, Lizard, Shark, Boar, Polar Bear, Rabbit |
+| 50-75% | Bear, Frog, Jaguar, Monkey, Hawk, Musk Ox, Scorpion |
+| 37-46% | Penguin, Crocodile, Wolf |
+| **0%** | **Shroomer, Sectid, Faeling** |
+
+---
+
+## 10. The Predation Collapse (Confirmed with Event Data)
+
+### Shroomer Predation Comparison
+
+| | S15 (entity) | S16 (entity) | S17 (stat) | S18 (stat) |
+|---|---:|---:|---:|---:|
+| Shroomer killed by predators | 845 | 773 | **79** | **10** |
+| Primary predator | Wolf (452) | Polar Bear (447) | Wolf (78) | Sectid (7) |
+| Predator species hunting Shroomer | 7 | 6 | **1** (Wolf only) | **2** (Sectid, Faeling) |
+
+Predation on Shroomer drops **90-99%** when stat sim is ON. This is because predator species go extinct in statistical chunks via `stat_starvation` within the first 3,000-5,000 ticks.
+
+### Predator Extinction Timeline (S17)
+
+12 of 13 extinct species were eliminated by `stat_starvation`:
+
+| Tick | Species | Deaths | Cause |
+|---:|---|---:|---|
+| 900 | Parrot | 9 | stat_starvation |
+| 1,290 | Rabbit | 29 | stat_starvation (25) + stat_kill (4) |
+| 1,290 | Jaguar | 4 | stat_starvation |
+| 1,350 | Lizard | 21 | stat_starvation (12) + stat_kill (9) |
+| 1,380 | Hawk | 6 | stat_starvation |
+| 1,590 | Bear | 3 | stat_starvation |
+| 1,800 | Shark | 4 | stat_starvation |
+| 2,490 | Snake | 4 | stat_starvation |
+| 2,640 | Arctic Fox | 7 | stat_starvation |
+| 3,359 | Sectid | 30 | kill by Shroomer (22) + starvation |
+| 3,510 | Crocodile | 3 | stat_starvation |
+| 4,814 | Scorpion | 4 | stat_starvation |
+| 21,063 | Faeling | 41 | All killed by Shroomer |
+
+**All predators extinct by tick 4,814.** Only Wolf (partially real at 46% stat) survives long enough to hunt Shroomers (78 kills), but even Wolf stops hunting after tick 25,000.
+
+Compare to entity sim S15: Jaguar (last tick 38,900+), Polar Bear (38,900+), Bear (38,900+), Wolf (38,900+), Boar (38,900+) — all survive to session end.
+
+---
+
+## 11. The Death Spiral Mechanism (Confirmed)
+
+The event data confirms the four-phase mechanism:
+
+### Phase 1: Stat Starvation Mass Extinction (ticks 0-5,000)
+
+The stat sim's carrying capacity formula calculates that most predator populations are unsustainable at the low starting population (~128 entities). `stat_starvation` events eliminate 11-12 species in the first 5,000 ticks. This happens because:
+- Starting population is split across many chunks → very few entities per chunk
+- Predator carrying capacity (`herbivoreCount * 0.2`) rounds to near-zero in sparse chunks
+- The stat sim expresses this as immediate death events with no migration or adaptation
+
+### Phase 2: Unopposed Shroomer Growth (ticks 5,000-10,000)
+
+With predators gone, Shroomer's birth-to-death ratio climbs to 10-13:1. Spore maturation rate holds steady at ~77-80%. The only mortality is starvation and drowning.
+
+### Phase 3: Exponential Shroomer Explosion (ticks 10,000-25,000)
+
+Peak net growth: +787 Shroomers per 5,000 ticks (S17) and +458 per 2,500 ticks (S18). Shroomer terraforming converts terrain to Wetland, expanding its own habitat while shrinking habitat for other species.
+
+### Phase 4: Carrying Capacity Plateau (ticks 25,000+)
+
+Starvation (74%) and drowning (21%) become the primary death causes. Net growth drops to near-zero. Shroomer fills 94-96% of the 2,000 population cap.
+
+---
+
+## 12. Entity Sim Comparison: Self-Regulating Ecosystem
+
+### S15 (Entity Sim) — Healthy Dynamics
+
+| Metric | Value |
+|---|---|
+| Shroomer births | 2,274 |
+| Shroomer deaths (predation) | 845 (37.1% of births) |
+| Shroomer deaths (starvation) | 636 |
+| Shroomer deaths (environment) | 222 |
+| Shroomer net growth | +569 |
+| Top predator: Wolf→Shroomer | 452 kills |
+| Predator species surviving | 7 (Wolf, Polar Bear, Jaguar, Bear, Boar, Crocodile, Faeling) |
+| Shroomer growth self-regulated? | **Yes** — net growth oscillates around zero after tick 20,000 |
+
+### S16 (Entity Sim) — Similar Pattern
+
+| Metric | Value |
+|---|---|
+| Shroomer births | 2,782 |
+| Shroomer deaths (predation) | 773 (27.8% of births) |
+| Shroomer deaths (starvation) | 1,067 |
+| Shroomer net growth | +672 |
+| Top predator: Polar Bear→Shroomer | 447 kills |
+| Shroomer growth self-regulated? | **Yes** — net negative in late game (-91 in final third) |
+
+**Key insight:** In entity sim, Shroomer growth follows a textbook logistic curve and self-limits. Predation removes 28-37% of Shroomer births. Multiple predator species coexist and provide redundant population control. The ecosystem produces a diverse community of 17-20 species.
+
+### Comparison: Wolf→Shroomer Kill Rate
+
+| Session | Wolf→Shroomer Kills | Shroomer Births | Kill/Birth Ratio |
+|---|---:|---:|---:|
+| S15 (entity) | 452 | 2,274 | **19.9%** |
+| S16 (entity) | 223 | 2,782 | **8.0%** |
+| S17 (stat) | 78 | 3,415 | **2.3%** |
+| S18 (stat) | 0 | 2,290 | **0%** |
+
+Wolf removes 8-20% of Shroomer births in entity sim but only 0-2.3% in stat sim. This single predator-prey relationship explains much of the divergence.
+
+---
+
+## 13. Faeling: The Control Experiment
+
+Faeling is uniquely informative because it's also excluded from aggregation (0% stat-simulated) like Shroomer. In S17:
+
+- **41 births, 41 deaths** — perfect equilibrium for 21,000 ticks
+- **100% of deaths caused by Shroomer** AoE attacks
+- Every crystal respawn was answered by Shroomer territorial killing
+- Went extinct at tick 21,063 when Shroomer reached peak saturation
+
+This demonstrates that even real-entity species cannot coexist with Shroomer at scale. Faeling's balanced terraform (shifting tiles toward Grass) cannot counteract Shroomer's wet terraform fast enough, and Faeling's ranged attacks (12 damage, 20 tick cooldown) are insufficient against Shroomer's S-curve AoE (2.4→30 damage, 2→25 tile radius).
+
+---
+
+## 14. Updated Priority List
+
+### P0 — Critical (Unchanged but Confirmed)
+
+1. **Shroomer asymmetry** — now confirmed with full event data. The 90-99% predation drop is the primary driver. **Recommended fix: Freeze-on-aggregate for terraformers** (roadmap Section 5.5). When chunk goes distant: snapshot faction population, pause all activity, restore exactly on materialization. No growth, no death, just stasis. This eliminates the asymmetry.
+
+2. **Starting population deficit** — still ~78% reduction (574→128). The prior ~48% deficit was for different seeds; the magnitude varies but the problem persists.
+
+### P1 — High (Updated with New Evidence)
+
+3. **Predator carrying capacity** — `stat_starvation` kills 11-12 species in the first 5,000 ticks. The formula needs:
+   - A minimum population floor (prevent extinction to zero from carrying capacity alone)
+   - Multi-chunk predator range (predators hunt across chunk boundaries)
+   - Slower starvation ramp (entity sim predators survive 7,000-22,000+ ticks; stat sim kills them in 900-3,500 ticks)
+
+4. **Shroomer-specific population pressure** — even with entity sim, Shroomer reaches 35-42%. Consider:
+   - Density-dependent spore suppression (fewer spores when many nearby Shroomers)
+   - Per-species population cap for terraformers (max 30% of total)
+   - Increased predator prey preference for Shroomer
+
+### P2 — Medium (New)
+
+5. **stat_starvation death rate too aggressive** — entity sim equivalent species survive 5-20x longer than their stat sim counterparts. The stat model should dampen starvation mortality or model inter-chunk migration before killing.
+
+6. **Fish stat sim cycling** — Fish has enormous stat sim throughput (S17: 21,067 stat births, 18,626 stat deaths) but remains trapped in the statistical layer. Verify this represents actual ecosystem behavior and not a numeric oscillation.
