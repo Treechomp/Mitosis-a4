@@ -136,6 +136,11 @@ public sealed class StatisticalSimSystem : ISystem
             }
         }
 
+        // Sweep: catch entities that drifted into statistical chunks after initial aggregation.
+        // Without this, entities that walk from entity-zone chunks into already-statistical chunks
+        // persist as live rendered entities (the transition logic only fires once per chunk).
+        SweepLeakedEntities(em);
+
         // Run statistical simulation periodically
         if (_tickCounter % StatisticalTickInterval == 0)
         {
@@ -256,6 +261,99 @@ public sealed class StatisticalSimSystem : ISystem
         foreach (int entity in _entitiesToDestroy)
             _spatialHash.Remove(entity);
         em.DestroyEntities(_entitiesToDestroy);
+    }
+
+    /// <summary>
+    /// Catch entities that moved into already-statistical chunks (e.g. via movement or reproduction
+    /// near chunk boundaries). Merges them into the chunk's population data and destroys them.
+    /// Runs every tick so leaked entities never persist for more than one frame.
+    /// Cost: one spatial hash lookup per statistical chunk (~72 dict lookups in 9x9 world).
+    /// </summary>
+    private void SweepLeakedEntities(EntityManager em)
+    {
+        _entitiesToDestroy.Clear();
+
+        foreach (var key in _statisticalChunks)
+        {
+            _speciesAccum.Clear();
+            bool found = false;
+
+            foreach (int entity in _spatialHash.GetEntitiesInCell(key.Item1, key.Item2))
+            {
+                if (!em.IsAlive(entity)) continue;
+                if (!em.HasComponents(entity, ComponentFlags.Species)) continue;
+                if (em.HasComponents(entity, ComponentFlags.Nest)) continue;
+                if (em.HasComponents(entity, ComponentFlags.Crystal)) continue;
+                if (em.HasComponents(entity, ComponentFlags.Spore)) continue;
+                if (em.HasComponents(entity, ComponentFlags.Terraform)) continue;
+
+                ref var species = ref em.Species[entity];
+                int sid = species.SpeciesId;
+
+                float hungerRatio = 0.5f;
+                if (em.HasComponents(entity, ComponentFlags.Hunger))
+                {
+                    ref var hunger = ref em.Hungers[entity];
+                    hungerRatio = hunger.Max > 0 ? hunger.Current / hunger.Max : 0.5f;
+                }
+
+                float ageRatio = 0.5f;
+                if (em.HasComponents(entity, ComponentFlags.Age))
+                {
+                    ref var age = ref em.Ages[entity];
+                    ageRatio = age.MaxLifespan > 0 ? (float)age.Current / age.MaxLifespan : 0.5f;
+                }
+
+                if (_speciesAccum.TryGetValue(sid, out var acc))
+                    _speciesAccum[sid] = (acc.count + 1, acc.totalHungerRatio + hungerRatio, acc.totalAgeRatio + ageRatio);
+                else
+                    _speciesAccum[sid] = (1, hungerRatio, ageRatio);
+
+                _entitiesToDestroy.Add(entity);
+                found = true;
+            }
+
+            if (!found) continue;
+
+            // Get or create population data for this chunk
+            if (!_chunkPopulations.TryGetValue(key, out var popData))
+            {
+                popData = new ChunkPopulationData();
+                _chunkPopulations[key] = popData;
+            }
+
+            // Merge leaked entities into existing population data
+            foreach (var (sid, (count, totalHunger, totalAge)) in _speciesAccum)
+            {
+                if (popData.Populations.TryGetValue(sid, out var existing))
+                {
+                    // Weighted merge of hunger/age ratios
+                    int newCount = existing.Count + count;
+                    existing.AverageHungerRatio = (existing.AverageHungerRatio * existing.Count + totalHunger) / newCount;
+                    existing.AverageAgeRatio = (existing.AverageAgeRatio * existing.Count + totalAge) / newCount;
+                    existing.Count = newCount;
+                    popData.Populations[sid] = existing;
+                }
+                else
+                {
+                    popData.AddPopulation(sid, count, totalHunger / count, totalAge / count);
+                }
+            }
+
+            // Recalculate total (AddPopulation does this internally, but direct dict writes don't)
+            popData.TotalCount = 0;
+            foreach (var pop in popData.Populations.Values)
+                popData.TotalCount += pop.Count;
+            popData.IsActive = true;
+        }
+
+        // Destroy all leaked entities
+        if (_entitiesToDestroy.Count > 0)
+        {
+            foreach (int entity in _entitiesToDestroy)
+                _spatialHash.Remove(entity);
+            em.DestroyEntities(_entitiesToDestroy);
+        }
     }
 
     /// <summary>
