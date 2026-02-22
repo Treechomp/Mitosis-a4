@@ -22,6 +22,7 @@ public sealed class StatisticalSimSystem : ISystem
     private readonly WorldManager _worldManager;
     private readonly EntityFactory _entityFactory;
     private readonly SpatialHash _spatialHash;
+    private readonly NestSystem _nestSystem;
     private readonly int _maxPopulation;
     private readonly int _chunkSize;
     private readonly Random _rng = new();
@@ -35,8 +36,10 @@ public sealed class StatisticalSimSystem : ISystem
     private readonly List<int> _entityBuffer = new(256);
     private readonly List<int> _entitiesToDestroy = new(256);
     private readonly List<(int speciesId, int count)> _toMaterialize = new(32);
-    private readonly Dictionary<int, (int count, float totalHungerRatio, float totalAgeRatio)> _speciesAccum = new(8);
+    private readonly Dictionary<int, (int count, float totalHungerRatio, float totalAgeRatio,
+        float totalGrowthScale, float totalPower)> _speciesAccum = new(8);
     private readonly List<int> _keyBuffer = new(16);
+    private readonly List<int> _structureBuffer = new(32);
 
     // Player position (set by GameManager)
     private float _playerX;
@@ -75,11 +78,13 @@ public sealed class StatisticalSimSystem : ISystem
     }
 
     public StatisticalSimSystem(WorldManager worldManager, EntityFactory entityFactory,
-                                 SpatialHash spatialHash, int maxPopulation, int chunkSize)
+                                 SpatialHash spatialHash, NestSystem nestSystem,
+                                 int maxPopulation, int chunkSize)
     {
         _worldManager = worldManager;
         _entityFactory = entityFactory;
         _spatialHash = spatialHash;
+        _nestSystem = nestSystem;
         _maxPopulation = maxPopulation;
         _chunkSize = chunkSize;
     }
@@ -158,6 +163,8 @@ public sealed class StatisticalSimSystem : ISystem
 
     /// <summary>
     /// Aggregate all entities in a chunk into population data, then destroy the entities.
+    /// Terraformers (Shroomer, Sectid, Faeling) are now aggregated alongside regular species.
+    /// Structures (nests, spores) are destroyed; crystals stay alive with a sentinel.
     /// </summary>
     private void AggregateChunk(int chunkX, int chunkY, EntityManager em)
     {
@@ -168,37 +175,37 @@ public sealed class StatisticalSimSystem : ISystem
         }
         popData.Clear();
 
-        // Find all entities in this chunk
         _entityBuffer.Clear();
         _entitiesToDestroy.Clear();
-
-        // Scan entities by position
-        float minX = chunkX * _chunkSize;
-        float minY = chunkY * _chunkSize;
-        float maxX = minX + _chunkSize;
-        float maxY = minY + _chunkSize;
+        _structureBuffer.Clear();
 
         // Use spatial hash to find entities in this chunk cell
         foreach (int entity in _spatialHash.GetEntitiesInCell(chunkX, chunkY))
         {
             if (!em.IsAlive(entity)) continue;
 
-            // Skip player, structures (nests, crystals, spores)
+            // Skip player and non-species (crystals have no Species component, skipped naturally)
             if (!em.HasComponents(entity, ComponentFlags.Species)) continue;
-            if (em.HasComponents(entity, ComponentFlags.Nest)) continue;
-            if (em.HasComponents(entity, ComponentFlags.Crystal)) continue;
-            if (em.HasComponents(entity, ComponentFlags.Spore)) continue;
 
-            // Skip faction species (Sectids, Shroomers, Faelings) — their unique
-            // reproduction systems (nests, spores, crystals) and feeding strategies
-            // (hunting, tile-feeding) can't be reduced to statistical birth/death rates.
-            // They stay as live entities; LOD gates already reduce processing cost.
-            if (em.HasComponents(entity, ComponentFlags.Terraform)) continue;
+            // Spores: destroy but don't count as population (modeled in Shroomer birth rate)
+            if (em.HasComponents(entity, ComponentFlags.Spore))
+            {
+                _entitiesToDestroy.Add(entity);
+                continue;
+            }
 
+            // Nest entities: collect separately (destroyed, count tracked in popData)
+            if (em.HasComponents(entity, ComponentFlags.Nest))
+            {
+                _structureBuffer.Add(entity);
+                continue;
+            }
+
+            // All creatures (regular + terraformers) get aggregated
             _entityBuffer.Add(entity);
         }
 
-        // Aggregate by species
+        // Aggregate creatures by species
         _speciesAccum.Clear();
 
         foreach (int entity in _entityBuffer)
@@ -220,18 +227,71 @@ public sealed class StatisticalSimSystem : ISystem
                 ageRatio = age.MaxLifespan > 0 ? (float)age.Current / age.MaxLifespan : 0.5f;
             }
 
+            // Track growth scale for Shroomer/Faeling
+            float growthScale = 1f;
+            if (em.HasComponents(entity, ComponentFlags.Growth))
+                growthScale = em.Growths[entity].CurrentScale;
+
+            // Track power for Faelings
+            float power = 0f;
+            if (em.HasComponents(entity, ComponentFlags.FaelingPower))
+            {
+                power = em.FaelingPowers[entity].Power;
+
+                // Update crystal: mark linked Faeling as aggregated (not dead)
+                int crystalId = em.FaelingPowers[entity].LinkedCrystal;
+                if (crystalId >= 0 && em.IsAlive(crystalId) &&
+                    em.HasComponents(crystalId, ComponentFlags.Crystal))
+                {
+                    ref var crystal = ref em.Crystals[crystalId];
+                    crystal.LinkedFaeling = Crystal.FAELING_AGGREGATED;
+                    crystal.InheritedPower = power;
+                }
+            }
+
             if (_speciesAccum.TryGetValue(sid, out var acc))
-                _speciesAccum[sid] = (acc.count + 1, acc.totalHungerRatio + hungerRatio, acc.totalAgeRatio + ageRatio);
+                _speciesAccum[sid] = (acc.count + 1, acc.totalHungerRatio + hungerRatio,
+                    acc.totalAgeRatio + ageRatio, acc.totalGrowthScale + growthScale,
+                    acc.totalPower + power);
             else
-                _speciesAccum[sid] = (1, hungerRatio, ageRatio);
+                _speciesAccum[sid] = (1, hungerRatio, ageRatio, growthScale, power);
 
             _entitiesToDestroy.Add(entity);
         }
 
         // Store aggregated data
-        foreach (var (sid, (count, totalHunger, totalAge)) in _speciesAccum)
+        foreach (var (sid, (count, totalHunger, totalAge, totalGrowth, totalPower)) in _speciesAccum)
         {
-            popData.AddPopulation(sid, count, totalHunger / count, totalAge / count);
+            var pop = new SpeciesPopulation
+            {
+                SpeciesId = sid,
+                Count = count,
+                AverageHungerRatio = totalHunger / count,
+                AverageAgeRatio = totalAge / count,
+                AverageGrowthScale = totalGrowth / count,
+                AveragePower = totalPower / count,
+            };
+            popData.Populations[sid] = pop;
+        }
+
+        // Count and destroy nest structures
+        popData.NestCount = _structureBuffer.Count;
+        float totalNestFood = 0;
+        foreach (int nestEntity in _structureBuffer)
+        {
+            if (em.HasComponents(nestEntity, ComponentFlags.Nest))
+                totalNestFood += em.Nests[nestEntity].FoodStored;
+            _spatialHash.Remove(nestEntity);
+            _entitiesToDestroy.Add(nestEntity);
+        }
+        popData.NestFoodStored = popData.NestCount > 0 ? totalNestFood / popData.NestCount : 0;
+
+        // Count crystals in chunk (they stay alive — just count for Faeling birth rate)
+        popData.CrystalCount = 0;
+        foreach (int entity in _spatialHash.GetEntitiesInCell(chunkX, chunkY))
+        {
+            if (em.IsAlive(entity) && em.HasComponents(entity, ComponentFlags.Crystal))
+                popData.CrystalCount++;
         }
 
         // Cache chunk nutrition
@@ -255,9 +315,14 @@ public sealed class StatisticalSimSystem : ISystem
             popData.AverageNutrition = grazeCount > 0 ? totalNutrition / grazeCount : 0;
         }
 
+        // Recalculate total
+        popData.TotalCount = 0;
+        foreach (var pop in popData.Populations.Values)
+            popData.TotalCount += pop.Count;
+
         popData.IsActive = true;
 
-        // Destroy aggregated entities
+        // Destroy aggregated entities (creatures + spores + nests)
         foreach (int entity in _entitiesToDestroy)
             _spatialHash.Remove(entity);
         em.DestroyEntities(_entitiesToDestroy);
@@ -267,7 +332,7 @@ public sealed class StatisticalSimSystem : ISystem
     /// Catch entities that moved into already-statistical chunks (e.g. via movement or reproduction
     /// near chunk boundaries). Merges them into the chunk's population data and destroys them.
     /// Runs every tick so leaked entities never persist for more than one frame.
-    /// Cost: one spatial hash lookup per statistical chunk (~72 dict lookups in 9x9 world).
+    /// Now also sweeps terraformers and spores.
     /// </summary>
     private void SweepLeakedEntities(EntityManager em)
     {
@@ -282,10 +347,24 @@ public sealed class StatisticalSimSystem : ISystem
             {
                 if (!em.IsAlive(entity)) continue;
                 if (!em.HasComponents(entity, ComponentFlags.Species)) continue;
-                if (em.HasComponents(entity, ComponentFlags.Nest)) continue;
+                // Skip crystals (permanent structures that stay alive)
                 if (em.HasComponents(entity, ComponentFlags.Crystal)) continue;
-                if (em.HasComponents(entity, ComponentFlags.Spore)) continue;
-                if (em.HasComponents(entity, ComponentFlags.Terraform)) continue;
+
+                // Spores: destroy but don't count as population
+                if (em.HasComponents(entity, ComponentFlags.Spore))
+                {
+                    _entitiesToDestroy.Add(entity);
+                    found = true;
+                    continue;
+                }
+
+                // Nests: destroy but don't count as population (already tracked in popData)
+                if (em.HasComponents(entity, ComponentFlags.Nest))
+                {
+                    _entitiesToDestroy.Add(entity);
+                    found = true;
+                    continue;
+                }
 
                 ref var species = ref em.Species[entity];
                 int sid = species.SpeciesId;
@@ -304,10 +383,31 @@ public sealed class StatisticalSimSystem : ISystem
                     ageRatio = age.MaxLifespan > 0 ? (float)age.Current / age.MaxLifespan : 0.5f;
                 }
 
+                float growthScale = 1f;
+                if (em.HasComponents(entity, ComponentFlags.Growth))
+                    growthScale = em.Growths[entity].CurrentScale;
+
+                float power = 0f;
+                if (em.HasComponents(entity, ComponentFlags.FaelingPower))
+                {
+                    power = em.FaelingPowers[entity].Power;
+                    // Update crystal sentinel
+                    int crystalId = em.FaelingPowers[entity].LinkedCrystal;
+                    if (crystalId >= 0 && em.IsAlive(crystalId) &&
+                        em.HasComponents(crystalId, ComponentFlags.Crystal))
+                    {
+                        ref var crystal = ref em.Crystals[crystalId];
+                        crystal.LinkedFaeling = Crystal.FAELING_AGGREGATED;
+                        crystal.InheritedPower = power;
+                    }
+                }
+
                 if (_speciesAccum.TryGetValue(sid, out var acc))
-                    _speciesAccum[sid] = (acc.count + 1, acc.totalHungerRatio + hungerRatio, acc.totalAgeRatio + ageRatio);
+                    _speciesAccum[sid] = (acc.count + 1, acc.totalHungerRatio + hungerRatio,
+                        acc.totalAgeRatio + ageRatio, acc.totalGrowthScale + growthScale,
+                        acc.totalPower + power);
                 else
-                    _speciesAccum[sid] = (1, hungerRatio, ageRatio);
+                    _speciesAccum[sid] = (1, hungerRatio, ageRatio, growthScale, power);
 
                 _entitiesToDestroy.Add(entity);
                 found = true;
@@ -323,24 +423,29 @@ public sealed class StatisticalSimSystem : ISystem
             }
 
             // Merge leaked entities into existing population data
-            foreach (var (sid, (count, totalHunger, totalAge)) in _speciesAccum)
+            foreach (var (sid, (count, totalHunger, totalAge, totalGrowth, totalPower)) in _speciesAccum)
             {
                 if (popData.Populations.TryGetValue(sid, out var existing))
                 {
-                    // Weighted merge of hunger/age ratios
                     int newCount = existing.Count + count;
                     existing.AverageHungerRatio = (existing.AverageHungerRatio * existing.Count + totalHunger) / newCount;
                     existing.AverageAgeRatio = (existing.AverageAgeRatio * existing.Count + totalAge) / newCount;
+                    existing.AverageGrowthScale = (existing.AverageGrowthScale * existing.Count + totalGrowth) / newCount;
+                    existing.AveragePower = (existing.AveragePower * existing.Count + totalPower) / newCount;
                     existing.Count = newCount;
                     popData.Populations[sid] = existing;
                 }
                 else
                 {
                     popData.AddPopulation(sid, count, totalHunger / count, totalAge / count);
+                    // Set extra fields on newly added population
+                    var newPop = popData.Populations[sid];
+                    newPop.AverageGrowthScale = totalGrowth / count;
+                    newPop.AveragePower = totalPower / count;
+                    popData.Populations[sid] = newPop;
                 }
             }
 
-            // Recalculate total (AddPopulation does this internally, but direct dict writes don't)
             popData.TotalCount = 0;
             foreach (var pop in popData.Populations.Values)
                 popData.TotalCount += pop.Count;
@@ -358,6 +463,7 @@ public sealed class StatisticalSimSystem : ISystem
 
     /// <summary>
     /// Materialize entities from population data when a chunk becomes nearby.
+    /// Handles terraformer-specific spawning: growth scale, nests, crystal re-linking.
     /// </summary>
     private void MaterializeChunk(int chunkX, int chunkY, EntityManager em)
     {
@@ -371,6 +477,15 @@ public sealed class StatisticalSimSystem : ISystem
             return;
         }
 
+        // Collect Faeling crystals in this chunk for re-linking
+        _structureBuffer.Clear();
+        foreach (int entity in _spatialHash.GetEntitiesInCell(chunkX, chunkY))
+        {
+            if (em.IsAlive(entity) && em.HasComponents(entity, ComponentFlags.Crystal))
+                _structureBuffer.Add(entity);
+        }
+        int crystalIndex = 0;
+
         _toMaterialize.Clear();
         foreach (var (sid, pop) in popData.Populations)
         {
@@ -380,21 +495,92 @@ public sealed class StatisticalSimSystem : ISystem
 
         foreach (var (speciesId, count) in _toMaterialize)
         {
-            // Cap materialization to avoid exceeding max population
             int toSpawn = Math.Min(count, _maxPopulation - em.EntityCount);
             if (toSpawn <= 0) break;
 
-            // Look up species definition
             var speciesDef = SpeciesRegistry.GetById(speciesId);
             if (speciesDef == null) continue;
 
-            // Get valid spawn positions
+            // Faelings: re-link to crystals instead of spawning via EntityFactory
+            // (EntityFactory.SpawnCreature would incorrectly add Prey/Fear to Faelings)
+            if (speciesDef.CrystalSpawned)
+            {
+                int faelingCount = toSpawn;
+                var pop = popData.Populations[speciesId];
+                while (faelingCount > 0 && crystalIndex < _structureBuffer.Count)
+                {
+                    int crystalEntity = _structureBuffer[crystalIndex++];
+                    if (!em.IsAlive(crystalEntity)) continue;
+                    ref var crystal = ref em.Crystals[crystalEntity];
+                    // Set crystal to immediately spawn a Faeling (1 tick delay)
+                    crystal.LinkedFaeling = -1;
+                    crystal.SpawnTimer = 1;
+                    crystal.InheritedPower = pop.AveragePower;
+                    faelingCount--;
+                }
+                // Any remaining crystals without Faelings: start normal respawn
+                while (crystalIndex < _structureBuffer.Count)
+                {
+                    int crystalEntity = _structureBuffer[crystalIndex++];
+                    if (!em.IsAlive(crystalEntity)) continue;
+                    ref var crystal = ref em.Crystals[crystalEntity];
+                    if (crystal.IsFaelingAggregated)
+                    {
+                        crystal.LinkedFaeling = -1;
+                        crystal.SpawnTimer = crystal.SpawnDelay;
+                    }
+                }
+                continue;
+            }
+
+            // Regular species + Shroomer + Sectid: spawn via EntityFactory
             var positions = _worldManager.GetSpawnablePositionsForSpecies(chunk, toSpawn, _rng, speciesDef);
+            var popForSpecies = popData.Populations[speciesId];
 
             foreach (var (x, y, _, _) in positions)
             {
                 if (em.EntityCount >= _maxPopulation) break;
                 _entityFactory.SpawnCreature(x, y, speciesDef);
+
+                // Post-fix growth scale for terraformers with Growth component
+                if (speciesDef.HasGrowth && popForSpecies.AverageGrowthScale > 1f)
+                {
+                    // Find the just-spawned entity (it's the most recent)
+                    int spawned = em.EntityCount - 1;
+                    if (spawned >= 0 && em.IsAlive(spawned) &&
+                        em.HasComponents(spawned, ComponentFlags.Growth))
+                    {
+                        ref var growth = ref em.Growths[spawned];
+                        growth.CurrentScale = popForSpecies.AverageGrowthScale;
+                        // Scale renderable size to match
+                        if (em.HasComponents(spawned, ComponentFlags.Renderable))
+                        {
+                            ref var rend = ref em.Renderables[spawned];
+                            rend.Size = speciesDef.BaseSize * growth.CurrentScale;
+                        }
+                        // Scale max energy with growth
+                        if (em.HasComponents(spawned, ComponentFlags.Energy))
+                        {
+                            ref var energy = ref em.Energies[spawned];
+                            energy.Max = speciesDef.MaxEnergy * growth.CurrentScale;
+                            energy.Current = energy.Max;
+                        }
+                    }
+                }
+            }
+
+            // Sectid: also recreate nests (~1 nest per 5 Sectids, minimum 1 if any Sectids)
+            if (speciesDef.NestBreeder && toSpawn > 0)
+            {
+                int nestsToSpawn = Math.Max(1, toSpawn / 5);
+                for (int i = 0; i < nestsToSpawn; i++)
+                {
+                    if (em.EntityCount >= _maxPopulation) break;
+                    // Find a valid position for the nest (dry tiles)
+                    float nx = (chunkX + 0.1f + (float)_rng.NextDouble() * 0.8f) * _chunkSize;
+                    float ny = (chunkY + 0.1f + (float)_rng.NextDouble() * 0.8f) * _chunkSize;
+                    _nestSystem.SpawnNest(em, nx, ny, _rng.Next(1, 100));
+                }
             }
         }
 
@@ -405,22 +591,27 @@ public sealed class StatisticalSimSystem : ISystem
 
     /// <summary>
     /// Apply population-level birth/death rates for one statistical tick interval.
-    /// Uses simplified Lotka-Volterra dynamics.
+    /// Uses simplified Lotka-Volterra dynamics for regular species.
+    /// Terraformers use species-specific models (spore/nest/crystal).
     /// </summary>
     private void UpdatePopulation(ChunkPopulationData popData, int chunkX, int chunkY)
     {
-        // Nutrition regeneration (simplified: average nutrition drifts toward 1.0)
+        // Nutrition regeneration
         if (popData.GrazeableTileCount > 0)
         {
-            // Regeneration: nutrition += RegenerationRate * TickInterval (but capped at 1.0)
             float regenPerInterval = Chunk.RegenerationRate * StatisticalTickInterval;
             popData.AverageNutrition = MathF.Min(1.0f, popData.AverageNutrition + regenPerInterval);
         }
 
-        // Count herbivores and predators for interaction
+        // Count herbivores and predators for interaction.
+        // Sectid counts as predator here (it hunts) despite IsPredator being false.
         int totalHerbivores = 0;
         int totalPredators = 0;
-        float totalPredatorDemand = 0; // total hunger drain per tick across all predators
+        float totalPredatorDemand = 0;
+
+        // Count terraformer populations for inter-faction combat
+        int totalShroomers = 0, totalSectids = 0, totalFaelings = 0;
+
         _keyBuffer.Clear();
         _keyBuffer.AddRange(popData.Populations.Keys);
 
@@ -429,13 +620,23 @@ public sealed class StatisticalSimSystem : ISystem
             var speciesDef = SpeciesRegistry.GetById(sid);
             if (speciesDef == null) continue;
             var pop = popData.Populations[sid];
-            if (speciesDef.IsPredator)
+            if (pop.Count <= 0) continue;
+
+            if (speciesDef.IsPredator || speciesDef.NestBreeder)
             {
+                // IsPredator covers Carnivore/Omnivore. NestBreeder adds Sectid.
                 totalPredators += pop.Count;
                 totalPredatorDemand += pop.Count * speciesDef.HungerDecayRate;
             }
             else if (speciesDef.Diet != DietType.Terraformer)
-                totalHerbivores += pop.Count; // Don't count terraformers — they aren't typical prey
+            {
+                totalHerbivores += pop.Count;
+            }
+
+            // Track terraformer totals for inter-faction combat
+            if (speciesDef.SporeReproducer) totalShroomers += pop.Count;
+            else if (speciesDef.NestBreeder) totalSectids += pop.Count;
+            else if (speciesDef.CrystalSpawned) totalFaelings += pop.Count;
         }
 
         // Process each species
@@ -447,64 +648,57 @@ public sealed class StatisticalSimSystem : ISystem
             var pop = popData.Populations[sid];
             if (pop.Count <= 0) continue;
 
-            // --- Birth rate ---
-            // Fraction of population that's mature
-            float matureFraction = MathF.Max(0, 1f - (float)speciesDef.MaturityAge / speciesDef.MaxLifespan);
+            float birthRate, naturalDeathRate, starvationRate, predationRate;
+            float carryingCapacity;
 
-            // Fraction that's well-fed enough to reproduce
-            float wellFedFraction;
-            float hungerThresholdRatio = speciesDef.ReproHungerThreshold / speciesDef.MaxHunger;
-            if (pop.AverageHungerRatio > hungerThresholdRatio)
-                wellFedFraction = 0.8f; // Most mature individuals can breed
-            else if (pop.AverageHungerRatio > hungerThresholdRatio * 0.8f)
-                wellFedFraction = 0.3f; // Some can breed
+            if (speciesDef.Diet == DietType.Terraformer)
+            {
+                // === TERRAFORMER-SPECIFIC MODELS ===
+                CalculateTerraformerRates(speciesDef, ref pop, popData, chunkX, chunkY,
+                    totalShroomers, totalSectids, totalFaelings,
+                    totalHerbivores, totalPredators,
+                    out birthRate, out naturalDeathRate, out starvationRate, out predationRate,
+                    out carryingCapacity);
+            }
             else
-                wellFedFraction = 0.0f; // Too hungry
-
-            // Births per tick per eligible individual: 1/cooldown * offspring
-            float birthsPerTickPerIndividual = (float)speciesDef.OffspringCount / speciesDef.ReproCooldown;
-            float birthRate = pop.Count * matureFraction * wellFedFraction * birthsPerTickPerIndividual;
-
-            // Density suppression: reduce births as count approaches carrying capacity
-            float carryingCapacity = EstimateCarryingCapacity(speciesDef, popData, chunkX, chunkY);
-            if (carryingCapacity <= 0)
             {
-                // No food source in this chunk — species cannot sustain here at all
-                birthRate = 0;
-            }
-            else if (pop.Count > carryingCapacity * 0.5f)
-            {
-                float densityFactor = MathF.Max(0, 1f - pop.Count / carryingCapacity);
-                birthRate *= densityFactor;
-            }
+                // === REGULAR SPECIES (unchanged logic) ===
+                float matureFraction = MathF.Max(0, 1f - (float)speciesDef.MaturityAge / speciesDef.MaxLifespan);
+                float wellFedFraction;
+                float hungerThresholdRatio = speciesDef.ReproHungerThreshold / speciesDef.MaxHunger;
+                if (pop.AverageHungerRatio > hungerThresholdRatio)
+                    wellFedFraction = 0.8f;
+                else if (pop.AverageHungerRatio > hungerThresholdRatio * 0.8f)
+                    wellFedFraction = 0.3f;
+                else
+                    wellFedFraction = 0.0f;
 
-            // --- Death rate ---
-            // Natural death: uniform age distribution = 1/maxLifespan per individual per tick
-            float naturalDeathRate = (float)pop.Count / speciesDef.MaxLifespan;
+                float birthsPerTickPerIndividual = (float)speciesDef.OffspringCount / speciesDef.ReproCooldown;
+                birthRate = pop.Count * matureFraction * wellFedFraction * birthsPerTickPerIndividual;
 
-            // Starvation deaths: depends on hunger level
-            float starvationRate = 0;
-            if (pop.AverageHungerRatio < 0.1f)
-            {
-                // Many individuals starving, high death rate
-                float starvationFraction = MathF.Max(0, 0.1f - pop.AverageHungerRatio) / 0.1f;
-                // Time to die from starvation: MaxEnergy / StarvationDamage ticks
-                float starvationDeathsPerTick = starvationFraction * pop.Count /
-                    (speciesDef.MaxEnergy / speciesDef.StarvationDamage);
-                starvationRate = starvationDeathsPerTick;
-            }
+                carryingCapacity = EstimateCarryingCapacity(speciesDef, popData, chunkX, chunkY);
+                if (carryingCapacity <= 0)
+                    birthRate = 0;
+                else if (pop.Count > carryingCapacity * 0.5f)
+                    birthRate *= MathF.Max(0, 1f - pop.Count / carryingCapacity);
 
-            // Predation deaths (herbivores only)
-            float predationRate = 0;
-            if (!speciesDef.IsPredator && totalPredatorDemand > 0 && totalHerbivores > 0)
-            {
-                // Predators collectively need totalPredatorDemand nutrition per tick.
-                // Each kill of this prey species provides EffectiveNutrition worth of food.
-                // Distribute kills across prey species proportionally by count.
-                float killsNeededPerTick = totalPredatorDemand /
-                    MathF.Max(1f, speciesDef.EffectiveNutrition);
-                float preyShareFraction = (float)pop.Count / totalHerbivores;
-                predationRate = killsNeededPerTick * preyShareFraction;
+                naturalDeathRate = (float)pop.Count / speciesDef.MaxLifespan;
+                starvationRate = 0;
+                if (pop.AverageHungerRatio < 0.1f)
+                {
+                    float starvationFraction = MathF.Max(0, 0.1f - pop.AverageHungerRatio) / 0.1f;
+                    starvationRate = starvationFraction * pop.Count /
+                        (speciesDef.MaxEnergy / speciesDef.StarvationDamage);
+                }
+
+                predationRate = 0;
+                if (!speciesDef.IsPredator && totalPredatorDemand > 0 && totalHerbivores > 0)
+                {
+                    float killsNeededPerTick = totalPredatorDemand /
+                        MathF.Max(1f, speciesDef.EffectiveNutrition);
+                    float preyShareFraction = (float)pop.Count / totalHerbivores;
+                    predationRate = killsNeededPerTick * preyShareFraction;
+                }
             }
 
             float totalDeathRate = naturalDeathRate + starvationRate + predationRate;
@@ -533,15 +727,11 @@ public sealed class StatisticalSimSystem : ISystem
 
                 if (intDeaths > 0 && totalDeathRate > 0)
                 {
-                    // Split deaths proportionally by cause
                     float naturalFrac = naturalDeathRate / totalDeathRate;
                     float starvationFrac = starvationRate / totalDeathRate;
-                    // predation gets the remainder to avoid rounding drift
                     int naturalDeaths = (int)(intDeaths * naturalFrac + 0.5f);
                     int starvationDeaths = (int)(intDeaths * starvationFrac + 0.5f);
                     int predationDeaths = intDeaths - naturalDeaths - starvationDeaths;
-
-                    // Clamp: rounding can overshoot by 1
                     if (predationDeaths < 0) { predationDeaths = 0; naturalDeaths = intDeaths - starvationDeaths; }
 
                     logger.LogStatDeaths(sid, naturalDeaths, cx, cy, "age_death");
@@ -550,72 +740,26 @@ public sealed class StatisticalSimSystem : ISystem
                 }
             }
 
-            // Hard per-chunk cap: no species should exceed 2x carrying capacity
-            // (in entity sim, spatial density + food depletion enforce this naturally)
+            // Hard per-chunk cap
             if (carryingCapacity > 0)
             {
                 int maxPerChunk = Math.Max(2, (int)(carryingCapacity * 2));
                 pop.Count = Math.Min(pop.Count, maxPerChunk);
             }
-            else if (pop.Count > 0 && birthRate <= 0)
-            {
-                // No carrying capacity and no births — cap at what we started with
-                // (population can only shrink in a hostile chunk)
-            }
 
             // Update hunger based on food availability
-            if (speciesDef.CanGraze)
-            {
-                if (popData.GrazeableTileCount > 0)
-                {
-                    // Each herbivore consumes HungerDecayRate per tick; grazing restores GrazeNutrition
-                    float demandPerTick = pop.Count * (speciesDef.HungerDecayRate / speciesDef.GrazeNutrition);
-                    float supplyPerTick = popData.GrazeableTileCount * Chunk.RegenerationRate;
+            UpdateHunger(speciesDef, ref pop, popData, chunkX, chunkY,
+                totalHerbivores, totalPredators);
 
-                    if (supplyPerTick > demandPerTick)
-                    {
-                        pop.AverageHungerRatio = MathF.Min(1f, pop.AverageHungerRatio + 0.01f);
-                    }
-                    else
-                    {
-                        float deficit = demandPerTick / MathF.Max(0.001f, supplyPerTick);
-                        pop.AverageHungerRatio = MathF.Max(0f, pop.AverageHungerRatio - 0.02f * deficit);
-                        popData.AverageNutrition *= 0.95f;
-                    }
-                }
-                else
-                {
-                    // No grazeable tiles — herbivores starve rapidly
-                    pop.AverageHungerRatio = MathF.Max(0f, pop.AverageHungerRatio - 0.1f);
-                }
-            }
-            else if (speciesDef.IsPredator)
-            {
-                // Predator hunger depends on prey availability
-                if (totalHerbivores > totalPredators * 3)
-                    pop.AverageHungerRatio = MathF.Min(1f, pop.AverageHungerRatio + 0.01f);
-                else
-                    pop.AverageHungerRatio = MathF.Max(0f, pop.AverageHungerRatio - 0.02f);
-            }
-            else if (speciesDef.FeedTiles != null && speciesDef.FeedTiles.Count > 0
-                     && speciesDef.FeedNutrition > 0)
-            {
-                // FeedTile species (Fish, Terraformers, etc.): hunger based on feed tile availability.
-                float feedTileCount = CountFeedTiles(speciesDef, chunkX, chunkY);
-                float tilesPerCreature = feedTileCount / MathF.Max(1f, pop.Count);
-                if (tilesPerCreature > 2f)
-                    pop.AverageHungerRatio = MathF.Min(1f, pop.AverageHungerRatio + 0.01f);
-                else if (tilesPerCreature > 0.5f)
-                    pop.AverageHungerRatio = MathF.Min(0.6f, pop.AverageHungerRatio + 0.005f);
-                else
-                    pop.AverageHungerRatio = MathF.Max(0f, pop.AverageHungerRatio - 0.03f);
-            }
-
-            // Age drift (average age drifts toward middle of lifespan in steady state)
+            // Age drift
             pop.AverageAgeRatio = MathF.Min(0.9f, pop.AverageAgeRatio + 0.001f);
-            // Births pull average age down
             if (intBirths > 0 && pop.Count > 0)
                 pop.AverageAgeRatio *= (float)(pop.Count - intBirths) / pop.Count;
+
+            // Growth drift for terraformers
+            if (speciesDef.HasGrowth && pop.AverageGrowthScale < speciesDef.GrowthMaxScale)
+                pop.AverageGrowthScale = MathF.Min(speciesDef.GrowthMaxScale,
+                    pop.AverageGrowthScale + speciesDef.GrowthRate * StatisticalTickInterval);
 
             popData.Populations[sid] = pop;
         }
@@ -627,6 +771,225 @@ public sealed class StatisticalSimSystem : ISystem
 
         // Statistical terraforming for faction species
         ApplyStatisticalTerraforming(popData, chunkX, chunkY);
+    }
+
+    /// <summary>
+    /// Calculate birth/death rates for terraformer species using species-specific models.
+    /// Shroomer: spore-based reproduction, FeedTile starvation, predation by wolves etc.
+    /// Sectid: nest-based reproduction, predator hunger model, predation by Faelings.
+    /// Faeling: crystal-based respawn, immune to starvation, killed by inter-faction combat.
+    /// </summary>
+    private void CalculateTerraformerRates(
+        SpeciesDefinition speciesDef, ref SpeciesPopulation pop,
+        ChunkPopulationData popData, int chunkX, int chunkY,
+        int totalShroomers, int totalSectids, int totalFaelings,
+        int totalHerbivores, int totalPredators,
+        out float birthRate, out float naturalDeathRate,
+        out float starvationRate, out float predationRate,
+        out float carryingCapacity)
+    {
+        naturalDeathRate = (float)pop.Count / speciesDef.MaxLifespan;
+        starvationRate = 0;
+        predationRate = 0;
+
+        if (speciesDef.SporeReproducer)
+        {
+            // === SHROOMER ===
+            // Birth rate: population × sporeSpreadChance × sporesPerSpread × maturationRate × eligibleFraction
+            float matureFraction = MathF.Max(0, 1f - (float)speciesDef.MaturityAge / speciesDef.MaxLifespan);
+            float wellFedFraction = pop.AverageHungerRatio > 0.5f ? 0.8f : (pop.AverageHungerRatio > 0.3f ? 0.3f : 0f);
+            float feedTiles = CountFeedTiles(speciesDef, chunkX, chunkY);
+            float totalTiles = _chunkSize * _chunkSize;
+            float moistTileFraction = feedTiles / MathF.Max(1f, totalTiles);
+
+            // ~77% maturation rate from entity sim data
+            const float maturationRate = 0.77f;
+            birthRate = pop.Count * matureFraction * wellFedFraction
+                * speciesDef.SporeSpreadChance * speciesDef.SporesPerSpread * maturationRate
+                * moistTileFraction;
+
+            // Carrying capacity: based on feed tiles (Wetland/Forest)
+            carryingCapacity = feedTiles > 0 ? feedTiles * 0.3f : 0f;
+            if (carryingCapacity > 0 && pop.Count > carryingCapacity * 0.5f)
+                birthRate *= MathF.Max(0, 1f - pop.Count / carryingCapacity);
+
+            // Starvation: Shroomer feeds on Wetland/Forest tiles
+            if (pop.AverageHungerRatio < 0.1f && speciesDef.StarvationDamage > 0)
+            {
+                float starvFrac = MathF.Max(0, 0.1f - pop.AverageHungerRatio) / 0.1f;
+                starvationRate = starvFrac * pop.Count / (speciesDef.MaxEnergy / speciesDef.StarvationDamage);
+            }
+
+            // Predation: wolves and other real predators hunt Shroomer (IsPrey is true)
+            // Use same Lotka-Volterra but include Shroomer in the prey pool
+            int preyPool = totalHerbivores + totalShroomers;
+            if (totalPredators > 0 && preyPool > 0)
+            {
+                float predatorDemand = totalPredators * 0.05f; // approximate hunger demand
+                float killsNeeded = predatorDemand / MathF.Max(1f, speciesDef.EffectiveNutrition);
+                predationRate = killsNeeded * ((float)pop.Count / preyPool);
+            }
+
+            // Inter-faction combat: Faelings kill Shroomers
+            if (totalFaelings > 0)
+            {
+                // Faeling ranged attacks: ~1 kill per 20 ticks per Faeling vs Shroomers
+                float faelingKillRate = totalFaelings * 0.05f / MathF.Max(1f, speciesDef.MaxEnergy);
+                predationRate += faelingKillRate * ((float)pop.Count / MathF.Max(1, totalShroomers + totalSectids));
+            }
+        }
+        else if (speciesDef.NestBreeder)
+        {
+            // === SECTID ===
+            // Birth rate from nests: nestCount × avgSlots × (1/spawnDuration) × foodAvailability
+            int nestCount = Math.Max(popData.NestCount, pop.Count > 0 ? 1 : 0);
+            float avgSlots = 2f; // average across stages 1-3
+            // Food availability: Sectids hunt prey, so depends on prey count
+            int preyForSectid = totalHerbivores + totalShroomers;
+            float foodAvailability = preyForSectid > 0
+                ? MathF.Min(1f, (float)preyForSectid / (pop.Count * 2f + 1f))
+                : 0f;
+            float nestSpawnDuration = speciesDef.NestSpawnDuration > 0 ? speciesDef.NestSpawnDuration : 200f;
+            birthRate = nestCount * avgSlots * (1f / nestSpawnDuration) * foodAvailability;
+
+            // Carrying capacity: predator-like (needs prey)
+            carryingCapacity = preyForSectid * 0.2f;
+            if (carryingCapacity > 0 && pop.Count > carryingCapacity * 0.5f)
+                birthRate *= MathF.Max(0, 1f - pop.Count / carryingCapacity);
+
+            // Nest count adjusts over time based on Sectid population
+            if (pop.Count > nestCount * 5)
+                popData.NestCount = Math.Min(nestCount + 1, pop.Count / 3);
+            else if (pop.Count < nestCount * 2 && nestCount > 1)
+                popData.NestCount = nestCount - 1;
+
+            // Starvation: Sectids hunt to survive, so hunger depends on prey availability
+            if (pop.AverageHungerRatio < 0.1f && speciesDef.StarvationDamage > 0)
+            {
+                float starvFrac = MathF.Max(0, 0.1f - pop.AverageHungerRatio) / 0.1f;
+                starvationRate = starvFrac * pop.Count / (speciesDef.MaxEnergy / speciesDef.StarvationDamage);
+            }
+
+            // Inter-faction: Faelings and Shroomer AoE kill Sectids
+            if (totalFaelings > 0)
+            {
+                float faelingKillRate = totalFaelings * 0.05f / MathF.Max(1f, speciesDef.MaxEnergy);
+                predationRate += faelingKillRate * ((float)pop.Count / MathF.Max(1, totalShroomers + totalSectids));
+            }
+            if (totalShroomers > 0)
+            {
+                // Shroomer AoE: damage scales with average growth. Larger Shroomers kill more Sectids.
+                var shroomDef = SpeciesRegistry.Get("Shroomer");
+                float avgScale = 1f;
+                int shroomSid = SpeciesRegistry.GetId("Shroomer");
+                if (popData.Populations.TryGetValue(shroomSid, out var shroomPop))
+                    avgScale = shroomPop.AverageGrowthScale;
+                float aoeDamageRate = totalShroomers * 0.02f * avgScale / MathF.Max(1f, speciesDef.MaxEnergy);
+                predationRate += aoeDamageRate;
+            }
+        }
+        else if (speciesDef.CrystalSpawned)
+        {
+            // === FAELING ===
+            // Birth rate: unlinked crystals respawn Faelings
+            int unlinked = Math.Max(0, popData.CrystalCount - pop.Count);
+            float spawnDelay = speciesDef.CrystalSpawnDelay > 0 ? speciesDef.CrystalSpawnDelay : 500f;
+            birthRate = (float)unlinked / spawnDelay;
+
+            // Carrying capacity = crystal count (hard cap: 1 Faeling per crystal)
+            carryingCapacity = popData.CrystalCount;
+            pop.Count = Math.Min(pop.Count, popData.CrystalCount);
+
+            // Faelings are immune to starvation
+            starvationRate = 0;
+
+            // Inter-faction: killed by Shroomer AoE and Sectid swarms
+            if (totalShroomers > 0)
+            {
+                var shroomDef = SpeciesRegistry.Get("Shroomer");
+                float avgScale = 1f;
+                int shroomSid = SpeciesRegistry.GetId("Shroomer");
+                if (popData.Populations.TryGetValue(shroomSid, out var shroomPop))
+                    avgScale = shroomPop.AverageGrowthScale;
+                // Large Shroomers are devastating to Faelings
+                float aoeDamageRate = totalShroomers * 0.01f * avgScale / MathF.Max(1f, speciesDef.MaxEnergy);
+                predationRate += aoeDamageRate;
+            }
+            if (totalSectids > 0)
+            {
+                // Sectid swarms can overwhelm Faelings
+                float swarmRate = totalSectids * 0.005f / MathF.Max(1f, speciesDef.MaxEnergy);
+                predationRate += swarmRate;
+            }
+        }
+        else
+        {
+            // Unknown terraformer — use generic rates
+            birthRate = 0;
+            carryingCapacity = 10f;
+        }
+    }
+
+    /// <summary>
+    /// Update hunger ratio for a species based on food availability.
+    /// Handles all diet types including terraformer-specific feeding.
+    /// </summary>
+    private void UpdateHunger(SpeciesDefinition speciesDef, ref SpeciesPopulation pop,
+        ChunkPopulationData popData, int chunkX, int chunkY,
+        int totalHerbivores, int totalPredators)
+    {
+        if (speciesDef.ImmuneToStarvation)
+        {
+            // Faelings: always well-fed
+            pop.AverageHungerRatio = 1f;
+        }
+        else if (speciesDef.CanGraze)
+        {
+            if (popData.GrazeableTileCount > 0)
+            {
+                float demandPerTick = pop.Count * (speciesDef.HungerDecayRate / speciesDef.GrazeNutrition);
+                float supplyPerTick = popData.GrazeableTileCount * Chunk.RegenerationRate;
+                if (supplyPerTick > demandPerTick)
+                    pop.AverageHungerRatio = MathF.Min(1f, pop.AverageHungerRatio + 0.01f);
+                else
+                {
+                    float deficit = demandPerTick / MathF.Max(0.001f, supplyPerTick);
+                    pop.AverageHungerRatio = MathF.Max(0f, pop.AverageHungerRatio - 0.02f * deficit);
+                    popData.AverageNutrition *= 0.95f;
+                }
+            }
+            else
+                pop.AverageHungerRatio = MathF.Max(0f, pop.AverageHungerRatio - 0.1f);
+        }
+        else if (speciesDef.IsPredator || speciesDef.NestBreeder)
+        {
+            // Predator/Sectid hunger depends on prey availability
+            int preyCount = totalHerbivores;
+            if (speciesDef.NestBreeder)
+            {
+                // Sectids also hunt Shroomers (spores)
+                int shroomSid = SpeciesRegistry.GetId("Shroomer");
+                if (popData.Populations.TryGetValue(shroomSid, out var shroomPop))
+                    preyCount += shroomPop.Count;
+            }
+            if (preyCount > totalPredators * 3)
+                pop.AverageHungerRatio = MathF.Min(1f, pop.AverageHungerRatio + 0.01f);
+            else
+                pop.AverageHungerRatio = MathF.Max(0f, pop.AverageHungerRatio - 0.02f);
+        }
+        else if (speciesDef.FeedTiles != null && speciesDef.FeedTiles.Count > 0
+                 && speciesDef.FeedNutrition > 0)
+        {
+            // FeedTile species (Fish, Shroomer, etc.)
+            float feedTileCount = CountFeedTiles(speciesDef, chunkX, chunkY);
+            float tilesPerCreature = feedTileCount / MathF.Max(1f, pop.Count);
+            if (tilesPerCreature > 2f)
+                pop.AverageHungerRatio = MathF.Min(1f, pop.AverageHungerRatio + 0.01f);
+            else if (tilesPerCreature > 0.5f)
+                pop.AverageHungerRatio = MathF.Min(0.6f, pop.AverageHungerRatio + 0.005f);
+            else
+                pop.AverageHungerRatio = MathF.Max(0f, pop.AverageHungerRatio - 0.03f);
+        }
     }
 
     /// <summary>
@@ -659,14 +1022,14 @@ public sealed class StatisticalSimSystem : ISystem
             feedTileCap = feedTiles / MathF.Max(0.5f, feedRatio);
         }
 
-        // Predator capacity: based on herbivore count only (not total population)
-        if (species.IsPredator)
+        // Predator capacity: based on herbivore count (includes Sectid which hunts)
+        if (species.IsPredator || species.NestBreeder)
         {
             int herbivoreCount = 0;
             foreach (var (sid, pop) in popData.Populations)
             {
                 var def = SpeciesRegistry.GetById(sid);
-                if (def != null && !def.IsPredator && def.Diet != DietType.Terraformer)
+                if (def != null && !def.IsPredator && !def.NestBreeder && def.Diet != DietType.Terraformer)
                     herbivoreCount += pop.Count;
             }
             predatorCap = herbivoreCount * 0.2f; // ~1 predator per 5 herbivores

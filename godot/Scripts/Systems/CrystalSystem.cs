@@ -49,6 +49,10 @@ public sealed class CrystalSystem : ISystem
         {
             ref var crystal = ref em.Crystals[entity];
 
+            // Faeling aggregated into statistical sim — skip processing until materialized
+            if (crystal.IsFaelingAggregated)
+                continue;
+
             // Check if linked Faeling is still alive
             if (crystal.HasFaeling)
             {

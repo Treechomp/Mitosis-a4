@@ -148,7 +148,8 @@ public partial class GameManager : Node2D
 
         if (EnableStatisticalSim)
             _statSimSystem = new StatisticalSimSystem(
-                _worldManager, _entityFactory, spatialHash, MaxPopulation, ChunkSize);
+                _worldManager, _entityFactory, spatialHash, _nestSystem,
+                MaxPopulation, ChunkSize);
 
         // DEBUG: Ecosystem logger — writes CSV logs to godot/logs/ (see latest_events.csv, latest_population.csv)
         _ecosystemLogger = new EcosystemLogger();

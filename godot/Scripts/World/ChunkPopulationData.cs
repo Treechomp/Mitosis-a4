@@ -14,6 +14,8 @@ public struct SpeciesPopulation
     public float AverageAgeRatio;      // 0-1 (fraction of MaxLifespan)
     public float FractionalBirths;     // Accumulated fractional births (< 1.0)
     public float FractionalDeaths;     // Accumulated fractional deaths (< 1.0)
+    public float AverageGrowthScale;   // For Shroomer/Faeling growth tracking (1.0 = base)
+    public float AveragePower;         // For Faeling power tracking
 }
 
 /// <summary>
@@ -37,11 +39,25 @@ public sealed class ChunkPopulationData
     /// <summary>Whether this chunk is currently running statistical simulation.</summary>
     public bool IsActive;
 
+    // --- Terraformer structure tracking ---
+
+    /// <summary>Number of Sectid nests in this chunk (tracked for birth rate calculation).</summary>
+    public int NestCount;
+
+    /// <summary>Average food stored per nest (for Sectid birth rate).</summary>
+    public float NestFoodStored;
+
+    /// <summary>Number of Faeling crystals in this chunk.</summary>
+    public int CrystalCount;
+
     public void Clear()
     {
         Populations.Clear();
         TotalCount = 0;
         AverageNutrition = 0;
+        NestCount = 0;
+        NestFoodStored = 0;
+        CrystalCount = 0;
         IsActive = false;
     }
 

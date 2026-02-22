@@ -114,7 +114,10 @@ public struct Growth
 [StructLayout(LayoutKind.Sequential)]
 public struct Crystal
 {
-    public int LinkedFaeling;     // Entity ID of the active Faeling (-1 = spawning)
+    /// <summary>Sentinel: linked Faeling was aggregated into statistical sim (not dead).</summary>
+    public const int FAELING_AGGREGATED = -2;
+
+    public int LinkedFaeling;     // Entity ID of the active Faeling (-1 = spawning, -2 = aggregated)
     public float InheritedPower;  // Power to give the next spawned Faeling
     public int SpawnTimer;        // Ticks until new Faeling spawns (0 = not spawning)
     public int SpawnDelay;        // Total ticks to spawn a new Faeling
@@ -127,8 +130,9 @@ public struct Crystal
         SpawnDelay = spawnDelay;
     }
 
-    public readonly bool IsSpawning => LinkedFaeling < 0 && SpawnTimer > 0;
+    public readonly bool IsSpawning => LinkedFaeling == -1 && SpawnTimer > 0;
     public readonly bool HasFaeling => LinkedFaeling >= 0;
+    public readonly bool IsFaelingAggregated => LinkedFaeling == FAELING_AGGREGATED;
 }
 
 /// <summary>
