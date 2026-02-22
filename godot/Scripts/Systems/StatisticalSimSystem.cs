@@ -40,6 +40,8 @@ public sealed class StatisticalSimSystem : ISystem
         float totalGrowthScale, float totalPower)> _speciesAccum = new(8);
     private readonly List<int> _keyBuffer = new(16);
     private readonly List<int> _structureBuffer = new(32);
+    private readonly Dictionary<(int, int, int), float> _migrationBuffer = new(64);
+    private readonly (int x, int y)[] _neighborBuffer = new (int, int)[8];
 
     // Player position (set by GameManager)
     private float _playerX;
@@ -149,14 +151,21 @@ public sealed class StatisticalSimSystem : ISystem
         // Run statistical simulation periodically
         if (_tickCounter % StatisticalTickInterval == 0)
         {
+            foreach (var key in _statisticalChunks)
+            {
+                if (_chunkPopulations.TryGetValue(key, out var popData) && popData.IsActive)
+                    UpdatePopulation(popData, key.Item1, key.Item2);
+            }
+
+            // Inter-chunk migration: diffusion-based population flow between statistical chunks
+            ApplyMigration();
+
+            // Recount total after population updates and migration
             TotalStatisticalPopulation = 0;
             foreach (var key in _statisticalChunks)
             {
                 if (_chunkPopulations.TryGetValue(key, out var popData) && popData.IsActive)
-                {
-                    UpdatePopulation(popData, key.Item1, key.Item2);
                     TotalStatisticalPopulation += popData.TotalCount;
-                }
             }
         }
     }
@@ -1062,6 +1071,185 @@ public sealed class StatisticalSimSystem : ISystem
             }
         }
         return count;
+    }
+
+    /// <summary>
+    /// Apply diffusion-based migration between adjacent statistical chunks.
+    /// Two-phase: (1) calculate all emigration, (2) apply all immigration.
+    /// This prevents double-counting migrants in the same tick.
+    /// Migration rate scales with species RoamDistance and increases under
+    /// overpopulation or hunger pressure.
+    /// </summary>
+    private void ApplyMigration()
+    {
+        _migrationBuffer.Clear();
+        int worldChunks = _worldManager.WorldSizeChunks;
+
+        // Phase 1: Calculate emigration from each active statistical chunk
+        foreach (var key in _statisticalChunks)
+        {
+            if (!_chunkPopulations.TryGetValue(key, out var popData) || !popData.IsActive)
+                continue;
+
+            int chunkX = key.Item1, chunkY = key.Item2;
+
+            // Find active statistical neighbors (8-directional)
+            int nCount = 0;
+            for (int dx = -1; dx <= 1; dx++)
+            {
+                for (int dy = -1; dy <= 1; dy++)
+                {
+                    if (dx == 0 && dy == 0) continue;
+                    int nx = chunkX + dx, ny = chunkY + dy;
+                    if (nx >= 0 && nx < worldChunks && ny >= 0 && ny < worldChunks
+                        && _statisticalChunks.Contains((nx, ny)))
+                        _neighborBuffer[nCount++] = (nx, ny);
+                }
+            }
+            if (nCount == 0) continue;
+
+            _keyBuffer.Clear();
+            _keyBuffer.AddRange(popData.Populations.Keys);
+
+            foreach (int sid in _keyBuffer)
+            {
+                var pop = popData.Populations[sid];
+                if (pop.Count <= 1) continue; // need at least 2 to migrate
+
+                var speciesDef = SpeciesRegistry.GetById(sid);
+                if (speciesDef == null) continue;
+
+                // Faelings don't migrate (crystal-bound)
+                if (speciesDef.CrystalSpawned) continue;
+
+                // Mobility factor: normalized to default RoamDistance (60 tiles ~ 2 chunks)
+                float mobility = speciesDef.RoamDistance / 60f;
+
+                // Base diffusion: small constant flow representing natural wandering
+                float migrationRate = 0.01f * mobility;
+
+                // Overpopulation pressure: accelerates emigration when above 50% capacity
+                float capacity = EstimateCarryingCapacity(speciesDef, popData, chunkX, chunkY);
+                if (capacity > 0 && pop.Count > capacity * 0.5f)
+                {
+                    float pressure = MathF.Min(1.5f, (float)pop.Count / capacity - 0.5f);
+                    migrationRate += 0.08f * mobility * pressure;
+                }
+
+                // Hunger pressure: hungry creatures more likely to leave
+                if (pop.AverageHungerRatio < 0.3f)
+                {
+                    float hungerPressure = (0.3f - pop.AverageHungerRatio) / 0.3f;
+                    migrationRate += 0.05f * mobility * hungerPressure;
+                }
+
+                // Cap at 25% per tick to prevent population collapse
+                float totalEmigrants = pop.Count * MathF.Min(0.25f, migrationRate);
+                if (totalEmigrants < 0.05f) continue;
+
+                float perNeighbor = totalEmigrants / nCount;
+
+                // Distribute to each active statistical neighbor
+                for (int i = 0; i < nCount; i++)
+                {
+                    var (nx, ny) = _neighborBuffer[i];
+                    var destKey = (nx, ny, sid);
+                    _migrationBuffer.TryGetValue(destKey, out float existing);
+                    _migrationBuffer[destKey] = existing + perNeighbor;
+                }
+
+                // Subtract emigrants from source
+                int intEmigrants = (int)totalEmigrants;
+                pop.Count = Math.Max(0, pop.Count - intEmigrants);
+                popData.Populations[sid] = pop;
+            }
+
+            // Recalculate source total
+            popData.TotalCount = 0;
+            foreach (var p in popData.Populations.Values)
+                popData.TotalCount += p.Count;
+        }
+
+        // Phase 2: Apply immigration to destination chunks
+        foreach (var (destKey, immigrants) in _migrationBuffer)
+        {
+            var (cx, cy, sid) = destKey;
+
+            if (!_chunkPopulations.TryGetValue((cx, cy), out var popData))
+            {
+                popData = new ChunkPopulationData();
+                _chunkPopulations[(cx, cy)] = popData;
+                popData.IsActive = true;
+
+                // Cache terrain data for the new population entry
+                var chunk = _worldManager.GetChunk(cx, cy);
+                if (chunk != null)
+                {
+                    int grazeCount = 0;
+                    float totalNutrition = 0;
+                    for (int ly = 0; ly < _chunkSize; ly++)
+                    {
+                        for (int lx = 0; lx < _chunkSize; lx++)
+                        {
+                            if (chunk.GetTile(lx, ly).IsGrazeable())
+                            {
+                                totalNutrition += chunk.GetNutrition(lx, ly);
+                                grazeCount++;
+                            }
+                        }
+                    }
+                    popData.GrazeableTileCount = grazeCount;
+                    popData.AverageNutrition = grazeCount > 0 ? totalNutrition / grazeCount : 0;
+                }
+            }
+
+            if (popData.Populations.TryGetValue(sid, out var pop))
+            {
+                // Existing species: accumulate fractional migrants
+                float total = immigrants + pop.FractionalMigrants;
+                int intImmigrants = (int)total;
+                pop.FractionalMigrants = total - intImmigrants;
+                pop.Count += intImmigrants;
+                popData.Populations[sid] = pop;
+            }
+            else
+            {
+                // New species in this chunk: create entry when enough migrants arrive
+                float total = immigrants; // no prior fractional to add
+                int intImmigrants = (int)total;
+                if (intImmigrants > 0)
+                {
+                    var speciesDef = SpeciesRegistry.GetById(sid);
+                    popData.Populations[sid] = new SpeciesPopulation
+                    {
+                        SpeciesId = sid,
+                        Count = intImmigrants,
+                        AverageHungerRatio = 0.5f, // neutral starting hunger
+                        AverageAgeRatio = 0.4f,    // slightly younger than average
+                        FractionalMigrants = total - intImmigrants,
+                        AverageGrowthScale = speciesDef?.HasGrowth == true ? 1f : 0f,
+                    };
+                }
+                else if (total > 0.1f)
+                {
+                    // Not enough for a whole creature yet, but save fractional
+                    // so they accumulate over multiple ticks
+                    popData.Populations[sid] = new SpeciesPopulation
+                    {
+                        SpeciesId = sid,
+                        Count = 0,
+                        AverageHungerRatio = 0.5f,
+                        AverageAgeRatio = 0.4f,
+                        FractionalMigrants = total,
+                    };
+                }
+            }
+
+            // Recalculate destination total
+            popData.TotalCount = 0;
+            foreach (var p in popData.Populations.Values)
+                popData.TotalCount += p.Count;
+        }
     }
 
     /// <summary>

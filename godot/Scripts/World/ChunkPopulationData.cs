@@ -16,6 +16,7 @@ public struct SpeciesPopulation
     public float FractionalDeaths;     // Accumulated fractional deaths (< 1.0)
     public float AverageGrowthScale;   // For Shroomer/Faeling growth tracking (1.0 = base)
     public float AveragePower;         // For Faeling power tracking
+    public float FractionalMigrants;   // Accumulated incoming fractional migrants (< 1.0)
 }
 
 /// <summary>
