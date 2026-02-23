@@ -146,18 +146,22 @@ public struct Reproduction
 }
 
 /// <summary>
-/// LOD level for simulation fidelity based on distance from player.
+/// LOD level for simulation tick rate based on distance from player.
+/// At 20 TPS base rate: Full=20, High=10, Medium=5, Low=2, Minimal=1 TPS.
 /// </summary>
 public enum LODLevel : byte
 {
-    Full = 0,       // Every tick, full AI
-    Reduced = 1,    // Every 5 ticks, simplified AI
-    Statistical = 2, // Every 30 ticks, statistical updates
-    Aggregate = 3   // Every 60 ticks, population-level only
+    Full = 0,       // Every tick (20 TPS) — near player
+    High = 1,       // Every 2 ticks (10 TPS)
+    Medium = 2,     // Every 4 ticks (5 TPS)
+    Low = 3,        // Every 10 ticks (2 TPS)
+    Minimal = 4     // Every 20 ticks (1 TPS)
 }
 
 /// <summary>
-/// Simulation Level of Detail - determines update frequency based on distance.
+/// Simulation Level of Detail — determines update frequency based on distance.
+/// LODSystem runs first each tick, counting down TicksUntilUpdate.
+/// All other systems skip the entity when TicksUntilUpdate != 0.
 /// </summary>
 [StructLayout(LayoutKind.Sequential)]
 public struct SimulationLOD
@@ -174,16 +178,17 @@ public struct SimulationLOD
     }
 
     /// <summary>
-    /// Get the tick interval for this LOD level.
+    /// Get the tick interval (in simulation ticks) for this LOD level.
     /// </summary>
     public static int GetTickInterval(LODLevel level)
     {
         return level switch
         {
-            LODLevel.Full => 1,
-            LODLevel.Reduced => 5,
-            LODLevel.Statistical => 30,
-            LODLevel.Aggregate => 60,
+            LODLevel.Full => 1,      // 20 TPS
+            LODLevel.High => 2,      // 10 TPS
+            LODLevel.Medium => 4,    // 5 TPS
+            LODLevel.Low => 10,      // 2 TPS
+            LODLevel.Minimal => 20,  // 1 TPS
             _ => 1
         };
     }
@@ -193,10 +198,11 @@ public struct SimulationLOD
     /// </summary>
     public static LODLevel GetLevelForDistance(float distance)
     {
-        if (distance < 25f) return LODLevel.Full;        // <1 chunk
-        if (distance < 50f) return LODLevel.Reduced;     // ~1.5 chunks
-        if (distance < 100f) return LODLevel.Statistical; // ~3 chunks
-        return LODLevel.Aggregate;
+        if (distance < 48f) return LODLevel.Full;       // ~1.5 chunks — full 20 TPS
+        if (distance < 96f) return LODLevel.High;       // ~3 chunks   — 10 TPS
+        if (distance < 160f) return LODLevel.Medium;    // ~5 chunks   — 5 TPS
+        if (distance < 256f) return LODLevel.Low;       // ~8 chunks   — 2 TPS
+        return LODLevel.Minimal;                         // far         — 1 TPS
     }
 }
 

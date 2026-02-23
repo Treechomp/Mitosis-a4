@@ -30,13 +30,10 @@ public sealed class SeparationSystem : ISystem
         // Apply separation forces (spatial hash already updated by SpatialHashUpdateSystem)
         foreach (int entity in em.Query(required))
         {
-            // Check LOD - skip if not due for update
-            if (em.HasComponents(entity, ComponentFlags.SimulationLOD))
-            {
-                ref var lod = ref em.SimulationLODs[entity];
-                if (!LODSystem.ShouldUpdate(in lod))
-                    continue;
-            }
+            // LOD gate: skip if not due for update this tick
+            if (em.HasComponents(entity, ComponentFlags.SimulationLOD) &&
+                em.SimulationLODs[entity].TicksUntilUpdate != 0)
+                continue;
 
             ref var pos = ref em.Positions[entity];
             ref var vel = ref em.Velocities[entity];
@@ -121,13 +118,10 @@ public sealed class CollisionSystem : ISystem
         {
             foreach (int entity in em.Query(required))
             {
-                // LOD gate: skip collision for distant entities (Reduced+)
-                if (em.HasComponents(entity, ComponentFlags.SimulationLOD))
-                {
-                    ref var lod = ref em.SimulationLODs[entity];
-                    if (lod.Level >= LODLevel.Reduced)
-                        continue;
-                }
+                // LOD gate: skip if not due for update this tick
+                if (em.HasComponents(entity, ComponentFlags.SimulationLOD) &&
+                    em.SimulationLODs[entity].TicksUntilUpdate != 0)
+                    continue;
 
                 ref var pos = ref em.Positions[entity];
                 ref var rend = ref em.Renderables[entity];

@@ -30,6 +30,11 @@ public sealed class MovementSystem : ISystem
 
         foreach (int entity in em.Query(required))
         {
+            // LOD gate: skip if not due for update this tick
+            if (em.HasComponents(entity, ComponentFlags.SimulationLOD) &&
+                em.SimulationLODs[entity].TicksUntilUpdate != 0)
+                continue;
+
             ref var pos = ref em.Positions[entity];
             ref var vel = ref em.Velocities[entity];
 

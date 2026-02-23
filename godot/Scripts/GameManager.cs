@@ -25,7 +25,6 @@ public partial class GameManager : Node2D
     [Export] public int WorldSeed = 0;
     [Export] public int TileSize = 16;
     [Export] public int TargetTPS = 20;
-    [Export] public bool EnableStatisticalSim = false;  // Toggle statistical sim from inspector
     [Export] public int MaxPopulation = 2000;  // DEBUG: cap at 2000 (2500+ causes FPS drop)
     [Export] public int InitialPopulation = 500;  // DEBUG: standardized debug population
     [Export] public float HerbivoreRatio = 0.85f;
@@ -50,7 +49,6 @@ public partial class GameManager : Node2D
     private LODSystem? _lodSystem;
     private NestSystem? _nestSystem;
     private CrystalSystem? _crystalSystem;
-    private StatisticalSimSystem? _statSimSystem;
     private EcosystemLogger? _ecosystemLogger;
 
     // Extracted managers
@@ -117,11 +115,10 @@ public partial class GameManager : Node2D
         _renderingManager = new RenderingManager(_entityManager, _worldManager,
             ChunkSize, WorldSizeChunks, TileSize);
 
-        // Initialize systems
-        // DEBUG: LODSystem disabled — all entities run at Full LOD (no gating)
+        // Initialize systems — LODSystem must run FIRST to set tick gating
         var spatialHash = _worldManager.SpatialHash;
-        // _lodSystem = new LODSystem();
-        // _systems.Add(_lodSystem);
+        _lodSystem = new LODSystem();
+        _systems.Add(_lodSystem);
         _systems.Add(new MovementSystem(ChunkSize, WorldSizeChunks, _worldManager));
         _systems.Add(new SpatialHashUpdateSystem(spatialHash));    // Sync all positions once
         _systems.Add(new TerrainDiscomfortSystem(_worldManager));  // Process discomfort early
@@ -146,18 +143,11 @@ public partial class GameManager : Node2D
         _crystalSystem = new CrystalSystem(_worldManager, spatialHash, MaxPopulation);
         _systems.Add(_crystalSystem);
 
-        if (EnableStatisticalSim)
-            _statSimSystem = new StatisticalSimSystem(
-                _worldManager, _entityFactory, spatialHash, _nestSystem,
-                MaxPopulation, ChunkSize);
-
         // DEBUG: Ecosystem logger — writes CSV logs to godot/logs/ (see latest_events.csv, latest_population.csv)
         _ecosystemLogger = new EcosystemLogger();
-        if (_statSimSystem != null)
-            _ecosystemLogger.SetStatisticalSimSystem(_statSimSystem);
         _systems.Add(_ecosystemLogger);
 
-        // Initialize profiling arrays (does not include StatisticalSimSystem — it runs separately)
+        // Initialize profiling arrays
         _systemNames = new string[_systems.Count];
         _systemTimingsMs = new double[_systems.Count];
         for (int i = 0; i < _systems.Count; i++)
@@ -195,8 +185,7 @@ public partial class GameManager : Node2D
         int playerEntity = _entityFactory.SpawnPlayer(centerX, centerY, _worldManager);
         _playerController.SetPlayerEntity(playerEntity, TileSize, _camera);
 
-        // DEBUG: LOD system disabled — skip player entity setup
-        // _lodSystem?.SetPlayerEntity(_playerController.PlayerEntity);
+        _lodSystem?.SetPlayerEntity(_playerController.PlayerEntity);
 
         // Setup entity rendering via MultiMesh
         var shapeMMIs = _renderingManager.CreateMultiMeshInstances();
@@ -248,14 +237,6 @@ public partial class GameManager : Node2D
         _playerController.HandleInput();
         _playerController.HandleZoomInput(_camera);
 
-        // Update statistical sim with player position
-        if (_statSimSystem != null && _playerController.PlayerEntity >= 0 &&
-            _entityManager.HasComponents(_playerController.PlayerEntity, ComponentFlags.Position))
-        {
-            ref var playerPos = ref _entityManager.Positions[_playerController.PlayerEntity];
-            _statSimSystem.SetPlayerPosition(playerPos.X, playerPos.Y);
-        }
-
         // Fixed timestep simulation
         _simulationAccumulator += delta;
         while (_simulationAccumulator >= _simulationDt)
@@ -269,9 +250,6 @@ public partial class GameManager : Node2D
                 double ms = _systemStopwatch.Elapsed.TotalMilliseconds;
                 _systemTimingsMs[i] += (ms - _systemTimingsMs[i]) * SmoothingFactor;
             }
-
-            // Statistical simulation runs after all entity systems
-            _statSimSystem?.Process(_entityManager);
 
             _tickStopwatch.Stop();
             double tickMs = _tickStopwatch.Elapsed.TotalMilliseconds;
@@ -364,18 +342,15 @@ public partial class GameManager : Node2D
             }
         }
 
-        // Merge statistical populations into per-species counts
-        _statSimSystem?.AccumulateSpeciesPopulations(_perSpeciesCounts);
-
         // Update debug label
         if (_debugLabel != null)
         {
-            int statPop = _statSimSystem?.TotalStatisticalPopulation ?? 0;
-            int statChunks = _statSimSystem?.StatisticalChunkCount ?? 0;
-            int worldPop = _entityManager.EntityCount + statPop;
-            _debugLabel.Text = $"FPS: {_fps}  |  TPS: {TargetTPS}  |  World pop: {worldPop}\n" +
-                              $"Nearby: {_entityManager.EntityCount} entities  |  " +
-                              $"Distant: {statPop} in {statChunks} chunks\n" +
+            _debugLabel.Text = $"FPS: {_fps}  |  TPS: {TargetTPS}  |  Entities: {_entityManager.EntityCount}\n" +
+                              $"LOD: Full={_lodSystem?.CountFull ?? 0}  " +
+                              $"High={_lodSystem?.CountHigh ?? 0}  " +
+                              $"Med={_lodSystem?.CountMedium ?? 0}  " +
+                              $"Low={_lodSystem?.CountLow ?? 0}  " +
+                              $"Min={_lodSystem?.CountMinimal ?? 0}\n" +
                               $"Herbivores: {_herbivoreCount}  Predators: {_predatorCount}  " +
                               $"Shroomers: {_shroomerCount}  Sectids: {_sectidCount}  " +
                               $"Faelings: {_faelingCount}";
@@ -412,7 +387,7 @@ public partial class GameManager : Node2D
                     _debugLabel.Text += $"  {_systemNames[idx],-28} {ms,6:F2} ms  {pct,5:F1}%  {bar}\n";
                 }
 
-                // Per-species world population (entities + statistical)
+                // Per-species world population
                 _debugLabel.Text += "\n--- World Population by Species ---\n";
                 foreach (string name in SpeciesRegistry.GetAllNames())
                 {

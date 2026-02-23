@@ -85,14 +85,10 @@ public sealed class HuntingSystem : ISystem
         // Second pass: All predators hunt
         foreach (int entity in em.Query(predatorRequired))
         {
-            // LOD gate: skip hunting only for very distant entities (Aggregate)
-            // Hunting feeds Sectids and predators — gating too early causes starvation
-            if (em.HasComponents(entity, ComponentFlags.SimulationLOD))
-            {
-                ref var lod = ref em.SimulationLODs[entity];
-                if (lod.Level >= LODLevel.Aggregate)
-                    continue;
-            }
+            // LOD gate: skip if not due for update this tick
+            if (em.HasComponents(entity, ComponentFlags.SimulationLOD) &&
+                em.SimulationLODs[entity].TicksUntilUpdate != 0)
+                continue;
 
             ref var pos = ref em.Positions[entity];
             ref var predator = ref em.Predators[entity];

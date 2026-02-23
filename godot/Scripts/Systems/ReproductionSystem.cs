@@ -54,14 +54,10 @@ public sealed class ReproductionSystem : ISystem
 
         foreach (int entity in em.Query(required))
         {
-            // LOD gate: skip reproduction for distant entities (Statistical+)
-            // Must match hunger/grazing gate — otherwise entities breed without hunger cost
-            if (em.HasComponents(entity, ComponentFlags.SimulationLOD))
-            {
-                ref var lod = ref em.SimulationLODs[entity];
-                if (lod.Level >= LODLevel.Statistical)
-                    continue;
-            }
+            // LOD gate: skip if not due for update this tick
+            if (em.HasComponents(entity, ComponentFlags.SimulationLOD) &&
+                em.SimulationLODs[entity].TicksUntilUpdate != 0)
+                continue;
 
             ref var reproduction = ref em.Reproductions[entity];
 

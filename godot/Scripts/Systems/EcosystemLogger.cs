@@ -31,8 +31,6 @@ public sealed class EcosystemLogger : ISystem
     private readonly StreamWriter _latestEventLog;
     private readonly StreamWriter _latestPopLog;
     private readonly Dictionary<int, int> _speciesCounts = new();
-    private readonly Dictionary<int, int> _statSimCounts = new();
-    private StatisticalSimSystem? _statSimSystem;
     private int _tick;
 
     // Snapshot interval in ticks (every 100 ticks = 5 seconds at 20 TPS)
@@ -172,39 +170,12 @@ public sealed class EcosystemLogger : ISystem
         _latestEventLog.WriteLine(line);
     }
 
-    // --- Statistical sim aggregate events ---
-    // These log population-level births/deaths from StatisticalSimSystem.
-    // Position is chunk center; entity_id is -1; count is in the detail field.
-
-    /// <summary>Log aggregate births from the statistical sim.</summary>
-    public void LogStatBirths(int speciesId, int count, float chunkCenterX, float chunkCenterY)
-    {
-        if (count <= 0) return;
-        var name = SpeciesRegistry.GetById(speciesId)?.Name ?? speciesId.ToString();
-        var line = $"{_tick},stat_birth,{name},-1,{chunkCenterX:F1},{chunkCenterY:F1},count:{count}";
-        _eventLog.WriteLine(line);
-        _latestEventLog.WriteLine(line);
-    }
-
-    /// <summary>Log aggregate deaths from the statistical sim, split by cause.</summary>
-    public void LogStatDeaths(int speciesId, int count, float chunkCenterX, float chunkCenterY, string cause)
-    {
-        if (count <= 0) return;
-        var name = SpeciesRegistry.GetById(speciesId)?.Name ?? speciesId.ToString();
-        var line = $"{_tick},stat_{cause},{name},-1,{chunkCenterX:F1},{chunkCenterY:F1},count:{count}";
-        _eventLog.WriteLine(line);
-        _latestEventLog.WriteLine(line);
-    }
-
-    /// <summary>Wire up the statistical sim so population snapshots include stat sim counts.</summary>
-    public void SetStatisticalSimSystem(StatisticalSimSystem statSim) => _statSimSystem = statSim;
-
     private bool _headerWritten;
     private List<string>? _speciesNames;
 
     private void WritePopulationSnapshot(EntityManager em)
     {
-        // Count real entities
+        // Count entities by species
         _speciesCounts.Clear();
         const ComponentFlags required = ComponentFlags.Species;
         foreach (int entity in em.Query(required))
@@ -214,45 +185,25 @@ public sealed class EcosystemLogger : ISystem
             _speciesCounts[species.SpeciesId] = count + 1;
         }
 
-        // Count statistical simulation populations
-        _statSimCounts.Clear();
-        _statSimSystem?.AccumulateSpeciesPopulations(_statSimCounts);
-
         if (!_headerWritten)
         {
             _speciesNames = new List<string>(SpeciesRegistry.GetAllNames());
             _speciesNames.Sort();
-            // Header: entity counts, then stat sim counts, then combined total
-            var header = "tick,entity_total";
+            var header = "tick,total";
             foreach (var name in _speciesNames)
                 header += $",{name}";
-            header += ",stat_total";
-            foreach (var name in _speciesNames)
-                header += $",stat_{name}";
             _popLog.WriteLine(header);
             _latestPopLog.WriteLine(header);
             _headerWritten = true;
         }
 
-        // Entity counts
-        int entityTotal = 0;
-        foreach (var c in _speciesCounts.Values) entityTotal += c;
-        var line = $"{_tick},{entityTotal}";
+        int total = 0;
+        foreach (var c in _speciesCounts.Values) total += c;
+        var line = $"{_tick},{total}";
         foreach (var name in _speciesNames!)
         {
             int id = SpeciesRegistry.GetId(name);
             _speciesCounts.TryGetValue(id, out int count);
-            line += $",{count}";
-        }
-
-        // Stat sim counts
-        int statTotal = 0;
-        foreach (var c in _statSimCounts.Values) statTotal += c;
-        line += $",{statTotal}";
-        foreach (var name in _speciesNames)
-        {
-            int id = SpeciesRegistry.GetId(name);
-            _statSimCounts.TryGetValue(id, out int count);
             line += $",{count}";
         }
 

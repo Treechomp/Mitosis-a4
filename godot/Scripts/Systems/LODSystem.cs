@@ -1,4 +1,3 @@
-using System;
 using Mitosis.Components;
 using Mitosis.ECS;
 using Mitosis.Utils;
@@ -7,14 +6,27 @@ using static Mitosis.ECS.EntityManager;
 namespace Mitosis.Systems;
 
 /// <summary>
-/// Updates LOD levels for entities based on distance from player.
-/// Must run first each tick to set up LOD state for other systems.
+/// Updates LOD levels and tick countdown for entities based on distance from player.
+/// Must run FIRST each tick — all other systems skip entities where TicksUntilUpdate != 0.
+///
+/// Tick gating pattern:
+///   - LODSystem counts down TicksUntilUpdate each tick.
+///   - When it reaches 0, the entity is "due" — all systems process it.
+///   - LODSystem then resets the timer to the interval for the entity's LOD level.
+///   - Result: Full=every tick (20 TPS), High=every 2 ticks (10 TPS), etc.
 /// </summary>
 public sealed class LODSystem : ISystem
 {
     private float _playerX;
     private float _playerY;
     private int _playerEntity = -1;
+
+    // Per-LOD-level entity counts for debug display
+    public int CountFull { get; private set; }
+    public int CountHigh { get; private set; }
+    public int CountMedium { get; private set; }
+    public int CountLow { get; private set; }
+    public int CountMinimal { get; private set; }
 
     public void SetPlayerEntity(int entity)
     {
@@ -32,7 +44,13 @@ public sealed class LODSystem : ISystem
             _playerY = playerPos.Y;
         }
 
-        // Update LOD for all entities with SimulationLOD component
+        // Reset counts
+        CountFull = 0;
+        CountHigh = 0;
+        CountMedium = 0;
+        CountLow = 0;
+        CountMinimal = 0;
+
         const ComponentFlags required = ComponentFlags.Position | ComponentFlags.SimulationLOD;
 
         foreach (int entity in em.Query(required))
@@ -43,37 +61,32 @@ public sealed class LODSystem : ISystem
             // Calculate distance to player
             lod.DistanceToPlayer = MathUtils.Distance(_playerX, _playerY, pos.X, pos.Y);
 
-            // Determine LOD level
+            // Determine LOD level from distance
             var newLevel = SimulationLOD.GetLevelForDistance(lod.DistanceToPlayer);
 
-            // If level changed, reset timer
+            // If level changed (entity moved closer/farther), force immediate update
             if (newLevel != lod.Level)
             {
                 lod.Level = newLevel;
                 lod.TicksUntilUpdate = 0;
             }
 
-            // Decrement timer
-            if (lod.TicksUntilUpdate > 0)
+            // Countdown and reset: when timer hits 0, entity is due this tick.
+            // Reset timer so it counts down again for the next interval.
+            if (lod.TicksUntilUpdate == 0)
+                lod.TicksUntilUpdate = SimulationLOD.GetTickInterval(lod.Level);
+            lod.TicksUntilUpdate--;
+            // After this: TicksUntilUpdate == 0 means "process this tick"
+
+            // Track counts per level
+            switch (lod.Level)
             {
-                lod.TicksUntilUpdate--;
+                case LODLevel.Full: CountFull++; break;
+                case LODLevel.High: CountHigh++; break;
+                case LODLevel.Medium: CountMedium++; break;
+                case LODLevel.Low: CountLow++; break;
+                case LODLevel.Minimal: CountMinimal++; break;
             }
         }
-    }
-
-    /// <summary>
-    /// Check if an entity should be updated this tick based on its LOD.
-    /// </summary>
-    public static bool ShouldUpdate(in SimulationLOD lod)
-    {
-        return lod.TicksUntilUpdate <= 0;
-    }
-
-    /// <summary>
-    /// Mark that an entity was updated, resetting its timer.
-    /// </summary>
-    public static void MarkUpdated(ref SimulationLOD lod)
-    {
-        lod.TicksUntilUpdate = SimulationLOD.GetTickInterval(lod.Level);
     }
 }

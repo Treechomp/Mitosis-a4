@@ -32,13 +32,10 @@ public sealed class TerrainDiscomfortSystem : ISystem
 
         foreach (int entity in em.Query(required))
         {
-            // LOD gate: skip discomfort for distant entities (Reduced+)
-            if (em.HasComponents(entity, ComponentFlags.SimulationLOD))
-            {
-                ref var lod = ref em.SimulationLODs[entity];
-                if (lod.Level >= LODLevel.Reduced)
-                    continue;
-            }
+            // LOD gate: skip if not due for update this tick
+            if (em.HasComponents(entity, ComponentFlags.SimulationLOD) &&
+                em.SimulationLODs[entity].TicksUntilUpdate != 0)
+                continue;
 
             ref var pos = ref em.Positions[entity];
             ref var discomfort = ref em.TerrainDiscomforts[entity];
@@ -167,13 +164,10 @@ public sealed class TerraformSystem : ISystem
 
         foreach (int entity in em.Query(required))
         {
-            // LOD gate: skip terraform for distant entities (Statistical+)
-            if (em.HasComponents(entity, ComponentFlags.SimulationLOD))
-            {
-                ref var lod = ref em.SimulationLODs[entity];
-                if (lod.Level >= LODLevel.Statistical)
-                    continue;
-            }
+            // LOD gate: skip if not due for update this tick
+            if (em.HasComponents(entity, ComponentFlags.SimulationLOD) &&
+                em.SimulationLODs[entity].TicksUntilUpdate != 0)
+                continue;
 
             ref var terraform = ref em.Terraforms[entity];
 

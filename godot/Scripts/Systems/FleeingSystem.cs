@@ -75,14 +75,10 @@ public sealed class FleeingSystem : ISystem
 
         foreach (int entity in em.Query(preyRequired))
         {
-            // LOD gate: skip fleeing only for very distant entities (Aggregate)
-            // Must match hunting gate — prey needs to flee from active predators
-            if (em.HasComponents(entity, ComponentFlags.SimulationLOD))
-            {
-                ref var lod = ref em.SimulationLODs[entity];
-                if (lod.Level >= LODLevel.Aggregate)
-                    continue;
-            }
+            // LOD gate: skip if not due for update this tick
+            if (em.HasComponents(entity, ComponentFlags.SimulationLOD) &&
+                em.SimulationLODs[entity].TicksUntilUpdate != 0)
+                continue;
 
             ref var pos = ref em.Positions[entity];
             ref var prey = ref em.Preys[entity];

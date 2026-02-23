@@ -39,13 +39,10 @@ public sealed class WanderSystem : ISystem
 
         foreach (int entity in em.Query(required))
         {
-            // Check LOD - skip if not due for update
-            if (em.HasComponents(entity, ComponentFlags.SimulationLOD))
-            {
-                ref var lod = ref em.SimulationLODs[entity];
-                if (!LODSystem.ShouldUpdate(in lod))
-                    continue;
-            }
+            // LOD gate: skip if not due for update this tick
+            if (em.HasComponents(entity, ComponentFlags.SimulationLOD) &&
+                em.SimulationLODs[entity].TicksUntilUpdate != 0)
+                continue;
 
             ref var wander = ref em.Wanders[entity];
             ref var vel = ref em.Velocities[entity];

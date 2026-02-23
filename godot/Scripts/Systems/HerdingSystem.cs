@@ -63,13 +63,10 @@ public sealed class HerdingSystem : ISystem
         // Main pass: Apply social behaviors
         foreach (int entity in em.Query(required))
         {
-            // Check LOD - skip if not due for update
-            if (em.HasComponents(entity, ComponentFlags.SimulationLOD))
-            {
-                ref var lod = ref em.SimulationLODs[entity];
-                if (!LODSystem.ShouldUpdate(in lod))
-                    continue;
-            }
+            // LOD gate: skip if not due for update this tick
+            if (em.HasComponents(entity, ComponentFlags.SimulationLOD) &&
+                em.SimulationLODs[entity].TicksUntilUpdate != 0)
+                continue;
 
             ref var pos = ref em.Positions[entity];
             ref var vel = ref em.Velocities[entity];
