@@ -43,6 +43,12 @@ public sealed class StatisticalSimSystem : ISystem
     private readonly Dictionary<(int, int, int), float> _migrationBuffer = new(64);
     private readonly (int x, int y)[] _neighborBuffer = new (int, int)[8];
 
+    // Aggregation buffers for stat event logging (accumulated across all chunks, logged once per stat tick)
+    private readonly Dictionary<int, int> _statBirthAccum = new(16);
+    private readonly Dictionary<int, int> _statAgeDeathAccum = new(16);
+    private readonly Dictionary<int, int> _statStarvationAccum = new(16);
+    private readonly Dictionary<int, int> _statKillAccum = new(16);
+
     // Pre-computed per-chunk role summaries for cross-chunk predator-prey interaction
     private readonly Dictionary<(int, int), ChunkRoleSummary> _chunkRoleSummaries = new(64);
 
@@ -166,11 +172,20 @@ public sealed class StatisticalSimSystem : ISystem
             // Pre-compute per-chunk role summaries for cross-chunk predator-prey interaction
             BuildChunkRoleSummaries();
 
+            // Clear aggregation buffers before the chunk loop
+            _statBirthAccum.Clear();
+            _statAgeDeathAccum.Clear();
+            _statStarvationAccum.Clear();
+            _statKillAccum.Clear();
+
             foreach (var key in _statisticalChunks)
             {
                 if (_chunkPopulations.TryGetValue(key, out var popData) && popData.IsActive)
                     UpdatePopulation(popData, key.Item1, key.Item2);
             }
+
+            // Flush aggregated stat events (one line per species, not per chunk)
+            FlushStatEventLog();
 
             // Inter-chunk migration: diffusion-based population flow between statistical chunks
             ApplyMigration();
@@ -614,6 +629,42 @@ public sealed class StatisticalSimSystem : ISystem
     }
 
     /// <summary>
+    /// Flush aggregated stat birth/death events to the logger.
+    /// Called once per stat tick after all chunks have been processed.
+    /// Produces one line per species (instead of one per chunk per species).
+    /// </summary>
+    private void FlushStatEventLog()
+    {
+        var logger = EcosystemLogger.Instance;
+        if (logger == null) return;
+
+        // Collect all species IDs that had any activity
+        _keyBuffer.Clear();
+        foreach (int sid in _statBirthAccum.Keys)
+            if (!_keyBuffer.Contains(sid)) _keyBuffer.Add(sid);
+        foreach (int sid in _statAgeDeathAccum.Keys)
+            if (!_keyBuffer.Contains(sid)) _keyBuffer.Add(sid);
+        foreach (int sid in _statStarvationAccum.Keys)
+            if (!_keyBuffer.Contains(sid)) _keyBuffer.Add(sid);
+        foreach (int sid in _statKillAccum.Keys)
+            if (!_keyBuffer.Contains(sid)) _keyBuffer.Add(sid);
+
+        foreach (int sid in _keyBuffer)
+        {
+            _statBirthAccum.TryGetValue(sid, out int births);
+            _statAgeDeathAccum.TryGetValue(sid, out int ageDeaths);
+            _statStarvationAccum.TryGetValue(sid, out int starvDeaths);
+            _statKillAccum.TryGetValue(sid, out int killDeaths);
+
+            // Use (0,0) as position — aggregate events have no meaningful location
+            if (births > 0) logger.LogStatBirths(sid, births, 0, 0);
+            if (ageDeaths > 0) logger.LogStatDeaths(sid, ageDeaths, 0, 0, "age_death");
+            if (starvDeaths > 0) logger.LogStatDeaths(sid, starvDeaths, 0, 0, "starvation");
+            if (killDeaths > 0) logger.LogStatDeaths(sid, killDeaths, 0, 0, "kill");
+        }
+    }
+
+    /// <summary>
     /// Apply population-level birth/death rates for one statistical tick interval.
     /// Uses simplified Lotka-Volterra dynamics for regular species.
     /// Terraformers use species-specific models (spore/nest/crystal).
@@ -751,29 +802,28 @@ public sealed class StatisticalSimSystem : ISystem
 
             pop.Count = Math.Max(0, pop.Count + intBirths - intDeaths);
 
-            // Log aggregate events for auditing
-            var logger = EcosystemLogger.Instance;
-            if (logger != null && (intBirths > 0 || intDeaths > 0))
+            // Accumulate births/deaths for aggregated logging (one line per species per stat tick)
+            if (intBirths > 0)
             {
-                float cx = (chunkX + 0.5f) * _chunkSize;
-                float cy = (chunkY + 0.5f) * _chunkSize;
+                _statBirthAccum.TryGetValue(sid, out int prev);
+                _statBirthAccum[sid] = prev + intBirths;
+            }
 
-                if (intBirths > 0)
-                    logger.LogStatBirths(sid, intBirths, cx, cy);
+            if (intDeaths > 0 && totalDeathRate > 0)
+            {
+                float naturalFrac = naturalDeathRate / totalDeathRate;
+                float starvationFrac = starvationRate / totalDeathRate;
+                int naturalDeaths = (int)(intDeaths * naturalFrac + 0.5f);
+                int starvationDeaths = (int)(intDeaths * starvationFrac + 0.5f);
+                int predationDeaths = intDeaths - naturalDeaths - starvationDeaths;
+                if (predationDeaths < 0) { predationDeaths = 0; naturalDeaths = intDeaths - starvationDeaths; }
 
-                if (intDeaths > 0 && totalDeathRate > 0)
-                {
-                    float naturalFrac = naturalDeathRate / totalDeathRate;
-                    float starvationFrac = starvationRate / totalDeathRate;
-                    int naturalDeaths = (int)(intDeaths * naturalFrac + 0.5f);
-                    int starvationDeaths = (int)(intDeaths * starvationFrac + 0.5f);
-                    int predationDeaths = intDeaths - naturalDeaths - starvationDeaths;
-                    if (predationDeaths < 0) { predationDeaths = 0; naturalDeaths = intDeaths - starvationDeaths; }
-
-                    logger.LogStatDeaths(sid, naturalDeaths, cx, cy, "age_death");
-                    logger.LogStatDeaths(sid, starvationDeaths, cx, cy, "starvation");
-                    logger.LogStatDeaths(sid, predationDeaths, cx, cy, "kill");
-                }
+                _statAgeDeathAccum.TryGetValue(sid, out int prevAge);
+                _statAgeDeathAccum[sid] = prevAge + naturalDeaths;
+                _statStarvationAccum.TryGetValue(sid, out int prevStarv);
+                _statStarvationAccum[sid] = prevStarv + starvationDeaths;
+                _statKillAccum.TryGetValue(sid, out int prevKill);
+                _statKillAccum[sid] = prevKill + predationDeaths;
             }
 
             // Hard per-chunk cap
