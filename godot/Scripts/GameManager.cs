@@ -153,6 +153,8 @@ public partial class GameManager : Node2D
 
         // DEBUG: Ecosystem logger — writes CSV logs to godot/logs/ (see latest_events.csv, latest_population.csv)
         _ecosystemLogger = new EcosystemLogger();
+        if (_statSimSystem != null)
+            _ecosystemLogger.SetStatisticalSimSystem(_statSimSystem);
         _systems.Add(_ecosystemLogger);
 
         // Initialize profiling arrays (does not include StatisticalSimSystem — it runs separately)

@@ -31,6 +31,8 @@ public sealed class EcosystemLogger : ISystem
     private readonly StreamWriter _latestEventLog;
     private readonly StreamWriter _latestPopLog;
     private readonly Dictionary<int, int> _speciesCounts = new();
+    private readonly Dictionary<int, int> _statSimCounts = new();
+    private StatisticalSimSystem? _statSimSystem;
     private int _tick;
 
     // Snapshot interval in ticks (every 100 ticks = 5 seconds at 20 TPS)
@@ -194,13 +196,16 @@ public sealed class EcosystemLogger : ISystem
         _latestEventLog.WriteLine(line);
     }
 
+    /// <summary>Wire up the statistical sim so population snapshots include stat sim counts.</summary>
+    public void SetStatisticalSimSystem(StatisticalSimSystem statSim) => _statSimSystem = statSim;
+
     private bool _headerWritten;
     private List<string>? _speciesNames;
 
     private void WritePopulationSnapshot(EntityManager em)
     {
+        // Count real entities
         _speciesCounts.Clear();
-
         const ComponentFlags required = ComponentFlags.Species;
         foreach (int entity in em.Query(required))
         {
@@ -209,27 +214,48 @@ public sealed class EcosystemLogger : ISystem
             _speciesCounts[species.SpeciesId] = count + 1;
         }
 
+        // Count statistical simulation populations
+        _statSimCounts.Clear();
+        _statSimSystem?.AccumulateSpeciesPopulations(_statSimCounts);
+
         if (!_headerWritten)
         {
-            // Build header from all known species
             _speciesNames = new List<string>(SpeciesRegistry.GetAllNames());
             _speciesNames.Sort();
-            var header = "tick,total";
+            // Header: entity counts, then stat sim counts, then combined total
+            var header = "tick,entity_total";
             foreach (var name in _speciesNames)
                 header += $",{name}";
+            header += ",stat_total";
+            foreach (var name in _speciesNames)
+                header += $",stat_{name}";
             _popLog.WriteLine(header);
             _latestPopLog.WriteLine(header);
             _headerWritten = true;
         }
 
-        int total = em.EntityCount;
-        var line = $"{_tick},{total}";
+        // Entity counts
+        int entityTotal = 0;
+        foreach (var c in _speciesCounts.Values) entityTotal += c;
+        var line = $"{_tick},{entityTotal}";
         foreach (var name in _speciesNames!)
         {
             int id = SpeciesRegistry.GetId(name);
             _speciesCounts.TryGetValue(id, out int count);
             line += $",{count}";
         }
+
+        // Stat sim counts
+        int statTotal = 0;
+        foreach (var c in _statSimCounts.Values) statTotal += c;
+        line += $",{statTotal}";
+        foreach (var name in _speciesNames)
+        {
+            int id = SpeciesRegistry.GetId(name);
+            _statSimCounts.TryGetValue(id, out int count);
+            line += $",{count}";
+        }
+
         _popLog.WriteLine(line);
         _latestPopLog.WriteLine(line);
     }
