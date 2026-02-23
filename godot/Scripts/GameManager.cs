@@ -237,6 +237,22 @@ public partial class GameManager : Node2D
         _playerController.HandleInput();
         _playerController.HandleZoomInput(_camera);
 
+        // Update LOD visible radius from camera viewport and zoom
+        if (_lodSystem != null && _camera != null)
+        {
+            var viewport = GetViewport();
+            if (viewport != null)
+            {
+                var viewportSize = viewport.GetVisibleRect().Size;
+                float zoom = _camera.Zoom.X; // Uniform zoom (X == Y)
+                // Half-diagonal of viewport in tile units
+                float halfW = viewportSize.X / (2f * zoom * TileSize);
+                float halfH = viewportSize.Y / (2f * zoom * TileSize);
+                float visibleRadius = MathF.Sqrt(halfW * halfW + halfH * halfH);
+                _lodSystem.SetVisibleRadius(visibleRadius);
+            }
+        }
+
         // Fixed timestep simulation
         _simulationAccumulator += delta;
         while (_simulationAccumulator >= _simulationDt)

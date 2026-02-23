@@ -194,15 +194,18 @@ public struct SimulationLOD
     }
 
     /// <summary>
-    /// Determine LOD level based on distance (in tiles).
+    /// Determine LOD level based on distance (in tiles) and camera visible radius.
+    /// Full tier covers everything within visible range + 15% buffer for player movement.
+    /// Other tiers are spaced as multiples of the visible radius.
     /// </summary>
-    public static LODLevel GetLevelForDistance(float distance)
+    public static LODLevel GetLevelForDistance(float distance, float visibleRadius)
     {
-        if (distance < 48f) return LODLevel.Full;       // ~1.5 chunks — full 20 TPS
-        if (distance < 96f) return LODLevel.High;       // ~3 chunks   — 10 TPS
-        if (distance < 160f) return LODLevel.Medium;    // ~5 chunks   — 5 TPS
-        if (distance < 256f) return LODLevel.Low;       // ~8 chunks   — 2 TPS
-        return LODLevel.Minimal;                         // far         — 1 TPS
+        float fullRange = visibleRadius * 1.15f;             // visible + 15% buffer
+        if (distance < fullRange) return LODLevel.Full;       // 20 TPS — on screen
+        if (distance < fullRange * 2f) return LODLevel.High;  // 10 TPS
+        if (distance < fullRange * 3f) return LODLevel.Medium; // 5 TPS
+        if (distance < fullRange * 5f) return LODLevel.Low;   // 2 TPS
+        return LODLevel.Minimal;                               // 1 TPS
     }
 }
 

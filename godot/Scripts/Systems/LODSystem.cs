@@ -1,3 +1,4 @@
+using System;
 using Mitosis.Components;
 using Mitosis.ECS;
 using Mitosis.Utils;
@@ -8,6 +9,9 @@ namespace Mitosis.Systems;
 /// <summary>
 /// Updates LOD levels and tick countdown for entities based on distance from player.
 /// Must run FIRST each tick — all other systems skip entities where TicksUntilUpdate != 0.
+///
+/// The Full tier covers everything within the camera's visible radius + 15% buffer
+/// for player movement. LOD tiers beyond that are spaced as multiples of visible radius.
 ///
 /// Tick gating pattern:
 ///   - LODSystem counts down TicksUntilUpdate each tick.
@@ -20,6 +24,7 @@ public sealed class LODSystem : ISystem
     private float _playerX;
     private float _playerY;
     private int _playerEntity = -1;
+    private float _visibleRadius = 60f; // Default fallback (tiles)
 
     // Per-LOD-level entity counts for debug display
     public int CountFull { get; private set; }
@@ -31,6 +36,16 @@ public sealed class LODSystem : ISystem
     public void SetPlayerEntity(int entity)
     {
         _playerEntity = entity;
+    }
+
+    /// <summary>
+    /// Update the visible radius based on the camera viewport and zoom.
+    /// Called each frame by GameManager before the tick loop.
+    /// visibleRadius is the half-diagonal of the viewport in tile units.
+    /// </summary>
+    public void SetVisibleRadius(float visibleRadius)
+    {
+        _visibleRadius = MathF.Max(16f, visibleRadius); // Floor at 16 tiles
     }
 
     public void Process(EntityManager em)
@@ -51,6 +66,7 @@ public sealed class LODSystem : ISystem
         CountLow = 0;
         CountMinimal = 0;
 
+        float visRadius = _visibleRadius;
         const ComponentFlags required = ComponentFlags.Position | ComponentFlags.SimulationLOD;
 
         foreach (int entity in em.Query(required))
@@ -61,8 +77,8 @@ public sealed class LODSystem : ISystem
             // Calculate distance to player
             lod.DistanceToPlayer = MathUtils.Distance(_playerX, _playerY, pos.X, pos.Y);
 
-            // Determine LOD level from distance
-            var newLevel = SimulationLOD.GetLevelForDistance(lod.DistanceToPlayer);
+            // Determine LOD level from distance and current visible radius
+            var newLevel = SimulationLOD.GetLevelForDistance(lod.DistanceToPlayer, visRadius);
 
             // If level changed (entity moved closer/farther), force immediate update
             if (newLevel != lod.Level)
