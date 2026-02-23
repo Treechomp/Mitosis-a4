@@ -43,6 +43,18 @@ public sealed class StatisticalSimSystem : ISystem
     private readonly Dictionary<(int, int, int), float> _migrationBuffer = new(64);
     private readonly (int x, int y)[] _neighborBuffer = new (int, int)[8];
 
+    // Pre-computed per-chunk role summaries for cross-chunk predator-prey interaction
+    private readonly Dictionary<(int, int), ChunkRoleSummary> _chunkRoleSummaries = new(64);
+
+    /// <summary>Aggregate species role counts for a chunk, used for neighbor lookups.</summary>
+    private struct ChunkRoleSummary
+    {
+        public int Herbivores;
+        public int Predators;
+        public float PredatorDemand;
+        public int Shroomers;
+    }
+
     // Player position (set by GameManager)
     private float _playerX;
     private float _playerY;
@@ -151,6 +163,9 @@ public sealed class StatisticalSimSystem : ISystem
         // Run statistical simulation periodically
         if (_tickCounter % StatisticalTickInterval == 0)
         {
+            // Pre-compute per-chunk role summaries for cross-chunk predator-prey interaction
+            BuildChunkRoleSummaries();
+
             foreach (var key in _statisticalChunks)
             {
                 if (_chunkPopulations.TryGetValue(key, out var popData) && popData.IsActive)
@@ -612,13 +627,13 @@ public sealed class StatisticalSimSystem : ISystem
             popData.AverageNutrition = MathF.Min(1.0f, popData.AverageNutrition + regenPerInterval);
         }
 
-        // Count herbivores and predators for interaction.
+        // Count local herbivores and predators for interaction.
         // Sectid counts as predator here (it hunts) despite IsPredator being false.
-        int totalHerbivores = 0;
-        int totalPredators = 0;
-        float totalPredatorDemand = 0;
+        int localHerbivores = 0;
+        int localPredators = 0;
+        float localPredatorDemand = 0;
 
-        // Count terraformer populations for inter-faction combat
+        // Count terraformer populations for inter-faction combat (local only)
         int totalShroomers = 0, totalSectids = 0, totalFaelings = 0;
 
         _keyBuffer.Clear();
@@ -634,12 +649,12 @@ public sealed class StatisticalSimSystem : ISystem
             if (speciesDef.IsPredator || speciesDef.NestBreeder)
             {
                 // IsPredator covers Carnivore/Omnivore. NestBreeder adds Sectid.
-                totalPredators += pop.Count;
-                totalPredatorDemand += pop.Count * speciesDef.HungerDecayRate;
+                localPredators += pop.Count;
+                localPredatorDemand += pop.Count * speciesDef.HungerDecayRate;
             }
             else if (speciesDef.Diet != DietType.Terraformer)
             {
-                totalHerbivores += pop.Count;
+                localHerbivores += pop.Count;
             }
 
             // Track terraformer totals for inter-faction combat
@@ -647,6 +662,14 @@ public sealed class StatisticalSimSystem : ISystem
             else if (speciesDef.NestBreeder) totalSectids += pop.Count;
             else if (speciesDef.CrystalSpawned) totalFaelings += pop.Count;
         }
+
+        // Cross-chunk predator-prey interaction: predators hunt across chunk borders
+        // and prey in neighboring chunks dilutes local predation pressure.
+        var neighborCtx = GetNeighborSummary(chunkX, chunkY);
+        int effectiveHerbivores = localHerbivores + neighborCtx.Herbivores;
+        int effectivePredators = localPredators + neighborCtx.Predators;
+        float effectivePredatorDemand = localPredatorDemand + neighborCtx.PredatorDemand;
+        int effectiveShroomers = totalShroomers + neighborCtx.Shroomers;
 
         // Process each species
         foreach (int sid in _keyBuffer)
@@ -663,9 +686,11 @@ public sealed class StatisticalSimSystem : ISystem
             if (speciesDef.Diet == DietType.Terraformer)
             {
                 // === TERRAFORMER-SPECIFIC MODELS ===
+                // Local terraformer counts for inter-faction combat;
+                // effective herbivores/predators for cross-chunk hunting
                 CalculateTerraformerRates(speciesDef, ref pop, popData, chunkX, chunkY,
                     totalShroomers, totalSectids, totalFaelings,
-                    totalHerbivores, totalPredators,
+                    effectiveHerbivores, effectivePredators, effectiveShroomers,
                     out birthRate, out naturalDeathRate, out starvationRate, out predationRate,
                     out carryingCapacity);
             }
@@ -685,7 +710,8 @@ public sealed class StatisticalSimSystem : ISystem
                 float birthsPerTickPerIndividual = (float)speciesDef.OffspringCount / speciesDef.ReproCooldown;
                 birthRate = pop.Count * matureFraction * wellFedFraction * birthsPerTickPerIndividual;
 
-                carryingCapacity = EstimateCarryingCapacity(speciesDef, popData, chunkX, chunkY);
+                carryingCapacity = EstimateCarryingCapacity(speciesDef, popData, chunkX, chunkY,
+                    neighborCtx.Herbivores);
                 if (carryingCapacity <= 0)
                     birthRate = 0;
                 else if (pop.Count > carryingCapacity * 0.5f)
@@ -701,11 +727,12 @@ public sealed class StatisticalSimSystem : ISystem
                 }
 
                 predationRate = 0;
-                if (!speciesDef.IsPredator && totalPredatorDemand > 0 && totalHerbivores > 0)
+                if (!speciesDef.IsPredator && effectivePredatorDemand > 0 && effectiveHerbivores > 0)
                 {
-                    float killsNeededPerTick = totalPredatorDemand /
+                    // Predators from neighboring chunks can hunt here; neighbor prey dilutes pressure
+                    float killsNeededPerTick = effectivePredatorDemand /
                         MathF.Max(1f, speciesDef.EffectiveNutrition);
-                    float preyShareFraction = (float)pop.Count / totalHerbivores;
+                    float preyShareFraction = (float)pop.Count / effectiveHerbivores;
                     predationRate = killsNeededPerTick * preyShareFraction;
                 }
             }
@@ -756,9 +783,9 @@ public sealed class StatisticalSimSystem : ISystem
                 pop.Count = Math.Min(pop.Count, maxPerChunk);
             }
 
-            // Update hunger based on food availability
+            // Update hunger based on food availability (cross-chunk prey/predators)
             UpdateHunger(speciesDef, ref pop, popData, chunkX, chunkY,
-                totalHerbivores, totalPredators);
+                effectiveHerbivores, effectivePredators, effectiveShroomers);
 
             // Age drift
             pop.AverageAgeRatio = MathF.Min(0.9f, pop.AverageAgeRatio + 0.001f);
@@ -792,7 +819,7 @@ public sealed class StatisticalSimSystem : ISystem
         SpeciesDefinition speciesDef, ref SpeciesPopulation pop,
         ChunkPopulationData popData, int chunkX, int chunkY,
         int totalShroomers, int totalSectids, int totalFaelings,
-        int totalHerbivores, int totalPredators,
+        int effectiveHerbivores, int effectivePredators, int effectiveShroomers,
         out float birthRate, out float naturalDeathRate,
         out float starvationRate, out float predationRate,
         out float carryingCapacity)
@@ -830,11 +857,12 @@ public sealed class StatisticalSimSystem : ISystem
             }
 
             // Predation: wolves and other real predators hunt Shroomer (IsPrey is true)
-            // Use same Lotka-Volterra but include Shroomer in the prey pool
-            int preyPool = totalHerbivores + totalShroomers;
-            if (totalPredators > 0 && preyPool > 0)
+            // Use same Lotka-Volterra but include Shroomer in the prey pool.
+            // Effective values include neighbor chunks for cross-chunk hunting.
+            int preyPool = effectiveHerbivores + effectiveShroomers;
+            if (effectivePredators > 0 && preyPool > 0)
             {
-                float predatorDemand = totalPredators * 0.05f; // approximate hunger demand
+                float predatorDemand = effectivePredators * 0.05f;
                 float killsNeeded = predatorDemand / MathF.Max(1f, speciesDef.EffectiveNutrition);
                 predationRate = killsNeeded * ((float)pop.Count / preyPool);
             }
@@ -853,15 +881,15 @@ public sealed class StatisticalSimSystem : ISystem
             // Birth rate from nests: nestCount × avgSlots × (1/spawnDuration) × foodAvailability
             int nestCount = Math.Max(popData.NestCount, pop.Count > 0 ? 1 : 0);
             float avgSlots = 2f; // average across stages 1-3
-            // Food availability: Sectids hunt prey, so depends on prey count
-            int preyForSectid = totalHerbivores + totalShroomers;
+            // Food availability: Sectids hunt prey across chunk borders
+            int preyForSectid = effectiveHerbivores + effectiveShroomers;
             float foodAvailability = preyForSectid > 0
                 ? MathF.Min(1f, (float)preyForSectid / (pop.Count * 2f + 1f))
                 : 0f;
             float nestSpawnDuration = speciesDef.NestSpawnDuration > 0 ? speciesDef.NestSpawnDuration : 200f;
             birthRate = nestCount * avgSlots * (1f / nestSpawnDuration) * foodAvailability;
 
-            // Carrying capacity: predator-like (needs prey)
+            // Carrying capacity: predator-like, considers cross-chunk prey
             carryingCapacity = preyForSectid * 0.2f;
             if (carryingCapacity > 0 && pop.Count > carryingCapacity * 0.5f)
                 birthRate *= MathF.Max(0, 1f - pop.Count / carryingCapacity);
@@ -945,7 +973,7 @@ public sealed class StatisticalSimSystem : ISystem
     /// </summary>
     private void UpdateHunger(SpeciesDefinition speciesDef, ref SpeciesPopulation pop,
         ChunkPopulationData popData, int chunkX, int chunkY,
-        int totalHerbivores, int totalPredators)
+        int effectiveHerbivores, int effectivePredators, int effectiveShroomers)
     {
         if (speciesDef.ImmuneToStarvation)
         {
@@ -972,18 +1000,22 @@ public sealed class StatisticalSimSystem : ISystem
         }
         else if (speciesDef.IsPredator || speciesDef.NestBreeder)
         {
-            // Predator/Sectid hunger depends on prey availability
-            int preyCount = totalHerbivores;
+            // Predator/Sectid hunger depends on cross-chunk prey availability.
+            // Predators can hunt across chunk borders, so nearby prey sustains them.
+            int effectivePrey = effectiveHerbivores;
             if (speciesDef.NestBreeder)
-            {
-                // Sectids also hunt Shroomers (spores)
-                int shroomSid = SpeciesRegistry.GetId("Shroomer");
-                if (popData.Populations.TryGetValue(shroomSid, out var shroomPop))
-                    preyCount += shroomPop.Count;
-            }
-            if (preyCount > totalPredators * 3)
+                effectivePrey += effectiveShroomers; // Sectids also hunt Shroomers
+
+            // Prey-per-predator ratio determines hunting success
+            float preyPerPredator = (float)effectivePrey / MathF.Max(1f, effectivePredators);
+            if (preyPerPredator > 3f)
+                // Abundant prey: predators eat well
                 pop.AverageHungerRatio = MathF.Min(1f, pop.AverageHungerRatio + 0.01f);
+            else if (preyPerPredator > 1f)
+                // Moderate prey: predators find some food, hunger stabilizes
+                pop.AverageHungerRatio = MathF.Min(0.7f, pop.AverageHungerRatio + 0.005f);
             else
+                // Scarce prey: predators starve
                 pop.AverageHungerRatio = MathF.Max(0f, pop.AverageHungerRatio - 0.02f);
         }
         else if (speciesDef.FeedTiles != null && speciesDef.FeedTiles.Count > 0
@@ -1006,8 +1038,12 @@ public sealed class StatisticalSimSystem : ISystem
     /// Computes capacity from all applicable food sources and returns the highest,
     /// so omnivores (e.g. Boar: CanGraze + IsPredator) benefit from multiple diets.
     /// </summary>
+    /// <param name="neighborHerbivores">
+    /// Weighted herbivore count from neighboring chunks (0 if cross-chunk not applicable).
+    /// Added to local herbivore count for predator carrying capacity.
+    /// </param>
     private float EstimateCarryingCapacity(SpeciesDefinition species, ChunkPopulationData popData,
-                                             int chunkX, int chunkY)
+                                             int chunkX, int chunkY, int neighborHerbivores = 0)
     {
         float grazerCap = 0;
         float feedTileCap = 0;
@@ -1031,10 +1067,10 @@ public sealed class StatisticalSimSystem : ISystem
             feedTileCap = feedTiles / MathF.Max(0.5f, feedRatio);
         }
 
-        // Predator capacity: based on herbivore count (includes Sectid which hunts)
+        // Predator capacity: based on local + neighbor herbivore count
         if (species.IsPredator || species.NestBreeder)
         {
-            int herbivoreCount = 0;
+            int herbivoreCount = neighborHerbivores;
             foreach (var (sid, pop) in popData.Populations)
             {
                 var def = SpeciesRegistry.GetById(sid);
@@ -1071,6 +1107,76 @@ public sealed class StatisticalSimSystem : ISystem
             }
         }
         return count;
+    }
+
+    /// <summary>
+    /// Pre-compute species role summaries (herbivore/predator counts) for every active
+    /// statistical chunk. Called once per statistical tick so that GetNeighborSummary()
+    /// can cheaply look up pre-computed values instead of re-counting per neighbor.
+    /// </summary>
+    private void BuildChunkRoleSummaries()
+    {
+        _chunkRoleSummaries.Clear();
+
+        foreach (var key in _statisticalChunks)
+        {
+            if (!_chunkPopulations.TryGetValue(key, out var popData) || !popData.IsActive)
+                continue;
+
+            var summary = new ChunkRoleSummary();
+            foreach (var (sid, pop) in popData.Populations)
+            {
+                if (pop.Count <= 0) continue;
+                var def = SpeciesRegistry.GetById(sid);
+                if (def == null) continue;
+
+                if (def.IsPredator || def.NestBreeder)
+                {
+                    summary.Predators += pop.Count;
+                    summary.PredatorDemand += pop.Count * def.HungerDecayRate;
+                }
+                else if (def.Diet != DietType.Terraformer)
+                {
+                    summary.Herbivores += pop.Count;
+                }
+
+                if (def.SporeReproducer) summary.Shroomers += pop.Count;
+            }
+
+            _chunkRoleSummaries[key] = summary;
+        }
+    }
+
+    /// <summary>
+    /// Sum weighted population role counts from all active statistical neighbors.
+    /// Weight of 0.25 per neighbor represents the fraction of a neighbor's population
+    /// reachable by predators/prey across chunk borders.
+    /// </summary>
+    private ChunkRoleSummary GetNeighborSummary(int chunkX, int chunkY)
+    {
+        const float NeighborWeight = 0.25f;
+        int worldChunks = _worldManager.WorldSizeChunks;
+        var result = new ChunkRoleSummary();
+
+        for (int dx = -1; dx <= 1; dx++)
+        {
+            for (int dy = -1; dy <= 1; dy++)
+            {
+                if (dx == 0 && dy == 0) continue;
+                int nx = chunkX + dx, ny = chunkY + dy;
+                if (nx < 0 || nx >= worldChunks || ny < 0 || ny >= worldChunks) continue;
+
+                if (_chunkRoleSummaries.TryGetValue((nx, ny), out var nSummary))
+                {
+                    result.Herbivores += (int)(nSummary.Herbivores * NeighborWeight);
+                    result.Predators += (int)(nSummary.Predators * NeighborWeight);
+                    result.PredatorDemand += nSummary.PredatorDemand * NeighborWeight;
+                    result.Shroomers += (int)(nSummary.Shroomers * NeighborWeight);
+                }
+            }
+        }
+
+        return result;
     }
 
     /// <summary>
