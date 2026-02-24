@@ -117,7 +117,7 @@ public partial class GameManager : Node2D
 
         // Initialize systems — LODSystem must run FIRST to set tick gating
         var spatialHash = _worldManager.SpatialHash;
-        _lodSystem = new LODSystem();
+        _lodSystem = new LODSystem(spatialHash);
         _systems.Add(_lodSystem);
         _systems.Add(new MovementSystem(ChunkSize, WorldSizeChunks, _worldManager));
         _systems.Add(new SpatialHashUpdateSystem(spatialHash));    // Sync all positions once

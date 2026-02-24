@@ -108,16 +108,18 @@ public sealed class Chunk
     /// <summary>
     /// Regenerate nutrition for all grazeable tiles in this chunk.
     /// Called periodically by TileRegenerationSystem.
+    /// <param name="tickMultiplier">Number of ticks since last regeneration (rate scaled accordingly).</param>
     /// </summary>
-    public void RegenerateNutrition()
+    public void RegenerateNutrition(int tickMultiplier = 1)
     {
+        float rate = RegenerationRate * tickMultiplier;
         for (int y = 0; y < Size; y++)
         {
             for (int x = 0; x < Size; x++)
             {
                 if (_tiles[x, y].IsGrazeable() && _nutrition[x, y] < MaxNutrition)
                 {
-                    _nutrition[x, y] = MathF.Min(MaxNutrition, _nutrition[x, y] + RegenerationRate);
+                    _nutrition[x, y] = MathF.Min(MaxNutrition, _nutrition[x, y] + rate);
                 }
             }
         }

@@ -14,6 +14,9 @@ public sealed class SpatialHash
     private readonly float _cellSize;
     private readonly float _invCellSize;
     private readonly Dictionary<long, List<int>> _cells;
+
+    public float CellSize => _cellSize;
+    public float InvCellSize => _invCellSize;
     private readonly Dictionary<int, long> _entityCells;
     private readonly Stack<List<int>> _cellPool;
 

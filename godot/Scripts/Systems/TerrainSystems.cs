@@ -221,6 +221,14 @@ public sealed class TerraformSystem : ISystem
 public sealed class TileRegenerationSystem : ISystem
 {
     private readonly WorldManager _worldManager;
+    private int _tickCounter;
+
+    /// <summary>
+    /// Only regenerate every N ticks; multiply rate by N to keep net regeneration identical.
+    /// At RegenerationRate 0.0005/tick, tiles take 2000 ticks to fully recover —
+    /// a 4-tick gap is invisible but cuts this system's cost by ~75%.
+    /// </summary>
+    private const int RegenInterval = 4;
 
     public TileRegenerationSystem(WorldManager worldManager)
     {
@@ -229,9 +237,13 @@ public sealed class TileRegenerationSystem : ISystem
 
     public void Process(EntityManager em)
     {
+        _tickCounter++;
+        if (_tickCounter % RegenInterval != 0)
+            return;
+
         foreach (var chunk in _worldManager.GetLoadedChunks())
         {
-            chunk.RegenerateNutrition();
+            chunk.RegenerateNutrition(RegenInterval);
         }
     }
 }
