@@ -162,6 +162,181 @@ hash queries in HuntingSystem/FleeingSystem).
 
 ---
 
+## Session 24 Review (20260224_222216)
+
+**Config**: World 32, Seed 69, Initial 1500, Cap 10000. Herbivore 0.82, Sectid 0.08.
+
+### Population Analysis
+
+Population grew steadily from 1,695 (tick 100) to cap ~9,969 by tick 19,800 then stabilized.
+
+**Winners — Dominant species at equilibrium:**
+- **Snake**: Exploded from 17 → 7,300+ (73% of total). Massive herbivore success.
+- **Elk**: 124 → 489. Steady climber, never declined.
+- **Musk Ox**: 85 → 198. Consistent arctic herbivore.
+- **Camel**: 55 → 173. Stable arid specialist.
+- **Penguin**: 72 → 94. Small but persistent cold niche.
+- **Parrot**: 52 → ~200 peak then settled ~198. Solid mid-game.
+
+**Losers — Extinctions and collapses:**
+- **Sectid**: 120 → 0 by tick 4100. Complete extinction — likely starved as their terraform/nest loop couldn't keep up.
+- **Shroomer**: 162 → 0 by tick 5300. Another faction gone — 3,731 starvation deaths. Growth rate insufficient.
+- **Faeling**: Never spawned beyond 6. Faction species failed to establish.
+- **Scorpion**: 15 → 0 by tick 7500. Small predator outcompeted.
+- **Arctic Fox**: 22 → 2. Near extinction — outcompeted in arctic niche.
+- **Bear**: 8 → 2. Barely hanging on.
+- **Hawk**: 20 → 0 by tick 6200. Aerial predator collapsed.
+- **Shark**: 11 → 0 by tick 9000. Aquatic niche unsustainable.
+- **Crocodile**: 13 → 1. Near extinction.
+- **Jaguar**: 11 → 1. Near extinction.
+
+**Key events breakdown (27,500 ticks):**
+| Event | Count | Notes |
+|-------|-------|-------|
+| spore_created | 16,536 | Shroomer activity before extinction |
+| reproduce | 14,455 | Steady reproduction across all species |
+| spore_matured | 10,970 | ~66% spore survival rate |
+| starvation | 5,300 | Primary death cause (3,731 Shroomer alone) |
+| age_death | 1,159 | Natural lifespan expiry |
+| hunt_start | 351 | Very few hunts — predators collapsed early |
+| environment_death | 276 | Drowning/suffocation |
+| kill | 154 | Only 44% hunt success rate |
+| hunt_fail | 151 | Prey escaping / discomfort abandons |
+
+**Hunting was negligible as population control.** Only 154 kills across the entire session. The top hunters were Sectid (89 hunt starts) and Hawk (79) — both of which went extinct. By the time Snake dominated (post-tick 10K), only a handful of predators remained. This is a herbivore-dominated equilibrium where starvation is the only real population control.
+
+### Performance Observations (from user report)
+
+1. **TileRegenerationSystem: ~16ms per tick consistently**
+   - World size 32 chunks × 32 tiles = 1,024 chunks
+   - Each chunk iterates 32×32 = 1,024 tiles
+   - Total: 1,048,576 tile checks per tick
+   - `IsGrazeable()` check + float comparison + `MathF.Min` addition per tile
+   - This is a flat O(chunks × tiles²) cost, independent of population
+   - **NOT LOD-gated** — it shouldn't be, because regeneration is a world-level process, not entity-level
+
+2. **HuntingSystem: heaviest entity system, increasing with population**
+   - Each predator does 2-4 `QueryRadius()` calls per tick:
+     - Pack member count (line 254)
+     - Target acquisition scan (line 316)
+     - Tracking scan when hungry (line 475)
+     - Pack share on kill (line 663)
+     - Isolation check (line 807)
+     - Flanker position check (line 1162)
+   - Even in this session with few predators, the *prey iteration* inside queries scales with local density
+   - At 10K entities with spatial hash cell size 32: high-density cells contain dozens of entities
+
+3. **Distance checking is the core cost driver**
+   - LODSystem: `MathUtils.Distance()` (sqrt) for every LOD entity, every tick
+   - HuntingSystem: `MathUtils.DistanceSquared()` per candidate inside QueryRadius
+   - SeparationSystem: `MathF.Sqrt(distSq)` per neighbor pair
+   - CollisionSystem: `MathF.Sqrt(distSq)` per overlapping pair
+
+---
+
+## Track C: Next-Phase Performance Optimizations
+
+### C1. Tile Regeneration Optimization (Target: 16ms → <2ms)
+
+The 16ms TileRegenerationSystem cost is entirely from iterating 1M+ tiles per tick.
+Several approaches, in order of effort vs impact:
+
+**C1a. Skip-tick throttle (easiest, ~8ms saving)**
+Regenerate only every N ticks (e.g., every 4 ticks) and multiply the regeneration rate:
+```csharp
+// In TileRegenerationSystem.Process()
+_tickCounter++;
+if (_tickCounter % 4 != 0) return;
+// RegenerationRate becomes 0.002f (4× base) inside chunk
+```
+Nutrition resolution: 0.002 per 4 ticks vs 0.0005 per tick = identical result.
+At `RegenerationRate = 0.0005f`, tiles take 2000 ticks to fully recover — a 4-tick gap is invisible.
+
+**C1b. Dirty-chunk tracking (medium effort, near-zero cost when stable)**
+Only iterate chunks that have been grazed since last full regeneration:
+```csharp
+// In ConsumeNutrition(): mark chunk dirty
+// In RegenerateNutrition(): if all tiles are at max, mark clean and skip next time
+```
+At equilibrium with 10K herbivores, maybe 200-400 chunks are actively grazed.
+Reduces iteration from 1024 chunks to ~200-400 = 60-80% reduction.
+
+**C1c. SIMD/vectorized nutrition update (advanced)**
+The inner loop (`if grazeable && < max: add rate, clamp`) is SIMD-friendly.
+Could use `System.Numerics.Vector<float>` to process 8 tiles per cycle.
+Requires restructuring nutrition storage from `float[,]` to `float[]`.
+
+**Recommendation**: C1a first (trivial change, halves the cost), then C1b if still showing up.
+
+### C2. Chunk-Based LOD for Distance-Heavy Systems
+
+Currently LODSystem computes `MathUtils.Distance()` (which includes `MathF.Sqrt()`) for
+every entity with SimulationLOD, every tick. At 10K entities that's 10K sqrt calls per tick.
+
+**Proposal: Compute LOD per spatial-hash cell, not per entity.**
+
+The spatial hash cell size is 32 tiles. Entities in the same cell are at most ~45 tiles
+apart (diagonal). LOD boundaries are at multiples of `visibleRadius` (60+ tiles).
+The error from using cell-center distance instead of entity distance is at most ~22 tiles
+— well within the hysteresis buffer already in place (10% of boundary distance).
+
+```
+Implementation sketch:
+1. Each tick, compute LOD level for each occupied spatial hash cell
+   (distance from cell center to player → LOD level)
+2. When an entity's cell LOD changes, update the entity's LOD component
+3. Skip per-entity distance computation entirely
+4. Cost: ~200-400 cell distance checks vs 10,000 entity checks = 25-50× reduction
+```
+
+This also benefits HuntingSystem indirectly: fewer entities are DueThisTick,
+so fewer spatial hash queries fire.
+
+### C3. Hunting System Distance Reduction
+
+HuntingSystem is the second heaviest and **scales with population**. Key optimizations:
+
+**C3a. Early-out on spatial hash queries using squared distances only**
+Several places compute `MathF.Sqrt()` when squared distance would suffice:
+- Line 546: `float dist = MathF.Sqrt(dx * dx + dy * dy)` — only needed for
+  pack tactics (hold distance, approach speed). For attack range check (line 598),
+  `distSq < attackRangeSq` already works. Split the sqrt to only happen when
+  entering pack tactic movement.
+- Separation system (line 73): `float dist = MathF.Sqrt(distSq)` — needed for
+  normalization. Could use fast inverse sqrt approximation instead.
+
+**C3b. Reduce redundant QueryRadius calls per predator**
+A single predator in a pack currently triggers:
+1. Pack member count → QueryRadius (line 254)
+2. Target scan → QueryRadius (line 316) — same radius, overlapping results
+3. Tracking scan → QueryRadius (line 475) — wider radius
+4. Isolation check → QueryRadius per target (line 807)
+
+Optimization: Cache the first query result and reuse it for pack counting + target scan
+since they use overlapping radii. The isolation check could also be cached per-target
+(multiple predators targeting the same prey re-check isolation independently).
+
+**C3c. Predator-only spatial hash**
+Currently all entities share one spatial hash. HuntingSystem queries return ALL entities
+in range, then filters for Prey flag. At 10K entities (mostly herbivores), a query might
+return 50 entities but only 10 are valid targets.
+
+A separate predator-indexed structure (or component flag filter on the hash) would cut
+iteration counts significantly for prey-searching queries.
+
+### C4. Priority Order
+
+| Priority | Task | Expected Impact | Effort |
+|----------|------|-----------------|--------|
+| 1 | C1a: Tile regen skip-tick | 16ms → ~4ms | Trivial (5 lines) |
+| 2 | C2: Chunk-based LOD | 10K sqrt/tick → ~300 | Medium |
+| 3 | C3b: Cache QueryRadius in hunting | ~30-40% reduction in spatial queries | Medium |
+| 4 | C1b: Dirty-chunk regen | 4ms → <1ms at equilibrium | Low-medium |
+| 5 | C3a: Eliminate unnecessary sqrt | ~10-15% per-entity hunt cost | Low |
+| 6 | C3c: Predator spatial hash | Reduces false positives in queries | Higher effort |
+
+---
+
 ## What This Plan Does NOT Cover (Future Work)
 
 - Spatial hash consolidation (multiple systems rebuild independently)
