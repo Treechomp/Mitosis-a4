@@ -55,13 +55,12 @@ public sealed class ReproductionSystem : ISystem
         foreach (int entity in em.Query(required))
         {
             // LOD gate: skip if not due for update this tick
-            if (em.HasComponents(entity, ComponentFlags.SimulationLOD) &&
-                em.SimulationLODs[entity].TicksUntilUpdate != 0)
+            if (!em.DueThisTick[entity])
                 continue;
 
             // LOD tick multiplier: cooldowns count down at correct rate
             int tickMult = em.HasComponents(entity, ComponentFlags.SimulationLOD)
-                ? SimulationLOD.GetTickInterval(em.SimulationLODs[entity].Level) : 1;
+                ? em.SimulationLODs[entity].TickInterval : 1;
 
             ref var reproduction = ref em.Reproductions[entity];
 

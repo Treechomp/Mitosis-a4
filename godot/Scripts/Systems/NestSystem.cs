@@ -205,8 +205,7 @@ public sealed class NestSystem : ISystem
         foreach (int entity in em.Query(carrierRequired))
         {
             // LOD gate: skip if not due for update this tick
-            if (em.HasComponents(entity, ComponentFlags.SimulationLOD) &&
-                em.SimulationLODs[entity].TicksUntilUpdate != 0)
+            if (!em.DueThisTick[entity])
                 continue;
 
             ref var carrier = ref em.FoodCarriers[entity];

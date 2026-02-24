@@ -86,13 +86,12 @@ public sealed class HuntingSystem : ISystem
         foreach (int entity in em.Query(predatorRequired))
         {
             // LOD gate: skip if not due for update this tick
-            if (em.HasComponents(entity, ComponentFlags.SimulationLOD) &&
-                em.SimulationLODs[entity].TicksUntilUpdate != 0)
+            if (!em.DueThisTick[entity])
                 continue;
 
             // LOD tick multiplier: attack/phase cooldowns count down at correct rate
             int tickMult = em.HasComponents(entity, ComponentFlags.SimulationLOD)
-                ? SimulationLOD.GetTickInterval(em.SimulationLODs[entity].Level) : 1;
+                ? em.SimulationLODs[entity].TickInterval : 1;
 
             ref var pos = ref em.Positions[entity];
             ref var predator = ref em.Predators[entity];

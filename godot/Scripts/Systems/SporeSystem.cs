@@ -56,13 +56,12 @@ public sealed class SporeSystem : ISystem
         foreach (int entity in em.Query(sporeRequired))
         {
             // LOD gate: skip if not due for update this tick
-            if (em.HasComponents(entity, ComponentFlags.SimulationLOD) &&
-                em.SimulationLODs[entity].TicksUntilUpdate != 0)
+            if (!em.DueThisTick[entity])
                 continue;
 
             // LOD tick multiplier: moisture/wither accumulate at correct rate
             int tickMult = em.HasComponents(entity, ComponentFlags.SimulationLOD)
-                ? SimulationLOD.GetTickInterval(em.SimulationLODs[entity].Level) : 1;
+                ? em.SimulationLODs[entity].TickInterval : 1;
 
             ref var spore = ref em.Spores[entity];
             ref var pos = ref em.Positions[entity];
@@ -108,13 +107,12 @@ public sealed class SporeSystem : ISystem
         foreach (int entity in em.Query(shroomRequired))
         {
             // LOD gate: skip if not due for update this tick
-            if (em.HasComponents(entity, ComponentFlags.SimulationLOD) &&
-                em.SimulationLODs[entity].TicksUntilUpdate != 0)
+            if (!em.DueThisTick[entity])
                 continue;
 
             // LOD tick multiplier: roll spread chance multiple times to compensate
             int tickMult = em.HasComponents(entity, ComponentFlags.SimulationLOD)
-                ? SimulationLOD.GetTickInterval(em.SimulationLODs[entity].Level) : 1;
+                ? em.SimulationLODs[entity].TickInterval : 1;
 
             ref var species = ref em.Species[entity];
             if (species.Type != SpeciesType.Shroomer) continue;
@@ -161,7 +159,7 @@ public sealed class SporeSystem : ISystem
 
             // LOD tick multiplier: growth rate compensated for skipped ticks
             int growthTickMult = em.HasComponents(entity, ComponentFlags.SimulationLOD)
-                ? SimulationLOD.GetTickInterval(em.SimulationLODs[entity].Level) : 1;
+                ? em.SimulationLODs[entity].TickInterval : 1;
 
             float prevScale = growth.CurrentScale;
             growth.CurrentScale = MathF.Min(growth.MaxScale, growth.CurrentScale + growth.GrowthRate * growthTickMult);
@@ -363,8 +361,7 @@ public sealed class SporeSystem : ISystem
         foreach (int entity in em.Query(required))
         {
             // LOD gate: skip if not due for update this tick
-            if (em.HasComponents(entity, ComponentFlags.SimulationLOD) &&
-                em.SimulationLODs[entity].TicksUntilUpdate != 0)
+            if (!em.DueThisTick[entity])
                 continue;
 
             ref var species = ref em.Species[entity];

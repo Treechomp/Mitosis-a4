@@ -8,7 +8,7 @@ namespace Mitosis.Systems;
 
 /// <summary>
 /// Updates LOD levels and tick countdown for entities based on distance from player.
-/// Must run FIRST each tick — all other systems skip entities where TicksUntilUpdate != 0.
+/// Must run FIRST each tick — all other systems skip entities where DueThisTick is false.
 ///
 /// The Full tier covers everything within the camera's visible radius + 15% buffer
 /// for player movement. LOD tiers beyond that are spaced as multiples of visible radius.
@@ -18,6 +18,9 @@ namespace Mitosis.Systems;
 ///   - When it reaches 0, the entity is "due" — all systems process it.
 ///   - LODSystem then resets the timer to the interval for the entity's LOD level.
 ///   - Result: Full=every tick (20 TPS), High=every 2 ticks (10 TPS), etc.
+///
+/// Populates em.DueThisTick[] so downstream systems can gate with a single array read
+/// instead of checking HasComponents(SimulationLOD) + TicksUntilUpdate.
 /// </summary>
 public sealed class LODSystem : ISystem
 {
@@ -66,6 +69,17 @@ public sealed class LODSystem : ISystem
         CountLow = 0;
         CountMinimal = 0;
 
+        // Mark all entities without SimulationLOD as always due.
+        // We do this by defaulting to true for all alive entities and then
+        // overriding to false for LOD-gated entities that aren't due.
+        // This is done in the loop below to avoid a separate pass.
+
+        // First: mark all alive entities as due (covers player, structures, etc.)
+        int nextId = em.NextId;
+        var dueArray = em.DueThisTick;
+        for (int i = 0; i < nextId; i++)
+            dueArray[i] = em.IsAlive(i);
+
         float visRadius = _visibleRadius;
         const ComponentFlags required = ComponentFlags.Position | ComponentFlags.SimulationLOD;
 
@@ -84,15 +98,19 @@ public sealed class LODSystem : ISystem
             if (newLevel != lod.Level)
             {
                 lod.Level = newLevel;
+                lod.TickInterval = SimulationLOD.GetTickInterval(newLevel);
                 lod.TicksUntilUpdate = 0;
             }
 
             // Countdown and reset: when timer hits 0, entity is due this tick.
             // Reset timer so it counts down again for the next interval.
             if (lod.TicksUntilUpdate == 0)
-                lod.TicksUntilUpdate = SimulationLOD.GetTickInterval(lod.Level);
+                lod.TicksUntilUpdate = lod.TickInterval;
             lod.TicksUntilUpdate--;
             // After this: TicksUntilUpdate == 0 means "process this tick"
+
+            // Update DueThisTick flag (override the default true set above)
+            dueArray[entity] = lod.TicksUntilUpdate == 0;
 
             // Track counts per level
             switch (lod.Level)

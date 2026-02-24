@@ -30,13 +30,12 @@ public sealed class HungerSystem : ISystem
                 continue;
 
             // LOD gate: skip if not due for update this tick
-            if (em.HasComponents(entity, ComponentFlags.SimulationLOD) &&
-                em.SimulationLODs[entity].TicksUntilUpdate != 0)
+            if (!em.DueThisTick[entity])
                 continue;
 
             // LOD tick multiplier: compensate for skipped ticks so rates stay correct
             int tickMult = em.HasComponents(entity, ComponentFlags.SimulationLOD)
-                ? SimulationLOD.GetTickInterval(em.SimulationLODs[entity].Level) : 1;
+                ? em.SimulationLODs[entity].TickInterval : 1;
 
             ref var hunger = ref em.Hungers[entity];
 
@@ -132,13 +131,12 @@ public sealed class AgingSystem : ISystem
                 continue;
 
             // LOD gate: skip if not due for update this tick
-            if (em.HasComponents(entity, ComponentFlags.SimulationLOD) &&
-                em.SimulationLODs[entity].TicksUntilUpdate != 0)
+            if (!em.DueThisTick[entity])
                 continue;
 
             // LOD tick multiplier: age at correct rate regardless of update frequency
             int tickMult = em.HasComponents(entity, ComponentFlags.SimulationLOD)
-                ? SimulationLOD.GetTickInterval(em.SimulationLODs[entity].Level) : 1;
+                ? em.SimulationLODs[entity].TickInterval : 1;
 
             ref var age = ref em.Ages[entity];
             age.Current += tickMult;
@@ -199,13 +197,12 @@ public sealed class GrazingSystem : ISystem
         foreach (int entity in em.Query(required))
         {
             // LOD gate: skip if not due for update this tick
-            if (em.HasComponents(entity, ComponentFlags.SimulationLOD) &&
-                em.SimulationLODs[entity].TicksUntilUpdate != 0)
+            if (!em.DueThisTick[entity])
                 continue;
 
             // LOD tick multiplier: consume/gain food at correct rate
             int tickMult = em.HasComponents(entity, ComponentFlags.SimulationLOD)
-                ? SimulationLOD.GetTickInterval(em.SimulationLODs[entity].Level) : 1;
+                ? em.SimulationLODs[entity].TickInterval : 1;
 
             ref var species = ref em.Species[entity];
             ref var pos = ref em.Positions[entity];

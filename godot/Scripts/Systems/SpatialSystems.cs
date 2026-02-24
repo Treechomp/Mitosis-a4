@@ -31,8 +31,7 @@ public sealed class SeparationSystem : ISystem
         foreach (int entity in em.Query(required))
         {
             // LOD gate: skip if not due for update this tick
-            if (em.HasComponents(entity, ComponentFlags.SimulationLOD) &&
-                em.SimulationLODs[entity].TicksUntilUpdate != 0)
+            if (!em.DueThisTick[entity])
                 continue;
 
             ref var pos = ref em.Positions[entity];
@@ -119,8 +118,7 @@ public sealed class CollisionSystem : ISystem
             foreach (int entity in em.Query(required))
             {
                 // LOD gate: skip if not due for update this tick
-                if (em.HasComponents(entity, ComponentFlags.SimulationLOD) &&
-                    em.SimulationLODs[entity].TicksUntilUpdate != 0)
+                if (!em.DueThisTick[entity])
                     continue;
 
                 ref var pos = ref em.Positions[entity];

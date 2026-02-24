@@ -81,6 +81,14 @@ public sealed class EntityManager
     public readonly RangedAttack[] RangedAttacks;
     public readonly VenomEffect[] VenomEffects;
 
+    /// <summary>
+    /// Per-entity LOD gate flag. True = entity is due for processing this tick.
+    /// Set by LODSystem each tick. Entities without SimulationLOD are always due.
+    /// Systems read this instead of checking SimulationLOD.TicksUntilUpdate directly,
+    /// reducing the LOD gate from 2 checks (HasComponents + array read) to 1 array read.
+    /// </summary>
+    public readonly bool[] DueThisTick;
+
     public EntityManager()
     {
         _alive = new bool[MaxEntities];
@@ -115,6 +123,7 @@ public sealed class EntityManager
         FaelingPowers = new FaelingPower[MaxEntities];
         RangedAttacks = new RangedAttack[MaxEntities];
         VenomEffects = new VenomEffect[MaxEntities];
+        DueThisTick = new bool[MaxEntities];
     }
 
     public int EntityCount => _entityCount;

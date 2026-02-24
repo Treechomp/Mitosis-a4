@@ -162,18 +162,21 @@ public enum LODLevel : byte
 /// Simulation Level of Detail — determines update frequency based on distance.
 /// LODSystem runs first each tick, counting down TicksUntilUpdate.
 /// All other systems skip the entity when TicksUntilUpdate != 0.
+/// TickInterval is cached to avoid repeated switch lookups in downstream systems.
 /// </summary>
 [StructLayout(LayoutKind.Sequential)]
 public struct SimulationLOD
 {
     public LODLevel Level;
     public int TicksUntilUpdate;
+    public int TickInterval;      // Cached interval for this LOD level (avoids switch per system)
     public float DistanceToPlayer;
 
     public SimulationLOD(LODLevel level = LODLevel.Full)
     {
         Level = level;
         TicksUntilUpdate = 0;
+        TickInterval = GetTickInterval(level);
         DistanceToPlayer = 0f;
     }
 
