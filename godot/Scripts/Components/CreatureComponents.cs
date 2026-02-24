@@ -200,15 +200,33 @@ public struct SimulationLOD
     /// Determine LOD level based on distance (in tiles) and camera visible radius.
     /// Full tier covers everything within visible range + 15% buffer for player movement.
     /// Other tiers are spaced as multiples of the visible radius.
+    /// Hysteresis: to downgrade (lower tick rate), distance must exceed threshold by 10%.
+    /// To upgrade (higher tick rate), the normal threshold applies. This prevents
+    /// entities near boundaries from oscillating between tiers every few ticks.
     /// </summary>
-    public static LODLevel GetLevelForDistance(float distance, float visibleRadius)
+    public static LODLevel GetLevelForDistance(float distance, float visibleRadius, LODLevel currentLevel)
     {
         float fullRange = visibleRadius * 1.15f;             // visible + 15% buffer
-        if (distance < fullRange) return LODLevel.Full;       // 20 TPS — on screen
-        if (distance < fullRange * 2f) return LODLevel.High;  // 10 TPS
-        if (distance < fullRange * 3f) return LODLevel.Medium; // 5 TPS
-        if (distance < fullRange * 5f) return LODLevel.Low;   // 2 TPS
-        return LODLevel.Minimal;                               // 1 TPS
+        const float hysteresis = 1.1f;                        // 10% buffer to resist downgrade
+
+        // Thresholds for upgrading (moving to higher tick rate — use exact boundary)
+        // Thresholds for downgrading (moving to lower tick rate — require 10% past boundary)
+        float t0 = fullRange;           // Full ↔ High boundary
+        float t1 = fullRange * 2f;      // High ↔ Medium boundary
+        float t2 = fullRange * 3f;      // Medium ↔ Low boundary
+        float t3 = fullRange * 5f;      // Low ↔ Minimal boundary
+
+        // Use widened threshold when entity would downgrade (move farther from player)
+        float b0 = currentLevel <= LODLevel.Full    ? t0 * hysteresis : t0;
+        float b1 = currentLevel <= LODLevel.High    ? t1 * hysteresis : t1;
+        float b2 = currentLevel <= LODLevel.Medium  ? t2 * hysteresis : t2;
+        float b3 = currentLevel <= LODLevel.Low     ? t3 * hysteresis : t3;
+
+        if (distance < b0) return LODLevel.Full;
+        if (distance < b1) return LODLevel.High;
+        if (distance < b2) return LODLevel.Medium;
+        if (distance < b3) return LODLevel.Low;
+        return LODLevel.Minimal;
     }
 }
 

@@ -92,7 +92,7 @@ public sealed class LODSystem : ISystem
             lod.DistanceToPlayer = MathUtils.Distance(_playerX, _playerY, pos.X, pos.Y);
 
             // Determine LOD level from distance and current visible radius
-            var newLevel = SimulationLOD.GetLevelForDistance(lod.DistanceToPlayer, visRadius);
+            var newLevel = SimulationLOD.GetLevelForDistance(lod.DistanceToPlayer, visRadius, lod.Level);
 
             // If level changed (entity moved closer/farther), force immediate update
             if (newLevel != lod.Level)
