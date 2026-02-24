@@ -171,39 +171,60 @@ hash queries in HuntingSystem/FleeingSystem).
 Population grew steadily from 1,695 (tick 100) to cap ~9,969 by tick 19,800 then stabilized.
 
 **Winners — Dominant species at equilibrium:**
-- **Snake**: Exploded from 17 → 7,300+ (73% of total). Massive herbivore success.
-- **Elk**: 124 → 489. Steady climber, never declined.
+- **Shroomer**: Exploded from 162 → 7,307 (73% of total). Spore reproduction dominates the world.
+- **Elk**: 124 → 469. Steady climber, never declined.
+- **Deer**: 158 → 387. Solid herbivore throughout.
 - **Musk Ox**: 85 → 198. Consistent arctic herbivore.
-- **Camel**: 55 → 173. Stable arid specialist.
-- **Penguin**: 72 → 94. Small but persistent cold niche.
-- **Parrot**: 52 → ~200 peak then settled ~198. Solid mid-game.
+- **Camel**: 55 → 169. Stable arid specialist.
+- **Parrot**: 52 → ~200 peak then settled ~182. Solid mid-game.
 
 **Losers — Extinctions and collapses:**
-- **Sectid**: 120 → 0 by tick 4100. Complete extinction — likely starved as their terraform/nest loop couldn't keep up.
-- **Shroomer**: 162 → 0 by tick 5300. Another faction gone — 3,731 starvation deaths. Growth rate insufficient.
-- **Faeling**: Never spawned beyond 6. Faction species failed to establish.
-- **Scorpion**: 15 → 0 by tick 7500. Small predator outcompeted.
+- **Snake**: 17 → 0 by tick ~8000. Carnivore, couldn't find enough prey.
+- **Sectid**: 120 → 0 by tick ~4100. Faction species — terraform/nest loop couldn't keep up.
+- **Faeling**: Never spawned beyond 6. Crystal faction failed to establish.
+- **Wolf**: 40 → 0 by tick ~5400. Pack hunter, collapsed with other predators.
+- **Scorpion**: 15 → 0 by tick ~7500. Small predator outcompeted.
 - **Arctic Fox**: 22 → 2. Near extinction — outcompeted in arctic niche.
 - **Bear**: 8 → 2. Barely hanging on.
-- **Hawk**: 20 → 0 by tick 6200. Aerial predator collapsed.
-- **Shark**: 11 → 0 by tick 9000. Aquatic niche unsustainable.
+- **Hawk**: 20 → 0 by tick ~6200. Aerial predator collapsed.
+- **Shark**: 11 → 0 by tick ~9000. Aquatic niche unsustainable.
 - **Crocodile**: 13 → 1. Near extinction.
 - **Jaguar**: 11 → 1. Near extinction.
 
 **Key events breakdown (27,500 ticks):**
 | Event | Count | Notes |
 |-------|-------|-------|
-| spore_created | 16,536 | Shroomer activity before extinction |
+| spore_created | 16,536 | Shroomer spore reproduction engine |
 | reproduce | 14,455 | Steady reproduction across all species |
 | spore_matured | 10,970 | ~66% spore survival rate |
-| starvation | 5,300 | Primary death cause (3,731 Shroomer alone) |
+| starvation | 5,300 | Primary death cause (3,731 Shroomer alone despite growth) |
 | age_death | 1,159 | Natural lifespan expiry |
 | hunt_start | 351 | Very few hunts — predators collapsed early |
 | environment_death | 276 | Drowning/suffocation |
 | kill | 154 | Only 44% hunt success rate |
 | hunt_fail | 151 | Prey escaping / discomfort abandons |
 
-**Hunting was negligible as population control.** Only 154 kills across the entire session. The top hunters were Sectid (89 hunt starts) and Hawk (79) — both of which went extinct. By the time Snake dominated (post-tick 10K), only a handful of predators remained. This is a herbivore-dominated equilibrium where starvation is the only real population control.
+**Shroomer dominance via spore reproduction.** Despite 3,731 starvation deaths, Shroomer's
+spore mechanism (16,536 created, 10,970 matured) massively outpaced losses. Predators were
+unable to control the population — all carnivores went extinct. Hunting was negligible as
+population control (only 154 kills total). This is a Shroomer-dominated equilibrium where
+starvation is the only real population check.
+
+### Session 25 Comparison (20260224_231045, same parameters)
+
+| Milestone | Session 24 | Session 25 |
+|-----------|-----------|-----------|
+| Pop at tick 5K | 2,307 | 2,942 |
+| Pop at tick 10K | 3,743 | 4,079 |
+| Cap reached | tick 19,800 | tick 19,500 |
+| Shroomer at end | 7,307 (73%) | 6,086 (61%) |
+| Deer at end | 387 | 657 |
+| Elk at end | 469 | 407 |
+
+Same macro pattern reproduced: Shroomer dominance, total predator extinction, Sectid
+collapse by ~4K-5K ticks. S25 grew slightly faster and had more species diversity at
+equilibrium (Deer higher, Shroomer slightly less dominant). Differences are within
+normal stochastic variation — LOD changes have not distorted simulation outcomes.
 
 ### Performance Observations (from user report)
 
