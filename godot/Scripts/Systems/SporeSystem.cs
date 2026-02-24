@@ -60,6 +60,10 @@ public sealed class SporeSystem : ISystem
                 em.SimulationLODs[entity].TicksUntilUpdate != 0)
                 continue;
 
+            // LOD tick multiplier: moisture/wither accumulate at correct rate
+            int tickMult = em.HasComponents(entity, ComponentFlags.SimulationLOD)
+                ? SimulationLOD.GetTickInterval(em.SimulationLODs[entity].Level) : 1;
+
             ref var spore = ref em.Spores[entity];
             ref var pos = ref em.Positions[entity];
             ref var energy = ref em.Energies[entity];
@@ -74,12 +78,12 @@ public sealed class SporeSystem : ISystem
             if (tileMoisture >= moistureThreshold)
             {
                 // Wet tile: accumulate moisture
-                spore.MoistureAccumulated += spore.MoistureGainRate * tileMoisture;
+                spore.MoistureAccumulated += spore.MoistureGainRate * tileMoisture * tickMult;
             }
             else
             {
                 // Dry tile: wither
-                energy.Current -= spore.WitherRate;
+                energy.Current -= spore.WitherRate * tickMult;
             }
 
             // Check for transformation
@@ -108,6 +112,10 @@ public sealed class SporeSystem : ISystem
                 em.SimulationLODs[entity].TicksUntilUpdate != 0)
                 continue;
 
+            // LOD tick multiplier: roll spread chance multiple times to compensate
+            int tickMult = em.HasComponents(entity, ComponentFlags.SimulationLOD)
+                ? SimulationLOD.GetTickInterval(em.SimulationLODs[entity].Level) : 1;
+
             ref var species = ref em.Species[entity];
             if (species.Type != SpeciesType.Shroomer) continue;
 
@@ -125,8 +133,10 @@ public sealed class SporeSystem : ISystem
             var tile = _worldManager.GetTile(pos.X, pos.Y);
             if (GetTileMoisture(tile) < shroomDef.SporeMoistureThreshold) continue;
 
-            // Random chance to spread
-            if (_rng.NextDouble() >= shroomDef.SporeSpreadChance) continue;
+            // Random chance to spread — compensate for skipped ticks:
+            // probability of at least one success in tickMult trials = 1 - (1-p)^tickMult
+            double noSpreadProb = Math.Pow(1.0 - shroomDef.SporeSpreadChance, tickMult);
+            if (_rng.NextDouble() >= 1.0 - noSpreadProb) continue;
 
             // Spread spores
             hunger.Current -= hunger.Max * shroomDef.SporeSpreadHungerCost;
@@ -149,8 +159,12 @@ public sealed class SporeSystem : ISystem
             ref var growth = ref em.Growths[entity];
             if (growth.CurrentScale >= growth.MaxScale) continue;
 
+            // LOD tick multiplier: growth rate compensated for skipped ticks
+            int growthTickMult = em.HasComponents(entity, ComponentFlags.SimulationLOD)
+                ? SimulationLOD.GetTickInterval(em.SimulationLODs[entity].Level) : 1;
+
             float prevScale = growth.CurrentScale;
-            growth.CurrentScale = MathF.Min(growth.MaxScale, growth.CurrentScale + growth.GrowthRate);
+            growth.CurrentScale = MathF.Min(growth.MaxScale, growth.CurrentScale + growth.GrowthRate * growthTickMult);
 
             // Update visual size and scale HP with growth
             ref var rend = ref em.Renderables[entity];

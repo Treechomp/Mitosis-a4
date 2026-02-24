@@ -34,16 +34,20 @@ public sealed class HungerSystem : ISystem
                 em.SimulationLODs[entity].TicksUntilUpdate != 0)
                 continue;
 
+            // LOD tick multiplier: compensate for skipped ticks so rates stay correct
+            int tickMult = em.HasComponents(entity, ComponentFlags.SimulationLOD)
+                ? SimulationLOD.GetTickInterval(em.SimulationLODs[entity].Level) : 1;
+
             ref var hunger = ref em.Hungers[entity];
 
             // Decay hunger
-            hunger.Current -= hunger.DecayRate;
+            hunger.Current -= hunger.DecayRate * tickMult;
 
             // Starvation damage
             if (hunger.IsStarving && em.HasComponents(entity, ComponentFlags.Energy))
             {
                 ref var energy = ref em.Energies[entity];
-                energy.Current -= hunger.StarvationDamage;
+                energy.Current -= hunger.StarvationDamage * tickMult;
 
                 if (energy.IsDead)
                 {
@@ -63,13 +67,13 @@ public sealed class HungerSystem : ISystem
                 ref var energy = ref em.Energies[entity];
                 if (energy.RegenCooldown > 0)
                 {
-                    energy.RegenCooldown--;
+                    energy.RegenCooldown -= tickMult;
                 }
                 else if (energy.Current < energy.Max)
                 {
                     ref var species = ref em.Species[entity];
                     var speciesDef = SpeciesRegistry.GetById(species.SpeciesId);
-                    energy.Current = MathF.Min(energy.Max, energy.Current + speciesDef.EnergyRegenRate);
+                    energy.Current = MathF.Min(energy.Max, energy.Current + speciesDef.EnergyRegenRate * tickMult);
                 }
             }
 
@@ -78,8 +82,8 @@ public sealed class HungerSystem : ISystem
             {
                 ref var venom = ref em.VenomEffects[entity];
                 ref var energy = ref em.Energies[entity];
-                energy.Current -= venom.DamagePerTick;
-                venom.RemainingTicks--;
+                energy.Current -= venom.DamagePerTick * tickMult;
+                venom.RemainingTicks -= tickMult;
                 if (venom.RemainingTicks <= 0)
                     em.RemoveComponent(entity, ComponentFlags.VenomEffect);
                 if (energy.IsDead)
@@ -132,8 +136,12 @@ public sealed class AgingSystem : ISystem
                 em.SimulationLODs[entity].TicksUntilUpdate != 0)
                 continue;
 
+            // LOD tick multiplier: age at correct rate regardless of update frequency
+            int tickMult = em.HasComponents(entity, ComponentFlags.SimulationLOD)
+                ? SimulationLOD.GetTickInterval(em.SimulationLODs[entity].Level) : 1;
+
             ref var age = ref em.Ages[entity];
-            age.Current++;
+            age.Current += tickMult;
 
             // Natural death from old age
             if (age.Current >= age.MaxLifespan)
@@ -195,6 +203,10 @@ public sealed class GrazingSystem : ISystem
                 em.SimulationLODs[entity].TicksUntilUpdate != 0)
                 continue;
 
+            // LOD tick multiplier: consume/gain food at correct rate
+            int tickMult = em.HasComponents(entity, ComponentFlags.SimulationLOD)
+                ? SimulationLOD.GetTickInterval(em.SimulationLODs[entity].Level) : 1;
+
             ref var species = ref em.Species[entity];
             ref var pos = ref em.Positions[entity];
             ref var hunger = ref em.Hungers[entity];
@@ -211,16 +223,16 @@ public sealed class GrazingSystem : ISystem
                     float nutrition = _worldManager.GetNutrition(pos.X, pos.Y);
                     if (nutrition > 0.05f)
                     {
-                        float consumed = _worldManager.ConsumeNutrition(pos.X, pos.Y, nutritionConsumeRate);
+                        float consumed = _worldManager.ConsumeNutrition(pos.X, pos.Y, nutritionConsumeRate * tickMult);
                         // Food gained scales with tile nutrition level
-                        float foodGained = herbDef.GrazeNutrition * (consumed / nutritionConsumeRate);
-                        hunger.Current = MathF.Min(hunger.Max, hunger.Current + foodGained);
+                        float foodGained = herbDef.GrazeNutrition * (consumed / (nutritionConsumeRate * tickMult));
+                        hunger.Current = MathF.Min(hunger.Max, hunger.Current + foodGained * tickMult);
                     }
                 }
                 // FeedTiles fallback: species that feed from specific tiles (e.g. Fish from water)
                 else if (herbDef.FeedTiles != null && herbDef.FeedTiles.Contains(tile))
                 {
-                    hunger.Current = MathF.Min(hunger.Max, hunger.Current + herbDef.FeedNutrition);
+                    hunger.Current = MathF.Min(hunger.Max, hunger.Current + herbDef.FeedNutrition * tickMult);
                 }
                 continue;
             }
@@ -233,7 +245,7 @@ public sealed class GrazingSystem : ISystem
                 var speciesDef = SpeciesRegistry.GetById(species.SpeciesId);
                 if (speciesDef.FeedTiles != null && speciesDef.FeedTiles.Contains(tile))
                 {
-                    hunger.Current = MathF.Min(hunger.Max, hunger.Current + speciesDef.FeedNutrition);
+                    hunger.Current = MathF.Min(hunger.Max, hunger.Current + speciesDef.FeedNutrition * tickMult);
                 }
             }
         }

@@ -59,12 +59,16 @@ public sealed class ReproductionSystem : ISystem
                 em.SimulationLODs[entity].TicksUntilUpdate != 0)
                 continue;
 
+            // LOD tick multiplier: cooldowns count down at correct rate
+            int tickMult = em.HasComponents(entity, ComponentFlags.SimulationLOD)
+                ? SimulationLOD.GetTickInterval(em.SimulationLODs[entity].Level) : 1;
+
             ref var reproduction = ref em.Reproductions[entity];
 
             // Reduce cooldown
             if (reproduction.CurrentCooldown > 0)
             {
-                reproduction.CurrentCooldown--;
+                reproduction.CurrentCooldown -= tickMult;
                 continue;
             }
 

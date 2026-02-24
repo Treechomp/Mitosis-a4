@@ -90,6 +90,10 @@ public sealed class HuntingSystem : ISystem
                 em.SimulationLODs[entity].TicksUntilUpdate != 0)
                 continue;
 
+            // LOD tick multiplier: attack/phase cooldowns count down at correct rate
+            int tickMult = em.HasComponents(entity, ComponentFlags.SimulationLOD)
+                ? SimulationLOD.GetTickInterval(em.SimulationLODs[entity].Level) : 1;
+
             ref var pos = ref em.Positions[entity];
             ref var predator = ref em.Predators[entity];
             ref var hunger = ref em.Hungers[entity];
@@ -106,11 +110,11 @@ public sealed class HuntingSystem : ISystem
                 speciesDef = SpeciesRegistry.Get("Wolf"); // fallback
             }
 
-            // Reduce cooldowns
+            // Reduce cooldowns (compensated for LOD tick rate)
             if (predator.CurrentCooldown > 0)
-                predator.CurrentCooldown--;
+                predator.CurrentCooldown -= tickMult;
             if (predator.PhaseTimer > 0)
-                predator.PhaseTimer--;
+                predator.PhaseTimer -= tickMult;
 
             // Passive stealth accumulation for ambush predators (builds while idle/wandering)
             if (speciesDef.HuntingTactic == HuntingTactic.Ambush && !predator.HasTarget && predator.PounceTimer <= 0)

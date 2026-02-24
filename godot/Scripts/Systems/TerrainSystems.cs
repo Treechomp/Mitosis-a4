@@ -169,12 +169,16 @@ public sealed class TerraformSystem : ISystem
                 em.SimulationLODs[entity].TicksUntilUpdate != 0)
                 continue;
 
+            // LOD tick multiplier: terraform cooldowns count down at correct rate
+            int tickMult = em.HasComponents(entity, ComponentFlags.SimulationLOD)
+                ? SimulationLOD.GetTickInterval(em.SimulationLODs[entity].Level) : 1;
+
             ref var terraform = ref em.Terraforms[entity];
 
             // Cooldown
             if (terraform.CurrentCooldown > 0)
             {
-                terraform.CurrentCooldown--;
+                terraform.CurrentCooldown -= tickMult;
                 continue;
             }
 
