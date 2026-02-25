@@ -133,15 +133,21 @@ public sealed class LODSystem : ISystem
                 lod.TicksUntilUpdate = 0;
             }
 
-            // Countdown and reset: when timer hits 0, entity is due this tick.
-            // Reset timer so it counts down again for the next interval.
-            if (lod.TicksUntilUpdate == 0)
-                lod.TicksUntilUpdate = lod.TickInterval;
+            // Countdown: decrement first, then check if due.
+            // When TicksUntilUpdate was 0 (initial spawn or forced by level change),
+            // the decrement brings it to -1, which triggers the reset-and-due branch.
+            // This guarantees "force immediate" actually fires for ALL tick intervals,
+            // not just interval=1.
             lod.TicksUntilUpdate--;
-            // After this: TicksUntilUpdate == 0 means "process this tick"
-
-            // Update DueThisTick flag (override the default true set above)
-            dueArray[entity] = lod.TicksUntilUpdate == 0;
+            if (lod.TicksUntilUpdate <= 0)
+            {
+                dueArray[entity] = true;
+                lod.TicksUntilUpdate = lod.TickInterval;
+            }
+            else
+            {
+                dueArray[entity] = false;
+            }
 
             // Track counts per level
             switch (lod.Level)
