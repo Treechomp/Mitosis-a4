@@ -523,31 +523,19 @@ TerrainSystems, CrystalSystem, NestSystem all call EcosystemLogger methods.
 
 ### 5.2 LOD Gating — REVISED
 
-All survival/reproduction systems are now gated at consistent LOD thresholds to prevent
-asymmetric behavior between near and far entities. The key invariant: **if a system that
-produces a resource (food, offspring) is gated, the system that consumes that resource
-(hunger, death) must be gated at the same level.**
+All systems are now gated via `em.DueThisTick[]`, a per-entity boolean flag populated
+by LODSystem each tick. LODSystem uses **cell-based distance caching** (~32-tile spatial
+hash cells) instead of per-entity sqrt, and a **decrement-first countdown** that correctly
+handles "force immediate" updates for all LOD tiers.
 
-Current LOD gate map:
+The key invariant: **if a system that produces a resource (food, offspring) is gated,
+the system that consumes that resource (hunger, death) must be gated at the same level.**
 
-| System | LOD Gate | Rationale |
-|--------|----------|-----------|
-| LODSystem | None (always) | Must run first to set LOD levels |
-| MovementSystem | None (always) | Position must be current for all queries |
-| **HungerSystem** | **Statistical+** | Must match GrazingSystem — otherwise entities starve without ability to eat |
-| **AgingSystem** | **Statistical+** | Statistical sim handles age/death for distant entities |
-| **GrazingSystem** | **Statistical+** | Must match HungerSystem — food and hunger in same LOD band |
-| **ReproductionSystem** | **Statistical+** | Must match hunger/grazing — otherwise entities breed without hunger cost |
-| **SporeSystem (spread)** | **Reduced+** | Shroomer spore creation — most aggressive gate to break feedback loop |
-| **SporeSystem (maturation)** | **Statistical+** | Spore moisture accumulation |
-| SporeSystem (AoE) | Reduced+ | Combat — fine to skip at distance |
-| HuntingSystem | Aggregate+ | Predators need to hunt to survive |
-| FleeingSystem | Aggregate+ | Must match hunting gate |
-| TerraformSystem | Statistical+ | Tile changes handled by statistical terraforming |
-| TerrainDiscomfort | Reduced+ | Behavioral comfort — cosmetic at distance |
-| CollisionSystem | Reduced+ | Spatial overlap — cosmetic at distance |
-| WanderSystem | ShouldUpdate() | Tick-rate throttled per LOD |
-| SocialSystem | ShouldUpdate() | Tick-rate throttled per LOD |
+LOD tiers are now distance-proportional (Full/High/Medium/Low/Minimal with tick intervals
+1/2/4/10/20) rather than the original four named levels. All gated systems use the same
+pattern: `if (!em.DueThisTick[entity]) continue;`
+
+Systems that must NOT be LOD-gated: MovementSystem, LODSystem.
 
 **Critical invariant violated previously:**
 - HungerSystem, AgingSystem, GrazingSystem had **no LOD gate** (ran every tick for all entities)

@@ -190,6 +190,75 @@ Doc claimed 30% self-feed on delivery needed verification.
 
 ---
 
+---
+
+## Post-Optimization Audit (Feb 2026)
+
+Following performance optimization work (C1a tile regen throttle, C2 cell-based LOD,
+WanderSystem smooth turning), all documentation was re-audited and updated.
+
+### O1. LODSystem now uses cell-based distance caching — RESOLVED
+
+LODSystem no longer computes per-entity `MathUtils.Distance()`. Instead, it maps
+entities to spatial-hash cells (~32 tiles) and caches one distance-to-player value
+per cell. Per-entity hysteresis is preserved.
+
+**Resolution**: Updated in FEATURES_AND_DESIGN.md (Section 5.1), architecture.md
+(design decision #4, system order), plan-optimization.md (C2 marked DONE),
+godot-roadmap.md (Section 5.2).
+
+### O2. LOD countdown logic uses decrement-first approach — RESOLVED
+
+The old countdown (`set-to-interval → decrement → check ==0`) had an off-by-one for
+"force immediate" updates at TickInterval > 1. Now uses decrement-first: `TicksUntilUpdate--`
+then check `<= 0`. This ensures newly spawned entities and level-change resets are
+processed immediately for all LOD tiers.
+
+**Resolution**: Documented in FEATURES_AND_DESIGN.md (Section 5.1) and plan-optimization.md (C2).
+
+### O3. DueThisTick[] replaces ShouldUpdate() pattern — RESOLVED
+
+All LOD-gated systems now use `if (!em.DueThisTick[entity]) continue;` instead of
+the old `ShouldUpdate()` or explicit level-gate checks. LODSystem populates this
+boolean array each tick.
+
+**Resolution**: LOD-aware systems table in FEATURES_AND_DESIGN.md updated to show
+`DueThisTick` as the gate mechanism. Tick multiplier pattern documented.
+
+### O4. WanderSystem uses angular interpolation for smooth turning — RESOLVED
+
+WanderSystem previously did direct velocity assignment (`vel = dir * speed`), causing
+instant direction-flip jitter. Now uses `BlendVelocitySmooth()` with mass-based turn
+rates (0.06-0.3, inversely proportional to body mass).
+
+**Resolution**: Documented in FEATURES_AND_DESIGN.md (Section 5.6) with turn rate
+formula and per-mass examples.
+
+### O5. SpatialHashUpdateSystem exists as centralized system — RESOLVED
+
+A new system (`SpatialHashUpdateSystem.cs`) centralizes spatial hash position updates,
+LOD-gated via `DueThisTick[]`. Previously not mentioned in any documentation.
+
+**Resolution**: Added to file maps in FEATURES_AND_DESIGN.md and architecture.md,
+added to system execution order in architecture.md.
+
+### O6. TileRegenerationSystem uses 4-tick throttle — RESOLVED
+
+C1a optimization: TileRegenerationSystem now runs every 4 ticks with 4× regeneration
+rate multiplier. Net nutrition gain is identical.
+
+**Resolution**: Noted in plan-optimization.md (C1a marked DONE) and architecture.md
+system execution order.
+
+### O7. Species count is 28, not 8 — RESOLVED
+
+Phase 3 added 20 biome-specific species. Several docs still referenced "8 species."
+
+**Resolution**: Updated README.md, architecture.md, and FEATURES_AND_DESIGN.md
+file map to say 28 species.
+
+---
+
 ## Audit History
 
 | Date | Action | Issues |
@@ -197,3 +266,4 @@ Doc claimed 30% self-feed on delivery needed verification.
 | Feb 2026 | Initial audit | 22 issues identified (6 critical, 8 major, 8 minor) |
 | Feb 2026 | Full fix pass | All 22 issues resolved |
 | Feb 2026 | Post-Phase 2.4 update | Docs updated for 11 new tile types, world size, seed changes |
+| Feb 2026 | Post-optimization audit | 7 issues (O1-O7) identified and resolved: cell-based LOD, countdown fix, DueThisTick pattern, smooth turning, SpatialHashUpdateSystem, tile regen throttle, species count |

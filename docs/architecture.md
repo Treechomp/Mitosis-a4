@@ -19,8 +19,8 @@ built-in scene tree, for maximum cache efficiency with thousands of entities.
 ┌──────────────────────────────────────────────────────────────┐
 │                    SPECIES DEFINITION LAYER                    │
 │  SpeciesDefinition (90+ properties per species)               │
-│  SpeciesRegistry (8 species: Deer, Rabbit, Wolf, Fox,            │
-│                   Crocodile, Shroomer, Sectid, Faeling)          │
+│  SpeciesRegistry (28 species: 8 core + 20 biome-specific)        │
+│                                                                  │
 └──────────────────────────┬───────────────────────────────────┘
                            │
                            ▼
@@ -30,7 +30,7 @@ built-in scene tree, for maximum cache efficiency with thousands of entities.
 │  Components: Position, Velocity, Hunger, Energy, Age, Fear,      │
 │              Species, Wander, Predator (with Stealth/Pounce),    │
 │              Prey, Social, Terraform, Nest, Spore, Crystal...    │
-│  Systems: 18 systems across 15 files, 20 TPS fixed timestep     │
+│  Systems: 19 systems across 16 files, 20 TPS fixed timestep     │
 │  SpatialHash: O(1) grid-based neighbor queries                │
 └──────────────────────────┬───────────────────────────────────┘
                            │
@@ -66,8 +66,10 @@ built-in scene tree, for maximum cache efficiency with thousands of entities.
 3. **Fixed timestep simulation** (20 TPS): Decoupled from rendering frame rate.
    Ensures reproducible, deterministic behavior.
 
-4. **Level of Detail (LOD)**: Full AI within 50 tiles, reduced at 100, statistical
-   at 200, aggregate at 200+. Enables large worlds without performance collapse.
+4. **Level of Detail (LOD)**: Five tiers (Full/High/Medium/Low/Minimal) based on
+   distance from player. LODSystem uses **cell-based distance caching** (~32-tile
+   spatial hash cells) to avoid per-entity sqrt, and populates a `DueThisTick[]`
+   flag array that all downstream systems gate on with a single array read.
 
 5. **Data-driven species**: All behavior configured through SpeciesDefinition.
    No species-specific logic hardcoded in systems.
@@ -80,24 +82,25 @@ built-in scene tree, for maximum cache efficiency with thousands of entities.
 Systems run in this order each tick (order matters for data dependencies):
 
 ```
- 1. LODSystem              - Set up distance-based fidelity
+ 1. LODSystem              - Cell-based LOD + populate DueThisTick[]
  2. MovementSystem         - Apply velocity + damping (0.85/frame)
- 3. TerrainDiscomfort      - Track terrain comfort/discomfort        [TerrainSystems.cs]
- 4. HungerSystem           - Hunger decay, starvation                [SurvivalSystems.cs]
- 5. GrazingSystem          - Feeding on appropriate tiles            [SurvivalSystems.cs]
- 6. WanderSystem           - Random movement, roaming, terrain escape
- 7. HerdingSystem          - Social cohesion, leadership
- 8. SeparationSystem       - Prevent same-species overlap            [SpatialSystems.cs]
- 9. CollisionSystem        - Physical overlap resolution             [SpatialSystems.cs]
-10. HuntingSystem          - Solo/pack/ambush hunting, flanking, stealth
-11. FleeingSystem          - Stealth-aware threat detection, fear, escape
-12. AgingSystem            - Age increment, natural death            [SurvivalSystems.cs]
-13. ReproductionSystem     - Standard offspring spawning
-14. TerraformSystem        - Faction tile modification               [TerrainSystems.cs]
-15. TileRegenerationSystem - Regrow nutrition on grazeable tiles     [TerrainSystems.cs]
-16. NestSystem             - Sectid nest breeding
-17. SporeSystem            - Shroomer spore lifecycle
-18. CrystalSystem          - Faeling crystal management
+ 3. SpatialHashUpdateSystem - Update spatial hash positions (LOD-gated)
+ 4. TerrainDiscomfort      - Track terrain comfort/discomfort        [TerrainSystems.cs]
+ 5. HungerSystem           - Hunger decay, starvation                [SurvivalSystems.cs]
+ 6. GrazingSystem          - Feeding on appropriate tiles            [SurvivalSystems.cs]
+ 7. WanderSystem           - Smooth-turning wander, roaming, terrain escape
+ 8. HerdingSystem          - Social cohesion, leadership
+ 9. SeparationSystem       - Prevent same-species overlap            [SpatialSystems.cs]
+10. CollisionSystem        - Physical overlap resolution             [SpatialSystems.cs]
+11. HuntingSystem          - Solo/pack/ambush hunting, flanking, stealth
+12. FleeingSystem          - Stealth-aware threat detection, fear, escape
+13. AgingSystem            - Age increment, natural death            [SurvivalSystems.cs]
+14. ReproductionSystem     - Standard offspring spawning
+15. TerraformSystem        - Faction tile modification               [TerrainSystems.cs]
+16. TileRegenerationSystem - Regrow nutrition (4-tick throttle)      [TerrainSystems.cs]
+17. NestSystem             - Sectid nest breeding
+18. SporeSystem            - Shroomer spore lifecycle
+19. CrystalSystem          - Faeling crystal management
 ```
 
 ### File Structure
@@ -113,11 +116,12 @@ godot/Scripts/
 │   └── FactionComponents.cs          # Nest, Spore, Crystal, FaelingPower, etc.
 ├── Systems/
 │   ├── ISystem.cs                    # System interface
-│   ├── LODSystem.cs                  # Distance-based simulation fidelity
+│   ├── LODSystem.cs                  # Cell-based LOD + DueThisTick flag
 │   ├── MovementSystem.cs             # Position updates + velocity damping
+│   ├── SpatialHashUpdateSystem.cs    # Centralized spatial hash updates
 │   ├── TerrainSystems.cs             # TerrainDiscomfort + Terraform + TileRegeneration
 │   ├── SurvivalSystems.cs            # Hunger + Aging + Grazing
-│   ├── WanderSystem.cs               # Random movement, roaming, terrain escape
+│   ├── WanderSystem.cs               # Smooth-turning wander, roaming, terrain escape
 │   ├── HerdingSystem.cs              # Social cohesion, alignment, leadership
 │   ├── SpatialSystems.cs             # Separation + Collision
 │   ├── HuntingSystem.cs              # Solo/pack/ambush hunting, flanking, stealth
@@ -135,7 +139,7 @@ godot/Scripts/
 │   └── TileType.cs                   # Tile enum + extensions
 ├── Species/
 │   ├── SpeciesDefinition.cs          # 90+ configurable properties
-│   └── SpeciesRegistry.cs            # All 8 species defined
+│   └── SpeciesRegistry.cs            # All 28 species defined
 ├── Utils/
 │   ├── SpatialHash.cs                # Grid-based neighbor queries
 │   └── MathUtils.cs                  # Distance, normalization

@@ -10,12 +10,10 @@ Scale from ~1,500 entities at acceptable FPS to 10,000+ entities at 60 FPS.
 - ~~Entities: Individual draw calls with no frustum culling~~ → MultiMesh batching + frustum culling (A1+A3)
 - Current: 3 draw calls for entities + 4-16 for terrain chunks
 
-**Simulation** (LOD mostly implemented):
-- HuntingSystem, FleeingSystem, NestSystem, CrystalSystem, SporeSystem: LOD gates at Aggregate
-- WanderSystem, SeparationSystem, HerdingSystem: LOD gates via ShouldUpdate()
-- CollisionSystem, TerrainDiscomfortSystem: LOD gates at Reduced
-- TerraformSystem: LOD gate at Statistical
-- ReproductionSystem: LOD gate at Aggregate
+**Simulation** (LOD implemented + optimized):
+- All behavior systems LOD-gated via `DueThisTick[]` flag (set by LODSystem each tick)
+- LODSystem uses **cell-based distance caching** (~32-tile spatial hash cells) instead of per-entity sqrt
+- WanderSystem uses **angular interpolation** for smooth turning (mass-based turn rates)
 - Remaining bottleneck: spatial hash queries in HuntingSystem/FleeingSystem at scale
 
 ---
@@ -95,29 +93,19 @@ All three rendering optimizations (A1, A2, A3) are implemented in
 | AgingSystem | Natural death is core population control. Skipping = population explosion |
 | LODSystem | Must run every tick to update LOD levels |
 
-### B2. Implementation Approach
+### B2. Implementation Approach — DONE
 
-For each system, the pattern is the same - add a check near the top of the
-per-entity loop:
+LODSystem populates `em.DueThisTick[]` each tick. All gated systems use a single
+array read:
 
 ```csharp
-// For systems that should skip at Statistical and above:
-if (entityManager.HasComponent(entity, ComponentFlags.SimulationLOD))
-{
-    ref var lod = ref entityManager.SimulationLODs[entity];
-    if (lod.Level >= LODLevel.Statistical) continue;
-}
-
-// For systems that should skip at Reduced and above:
-if (entityManager.HasComponent(entity, ComponentFlags.SimulationLOD))
-{
-    ref var lod = ref entityManager.SimulationLODs[entity];
-    if (lod.Level >= LODLevel.Reduced) continue;
-}
+if (!em.DueThisTick[entity]) continue;
 ```
 
-This is a minimal, low-risk change per system. The LOD level is already computed
-by LODSystem each tick. We're just reading it.
+LODSystem computes distance per spatial-hash cell (not per entity), assigns LOD
+levels with hysteresis, and runs a decrement-first countdown to determine which
+entities are due. This replaced the old per-entity `ShouldUpdate()` pattern with
+a more cache-friendly single-array gate.
 
 ### B3. Compensation for LOD Gaps
 
@@ -156,9 +144,15 @@ B1 (GrazingSystem) → B1 (faction system attacks)
 | 10 | B1 | LOD-gate GrazingSystem | Pending |
 | 11 | B1 | LOD-gate faction systems (Crystal, Nest, Spore attacks) | Pending |
 
-**Remaining work**: LOD-gate GrazingSystem and faction system attack loops. Profile
-at higher entity counts (5K, 10K) to identify remaining bottlenecks (likely spatial
-hash queries in HuntingSystem/FleeingSystem).
+**Remaining LOD work**: LOD-gate GrazingSystem and faction system attack loops.
+
+**Additional optimizations completed**:
+- C1a: Tile regeneration skip-tick throttle (4-tick interval, 4× rate)
+- C2: Cell-based LOD distance caching (~25-50× reduction in sqrt calls)
+- WanderSystem: Angular interpolation for smooth turning (fixes direction-flip jitter)
+
+Profile at higher entity counts (5K, 10K) to identify remaining bottlenecks (likely
+spatial hash queries in HuntingSystem/FleeingSystem).
 
 ---
 
@@ -247,8 +241,8 @@ normal stochastic variation — LOD changes have not distorted simulation outcom
    - Even in this session with few predators, the *prey iteration* inside queries scales with local density
    - At 10K entities with spatial hash cell size 32: high-density cells contain dozens of entities
 
-3. **Distance checking is the core cost driver**
-   - LODSystem: `MathUtils.Distance()` (sqrt) for every LOD entity, every tick
+3. **Distance checking is the core cost driver** (LODSystem now mitigated — see C2)
+   - ~~LODSystem: `MathUtils.Distance()` (sqrt) for every LOD entity, every tick~~ → **RESOLVED by C2: cell-based caching**
    - HuntingSystem: `MathUtils.DistanceSquared()` per candidate inside QueryRadius
    - SeparationSystem: `MathF.Sqrt(distSq)` per neighbor pair
    - CollisionSystem: `MathF.Sqrt(distSq)` per overlapping pair
@@ -262,16 +256,10 @@ normal stochastic variation — LOD changes have not distorted simulation outcom
 The 16ms TileRegenerationSystem cost is entirely from iterating 1M+ tiles per tick.
 Several approaches, in order of effort vs impact:
 
-**C1a. Skip-tick throttle (easiest, ~8ms saving)**
-Regenerate only every N ticks (e.g., every 4 ticks) and multiply the regeneration rate:
-```csharp
-// In TileRegenerationSystem.Process()
-_tickCounter++;
-if (_tickCounter % 4 != 0) return;
-// RegenerationRate becomes 0.002f (4× base) inside chunk
-```
-Nutrition resolution: 0.002 per 4 ticks vs 0.0005 per tick = identical result.
-At `RegenerationRate = 0.0005f`, tiles take 2000 ticks to fully recover — a 4-tick gap is invisible.
+**C1a. Skip-tick throttle — DONE**
+Regenerates every 4 ticks with 4× rate multiplier. Identical net nutrition gain
+(0.002 per 4 ticks vs 0.0005 per tick). Reduces average per-tick cost by ~75%.
+Implemented in `TileRegenerationSystem.Process()` with `_tickCounter % 4`.
 
 **C1b. Dirty-chunk tracking (medium effort, near-zero cost when stable)**
 Only iterate chunks that have been grazed since last full regeneration:
@@ -289,29 +277,24 @@ Requires restructuring nutrition storage from `float[,]` to `float[]`.
 
 **Recommendation**: C1a first (trivial change, halves the cost), then C1b if still showing up.
 
-### C2. Chunk-Based LOD for Distance-Heavy Systems
+### C2. Cell-Based LOD Distance Caching — DONE
 
-Currently LODSystem computes `MathUtils.Distance()` (which includes `MathF.Sqrt()`) for
-every entity with SimulationLOD, every tick. At 10K entities that's 10K sqrt calls per tick.
+LODSystem now computes distance per spatial-hash cell (~32-tile cells), not per entity.
+Entities in the same cell share a single cached distance-to-player value.
 
-**Proposal: Compute LOD per spatial-hash cell, not per entity.**
+**Implementation** (in `LODSystem.Process()`):
+1. Clear per-tick `_cellDistCache` dictionary
+2. For each entity: compute cell key from `(int)MathF.Floor(pos * invCellSize)`
+3. Cache miss: compute `MathUtils.Distance(playerPos, cellCenter)`, store in cache
+4. Cache hit: reuse distance. All entities in the cell get the same LOD level.
+5. Per-entity hysteresis preserved: `GetLevelForDistance()` still uses each entity's own current level
 
-The spatial hash cell size is 32 tiles. Entities in the same cell are at most ~45 tiles
-apart (diagonal). LOD boundaries are at multiples of `visibleRadius` (60+ tiles).
-The error from using cell-center distance instead of entity distance is at most ~22 tiles
-— well within the hysteresis buffer already in place (10% of boundary distance).
+**Countdown fix**: Uses decrement-first logic (`TicksUntilUpdate--` then check `<= 0`)
+so that "force immediate" updates (TicksUntilUpdate = 0 from spawn or level change)
+work correctly for ALL LOD tiers, not just Full (interval=1).
 
-```
-Implementation sketch:
-1. Each tick, compute LOD level for each occupied spatial hash cell
-   (distance from cell center to player → LOD level)
-2. When an entity's cell LOD changes, update the entity's LOD component
-3. Skip per-entity distance computation entirely
-4. Cost: ~200-400 cell distance checks vs 10,000 entity checks = 25-50× reduction
-```
-
-This also benefits HuntingSystem indirectly: fewer entities are DueThisTick,
-so fewer spatial hash queries fire.
+**Cost reduction**: ~200-400 cell distance checks vs 10,000 entity sqrt calls = 25-50× reduction.
+Also reduces DueThisTick entities, which reduces spatial hash queries in HuntingSystem/FleeingSystem.
 
 ### C3. Hunting System Distance Reduction
 
@@ -347,14 +330,14 @@ iteration counts significantly for prey-searching queries.
 
 ### C4. Priority Order
 
-| Priority | Task | Expected Impact | Effort |
+| Priority | Task | Expected Impact | Status |
 |----------|------|-----------------|--------|
-| 1 | C1a: Tile regen skip-tick | 16ms → ~4ms | Trivial (5 lines) |
-| 2 | C2: Chunk-based LOD | 10K sqrt/tick → ~300 | Medium |
-| 3 | C3b: Cache QueryRadius in hunting | ~30-40% reduction in spatial queries | Medium |
-| 4 | C1b: Dirty-chunk regen | 4ms → <1ms at equilibrium | Low-medium |
-| 5 | C3a: Eliminate unnecessary sqrt | ~10-15% per-entity hunt cost | Low |
-| 6 | C3c: Predator spatial hash | Reduces false positives in queries | Higher effort |
+| 1 | C1a: Tile regen skip-tick | 16ms → ~4ms | **DONE** |
+| 2 | C2: Cell-based LOD caching | 10K sqrt/tick → ~300 | **DONE** |
+| 3 | C3b: Cache QueryRadius in hunting | ~30-40% reduction in spatial queries | Pending |
+| 4 | C1b: Dirty-chunk regen | 4ms → <1ms at equilibrium | Pending |
+| 5 | C3a: Eliminate unnecessary sqrt | ~10-15% per-entity hunt cost | Pending |
+| 6 | C3c: Predator spatial hash | Reduces false positives in queries | Pending |
 
 ---
 

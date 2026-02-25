@@ -5,7 +5,7 @@ A top-down ecosystem simulation game with procedurally generated worlds and emer
 ## Features
 
 - **Large procedural worlds** — Chunk-based terrain with simplex noise generation (768x768 tiles)
-- **Ecosystem simulation** — 8 species with hunger, energy, predator/prey dynamics, and faction warfare
+- **Ecosystem simulation** — 28 species (8 core + 20 biome-specific) with hunger, energy, predator/prey dynamics, and faction warfare
 - **Custom SoA ECS** — Structure of Arrays Entity-Component-System for cache-efficient simulation of 10,000+ entities
 - **Level of Detail** — Distance-based simulation fidelity (Full / Reduced / Statistical / Aggregate)
 - **Faction terraforming** — Three factions (Shroomer, Sectid, Faeling) compete to reshape the world's terrain
@@ -33,9 +33,9 @@ A top-down ecosystem simulation game with procedurally generated worlds and emer
 godot/Scripts/
 ├── ECS/EntityManager.cs              # SoA entity storage (16,384 capacity)
 ├── Components/                       # Position, Velocity, Hunger, Fear, etc.
-├── Systems/                          # 18 simulation systems (20 TPS)
+├── Systems/                          # 19 simulation systems (20 TPS)
 ├── World/                            # Terrain generation, chunks, tile types
-├── Species/                          # SpeciesDefinition + SpeciesRegistry (8 species)
+├── Species/                          # SpeciesDefinition + SpeciesRegistry (28 species)
 ├── Rendering/RenderingManager.cs     # MultiMesh entity batching + chunk textures
 ├── Utils/                            # SpatialHash, MathUtils
 ├── GameManager.cs                    # Main loop, initialization

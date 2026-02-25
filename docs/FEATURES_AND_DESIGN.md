@@ -101,24 +101,25 @@ GameManager runs a fixed-timestep loop at **20 TPS** (ticks per second):
 
 ```
 Each Tick (0.05 seconds):
-  1.  LODSystem           - Update distance-based fidelity levels
-  2.  MovementSystem      - Apply velocity, terrain speed, velocity damping (0.85/frame)
-  3.  TerrainDiscomfort   - Accumulate/decay terrain discomfort     [TerrainSystems.cs]
-  4.  HungerSystem        - Decay hunger, apply starvation damage   [SurvivalSystems.cs]
-  5.  GrazingSystem       - Herbivores/factions feed on tiles       [SurvivalSystems.cs]
-  6.  WanderSystem        - Random movement, roaming, terrain escape (hysteresis)
-  7.  HerdingSystem       - Social cohesion, alignment, leader following
-  8.  SeparationSystem    - Prevent creature overlap within species  [SpatialSystems.cs]
-  9.  CollisionSystem     - Physical overlap resolution (all)        [SpatialSystems.cs]
-  10. HuntingSystem       - Solo/pack/ambush hunting, flanking, stealth, pounce
-  11. FleeingSystem       - Stealth-aware threat detection, fear, escape
-  12. AgingSystem          - Increment age, natural death            [SurvivalSystems.cs]
-  13. ReproductionSystem  - Spawn offspring when thresholds met
-  14. TerraformSystem     - Faction tile modification                [TerrainSystems.cs]
-  15. TileRegenerationSystem - Regrow nutrition on grazeable tiles   [TerrainSystems.cs]
-  16. NestSystem           - Sectid nest breeding & food delivery
-  17. SporeSystem          - Shroomer spore lifecycle & AoE attacks
-  18. CrystalSystem        - Faeling crystal management & ranged attacks
+  1.  LODSystem              - Cell-based LOD + populate DueThisTick[]
+  2.  MovementSystem         - Apply velocity, terrain speed, velocity damping (0.85/frame)
+  3.  SpatialHashUpdateSystem - Update spatial hash positions (LOD-gated)
+  4.  TerrainDiscomfort      - Accumulate/decay terrain discomfort     [TerrainSystems.cs]
+  5.  HungerSystem           - Decay hunger, apply starvation damage   [SurvivalSystems.cs]
+  6.  GrazingSystem          - Herbivores/factions feed on tiles       [SurvivalSystems.cs]
+  7.  WanderSystem           - Smooth-turning wander, roaming, terrain escape
+  8.  HerdingSystem          - Social cohesion, alignment, leader following
+  9.  SeparationSystem       - Prevent creature overlap within species  [SpatialSystems.cs]
+  10. CollisionSystem        - Physical overlap resolution (all)        [SpatialSystems.cs]
+  11. HuntingSystem          - Solo/pack/ambush hunting, flanking, stealth, pounce
+  12. FleeingSystem          - Stealth-aware threat detection, fear, escape
+  13. AgingSystem             - Increment age, natural death            [SurvivalSystems.cs]
+  14. ReproductionSystem     - Spawn offspring when thresholds met
+  15. TerraformSystem        - Faction tile modification                [TerrainSystems.cs]
+  16. TileRegenerationSystem - Regrow nutrition (4-tick throttle)       [TerrainSystems.cs]
+  17. NestSystem              - Sectid nest breeding & food delivery
+  18. SporeSystem             - Shroomer spore lifecycle & AoE attacks
+  19. CrystalSystem           - Faeling crystal management & ranged attacks
 ```
 
 Order matters: LOD must be first (sets up skip flags). Movement before behavior
@@ -455,37 +456,56 @@ Examples:
 **File**: `Scripts/Systems/LODSystem.cs`
 **Components**: Position, SimulationLOD
 
-Calculates each entity's distance from the player and assigns an LOD level.
-Other systems check `ShouldUpdate()` to skip distant entities.
+Assigns LOD levels based on entity distance from the player and populates the
+`em.DueThisTick[]` flag array each tick. All downstream systems gate with a single
+`if (!em.DueThisTick[entity]) continue;` check.
 
-| Distance (tiles) | LOD Level | Update Interval | Description |
-|-------------------|-----------|-----------------|-------------|
-| 0 - 50 | Full | Every tick | Full AI, all behaviors |
-| 50 - 100 | Reduced | Every 5 ticks | Simplified AI |
-| 100 - 200 | Statistical | Every 30 ticks | Statistical updates only |
-| 200+ | Aggregate | Every 60 ticks | Population-level only |
+**Cell-based distance caching**: Instead of computing per-entity distance (sqrt),
+LODSystem maps each entity to its spatial-hash cell (~32-tile cells) and caches one
+distance-to-player value per cell. All entities in the same cell share the cached
+distance. Per-entity hysteresis is preserved (each entity tracks its own current level
+for transition thresholds). This reduces ~10K sqrt calls to ~200-400 cell lookups.
 
-**LOD-aware systems** (checked via `ShouldUpdate()` or explicit level gate):
+**Countdown logic** (decrement-first): `TicksUntilUpdate--` then check `<= 0`.
+When an entity spawns or changes LOD level, `TicksUntilUpdate` is set to 0. The
+decrement brings it to -1, triggering the due branch immediately. This ensures
+"force immediate" works for all LOD tiers (not just Full where interval=1).
+
+| Distance (tiles) | LOD Level | Tick Interval | Description |
+|-------------------|-----------|---------------|-------------|
+| 0 - visRadius×1.15 | Full | 1 (every tick) | Full AI, all behaviors |
+| visRadius×1.15 - visRadius×2.3 | High | 2 (10 TPS) | Slightly throttled |
+| visRadius×2.3 - visRadius×4.6 | Medium | 4 (5 TPS) | Moderately throttled |
+| visRadius×4.6 - visRadius×9.2 | Low | 10 (2 TPS) | Heavily throttled |
+| > visRadius×9.2 | Minimal | 20 (1 TPS) | Near-dormant |
+
+**LOD-aware systems** (gated via `DueThisTick[]`):
 
 | System | LOD Gate | Source |
 |--------|----------|--------|
-| WanderSystem | ShouldUpdate() | WanderSystem.cs |
-| SeparationSystem | ShouldUpdate() | SpatialSystems.cs |
-| HerdingSystem | ShouldUpdate() | HerdingSystem.cs |
-| CollisionSystem | Reduced+ | SpatialSystems.cs |
-| TerrainDiscomfortSystem | Reduced+ | TerrainSystems.cs |
-| SporeSystem (spread) | Reduced+ | SporeSystem.cs |
-| SporeSystem (AoE) | Reduced+ | SporeSystem.cs |
-| TerraformSystem | Statistical+ | TerrainSystems.cs |
-| SporeSystem (maturation) | Statistical+ | SporeSystem.cs |
-| HungerSystem | Statistical+ | SurvivalSystems.cs |
-| AgingSystem | Statistical+ | SurvivalSystems.cs |
-| GrazingSystem | Statistical+ | SurvivalSystems.cs |
-| ReproductionSystem | Statistical+ | ReproductionSystem.cs |
-| HuntingSystem | Aggregate+ | HuntingSystem.cs |
-| FleeingSystem | Aggregate+ | FleeingSystem.cs |
+| WanderSystem | DueThisTick | WanderSystem.cs |
+| SeparationSystem | DueThisTick | SpatialSystems.cs |
+| HerdingSystem | DueThisTick | HerdingSystem.cs |
+| SpatialHashUpdateSystem | DueThisTick | SpatialHashUpdateSystem.cs |
+| CollisionSystem | DueThisTick | SpatialSystems.cs |
+| TerrainDiscomfortSystem | DueThisTick | TerrainSystems.cs |
+| SporeSystem (spread) | DueThisTick | SporeSystem.cs |
+| SporeSystem (AoE) | DueThisTick | SporeSystem.cs |
+| TerraformSystem | DueThisTick | TerrainSystems.cs |
+| SporeSystem (maturation) | DueThisTick | SporeSystem.cs |
+| HungerSystem | DueThisTick | SurvivalSystems.cs |
+| AgingSystem | DueThisTick | SurvivalSystems.cs |
+| GrazingSystem | DueThisTick | SurvivalSystems.cs |
+| ReproductionSystem | DueThisTick | ReproductionSystem.cs |
+| HuntingSystem | DueThisTick | HuntingSystem.cs |
+| FleeingSystem | DueThisTick | FleeingSystem.cs |
 
 Systems that must NOT be LOD-gated: MovementSystem, LODSystem.
+
+**Tick multiplier**: LOD-gated systems that need rate-correct behavior (cooldowns,
+hunger decay, aging) read `SimulationLOD.TickInterval` and multiply per-tick deltas
+accordingly. This ensures an entity at High LOD (processed every 2 ticks) ages at
+the same rate as one at Full LOD.
 
 **Critical design rule**: Systems that produce resources (GrazingSystem) and systems that
 consume them (HungerSystem) must be gated at the **same LOD level**. If hunger decays but
@@ -552,9 +572,20 @@ Each tick:
 ### 5.6 Wander System
 
 **File**: `Scripts/Systems/WanderSystem.cs`
-**Components**: Wander, Velocity, Position (LOD-aware)
+**Components**: Wander, Velocity, Position (LOD-aware via `DueThisTick`)
 
 The primary movement behavior for creatures not actively hunting or fleeing:
+
+**Smooth turning** (angular interpolation):
+All velocity changes use `BlendVelocitySmooth()`, which interpolates the current
+velocity angle toward the target direction at a mass-based turn rate. This prevents
+the instant direction-flip jitter that occurred with direct velocity assignment.
+Speed stays constant during the turn (only direction is smoothed).
+- Turn rate = `clamp(0.4 / bodyMass, 0.06, 0.3)`
+- Light creatures (mass 0.3-1.0): turnRate 0.3 — nimble, ~7 ticks for 90% of a turn
+- Medium (mass 3-5): turnRate 0.08-0.13 — moderate arc
+- Heavy (mass 8-14): turnRate 0.06 — ponderous, wide sweeping turns
+- Matches the mass-based agility already used by FleeingSystem and HuntingSystem
 
 **Normal wandering**:
 - Random direction changes at `DirectionChangeChance` probability per tick
@@ -1131,11 +1162,12 @@ godot/
 │   │                                # FaelingPower, RangedAttack
 │   ├── Systems/
 │   │   ├── ISystem.cs               # System interface
-│   │   ├── LODSystem.cs             # Distance-based simulation LOD
+│   │   ├── LODSystem.cs             # Cell-based LOD + DueThisTick flag
 │   │   ├── MovementSystem.cs        # Position + velocity damping (0.85/frame)
+│   │   ├── SpatialHashUpdateSystem.cs # Centralized spatial hash position updates
 │   │   ├── TerrainSystems.cs        # TerrainDiscomfort + TerraformSystem + TileRegeneration
 │   │   ├── SurvivalSystems.cs       # HungerSystem + AgingSystem + GrazingSystem
-│   │   ├── WanderSystem.cs          # Random movement, roaming, terrain escape (hysteresis)
+│   │   ├── WanderSystem.cs          # Smooth-turning wander, roaming, terrain escape
 │   │   ├── HerdingSystem.cs         # Social cohesion, alignment, leader following
 │   │   ├── SpatialSystems.cs        # SeparationSystem + CollisionSystem
 │   │   ├── HuntingSystem.cs         # Solo/pack/ambush hunting, flanking tactics, stealth
@@ -1152,7 +1184,7 @@ godot/
 │   │   └── RiverMapper.cs          # Flow-based river pre-computation
 │   ├── Species/
 │   │   ├── SpeciesDefinition.cs     # 90+ property data class for species config
-│   │   └── SpeciesRegistry.cs       # All 8 species registered with full parameters
+│   │   └── SpeciesRegistry.cs       # All 28 species registered with full parameters
 │   ├── Rendering/
 │   │   └── RenderingManager.cs      # Chunk-based entity/tile rendering
 │   ├── Utils/
