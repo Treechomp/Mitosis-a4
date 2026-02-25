@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using Godot;
 using Mitosis.Components;
 using Mitosis.ECS;
+using Mitosis.Utils;
 using Mitosis.World;
 using static Mitosis.ECS.EntityManager;
 
@@ -21,9 +22,9 @@ public sealed class RenderingManager
     private readonly int _worldSizeChunks;
     private readonly int _tileSize;
 
-    // Chunk texture cache
-    private readonly Dictionary<(int, int), ImageTexture> _chunkTextures = new();
-    private readonly HashSet<(int, int)> _dirtyChunks = new();
+    // Chunk mesh nodes — one MeshInstance2D per loaded chunk
+    private readonly Dictionary<(int, int), MeshInstance2D> _chunkMeshes = new();
+    private StandardMaterial3D _chunkMaterial = null!;
 
     // MultiMesh entity rendering — one per ShapeType
     private const int ShapeCount = 13; // ShapeType values 0..12
@@ -373,186 +374,126 @@ public sealed class RenderingManager
     }
 
     // ================================================================
-    // TERRAIN RENDERING (unchanged)
+    // TERRAIN RENDERING — triangle mesh per chunk
     // ================================================================
 
     /// <summary>
-    /// Draws visible terrain chunks using cached textures.
-    /// Must be called from within a CanvasItem._Draw() override.
+    /// Creates MeshInstance2D nodes for all loaded chunks and adds them as children
+    /// of the given parent node. Must be called after world generation and before
+    /// entity MultiMesh nodes are added so terrain renders behind entities.
     /// </summary>
-    public void DrawTerrain(CanvasItem canvas, Camera2D camera)
+    public void InitializeChunkMeshes(Node parent)
     {
-        var viewportSize = canvas.GetViewportRect().Size;
-        var cameraPos = camera.Position;
-        var zoom = camera.Zoom;
+        // Unshaded material that uses per-vertex colors directly as albedo.
+        _chunkMaterial = new StandardMaterial3D();
+        _chunkMaterial.ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded;
+        _chunkMaterial.VertexColorUseAsAlbedo = true;
 
-        float halfWidth = viewportSize.X / (2 * zoom.X);
-        float halfHeight = viewportSize.Y / (2 * zoom.Y);
-
-        float minWorldX = (cameraPos.X - halfWidth) / _tileSize;
-        float maxWorldX = (cameraPos.X + halfWidth) / _tileSize;
-        float minWorldY = (cameraPos.Y - halfHeight) / _tileSize;
-        float maxWorldY = (cameraPos.Y + halfHeight) / _tileSize;
-
-        int minChunkX = Math.Max(0, (int)(minWorldX / _chunkSize));
-        int maxChunkX = Math.Min(_worldSizeChunks - 1, (int)(maxWorldX / _chunkSize));
-        int minChunkY = Math.Max(0, (int)(minWorldY / _chunkSize));
-        int maxChunkY = Math.Min(_worldSizeChunks - 1, (int)(maxWorldY / _chunkSize));
-
-        for (int cx = minChunkX; cx <= maxChunkX; cx++)
+        foreach (var chunk in _worldManager.GetLoadedChunks())
         {
-            for (int cy = minChunkY; cy <= maxChunkY; cy++)
+            var mmi = new MeshInstance2D { Mesh = BuildChunkMesh(chunk) };
+            parent.AddChild(mmi);
+            _chunkMeshes[(chunk.ChunkX, chunk.ChunkY)] = mmi;
+        }
+    }
+
+    /// <summary>
+    /// Rebuilds the mesh for any chunk flagged dirty since the last call.
+    /// Should be called once per frame from _Process.
+    /// </summary>
+    public void UpdateDirtyChunkMeshes()
+    {
+        if (_worldManager.DirtyChunks.Count == 0) return;
+
+        foreach (var key in _worldManager.DirtyChunks)
+        {
+            if (_chunkMeshes.TryGetValue(key, out var mmi))
             {
-                var chunk = _worldManager.GetChunk(cx, cy);
-                if (chunk == null) continue;
-                DrawChunk(canvas, chunk);
+                var chunk = _worldManager.GetChunk(key.Item1, key.Item2);
+                if (chunk != null)
+                    mmi.Mesh = BuildChunkMesh(chunk);
             }
         }
+        _worldManager.DirtyChunks.Clear();
     }
 
-    private void DrawChunk(CanvasItem canvas, Chunk chunk)
+    /// <summary>
+    /// Builds a triangle-mesh for one chunk using offset-row vertex positions and
+    /// per-vertex biome colors. Each quad is split into two triangles; the diagonal
+    /// alternates direction between even and odd rows to match the row offset.
+    ///
+    /// Vertex grid is (Size+1) × (Size+1) so the mesh seamlessly abuts adjacent
+    /// chunk meshes — boundary vertices are sampled from WorldManager.
+    /// </summary>
+    private ArrayMesh BuildChunkMesh(Chunk chunk)
     {
-        var key = (chunk.ChunkX, chunk.ChunkY);
+        int n = chunk.Size + 1;  // vertices per side: 33 for the standard 32-tile chunk
+        int vertexCount = n * n;
+        int quadCount = chunk.Size * chunk.Size;
 
-        bool needsRebuild = !_chunkTextures.ContainsKey(key) ||
-                            _worldManager.DirtyChunks.Contains(key) ||
-                            _dirtyChunks.Contains(key);
+        var vertices = new Vector3[vertexCount];
+        var colors = new Color[vertexCount];
+        var indices = new int[quadCount * 6];  // 2 triangles × 3 indices per quad
 
-        if (needsRebuild)
+        int worldOffsetX = chunk.ChunkX * chunk.Size;
+        int worldOffsetY = chunk.ChunkY * chunk.Size;
+
+        // --- Build vertex positions and colors ---
+        for (int ly = 0; ly < n; ly++)
         {
-            _chunkTextures[key] = RenderChunkTexture(chunk);
-            _worldManager.DirtyChunks.Remove(key);
-            _dirtyChunks.Remove(key);
+            for (int lx = 0; lx < n; lx++)
+            {
+                int worldX = worldOffsetX + lx;
+                int worldY = worldOffsetY + ly;
+
+                // Fetch tile type: use chunk's own array for interior, WorldManager for boundary
+                TileType tile = (lx < chunk.Size && ly < chunk.Size)
+                    ? chunk.GetTile(lx, ly)
+                    : _worldManager.GetTile(worldX, worldY);
+
+                var screen = GridCoordinates.VertexToScreen(worldX, worldY, _tileSize);
+
+                vertices[ly * n + lx] = new Vector3(screen.X, screen.Y, 0f);
+                colors[ly * n + lx] = Chunk.GetTileColor(tile);
+            }
         }
 
-        float chunkWorldX = chunk.ChunkX * _chunkSize * _tileSize;
-        float chunkWorldY = chunk.ChunkY * _chunkSize * _tileSize;
-        float chunkPixelSize = _chunkSize * _tileSize;
-
-        canvas.DrawTextureRect(_chunkTextures[key],
-            new Rect2(chunkWorldX, chunkWorldY, chunkPixelSize, chunkPixelSize),
-            false);
-    }
-
-    private ImageTexture RenderChunkTexture(Chunk chunk)
-    {
-        const int pixelsPerTile = 4;
-        int texSize = chunk.Size * pixelsPerTile;
-        var image = Image.CreateEmpty(texSize, texSize, false, Image.Format.Rgba8);
-
+        // --- Build triangle indices ---
+        // For each quad, the split diagonal alternates to match the row offset:
+        //   Even bottom row:  BL-BR-TL  +  BR-TR-TL
+        //   Odd  bottom row:  BL-BR-TR  +  BL-TR-TL
+        int idx = 0;
         for (int ly = 0; ly < chunk.Size; ly++)
         {
             for (int lx = 0; lx < chunk.Size; lx++)
             {
-                var tileType = chunk.GetTile(lx, ly);
-                var baseColor = Chunk.GetTileColor(tileType);
-                int worldX = chunk.ChunkX * chunk.Size + lx;
-                int worldY = chunk.ChunkY * chunk.Size + ly;
+                int vBL = ly * n + lx;
+                int vBR = ly * n + lx + 1;
+                int vTL = (ly + 1) * n + lx;
+                int vTR = (ly + 1) * n + lx + 1;
 
-                int px = lx * pixelsPerTile;
-                int py = ly * pixelsPerTile;
-                for (int dy = 0; dy < pixelsPerTile; dy++)
+                if ((worldOffsetY + ly) % 2 == 0)
                 {
-                    for (int dx = 0; dx < pixelsPerTile; dx++)
-                    {
-                        var color = VaryTilePixel(baseColor, tileType, worldX, worldY, dx, dy);
-                        image.SetPixel(px + dx, py + dy, color);
-                    }
+                    indices[idx++] = vBL; indices[idx++] = vBR; indices[idx++] = vTL;
+                    indices[idx++] = vBR; indices[idx++] = vTR; indices[idx++] = vTL;
+                }
+                else
+                {
+                    indices[idx++] = vBL; indices[idx++] = vBR; indices[idx++] = vTR;
+                    indices[idx++] = vBL; indices[idx++] = vTR; indices[idx++] = vTL;
                 }
             }
         }
 
-        return ImageTexture.CreateFromImage(image);
-    }
-
-    private static Color VaryTilePixel(Color baseColor, TileType tile, int wx, int wy, int dx, int dy)
-    {
-        uint hash = PixelHash(wx, wy, dx, dy);
-        float rand = (hash & 0xFFFF) / 65535f;
-        float rand2 = ((hash >> 16) & 0xFFFF) / 65535f;
-
-        float r = baseColor.R;
-        float g = baseColor.G;
-        float b = baseColor.B;
-
-        switch (tile)
-        {
-            case TileType.Forest:
-            case TileType.Taiga:
-            case TileType.Jungle:
-            {
-                float variation = (rand - 0.5f) * 0.12f;
-                r += variation; g += variation; b += variation;
-                if (rand2 < 0.18f) { r -= 0.06f; g -= 0.04f; b -= 0.05f; }
-                break;
-            }
-            case TileType.Grass:
-            case TileType.Steppe:
-            case TileType.Savanna:
-            case TileType.Shrubland:
-            {
-                float brightness = (rand - 0.5f) * 0.08f;
-                float hueShift = (rand2 - 0.5f) * 0.03f;
-                r += brightness + hueShift; g += brightness; b += brightness - hueShift;
-                break;
-            }
-            case TileType.Sand:
-            case TileType.Dirt:
-            case TileType.Arid:
-            {
-                float variation = (rand - 0.5f) * 0.1f;
-                r += variation; g += variation; b += variation;
-                if (rand2 < 0.10f) { r += 0.06f; g += 0.05f; b += 0.03f; }
-                break;
-            }
-            case TileType.DeepWater:
-            case TileType.ShallowWater:
-            case TileType.River:
-            case TileType.Reef:
-            {
-                float variation = (rand - 0.5f) * 0.05f;
-                r += variation * 0.5f; g += variation * 0.7f; b += variation;
-                break;
-            }
-            case TileType.Wetland:
-            case TileType.Bog:
-            {
-                float variation = (rand - 0.5f) * 0.1f;
-                r += variation; g += variation; b += variation;
-                if (rand2 < 0.12f) { r -= 0.04f; g -= 0.02f; b -= 0.03f; }
-                break;
-            }
-            case TileType.Mountain:
-            case TileType.Tundra:
-            case TileType.Ice:
-            {
-                float variation = (rand - 0.5f) * 0.08f;
-                r += variation; g += variation; b += variation;
-                break;
-            }
-            case TileType.Lava:
-            {
-                float variation = (rand - 0.5f) * 0.15f;
-                r += variation; g += variation * 0.5f;
-                break;
-            }
-            default:
-            {
-                float variation = (rand - 0.5f) * 0.06f;
-                r += variation; g += variation; b += variation;
-                break;
-            }
-        }
-
-        return new Color(Math.Clamp(r, 0f, 1f), Math.Clamp(g, 0f, 1f), Math.Clamp(b, 0f, 1f));
-    }
-
-    private static uint PixelHash(int wx, int wy, int dx, int dy)
-    {
-        uint h = (uint)(wx * 374761393 + wy * 668265263 + dx * 2147483647 + dy * 1013904223);
-        h = (h ^ (h >> 13)) * 1274126177;
-        h ^= h >> 16;
-        return h;
+        var mesh = new ArrayMesh();
+        var arrays = new Godot.Collections.Array();
+        arrays.Resize((int)Mesh.ArrayType.Max);
+        arrays[(int)Mesh.ArrayType.Vertex] = vertices;
+        arrays[(int)Mesh.ArrayType.Color] = colors;
+        arrays[(int)Mesh.ArrayType.Index] = indices;
+        mesh.AddSurfaceFromArrays(Mesh.PrimitiveType.Triangles, arrays);
+        mesh.SurfaceSetMaterial(0, _chunkMaterial);
+        return mesh;
     }
 
     // ================================================================

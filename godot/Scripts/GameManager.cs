@@ -187,6 +187,10 @@ public partial class GameManager : Node2D
 
         _lodSystem?.SetPlayerEntity(_playerController.PlayerEntity);
 
+        // Setup terrain rendering — chunk meshes must be added before entity nodes
+        // so they render behind creatures in the scene tree order.
+        _renderingManager.InitializeChunkMeshes(this);
+
         // Setup entity rendering via MultiMesh
         var shapeMMIs = _renderingManager.CreateMultiMeshInstances();
         foreach (var mmi in shapeMMIs)
@@ -280,6 +284,9 @@ public partial class GameManager : Node2D
         // Update stats periodically
         UpdateStats(delta);
 
+        // Rebuild meshes for any chunks modified since last frame
+        _renderingManager.UpdateDirtyChunkMeshes();
+
         // Update entity MultiMesh buffers for rendering
         _renderStopwatch.Restart();
         if (_camera != null)
@@ -289,9 +296,6 @@ public partial class GameManager : Node2D
             double ms = _renderStopwatch.Elapsed.TotalMilliseconds;
             _renderMs += (ms - _renderMs) * SmoothingFactor;
         }
-
-        // Request redraw (for terrain and debug overlay)
-        QueueRedraw();
     }
 
     public override void _UnhandledInput(InputEvent @event)
@@ -302,15 +306,6 @@ public partial class GameManager : Node2D
         {
             _showProfiling = !_showProfiling;
         }
-    }
-
-    public override void _Draw()
-    {
-        if (_camera == null) return;
-
-        _renderingManager.DrawTerrain(this, _camera);
-
-        // Entities are rendered via MultiMeshInstance2D children (updated in _Process)
     }
 
     private void UpdateStats(double delta)
