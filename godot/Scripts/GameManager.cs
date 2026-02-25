@@ -16,15 +16,16 @@ namespace Mitosis;
 /// Main game manager that orchestrates the simulation.
 /// Delegates to EntityFactory (entity creation), WorldSpawner (population distribution),
 /// PlayerController (input/camera), and RenderingManager (visuals).
+/// Inherits Node3D for full 3D rendering with Camera3D and DirectionalLight3D.
 /// </summary>
-public partial class GameManager : Node2D
+public partial class GameManager : Node3D
 {
     // Configuration
     [Export] public int ChunkSize = 32;
     [Export] public int WorldSizeChunks = 9;  // DEBUG: standardized debug world
     [Export] public int WorldSeed = 0;
     [Export] public int TileSize = 16;
-    [Export] public float ElevationHeightScale = 64f;  // Pixels of vertical lift per elevation unit (0 = flat)
+    [Export] public float ElevationHeightScale = 64f;  // World units of vertical lift per elevation unit
     [Export] public int TargetTPS = 20;
     [Export] public int MaxPopulation = 2000;  // DEBUG: cap at 2000 (2500+ causes FPS drop)
     [Export] public int InitialPopulation = 500;  // DEBUG: standardized debug population
@@ -32,29 +33,29 @@ public partial class GameManager : Node2D
     [Export] public float CreaturesPerChunk = 2f;
 
     // Spectator settings
-    [Export] public float PlayerSpeed = 1.0f;         // Base movement speed (tiles per tick)
-    [Export] public float PlayerSprintMultiplier = 3.0f;  // Speed when holding shift
-    [Export] public float ZoomMin = 0.1f;             // Maximum zoom out
-    [Export] public float ZoomMax = 5.0f;             // Maximum zoom in
-    [Export] public float ZoomSpeed = 0.15f;          // Zoom sensitivity
+    [Export] public float PlayerSpeed = 1.0f;
+    [Export] public float PlayerSprintMultiplier = 3.0f;
+    [Export] public float ZoomMin = 0.1f;   // Multiplied by TileSize*32 for camera size min
+    [Export] public float ZoomMax = 5.0f;   // Multiplied by TileSize*32 for camera size max
+    [Export] public float ZoomSpeed = 0.15f;
 
     // Faction spawning — proportions of InitialPopulation
-    [Export] public float FaelingShare = 0.04f;   // Fraction of initial pop as Faelings (crystals + spawns)
-    [Export] public float SectidShare = 0.06f;    // Fraction of initial pop as Sectids (nests + starters)
+    [Export] public float FaelingShare = 0.04f;
+    [Export] public float SectidShare  = 0.06f;
 
     // Core systems
     private EntityManager _entityManager = null!;
-    private WorldManager _worldManager = null!;
+    private WorldManager  _worldManager  = null!;
     private readonly List<ISystem> _systems = new();
     private readonly Random _rng = new();
-    private LODSystem? _lodSystem;
-    private NestSystem? _nestSystem;
-    private CrystalSystem? _crystalSystem;
+    private LODSystem?       _lodSystem;
+    private NestSystem?      _nestSystem;
+    private CrystalSystem?   _crystalSystem;
     private EcosystemLogger? _ecosystemLogger;
 
     // Extracted managers
-    private EntityFactory _entityFactory = null!;
-    private WorldSpawner _worldSpawner = null!;
+    private EntityFactory    _entityFactory    = null!;
+    private WorldSpawner     _worldSpawner     = null!;
     private PlayerController _playerController = null!;
     private RenderingManager _renderingManager = null!;
 
@@ -63,39 +64,38 @@ public partial class GameManager : Node2D
     private double _simulationDt;
 
     // Debug info
-    private int _fps;
+    private int    _fps;
     private double _fpsTimer;
-    private int _frameCount;
-    private int _herbivoreCount;
-    private int _predatorCount;
-    private int _shroomerCount;
-    private int _sectidCount;
-    private int _faelingCount;
-    private int _nestCount;
-    private int _sporeCount;
-    private int _crystalCount;
+    private int    _frameCount;
+    private int    _herbivoreCount;
+    private int    _predatorCount;
+    private int    _shroomerCount;
+    private int    _sectidCount;
+    private int    _faelingCount;
+    private int    _nestCount;
+    private int    _sporeCount;
+    private int    _crystalCount;
     private double _statsTimer;
-    private readonly Dictionary<int, int> _perSpeciesCounts = new(32);  // speciesId -> count
+    private readonly Dictionary<int, int> _perSpeciesCounts = new(32);
 
     // Profiling
-    private readonly Stopwatch _tickStopwatch = new();
+    private readonly Stopwatch _tickStopwatch   = new();
     private readonly Stopwatch _systemStopwatch = new();
     private readonly Stopwatch _renderStopwatch = new();
-    private string[] _systemNames = Array.Empty<string>();
+    private string[] _systemNames    = Array.Empty<string>();
     private double[] _systemTimingsMs = Array.Empty<double>();
-    private double _totalTickMs;
-    private double _renderMs;
-    private bool _showProfiling;
-    private const double SmoothingFactor = 0.05; // ~20 sample EMA window
+    private double   _totalTickMs;
+    private double   _renderMs;
+    private bool     _showProfiling;
+    private const double SmoothingFactor = 0.05;
 
-    // Rendering
-    private Camera2D? _camera;
-    private Label? _debugLabel;
+    // 3D scene refs
+    private Camera3D? _camera;
+    private Label?    _debugLabel;
 
     public override void _Ready()
     {
         _entityManager = new EntityManager();
-        // Seed 0 means randomize each run; any other value gives a reproducible world
         int seed = WorldSeed != 0 ? WorldSeed : (int)(DateTime.UtcNow.Ticks & 0x7FFFFFFF);
         _worldManager = new WorldManager(ChunkSize, WorldSizeChunks, seed);
         _simulationDt = 1.0 / TargetTPS;
@@ -106,12 +106,12 @@ public partial class GameManager : Node2D
         _worldSpawner = new WorldSpawner(_worldManager, _entityFactory, _rng);
         _playerController = new PlayerController(_entityManager)
         {
-            PlayerSpeed = PlayerSpeed,
-            PlayerSprintMultiplier = PlayerSprintMultiplier,
-            ZoomMin = ZoomMin,
-            ZoomMax = ZoomMax,
-            ZoomSpeed = ZoomSpeed,
-            TileSize = TileSize
+            PlayerSpeed           = PlayerSpeed,
+            PlayerSprintMultiplier= PlayerSprintMultiplier,
+            ZoomMin               = ZoomMin,
+            ZoomMax               = ZoomMax,
+            ZoomSpeed             = ZoomSpeed,
+            TileSize              = TileSize
         };
         _renderingManager = new RenderingManager(_entityManager, _worldManager,
             ChunkSize, WorldSizeChunks, TileSize, ElevationHeightScale);
@@ -121,11 +121,11 @@ public partial class GameManager : Node2D
         _lodSystem = new LODSystem(spatialHash);
         _systems.Add(_lodSystem);
         _systems.Add(new MovementSystem(ChunkSize, WorldSizeChunks, _worldManager));
-        _systems.Add(new SpatialHashUpdateSystem(spatialHash));    // Sync all positions once
-        _systems.Add(new TerrainDiscomfortSystem(_worldManager));  // Process discomfort early
+        _systems.Add(new SpatialHashUpdateSystem(spatialHash));
+        _systems.Add(new TerrainDiscomfortSystem(_worldManager));
         _systems.Add(new HungerSystem());
         _systems.Add(new GrazingSystem(_worldManager));
-        _systems.Add(new WanderSystem(_worldManager, spatialHash: spatialHash));  // Roaming params from species
+        _systems.Add(new WanderSystem(_worldManager, spatialHash: spatialHash));
         _systems.Add(new HerdingSystem(spatialHash));
         _systems.Add(new SeparationSystem(spatialHash));
         _systems.Add(new CollisionSystem(spatialHash, collisionRadiusScale: 0.5f, tileSize: TileSize));
@@ -136,7 +136,6 @@ public partial class GameManager : Node2D
         _systems.Add(new TerraformSystem(_worldManager));
         _systems.Add(new TileRegenerationSystem(_worldManager));
 
-        // Faction systems
         _nestSystem = new NestSystem(_worldManager, spatialHash, MaxPopulation);
         _systems.Add(_nestSystem);
         var sporeSystem = new SporeSystem(_worldManager, spatialHash, MaxPopulation);
@@ -144,20 +143,38 @@ public partial class GameManager : Node2D
         _crystalSystem = new CrystalSystem(_worldManager, spatialHash, MaxPopulation);
         _systems.Add(_crystalSystem);
 
-        // DEBUG: Ecosystem logger — writes CSV logs to godot/logs/ (see latest_events.csv, latest_population.csv)
         _ecosystemLogger = new EcosystemLogger();
         _systems.Add(_ecosystemLogger);
 
-        // Initialize profiling arrays
-        _systemNames = new string[_systems.Count];
+        _systemNames    = new string[_systems.Count];
         _systemTimingsMs = new double[_systems.Count];
         for (int i = 0; i < _systems.Count; i++)
             _systemNames[i] = _systems[i].GetType().Name;
 
-        // Get camera reference
-        _camera = GetNode<Camera2D>("Camera2D");
+        // --- 3D scene setup ---
+        // Camera
+        _camera = GetNode<Camera3D>("Camera3D");
+        _camera.Projection = Camera3D.ProjectionType.Orthographic;
 
-        // Setup world
+        // Directional light: warm sunlight from upper-right
+        var dirLight = new DirectionalLight3D();
+        dirLight.LightColor  = new Color(1f, 0.95f, 0.85f);
+        dirLight.LightEnergy = 1.0f;
+        dirLight.RotationDegrees = new Vector3(-50f, 45f, 0f);
+        AddChild(dirLight);
+
+        // World environment: sky color + soft ambient so shadows aren't pitch black
+        var worldEnv = new WorldEnvironment();
+        var env = new Environment();
+        env.BackgroundMode  = Environment.BGMode.Color;
+        env.BackgroundColor = new Color(0.4f, 0.6f, 0.9f);
+        env.AmbientLightSource = Environment.AmbientSource.Color;
+        env.AmbientLightColor  = new Color(0.35f, 0.4f, 0.5f);
+        env.AmbientLightEnergy = 0.6f;
+        worldEnv.Environment = env;
+        AddChild(worldEnv);
+
+        // Generate world
         GD.Print("Generating world...");
         _worldManager.PregenerateWorld((completed, total) =>
         {
@@ -166,47 +183,42 @@ public partial class GameManager : Node2D
         });
         GD.Print($"World generated: {_worldManager.LoadedChunkCount} chunks");
 
-        // Spawn faction structures proportional to InitialPopulation
-        int faelingBudget = (int)(InitialPopulation * FaelingShare);
-        int sectidBudget = (int)(InitialPopulation * SectidShare);
+        // Spawn faction structures
+        int faelingBudget  = (int)(InitialPopulation * FaelingShare);
+        int sectidBudget   = (int)(InitialPopulation * SectidShare);
         int creatureBudget = InitialPopulation - faelingBudget - sectidBudget;
 
         GD.Print("Spawning faction structures...");
         _worldSpawner.SpawnCrystals(_crystalSystem!, _entityManager, faelingBudget);
         _worldSpawner.SpawnInitialNests(_nestSystem!, _entityManager, sectidBudget);
 
-        // Spawn creatures (herbivores, predators, initial Shroomers)
         GD.Print("Spawning creatures...");
         int spawnedCount = _worldSpawner.SpawnCreatures(creatureBudget, HerbivoreRatio);
         GD.Print($"Spawned {spawnedCount} creatures (+ faction structures from {faelingBudget} Faeling + {sectidBudget} Sectid budget)");
 
-        // Spawn player
+        // Spawn player at world center
         float centerX = WorldSizeChunks * ChunkSize / 2f;
         float centerY = WorldSizeChunks * ChunkSize / 2f;
         int playerEntity = _entityFactory.SpawnPlayer(centerX, centerY, _worldManager);
         _playerController.SetPlayerEntity(playerEntity, TileSize, _camera);
-
         _lodSystem?.SetPlayerEntity(_playerController.PlayerEntity);
 
-        // Setup terrain rendering — chunk meshes must be added before entity nodes
-        // so they render behind creatures in the scene tree order.
+        // Terrain meshes (behind entities in scene tree)
         _renderingManager.InitializeChunkMeshes(this);
 
-        // Setup entity rendering via MultiMesh
+        // Entity MultiMesh nodes
         var shapeMMIs = _renderingManager.CreateMultiMeshInstances();
         foreach (var mmi in shapeMMIs)
             AddChild(mmi);
 
-        // Setup debug UI
         SetupDebugUI();
-
         GD.Print($"Game ready! {_entityManager.EntityCount} entities");
     }
 
     private void SetupDebugUI()
     {
         var canvasLayer = new CanvasLayer();
-        canvasLayer.Layer = 100; // Above everything
+        canvasLayer.Layer = 100;
         AddChild(canvasLayer);
 
         _debugLabel = new Label();
@@ -215,7 +227,6 @@ public partial class GameManager : Node2D
         _debugLabel.AddThemeColorOverride("font_shadow_color", Colors.Black);
         _debugLabel.AddThemeConstantOverride("shadow_offset_x", 1);
         _debugLabel.AddThemeConstantOverride("shadow_offset_y", 1);
-        // Use monospace font for aligned profiling columns
         var monoFont = new SystemFont();
         monoFont.FontNames = new string[] { "Courier New", "monospace", "Consolas" };
         _debugLabel.AddThemeFontOverride("font", monoFont);
@@ -235,30 +246,29 @@ public partial class GameManager : Node2D
             _fpsTimer = 0;
         }
 
-        // Guard against partial initialization (e.g. world-gen failure)
         if (_playerController == null) return;
 
-        // Handle input
         _playerController.HandleInput();
         _playerController.HandleZoomInput(_camera);
 
-        // Update LOD visible radius from camera viewport and zoom
+        // LOD visible radius from orthographic camera size
         if (_lodSystem != null && _camera != null)
         {
             var viewport = GetViewport();
             if (viewport != null)
             {
                 var viewportSize = viewport.GetVisibleRect().Size;
-                float zoom = _camera.Zoom.X; // Uniform zoom (X == Y)
-                // Half-diagonal of viewport in tile units
-                float halfW = viewportSize.X / (2f * zoom * TileSize);
-                float halfH = viewportSize.Y / (2f * zoom * TileSize);
-                float visibleRadius = MathF.Sqrt(halfW * halfW + halfH * halfH);
+                float aspectRatio = viewportSize.X / viewportSize.Y;
+                // Camera.Size = visible height in world units
+                float halfH = _playerController.CameraSize / (2f * TileSize);
+                float halfW = halfH * aspectRatio;
+                // Multiply by ~1.5 to account for isometric tilt (camera sees more terrain depth)
+                float visibleRadius = MathF.Sqrt(halfW * halfW + halfH * halfH) * 1.5f;
                 _lodSystem.SetVisibleRadius(visibleRadius);
             }
         }
 
-        // Fixed timestep simulation
+        // Fixed-timestep simulation
         _simulationAccumulator += delta;
         while (_simulationAccumulator >= _simulationDt)
         {
@@ -271,24 +281,18 @@ public partial class GameManager : Node2D
                 double ms = _systemStopwatch.Elapsed.TotalMilliseconds;
                 _systemTimingsMs[i] += (ms - _systemTimingsMs[i]) * SmoothingFactor;
             }
-
             _tickStopwatch.Stop();
             double tickMs = _tickStopwatch.Elapsed.TotalMilliseconds;
             _totalTickMs += (tickMs - _totalTickMs) * SmoothingFactor;
-
             _simulationAccumulator -= _simulationDt;
         }
 
-        // Update camera
         _playerController.UpdateCamera(_camera, delta);
 
-        // Update stats periodically
         UpdateStats(delta);
 
-        // Rebuild meshes for any chunks modified since last frame
         _renderingManager.UpdateDirtyChunkMeshes();
 
-        // Update entity MultiMesh buffers for rendering
         _renderStopwatch.Restart();
         if (_camera != null)
             _renderingManager.UpdateEntityMultiMeshes(_camera);
@@ -304,9 +308,7 @@ public partial class GameManager : Node2D
         _playerController?.HandleMouseZoom(@event, _camera);
 
         if (@event is InputEventKey { Pressed: true, Keycode: Key.F3 })
-        {
             _showProfiling = !_showProfiling;
-        }
     }
 
     private void UpdateStats(double delta)
@@ -315,100 +317,86 @@ public partial class GameManager : Node2D
         if (_statsTimer < 0.5) return;
         _statsTimer = 0;
 
-        // Count entities by type and per-species
-        _herbivoreCount = 0;
-        _predatorCount = 0;
-        _shroomerCount = 0;
-        _sectidCount = 0;
-        _faelingCount = 0;
-        _nestCount = 0;
-        _sporeCount = 0;
-        _crystalCount = 0;
+        _herbivoreCount = 0; _predatorCount = 0; _shroomerCount = 0;
+        _sectidCount = 0;    _faelingCount  = 0; _nestCount     = 0;
+        _sporeCount  = 0;    _crystalCount  = 0;
         _perSpeciesCounts.Clear();
 
         foreach (int entity in _entityManager.AllEntities())
         {
             if (_entityManager.HasComponents(entity, ComponentFlags.Nest))
-            { _nestCount++; continue; }
+            { _nestCount++;    continue; }
             if (_entityManager.HasComponents(entity, ComponentFlags.Crystal))
             { _crystalCount++; continue; }
             if (_entityManager.HasComponents(entity, ComponentFlags.Spore))
-            { _sporeCount++; continue; }
+            { _sporeCount++;   continue; }
 
             if (_entityManager.HasComponents(entity, ComponentFlags.Species))
             {
                 ref var species = ref _entityManager.Species[entity];
-
-                // Per-species count
                 _perSpeciesCounts.TryGetValue(species.SpeciesId, out int cnt);
                 _perSpeciesCounts[species.SpeciesId] = cnt + 1;
 
                 switch (species.Type)
                 {
                     case SpeciesType.Herbivore: _herbivoreCount++; break;
-                    case SpeciesType.Carnivore: _predatorCount++; break;
-                    case SpeciesType.Shroomer: _shroomerCount++; break;
-                    case SpeciesType.Sectid: _sectidCount++; break;
-                    case SpeciesType.Faeling: _faelingCount++; break;
+                    case SpeciesType.Carnivore: _predatorCount++;  break;
+                    case SpeciesType.Shroomer:  _shroomerCount++;  break;
+                    case SpeciesType.Sectid:    _sectidCount++;    break;
+                    case SpeciesType.Faeling:   _faelingCount++;   break;
                 }
             }
         }
 
-        // Update debug label
         if (_debugLabel != null)
         {
-            _debugLabel.Text = $"FPS: {_fps}  |  TPS: {TargetTPS}  |  Entities: {_entityManager.EntityCount}\n" +
-                              $"LOD: Full={_lodSystem?.CountFull ?? 0}  " +
-                              $"High={_lodSystem?.CountHigh ?? 0}  " +
-                              $"Med={_lodSystem?.CountMedium ?? 0}  " +
-                              $"Low={_lodSystem?.CountLow ?? 0}  " +
-                              $"Min={_lodSystem?.CountMinimal ?? 0}\n" +
-                              $"Herbivores: {_herbivoreCount}  Predators: {_predatorCount}  " +
-                              $"Shroomers: {_shroomerCount}  Sectids: {_sectidCount}  " +
-                              $"Faelings: {_faelingCount}";
+            _debugLabel.Text =
+                $"FPS: {_fps}  |  TPS: {TargetTPS}  |  Entities: {_entityManager.EntityCount}\n" +
+                $"LOD: Full={_lodSystem?.CountFull ?? 0}  " +
+                $"High={_lodSystem?.CountHigh ?? 0}  " +
+                $"Med={_lodSystem?.CountMedium ?? 0}  " +
+                $"Low={_lodSystem?.CountLow ?? 0}  " +
+                $"Min={_lodSystem?.CountMinimal ?? 0}\n" +
+                $"Herbivores: {_herbivoreCount}  Predators: {_predatorCount}  " +
+                $"Shroomers: {_shroomerCount}  Sectids: {_sectidCount}  " +
+                $"Faelings: {_faelingCount}";
 
             if (_showProfiling)
             {
-                _debugLabel.Text += $"\n\n--- Profiling (F3 to hide) ---\n" +
-                                   $"Tick: {_totalTickMs:F2} ms  |  Render: {_renderMs:F2} ms  |  " +
-                                   $"Budget: {1000.0 / TargetTPS:F1} ms/tick\n";
+                _debugLabel.Text +=
+                    $"\n\n--- Profiling (F3 to hide) ---\n" +
+                    $"Tick: {_totalTickMs:F2} ms  |  Render: {_renderMs:F2} ms  |  " +
+                    $"Budget: {1000.0 / TargetTPS:F1} ms/tick\n";
 
-                // Sort systems by cost (descending) via index array
                 Span<int> indices = stackalloc int[_systems.Count];
                 for (int i = 0; i < indices.Length; i++) indices[i] = i;
-                // Simple insertion sort (small N)
                 for (int i = 1; i < indices.Length; i++)
                 {
-                    int key = indices[i];
+                    int key    = indices[i];
                     double keyVal = _systemTimingsMs[key];
                     int j = i - 1;
                     while (j >= 0 && _systemTimingsMs[indices[j]] < keyVal)
-                    {
-                        indices[j + 1] = indices[j];
-                        j--;
-                    }
+                    { indices[j + 1] = indices[j]; j--; }
                     indices[j + 1] = key;
                 }
 
                 for (int i = 0; i < indices.Length; i++)
                 {
-                    int idx = indices[i];
-                    double ms = _systemTimingsMs[idx];
+                    int    idx = indices[i];
+                    double ms  = _systemTimingsMs[idx];
                     double pct = _totalTickMs > 0 ? ms / _totalTickMs * 100 : 0;
-                    string bar = new string('|', (int)(pct / 2)); // 50 chars = 100%
+                    string bar = new string('|', (int)(pct / 2));
                     _debugLabel.Text += $"  {_systemNames[idx],-28} {ms,6:F2} ms  {pct,5:F1}%  {bar}\n";
                 }
 
-                // Per-species world population
                 _debugLabel.Text += "\n--- World Population by Species ---\n";
                 foreach (string name in SpeciesRegistry.GetAllNames())
                 {
                     int id = SpeciesRegistry.GetId(name);
                     _perSpeciesCounts.TryGetValue(id, out int count);
-                    if (count > 0)
-                        _debugLabel.Text += $"  {name,-16} {count,5}\n";
-                    else
-                        _debugLabel.Text += $"  {name,-16}     0  EXTINCT\n";
+                    _debugLabel.Text += count > 0
+                        ? $"  {name,-16} {count,5}\n"
+                        : $"  {name,-16}     0  EXTINCT\n";
                 }
             }
             else

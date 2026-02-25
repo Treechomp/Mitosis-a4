@@ -54,4 +54,25 @@ public static class GridCoordinates
         float vx = (screen.X - offsetX) / tileSize;
         return new Vector2(vx, vy);
     }
+
+    /// <summary>
+    /// Convert an abstract vertex position to a 3D world position.
+    /// The terrain lies in the XZ plane (Y-up); elevation lifts vertices along +Y.
+    /// </summary>
+    /// <param name="vx">Vertex X in abstract grid space.</param>
+    /// <param name="vy">Vertex Y in abstract grid space (becomes world Z).</param>
+    /// <param name="tileSize">World units per grid unit.</param>
+    /// <param name="elevation">Raw elevation value (0–1). Only used when heightScale > 0.</param>
+    /// <param name="heightScale">World units per unit of elevation.</param>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static Vector3 VertexToWorld3D(float vx, float vy, float tileSize,
+                                          float elevation = 0f, float heightScale = 0f)
+    {
+        float offsetX = ((int)vy % 2 == 1) ? tileSize * 0.5f : 0f;
+        return new Vector3(
+            vx * tileSize + offsetX,
+            elevation * heightScale,   // +Y is up in Godot 3D
+            vy * tileSize
+        );
+    }
 }
