@@ -25,6 +25,7 @@ public sealed class RenderingManager
     // Chunk mesh nodes — one MeshInstance2D per loaded chunk
     private readonly Dictionary<(int, int), MeshInstance2D> _chunkMeshes = new();
     private StandardMaterial3D _chunkMaterial = null!;
+    private readonly float _heightScale;
 
     // MultiMesh entity rendering — one per ShapeType
     private const int ShapeCount = 13; // ShapeType values 0..12
@@ -36,13 +37,14 @@ public sealed class RenderingManager
     private int _frameTick;
 
     public RenderingManager(EntityManager entityManager, WorldManager worldManager,
-                            int chunkSize, int worldSizeChunks, int tileSize)
+                            int chunkSize, int worldSizeChunks, int tileSize, float heightScale = 0f)
     {
         _entityManager = entityManager;
         _worldManager = worldManager;
         _chunkSize = chunkSize;
         _worldSizeChunks = worldSizeChunks;
         _tileSize = tileSize;
+        _heightScale = heightScale;
     }
 
     /// <summary>
@@ -446,12 +448,16 @@ public sealed class RenderingManager
                 int worldX = worldOffsetX + lx;
                 int worldY = worldOffsetY + ly;
 
-                // Fetch tile type: use chunk's own array for interior, WorldManager for boundary
-                TileType tile = (lx < chunk.Size && ly < chunk.Size)
+                // Fetch tile type and elevation: own array for interior, WorldManager for boundary
+                bool interior = lx < chunk.Size && ly < chunk.Size;
+                TileType tile = interior
                     ? chunk.GetTile(lx, ly)
                     : _worldManager.GetTile(worldX, worldY);
+                float elevation = interior
+                    ? chunk.GetElevation(lx, ly)
+                    : _worldManager.GetElevation(worldX, worldY);
 
-                var screen = GridCoordinates.VertexToScreen(worldX, worldY, _tileSize);
+                var screen = GridCoordinates.VertexToScreen(worldX, worldY, _tileSize, elevation, _heightScale);
 
                 vertices[ly * n + lx] = new Vector3(screen.X, screen.Y, 0f);
                 colors[ly * n + lx] = Chunk.GetTileColor(tile);

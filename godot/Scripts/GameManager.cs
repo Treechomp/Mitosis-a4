@@ -24,6 +24,7 @@ public partial class GameManager : Node2D
     [Export] public int WorldSizeChunks = 9;  // DEBUG: standardized debug world
     [Export] public int WorldSeed = 0;
     [Export] public int TileSize = 16;
+    [Export] public float ElevationHeightScale = 64f;  // Pixels of vertical lift per elevation unit (0 = flat)
     [Export] public int TargetTPS = 20;
     [Export] public int MaxPopulation = 2000;  // DEBUG: cap at 2000 (2500+ causes FPS drop)
     [Export] public int InitialPopulation = 500;  // DEBUG: standardized debug population
@@ -113,7 +114,7 @@ public partial class GameManager : Node2D
             TileSize = TileSize
         };
         _renderingManager = new RenderingManager(_entityManager, _worldManager,
-            ChunkSize, WorldSizeChunks, TileSize);
+            ChunkSize, WorldSizeChunks, TileSize, ElevationHeightScale);
 
         // Initialize systems — LODSystem must run FIRST to set tick gating
         var spatialHash = _worldManager.SpatialHash;
