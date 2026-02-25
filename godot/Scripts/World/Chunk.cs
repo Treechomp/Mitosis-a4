@@ -14,6 +14,7 @@ public sealed class Chunk
 
     private readonly TileType[,] _tiles;
     private readonly float[,] _nutrition;
+    private readonly float[,] _elevation;
 
     /// <summary>
     /// Maximum nutrition a tile can hold (1.0 = fully nourished).
@@ -32,6 +33,7 @@ public sealed class Chunk
         Size = size;
         _tiles = new TileType[size, size];
         _nutrition = new float[size, size];
+        _elevation = new float[size, size];
     }
 
     /// <summary>
@@ -79,6 +81,26 @@ public sealed class Chunk
             else
                 _nutrition[localX, localY] = MaxNutrition;
         }
+    }
+
+    /// <summary>
+    /// Get the raw elevation value (0–1) at a local vertex position.
+    /// </summary>
+    public float GetElevation(int localX, int localY)
+    {
+        if (localX < 0 || localX >= Size || localY < 0 || localY >= Size)
+            return 0f;
+        return _elevation[localX, localY];
+    }
+
+    /// <summary>
+    /// Store the raw elevation value at a local vertex position.
+    /// Called by TerrainGenerator during chunk generation.
+    /// </summary>
+    public void SetElevation(int localX, int localY, float value)
+    {
+        if (localX >= 0 && localX < Size && localY >= 0 && localY < Size)
+            _elevation[localX, localY] = value;
     }
 
     /// <summary>

@@ -135,6 +135,7 @@ public sealed class TerrainGenerator
                 }
 
                 chunk.SetTile(localX, localY, tile);
+                chunk.SetElevation(localX, localY, elevation);
             }
         }
 

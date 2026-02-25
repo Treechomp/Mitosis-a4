@@ -115,6 +115,23 @@ public sealed class WorldManager
     }
 
     /// <summary>
+    /// Get the raw elevation value (0–1) at world coordinates.
+    /// </summary>
+    public float GetElevation(float worldX, float worldY)
+    {
+        int chunkX = (int)(worldX / ChunkSize);
+        int chunkY = (int)(worldY / ChunkSize);
+
+        var chunk = GetChunk(chunkX, chunkY);
+        if (chunk == null)
+            return 0f;
+
+        int localX = (int)worldX % ChunkSize;
+        int localY = (int)worldY % ChunkSize;
+        return chunk.GetElevation(localX, localY);
+    }
+
+    /// <summary>
     /// Get the nutrition level at world coordinates (0.0 = depleted, 1.0 = full).
     /// </summary>
     public float GetNutrition(float worldX, float worldY)
