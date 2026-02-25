@@ -14,7 +14,7 @@ All gameplay systems (movement, spatial hash, rivers, pathfinding) continue to o
 
 ---
 
-## Phase 1 — Store Elevation at Vertices
+## Phase 1 — Store Elevation at Vertices ✅ DONE
 
 **Goal**: Persist raw elevation values per vertex in Chunk. No visual change.
 
@@ -32,7 +32,7 @@ All gameplay systems (movement, spatial hash, rivers, pathfinding) continue to o
 
 ---
 
-## Phase 2 — Coordinate Helper
+## Phase 2 — Coordinate Helper ✅ DONE
 
 **Goal**: Centralize screen↔world math with row offset in one place.
 
@@ -64,7 +64,7 @@ public static class GridCoordinates
 
 ---
 
-## Phase 3 — Triangle Mesh Terrain Renderer
+## Phase 3 — Triangle Mesh Terrain Renderer ✅ DONE
 
 **Goal**: Replace per-chunk `ImageTexture` + `DrawTextureRect` with `MeshInstance2D` triangle meshes per chunk. Row offset applied. Vertex colors interpolated by GPU (smooth biome blending).
 
@@ -98,7 +98,7 @@ public static class GridCoordinates
 
 ---
 
-## Phase 4 — Entity Screen Position Alignment
+## Phase 4 — Entity Screen Position Alignment ✅ DONE
 
 **Goal**: Apply row offset to entity screen positions so entities sit correctly on the offset terrain.
 
@@ -127,7 +127,7 @@ public static class GridCoordinates
 
 ---
 
-## Phase 5A — Fake Isometric Elevation (Quick Win)
+## Phase 5A — Fake Isometric Elevation ✅ DONE
 
 **Goal**: Use stored elevation to offset vertex Y positions in 2D screen space — giving a faux-3D look without changing the scene tree.
 
@@ -150,11 +150,15 @@ public static class GridCoordinates
 
 **Milestone**: Mountains visually "rise" above sea level. Valleys and oceans sit lower. The terrain has a hand-drawn topographic map appearance. No engine changes required.
 
+**Note**: With Camera2D (straight top-down), the Y-offset reads as terrain stretching rather
+than perceived height. The elevation data is correctly wired — the depth cue becomes apparent
+once Phase 5B replaces Camera2D with an angled Camera3D.
+
 **Risk**: Low-medium. Visual-only. May require camera adjustment for comfortable viewing.
 
 ---
 
-## Phase 5B — True 3D (Full Milestone)
+## Phase 5B — True 3D (Full Milestone) ← NEXT
 
 **Goal**: Proper 3D terrain mesh with perspective/isometric camera.
 
@@ -177,33 +181,40 @@ public static class GridCoordinates
 
 ---
 
-## Phase 6 — Gameplay System Alignment
+## Phase 6 — Gameplay System Alignment ✅ DONE (partial)
 
 **Goal**: Align remaining systems with offset grid and elevation.
 
 **Files**: `RiverMapper.cs`, `MovementSystem.cs`, `WorldSpawner.cs`
 
-**Changes**:
-- `RiverMapper`: Update neighbor directions from 8-directional to 6-directional (offset grid has 6 natural neighbors per vertex). Current `DX/DY[8]` → split into even-row and odd-row neighbor tables
-- `MovementSystem`: Entity movement slope resistance — penalize movement up steep elevation gradients (sample elevation delta between current and destination vertex)
-- `WorldSpawner`: Spawning on flat terrain — use elevation data to avoid spawning on steep slopes
-- `PlayerController`: 3D camera orbit controls (pan, zoom, rotate) for the full 3D mode
+**Implemented**:
+- `RiverMapper`: Replaced `DX/DY[8]` with `EvenDX/EvenDY[6]` and `OddDX/OddDY[6]`. All five
+  neighbor loops (river trace, lake flood-fill ×2, wide-river widening, wetland banks) now
+  walk the 6 geometrically correct hex neighbors based on row parity.
+- `MovementSystem`: Slope resistance — non-flying entities moving uphill have `speedMult`
+  reduced by `max(0.25, 1 − rise × 8)`. Sampled via `WorldManager.GetElevation`.
+- `WorldSpawner` (`WorldManager.GetSpawnablePositionsForSpecies`): Ground-dwelling species
+  (not `IsAquatic`, not `IsFlying`) skip tiles where any cardinal neighbor differs by more
+  than 0.18 elevation units.
+
+**Deferred to Phase 5B**:
+- `PlayerController`: 3D camera orbit controls (pan, zoom, rotate) — requires Camera3D.
 
 ---
 
 ## Implementation Order
 
 ```
-Phase 1  →  Phase 2  →  Phase 3  →  Phase 4
+Phase 1  →  Phase 2  →  Phase 3  →  Phase 4   ✅ all done
    ↓
 (stable 2D triangulated baseline)
    ↓
-Phase 5A  →  validate look  →  Phase 5B
-   ↓
-Phase 6
+Phase 5A  →  Phase 6  →  Phase 5B ← next
 ```
 
-Phases 1–4 are safe and incremental. The game stays playable throughout. Phase 5A is a quick visual experiment. Phase 5B is the architectural commitment.
+Phases 1–4, 5A, and 6 are complete. The game runs on a triangulated hex mesh with
+smooth biome blending, correct entity alignment, slope-aware movement, and hex-topology
+rivers. Phase 5B is the architectural commitment: Node3D, Camera3D, MeshInstance3D.
 
 ---
 
