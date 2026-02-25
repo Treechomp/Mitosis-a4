@@ -37,9 +37,13 @@ public sealed class RiverMapper
     private const float MaxLakeRise = 0.04f;             // Max water rise above depression bottom
     private const int MaxLakeArea = 80;                  // Max tiles a single lake can occupy
 
-    // 8-direction offsets (N, NE, E, SE, S, SW, W, NW)
-    private static readonly int[] DX = { 0, 1, 1, 1, 0, -1, -1, -1 };
-    private static readonly int[] DY = { -1, -1, 0, 1, 1, 1, 0, -1 };
+    // 6-direction offsets for staggered hex grid (row-parity variants)
+    // Even row (y%2==0): upper/lower diagonal neighbors lean left  (dx = -1)
+    // Odd  row (y%2==1): upper/lower diagonal neighbors lean right (dx = +1)
+    private static readonly int[] EvenDX = { -1,  1, -1,  0, -1,  0 };
+    private static readonly int[] EvenDY = {  0,  0, -1, -1,  1,  1 };
+    private static readonly int[]  OddDX = { -1,  1,  0,  1,  0,  1 };
+    private static readonly int[]  OddDY = {  0,  0, -1, -1,  1,  1 };
 
     public RiverMapper(FastNoiseLite elevationNoise, FastNoiseLite warpNoiseX,
                        FastNoiseLite warpNoiseY, float warpAmplitude)
@@ -192,14 +196,15 @@ public sealed class RiverMapper
             _flow[cx, cy]++;
             visited.Add((cx, cy));
 
-            // Find steepest descent among 8 neighbors
+            // Find steepest descent among 6 hex neighbors
             int bestNx = -1, bestNy = -1;
             float bestElev = currentElev;
 
-            for (int d = 0; d < 8; d++)
+            var (rdx, rdy) = cy % 2 == 0 ? (EvenDX, EvenDY) : (OddDX, OddDY);
+            for (int d = 0; d < 6; d++)
             {
-                int nx = cx + DX[d];
-                int ny = cy + DY[d];
+                int nx = cx + rdx[d];
+                int ny = cy + rdy[d];
 
                 if (nx < 0 || nx >= _worldSize || ny < 0 || ny >= _worldSize)
                 {
@@ -280,10 +285,11 @@ public sealed class RiverMapper
                 var snapshot = new List<(int, int)>(filled);
                 foreach (var (fx, fy) in snapshot)
                 {
-                    for (int d = 0; d < 8; d++)
+                    var (fdx, fdy) = fy % 2 == 0 ? (EvenDX, EvenDY) : (OddDX, OddDY);
+                    for (int d = 0; d < 6; d++)
                     {
-                        int nx = fx + DX[d];
-                        int ny = fy + DY[d];
+                        int nx = fx + fdx[d];
+                        int ny = fy + fdy[d];
                         if (nx < 0 || nx >= _worldSize || ny < 0 || ny >= _worldSize)
                             continue;
                         if (filled.Contains((nx, ny))) continue;
@@ -316,10 +322,11 @@ public sealed class RiverMapper
             {
                 var (px, py) = frontier.Dequeue();
 
-                for (int d = 0; d < 8; d++)
+                var (pdx, pdy) = py % 2 == 0 ? (EvenDX, EvenDY) : (OddDX, OddDY);
+                for (int d = 0; d < 6; d++)
                 {
-                    int nx = px + DX[d];
-                    int ny = py + DY[d];
+                    int nx = px + pdx[d];
+                    int ny = py + pdy[d];
                     if (nx < 0 || nx >= _worldSize || ny < 0 || ny >= _worldSize)
                         continue;
                     if (filled.Contains((nx, ny))) continue;
@@ -397,10 +404,11 @@ public sealed class RiverMapper
                     // Wide rivers: also mark adjacent tiles for high-flow rivers
                     if (flow >= WideRiverFlow)
                     {
-                        for (int d = 0; d < 8; d += 2) // Cardinal directions only
+                        var (wdx, wdy) = y % 2 == 0 ? (EvenDX, EvenDY) : (OddDX, OddDY);
+                        for (int d = 0; d < 6; d++) // All 6 hex neighbors
                         {
-                            int nx = x + DX[d];
-                            int ny = y + DY[d];
+                            int nx = x + wdx[d];
+                            int ny = y + wdy[d];
                             if (nx >= 0 && nx < _worldSize && ny >= 0 && ny < _worldSize &&
                                 _elevation[nx, ny] >= LandLevel && _elevation[nx, ny] < 0.80f &&
                                 !_isLake[nx, ny])
@@ -432,10 +440,11 @@ public sealed class RiverMapper
 
                 // Check if adjacent to river or lake
                 bool adjacentToWater = false;
-                for (int d = 0; d < 8; d++)
+                var (wbdx, wbdy) = y % 2 == 0 ? (EvenDX, EvenDY) : (OddDX, OddDY);
+                for (int d = 0; d < 6; d++)
                 {
-                    int nx = x + DX[d];
-                    int ny = y + DY[d];
+                    int nx = x + wbdx[d];
+                    int ny = y + wbdy[d];
                     if (nx >= 0 && nx < _worldSize && ny >= 0 && ny < _worldSize)
                     {
                         if (_isRiver[nx, ny] || _isLake[nx, ny])

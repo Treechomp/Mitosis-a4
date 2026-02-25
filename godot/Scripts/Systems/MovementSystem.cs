@@ -60,11 +60,26 @@ public sealed class MovementSystem : ISystem
             float speedMult = currentTile.GetSpeedMultiplier();
 
             // Flying creatures ignore terrain speed penalties
+            bool isFlying = false;
             if (em.HasComponents(entity, ComponentFlags.Species))
             {
                 var speciesDef = SpeciesRegistry.GetById(em.Species[entity].SpeciesId);
                 if (speciesDef.IsFlying)
+                {
+                    isFlying = true;
                     speedMult = 1f;
+                }
+            }
+
+            // Slope resistance: uphill movement is slower (non-flying only)
+            if (!isFlying)
+            {
+                float currentElev = _worldManager.GetElevation(pos.X, pos.Y);
+                float destX = Math.Clamp(pos.X + vel.Dx, 0f, _worldSizeTiles - 0.01f);
+                float destY = Math.Clamp(pos.Y + vel.Dy, 0f, _worldSizeTiles - 0.01f);
+                float elevRise = _worldManager.GetElevation(destX, destY) - currentElev;
+                if (elevRise > 0f)
+                    speedMult *= Math.Max(0.25f, 1f - elevRise * 8f);
             }
 
             // Calculate movement delta with terrain speed modifier

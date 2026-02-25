@@ -356,11 +356,24 @@ public sealed class WorldManager
             for (int lx = 0; lx < chunk.Size; lx++)
             {
                 var tile = chunk.GetTile(lx, ly);
-                if (species.CanSpawnOnTile(tile))
+                if (!species.CanSpawnOnTile(tile))
+                    continue;
+
+                // Skip steep slopes for ground-dwelling species
+                if (!species.IsAquatic && !species.IsFlying)
                 {
-                    var biome = chunk.GetBiome(lx, ly);
-                    spawnable.Add((lx, ly, biome, tile));
+                    float e = chunk.GetElevation(lx, ly);
+                    float maxSlope = 0f;
+                    if (lx > 0)              maxSlope = Math.Max(maxSlope, Math.Abs(chunk.GetElevation(lx - 1, ly) - e));
+                    if (lx < chunk.Size - 1) maxSlope = Math.Max(maxSlope, Math.Abs(chunk.GetElevation(lx + 1, ly) - e));
+                    if (ly > 0)              maxSlope = Math.Max(maxSlope, Math.Abs(chunk.GetElevation(lx, ly - 1) - e));
+                    if (ly < chunk.Size - 1) maxSlope = Math.Max(maxSlope, Math.Abs(chunk.GetElevation(lx, ly + 1) - e));
+                    if (maxSlope > 0.18f)
+                        continue;
                 }
+
+                var biome = chunk.GetBiome(lx, ly);
+                spawnable.Add((lx, ly, biome, tile));
             }
         }
 
