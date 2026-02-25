@@ -154,7 +154,7 @@ public partial class GameManager : Node3D
         // --- 3D scene setup ---
         // Camera
         _camera = GetNode<Camera3D>("Camera3D");
-        _camera.Projection = Camera3D.ProjectionType.Orthographic;
+        _camera.Projection = Camera3D.ProjectionType.Orthogonal;
 
         // Directional light: warm sunlight from upper-right
         var dirLight = new DirectionalLight3D();
@@ -165,10 +165,10 @@ public partial class GameManager : Node3D
 
         // World environment: sky color + soft ambient so shadows aren't pitch black
         var worldEnv = new WorldEnvironment();
-        var env = new Environment();
-        env.BackgroundMode  = Environment.BGMode.Color;
+        var env = new Godot.Environment();
+        env.BackgroundMode  = Godot.Environment.BGMode.Color;
         env.BackgroundColor = new Color(0.4f, 0.6f, 0.9f);
-        env.AmbientLightSource = Environment.AmbientSource.Color;
+        env.AmbientLightSource = Godot.Environment.AmbientSource.Color;
         env.AmbientLightColor  = new Color(0.35f, 0.4f, 0.5f);
         env.AmbientLightEnergy = 0.6f;
         worldEnv.Environment = env;
