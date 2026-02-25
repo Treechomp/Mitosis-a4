@@ -14,6 +14,7 @@ namespace Mitosis.Systems;
 /// Processes wandering behavior for entities.
 /// LOD-aware: only processes entities due for update.
 /// Includes terrain avoidance and discomfort-driven escape behavior.
+/// Uses angular interpolation for smooth turning (mass-based turn rates).
 /// </summary>
 public sealed class WanderSystem : ISystem
 {
@@ -23,6 +24,12 @@ public sealed class WanderSystem : ISystem
     private readonly float _lookAheadDistance;
     private readonly float _roamArrivalDist;
     private readonly List<int> _nearbyBuffer = new(32);
+
+    // Turn rate constants: turnRate = clamp(TurnRateScale / bodyMass, TurnRateMin, TurnRateMax)
+    // Light creatures (~0.3 mass) turn quickly, heavy creatures (~14 mass) turn slowly.
+    private const float TurnRateScale = 0.4f;
+    private const float TurnRateMin = 0.06f;
+    private const float TurnRateMax = 0.3f;
 
     public WanderSystem(WorldManager? worldManager = null, float lookAheadDistance = 1.5f,
                         float roamArrivalDist = 5f, SpatialHash? spatialHash = null)
@@ -47,7 +54,7 @@ public sealed class WanderSystem : ISystem
             ref var vel = ref em.Velocities[entity];
             ref var pos = ref em.Positions[entity];
 
-            // Get species definition for roaming parameters
+            // Get species definition for roaming parameters and turn rate
             SpeciesDefinition? wanderSpeciesDef = null;
             if (em.HasComponents(entity, ComponentFlags.Species))
             {
@@ -56,6 +63,8 @@ public sealed class WanderSystem : ISystem
             }
             float roamDistance = wanderSpeciesDef?.RoamDistance ?? 60f;
             int roamCooldownBase = wanderSpeciesDef?.RoamCooldown ?? 500;
+            float bodyMass = wanderSpeciesDef?.BodyMass ?? 1f;
+            float turnRate = Math.Clamp(TurnRateScale / bodyMass, TurnRateMin, TurnRateMax);
 
             // Skip if fleeing
             if (em.HasComponents(entity, ComponentFlags.Prey) && em.Preys[entity].IsFleeing)
@@ -154,8 +163,7 @@ public sealed class WanderSystem : ISystem
                     }
 
                     wander.CurrentDirection = roamDir;
-                    vel.Dx = roamDir.X * roamSpeed;
-                    vel.Dy = roamDir.Y * roamSpeed;
+                    BlendVelocitySmooth(ref vel, roamDir.X, roamDir.Y, roamSpeed, turnRate);
                     continue;  // Skip normal wander while roaming
                 }
             }
@@ -241,8 +249,8 @@ public sealed class WanderSystem : ISystem
                 wander.CurrentDirection = newDir;
             }
 
-            vel.Dx = wander.CurrentDirection.X * wander.Speed;
-            vel.Dy = wander.CurrentDirection.Y * wander.Speed;
+            BlendVelocitySmooth(ref vel, wander.CurrentDirection.X, wander.CurrentDirection.Y,
+                                wander.Speed, turnRate);
         }
     }
 
@@ -491,5 +499,38 @@ public sealed class WanderSystem : ISystem
             TileType.Shrubland => 0.5f,
             _ => 0f // Grass, water, mountain = balanced or untargetable
         };
+    }
+
+    /// <summary>
+    /// Smoothly rotate velocity toward a target direction using angular interpolation.
+    /// Maintains constant speed while the direction converges exponentially.
+    /// Avoids the instant-flip jitter of direct velocity assignment.
+    /// </summary>
+    private static void BlendVelocitySmooth(ref Velocity vel, float targetDirX, float targetDirY,
+                                             float speed, float turnRate)
+    {
+        float targetAngle = MathF.Atan2(targetDirY, targetDirX);
+        float speedSq = vel.Dx * vel.Dx + vel.Dy * vel.Dy;
+
+        float newAngle;
+        if (speedSq > 0.0001f)
+        {
+            float curAngle = MathF.Atan2(vel.Dy, vel.Dx);
+            float angleDiff = targetAngle - curAngle;
+
+            // Normalize to [-PI, PI] so we always take the shortest arc
+            if (angleDiff > MathF.PI) angleDiff -= 2f * MathF.PI;
+            else if (angleDiff < -MathF.PI) angleDiff += 2f * MathF.PI;
+
+            newAngle = curAngle + angleDiff * turnRate;
+        }
+        else
+        {
+            // No current velocity — snap to target direction (first tick after spawn)
+            newAngle = targetAngle;
+        }
+
+        vel.Dx = MathF.Cos(newAngle) * speed;
+        vel.Dy = MathF.Sin(newAngle) * speed;
     }
 }
