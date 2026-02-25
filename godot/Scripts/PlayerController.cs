@@ -1,6 +1,7 @@
 using Godot;
 using Mitosis.Components;
 using Mitosis.ECS;
+using Mitosis.Utils;
 using static Mitosis.ECS.EntityManager;
 
 namespace Mitosis;
@@ -36,7 +37,7 @@ public sealed class PlayerController
         if (entity >= 0 && _entityManager.IsAlive(entity))
         {
             ref var pos = ref _entityManager.Positions[entity];
-            _cameraTarget = new Vector2(pos.X * TileSize, pos.Y * TileSize);
+            _cameraTarget = GridCoordinates.VertexToScreen(pos.X, pos.Y, TileSize);
             if (camera != null)
                 camera.Position = _cameraTarget;
         }
@@ -104,7 +105,7 @@ public sealed class PlayerController
             return;
 
         ref var pos = ref _entityManager.Positions[_playerEntity];
-        _cameraTarget = new Vector2(pos.X * TileSize, pos.Y * TileSize);
+        _cameraTarget = GridCoordinates.VertexToScreen(pos.X, pos.Y, TileSize);
 
         // Smooth camera follow
         camera.Position = camera.Position.Lerp(_cameraTarget, (float)(5.0 * delta));

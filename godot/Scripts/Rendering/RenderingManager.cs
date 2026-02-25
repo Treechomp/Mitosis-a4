@@ -535,8 +535,9 @@ public sealed class RenderingManager
             ref var pos = ref _entityManager.Positions[entity];
             ref var rend = ref _entityManager.Renderables[entity];
 
-            float screenX = pos.X * _tileSize;
-            float screenY = pos.Y * _tileSize;
+            var screen = GridCoordinates.VertexToScreen(pos.X, pos.Y, _tileSize);
+            float screenX = screen.X;
+            float screenY = screen.Y;
 
             // Frustum cull
             float margin = rend.Size * 2f;
