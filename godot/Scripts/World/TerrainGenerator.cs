@@ -18,7 +18,7 @@ public sealed class TerrainGenerator
     private readonly FastNoiseLite _landmarkNoise;
 
     // Domain warping amplitude (in tiles) — larger value means more organic, winding boundaries
-    private const float WarpAmplitude = 24f;
+    private const float WarpAmplitude = 30f;
 
     // Flow-based river system (pre-computed before chunk generation)
     private RiverMapper? _riverMapper;
@@ -42,7 +42,7 @@ public sealed class TerrainGenerator
         _moistureNoise.Seed = seed + 1000;
         _moistureNoise.Frequency = 0.008f;
         _moistureNoise.FractalType = FastNoiseLite.FractalTypeEnum.Fbm;
-        _moistureNoise.FractalOctaves = 3;
+        _moistureNoise.FractalOctaves = 4;   // extra octave → patchier moisture → more biome variety
 
         // Temperature noise — very large-scale regions with latitude-like gradient
         _temperatureNoise = new FastNoiseLite();
@@ -172,96 +172,89 @@ public sealed class TerrainGenerator
 
     private static TileType DetermineTileType(float elevation, float moisture, float temperature)
     {
-        // Deep water
-        if (elevation < 0.3f)
+        // ── Water ──────────────────────────────────────────────────────────────────────
+        if (elevation < 0.30f)
             return TileType.DeepWater;
 
-        // Shallow water (with reef variant in warm coastal areas)
-        if (elevation < 0.4f)
+        if (elevation < 0.40f)
         {
-            // Reef generates in warm, shallow coastal zones
-            if (temperature > 0.7f && elevation > 0.35f)
+            // Reefs grow in warm, clear, shallow coastal water.
+            // Lowered threshold (0.70→0.62) and slightly wider elevation band so reef
+            // actually appears in tropical coastlines.
+            if (temperature > 0.62f && elevation > 0.33f)
                 return TileType.Reef;
             return TileType.ShallowWater;
         }
 
-        // Beach/sand
-        if (elevation < 0.45f)
+        // Slightly wider beach band (0.45→0.46) for more visible sand strips.
+        if (elevation < 0.46f)
             return TileType.Sand;
 
-        // Mountains at high elevation
-        if (elevation > 0.8f)
+        // ── Mountains / high ground ─────────────────────────────────────────────────────
+        if (elevation > 0.80f)
         {
-            // Volcanic vents: rare hot spots in mountain zones
-            if (temperature > 0.65f && moisture < 0.3f)
-                return TileType.Lava;
+            if (temperature < 0.22f) return TileType.Ice;                   // frozen peaks
+            if (temperature > 0.55f && moisture < 0.32f) return TileType.Lava; // volcanic
             return TileType.Mountain;
         }
 
-        // === Arctic biomes (cold temperature) ===
-        if (temperature < 0.2f)
+        // Sub-alpine ice cap: cold enough at altitude that ground stays frozen.
+        if (elevation > 0.72f && temperature < 0.26f)
+            return TileType.Ice;
+
+        // ── Arctic / polar (very cold) ─────────────────────────────────────────────────
+        // Expanded boundary 0.20→0.22 so ice sheets are slightly larger.
+        if (temperature < 0.22f)
         {
-            // Ice forms at very cold + low elevation (frozen water/ground)
-            if (moisture > 0.6f || elevation < 0.55f)
-                return TileType.Ice;
+            if (moisture > 0.55f || elevation < 0.57f) return TileType.Ice;
             return TileType.Tundra;
         }
 
-        if (temperature < 0.35f)
+        // ── Cold temperate ─────────────────────────────────────────────────────────────
+        // Expanded 0.35→0.40: the cold band now claims 18% of the temperature range
+        // instead of 15%, giving Taiga/Steppe/Tundra meaningful world coverage.
+        // Added polar-desert Ice at the dry extreme and Bog at the very wet extreme.
+        if (temperature < 0.40f)
         {
-            // Cold band: tundra → steppe → taiga → wetland
-            if (moisture > 0.7f)
-                return TileType.Wetland;
-            if (moisture > 0.5f)
-                return TileType.Taiga;
-            if (moisture > 0.3f)
-                return TileType.Steppe;
-            return TileType.Tundra;
+            if (moisture > 0.72f) return TileType.Wetland;
+            if (moisture > 0.54f) return TileType.Taiga;
+            if (moisture > 0.33f) return TileType.Steppe;
+            if (moisture > 0.17f) return TileType.Tundra;
+            return TileType.Ice;  // polar desert — very dry, very cold
         }
 
-        // === Tropical biomes (hot temperature) ===
+        // ── Tropical (hot) ─────────────────────────────────────────────────────────────
         if (temperature > 0.75f)
         {
-            if (moisture > 0.65f)
-                return TileType.Jungle;
-            if (moisture > 0.4f)
-                return TileType.Savanna;
-            if (moisture > 0.25f)
-                return TileType.Dirt;
-            if (moisture > 0.15f)
-                return TileType.Sand;
+            if (moisture > 0.62f) return TileType.Jungle;
+            if (moisture > 0.40f) return TileType.Savanna;
+            if (moisture > 0.26f) return TileType.Dirt;
+            if (moisture > 0.15f) return TileType.Sand;
             return TileType.Arid;
         }
 
-        if (temperature > 0.6f)
+        // ── Warm temperate ─────────────────────────────────────────────────────────────
+        // Jungle removed: temp 0.60–0.75 is too cool for true jungle; dense moisture
+        // here becomes Wetland (temperate rainforest / swamp) instead.
+        if (temperature > 0.60f)
         {
-            // Warm-temperate
-            if (moisture > 0.7f)
-                return TileType.Jungle;
-            if (moisture > 0.55f)
-                return TileType.Forest;
-            if (moisture > 0.35f)
-                return temperature > 0.67f ? TileType.Savanna : TileType.Grass;
-            if (moisture > 0.25f)
-                return TileType.Shrubland;
-            if (moisture > 0.15f)
-                return TileType.Dirt;
+            if (moisture > 0.70f) return TileType.Wetland;
+            if (moisture > 0.54f) return TileType.Forest;
+            if (moisture > 0.36f) return temperature > 0.67f ? TileType.Savanna : TileType.Grass;
+            if (moisture > 0.24f) return TileType.Shrubland;
+            if (moisture > 0.13f) return TileType.Dirt;
             return TileType.Arid;
         }
 
-        // === Temperate biomes (middle temperature) ===
-        if (moisture > 0.82f)
-            return TileType.Bog;
-        if (moisture > 0.7f)
-            return TileType.Wetland;
-        if (moisture > 0.55f)
-            return TileType.Forest;
-        if (moisture > 0.35f)
-            return TileType.Grass;
-        if (moisture > 0.25f)
-            return TileType.Shrubland;
-        if (moisture > 0.15f)
-            return TileType.Dirt;
+        // ── Temperate ──────────────────────────────────────────────────────────────────
+        // Bog threshold 0.82→0.76 so bogs actually appear.
+        // Steppe added at the dry end (0.11–0.22) — previously invisible in temperate.
+        if (moisture > 0.76f) return TileType.Bog;
+        if (moisture > 0.65f) return TileType.Wetland;
+        if (moisture > 0.50f) return TileType.Forest;
+        if (moisture > 0.33f) return TileType.Grass;
+        if (moisture > 0.22f) return TileType.Shrubland;
+        if (moisture > 0.11f) return TileType.Steppe;
         return TileType.Arid;
     }
 
@@ -303,12 +296,42 @@ public sealed class TerrainGenerator
                     }
                 }
 
+                // --- Taiga Clearings: cold meadows (steppe patches) inside taiga ---
+                if (currentTile == TileType.Taiga)
+                {
+                    if (lmNoise < -0.68f)
+                    {
+                        chunk.SetTile(localX, localY, TileType.Steppe);
+                        continue;
+                    }
+                }
+
                 // --- Jungle Clearings: savanna patches inside jungle ---
                 if (currentTile == TileType.Jungle)
                 {
-                    if (lmNoise < -0.7f)
+                    if (lmNoise < -0.70f)
                     {
                         chunk.SetTile(localX, localY, TileType.Savanna);
+                        continue;
+                    }
+                }
+
+                // --- Permafrost spots: ice patches within tundra ---
+                if (currentTile == TileType.Tundra)
+                {
+                    if (lmNoise > 0.72f)
+                    {
+                        chunk.SetTile(localX, localY, TileType.Ice);
+                        continue;
+                    }
+                }
+
+                // --- Shrubland dry patches: steppe outcrops in shrubland ---
+                if (currentTile == TileType.Shrubland)
+                {
+                    if (lmNoise > 0.74f)
+                    {
+                        chunk.SetTile(localX, localY, TileType.Steppe);
                         continue;
                     }
                 }
