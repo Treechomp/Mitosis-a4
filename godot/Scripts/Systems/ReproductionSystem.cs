@@ -128,8 +128,8 @@ public sealed class ReproductionSystem : ISystem
             float spawnX = pos.X + ((float)_rng.NextDouble() * 2 - 1) * reproduction.SpawnRadius;
             float spawnY = pos.Y + ((float)_rng.NextDouble() * 2 - 1) * reproduction.SpawnRadius;
 
-            // Only spawn on spawnable land tiles
-            if (!_worldManager.IsSpawnable(spawnX, spawnY))
+            // Only spawn on tiles valid for this species (aquatic spawn in water, etc.)
+            if (!speciesDef.CanSpawnOnTile(_worldManager.GetTile(spawnX, spawnY)))
                 continue;
 
             // Pay reproduction cost
