@@ -410,15 +410,18 @@ public sealed class RenderingManager
                 int vTL = (ly + 1) * n + lx;
                 int vTR = (ly + 1) * n + lx + 1;
 
+                // With grid Y mapped to world -Z, the original BL→BR→TL winding becomes
+                // CW in screen space and is back-face culled.  Swap v1↔v2 within each
+                // triangle to restore CCW screen-space winding (visible to camera).
                 if ((worldOffsetY + ly) % 2 == 0)
                 {
-                    indices[idx++] = vBL; indices[idx++] = vBR; indices[idx++] = vTL;
-                    indices[idx++] = vBR; indices[idx++] = vTR; indices[idx++] = vTL;
+                    indices[idx++] = vBL; indices[idx++] = vTL; indices[idx++] = vBR;
+                    indices[idx++] = vBR; indices[idx++] = vTL; indices[idx++] = vTR;
                 }
                 else
                 {
-                    indices[idx++] = vBL; indices[idx++] = vBR; indices[idx++] = vTR;
-                    indices[idx++] = vBL; indices[idx++] = vTR; indices[idx++] = vTL;
+                    indices[idx++] = vBL; indices[idx++] = vTR; indices[idx++] = vBR;
+                    indices[idx++] = vBL; indices[idx++] = vTL; indices[idx++] = vTR;
                 }
             }
         }
@@ -435,8 +438,11 @@ public sealed class RenderingManager
             normals[indices[i + 1]] += faceN;
             normals[indices[i + 2]] += faceN;
         }
+        // The reversed CCW winding (required after the Z-axis flip) makes cross products
+        // point in -Y; negate to restore +Y face normals so DirectionalLight from above
+        // illuminates the terrain surface correctly.
         for (int i = 0; i < normals.Length; i++)
-            normals[i] = normals[i].Normalized();
+            normals[i] = (-normals[i]).Normalized();
 
         var mesh = new ArrayMesh();
         var arrays = new Godot.Collections.Array();
