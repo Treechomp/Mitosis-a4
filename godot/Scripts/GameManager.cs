@@ -156,6 +156,14 @@ public partial class GameManager : Node3D
         _camera = GetNode<Camera3D>("Camera3D");
         _camera.Projection = Camera3D.ProjectionType.Orthogonal;
 
+        // Far plane: must exceed CameraDistance (= CameraSize*2) at maximum zoom,
+        // plus the world's half-diagonal so terrain edges are never clipped.
+        // Default Godot far (4000) is too small once zoom pushes CameraDistance to 5000+.
+        float maxCamDist  = ZoomMax * TileSize * 32f * 2f;
+        float worldRadius = WorldSizeChunks * ChunkSize * TileSize * 1.5f;
+        _camera.Far  = maxCamDist + worldRadius + ElevationHeightScale + 500f;
+        _camera.Near = 1f;
+
         // Directional light: warm sunlight from upper-right
         var dirLight = new DirectionalLight3D();
         dirLight.LightColor  = new Color(1f, 0.95f, 0.85f);

@@ -435,8 +435,10 @@ public sealed class RenderingManager
             normals[indices[i + 1]] += faceN;
             normals[indices[i + 2]] += faceN;
         }
+        // Negate: cross-product winding gives -Y normals for terrain in the XZ plane;
+        // flipping to +Y ensures the directional light (from above) illuminates the top surface.
         for (int i = 0; i < normals.Length; i++)
-            normals[i] = normals[i].Normalized();
+            normals[i] = (-normals[i]).Normalized();
 
         var mesh = new ArrayMesh();
         var arrays = new Godot.Collections.Array();
