@@ -137,7 +137,7 @@ public sealed class PlayerController
     {
         // Use XZ only (Y=0) so the camera stays level regardless of terrain height.
         float offsetX = ((int)worldY % 2 == 1) ? TileSize * 0.5f : 0f;
-        return new Vector3(worldX * TileSize + offsetX, 0f, worldY * TileSize);
+        return new Vector3(worldX * TileSize + offsetX, 0f, -worldY * TileSize); // -Z matches VertexToWorld3D
     }
 
     /// <summary>
