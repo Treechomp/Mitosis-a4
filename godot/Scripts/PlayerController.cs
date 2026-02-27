@@ -79,20 +79,33 @@ public sealed class PlayerController
         if (Input.IsKeyPressed(Key.Shift))
             speed *= PlayerSprintMultiplier;
 
-        vel.Dx = 0;
-        vel.Dy = 0;
+        // --- Camera-relative movement ---
+        // Gather raw input in screen space: forward = toward top of screen, right = toward right.
+        float inputForward = 0f;
+        float inputRight   = 0f;
+        if (Input.IsActionPressed("move_up"))    inputForward += 1f;
+        if (Input.IsActionPressed("move_down"))  inputForward -= 1f;
+        if (Input.IsActionPressed("move_right")) inputRight   += 1f;
+        if (Input.IsActionPressed("move_left"))  inputRight   -= 1f;
 
-        if (Input.IsActionPressed("move_up"))    vel.Dy = -speed;
-        if (Input.IsActionPressed("move_down"))  vel.Dy =  speed;
-        if (Input.IsActionPressed("move_left"))  vel.Dx = -speed;
-        if (Input.IsActionPressed("move_right")) vel.Dx =  speed;
+        // Normalize so diagonal is not faster than cardinal.
+        float len = MathF.Sqrt(inputForward * inputForward + inputRight * inputRight);
+        if (len > 1f) { inputForward /= len; inputRight /= len; }
 
-        // Normalize diagonal movement
-        if (vel.Dx != 0 && vel.Dy != 0)
-        {
-            vel.Dx *= 0.707f;
-            vel.Dy *= 0.707f;
-        }
+        // Rotate input by camera yaw to get world-XZ movement direction.
+        //   camera forward (horizontal) = ( sin(yaw),  cos(yaw) ) in world (X, Z)
+        //   camera right   (horizontal) = ( cos(yaw), -sin(yaw) ) in world (X, Z)
+        float yawRad = Mathf.DegToRad(_cameraYaw);
+        float sinY   = MathF.Sin(yawRad);
+        float cosY   = MathF.Cos(yawRad);
+        float worldDX = inputForward * sinY + inputRight * cosY;   // world +X
+        float worldDZ = inputForward * cosY + inputRight * -sinY;  // world +Z
+
+        // Convert world-XZ to grid velocity.
+        //   world_X =  grid_X * tileSize  →  vel.Dx = worldDX * speed
+        //   world_Z = -grid_Y * tileSize  →  vel.Dy = -worldDZ * speed
+        vel.Dx = worldDX * speed;
+        vel.Dy = -worldDZ * speed;
     }
 
     public void HandleZoomInput(Camera3D? camera)

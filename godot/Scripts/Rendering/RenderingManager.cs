@@ -506,7 +506,7 @@ public sealed class RenderingManager
                 if (speedSq > 0.0004f)
                 {
                     // Y-axis rotation so entity faces its movement direction in XZ.
-                    // vel.Dx maps to world X, vel.Dy maps to world Z.
+                    // vel.Dx = worldDX, vel.Dy = -worldDZ → atan2(worldDX, worldDZ).
                     rotation = MathF.Atan2(vel.Dx, -vel.Dy);
                 }
             }
