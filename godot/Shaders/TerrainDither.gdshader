@@ -5,25 +5,34 @@
 //   COLOR.rgb  — the vertex's own biome colour (interpolated by GPU → blend weight)
 //   UV.x       — the vertex's TileType index as a float (flat: provoking vertex wins)
 //
-// In the fragment shader we know:
-//   primary   = the tile type that "owns" this triangle (from the flat ID)
-//   secondary = nearest palette entry to the interpolated blend colour that is NOT primary
+// In the fragment shader:
+//   primary   = the tile type that "owns" this triangle (from the flat UV.x)
+//   secondary = nearest palette entry to the interpolated blend colour, excluding primary
 //
-// A 4×4 Bayer ordered-dither pattern in screen space produces an organic stipple at
-// biome edges without any external texture dependency.
+// A 4×4 Bayer ordered-dither pattern in WORLD space produces a stable (non-swimming)
+// stipple at biome edges.  The dither cell size is tile_size/4 world units so one full
+// Bayer period spans exactly one terrain tile regardless of camera zoom or movement.
 
 shader_type spatial;
+render_mode diffuse_lambert, specular_disabled;
 
-// Flat varying — provoking vertex's tile index propagates to all fragments in the triangle.
-// This ensures the primary biome is always a real tile type, never an interpolated artefact.
+// Flat varying — provoking-vertex tile index propagates unchanged to every fragment.
+// Guarantees primary is always a real palette index, never an interpolated artefact.
 varying flat float primary_tile_id;
 
-// Terrain colour palette.  Must match Chunk.GetTileColor() exactly, indexed by TileType value.
+// World-space XZ position passed from vertex → fragment for world-anchored dithering.
+varying vec2 world_xz;
+
+// Terrain colour palette.  Must match Chunk.GetTileColor() exactly, indexed by TileType.
 // Set via ShaderMaterial.SetShaderParameter("palette", colors) from RenderingManager.
 uniform vec4 palette[20];
 
-// ── Bayer 4×4 ordered-dither threshold ──────────────────────────────────────────────────────
-// Returns a threshold in [0, 15/16] for screen-pixel p, tiling every 4 pixels.
+// World units per grid tile.  Set to RenderingManager._tileSize (default 16).
+// Controls dither cell size: one Bayer period = tile_size world units = one tile.
+uniform float tile_size = 16.0;
+
+// ── Bayer 4×4 ordered-dither threshold ──────────────────────────────────────────────────
+// Returns a threshold in [0, 15/16] for tile-space integer coordinate p, tiling every 4.
 float bayer_threshold(ivec2 p) {
     int bayer[16] = int[16](
          0,  8,  2, 10,
@@ -38,6 +47,8 @@ float bayer_threshold(ivec2 p) {
 
 void vertex() {
     primary_tile_id = UV.x;
+    // World-space XZ: used for stable dithering that doesn't move with the camera.
+    world_xz = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xz;
 }
 
 void fragment() {
@@ -65,8 +76,12 @@ void fragment() {
         ? clamp(distance(COLOR.rgb, color_primary) / range, 0.0, 1.0)
         : 0.0;
 
-    // Ordered dither: fragments whose blend weight exceeds the Bayer threshold take the
-    // secondary colour, producing a stipple pattern at the biome boundary.
-    float threshold = bayer_threshold(ivec2(FRAGCOORD.xy));
-    ALBEDO = (blend > threshold) ? color_secondary : color_primary;
+    // Dither in world tile space so the pattern is anchored to the terrain grid.
+    // Cell size = tile_size / 4 → one full 4×4 Bayer period per tile.
+    float cell = tile_size * 0.25;
+    float threshold = bayer_threshold(ivec2(floor(world_xz / cell)));
+
+    ALBEDO   = (blend > threshold) ? color_secondary : color_primary;
+    ROUGHNESS = 1.0;
+    METALLIC  = 0.0;
 }

@@ -332,6 +332,7 @@ public sealed class RenderingManager
         for (int i = 0; i < 20; i++)
             palette[i] = Chunk.GetTileColor((TileType)i);
         _chunkMaterial.SetShaderParameter("palette", palette);
+        _chunkMaterial.SetShaderParameter("tile_size", (float)_tileSize);
 
         foreach (var chunk in _worldManager.GetLoadedChunks())
         {

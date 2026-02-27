@@ -93,13 +93,14 @@ public sealed class PlayerController
         if (len > 1f) { inputForward /= len; inputRight /= len; }
 
         // Rotate input by camera yaw to get world-XZ movement direction.
-        //   camera forward (horizontal) = ( sin(yaw),  cos(yaw) ) in world (X, Z)
-        //   camera right   (horizontal) = ( cos(yaw), -sin(yaw) ) in world (X, Z)
+        // Godot's LookAt builds camera +X (screen right) = (-cos yaw, sin yaw) in world XZ.
+        //   camera forward (horizontal) = (  sin(yaw),  cos(yaw) ) in world (X, Z)
+        //   camera right   (horizontal) = ( -cos(yaw),  sin(yaw) ) in world (X, Z)
         float yawRad = Mathf.DegToRad(_cameraYaw);
         float sinY   = MathF.Sin(yawRad);
         float cosY   = MathF.Cos(yawRad);
-        float worldDX = inputForward * sinY + inputRight * cosY;   // world +X
-        float worldDZ = inputForward * cosY + inputRight * -sinY;  // world +Z
+        float worldDX = inputForward * sinY - inputRight * cosY;   // world +X
+        float worldDZ = inputForward * cosY + inputRight * sinY;   // world +Z
 
         // Convert world-XZ to grid velocity.
         //   world_X =  grid_X * tileSize  →  vel.Dx = worldDX * speed
