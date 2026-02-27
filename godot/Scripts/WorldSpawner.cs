@@ -432,7 +432,7 @@ public sealed class WorldSpawner
                     float sx = x + MathF.Cos(angle) * dist;
                     float sy = y + MathF.Sin(angle) * dist;
 
-                    if (_worldManager.IsWalkable(sx, sy))
+                    if (_worldManager.IsSpawnable(sx, sy))
                     {
                         _entityFactory.SpawnCreature(sx, sy, sectidDef, colonyId);
                         totalSectids++;

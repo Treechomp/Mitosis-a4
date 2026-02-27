@@ -145,7 +145,7 @@ public sealed class SporeSystem : ISystem
                 float sx = pos.X + MathF.Cos(angle) * dist;
                 float sy = pos.Y + MathF.Sin(angle) * dist;
 
-                if (_worldManager.IsWalkable(sx, sy))
+                if (_worldManager.IsSpawnable(sx, sy))
                     _pendingSpores.Add((sx, sy, species.SpeciesId));
             }
         }

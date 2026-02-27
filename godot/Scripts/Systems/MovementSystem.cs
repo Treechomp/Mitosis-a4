@@ -17,6 +17,12 @@ public sealed class MovementSystem : ISystem
     private readonly int _worldSizeTiles;
     private readonly WorldManager _worldManager;
 
+    /// <summary>
+    /// Maximum elevation difference between adjacent positions that counts as a cliff.
+    /// Gradual slopes slow movement via slope resistance; only true cliff-faces hard-block.
+    /// </summary>
+    private const float CliffThreshold = 0.28f;
+
     public MovementSystem(int chunkSize, int worldSizeChunks, WorldManager worldManager)
     {
         _chunkSize = chunkSize;
@@ -87,18 +93,18 @@ public sealed class MovementSystem : ISystem
             float dy = vel.Dy * speedMult;
 
             // Try to move
-            bool moved = TryMove(ref pos, dx, dy);
+            bool moved = TryMove(ref pos, dx, dy, isFlying);
 
-            // If blocked and moving diagonally, try sliding along walls
+            // If blocked and moving diagonally, try sliding along cliff edges
             if (!moved && dx != 0 && dy != 0)
             {
                 // Try X-axis slide
-                if (TryMove(ref pos, dx, 0))
+                if (TryMove(ref pos, dx, 0, isFlying))
                 {
                     moved = true;
                 }
                 // Try Y-axis slide
-                else if (TryMove(ref pos, 0, dy))
+                else if (TryMove(ref pos, 0, dy, isFlying))
                 {
                     moved = true;
                 }
@@ -107,20 +113,17 @@ public sealed class MovementSystem : ISystem
             // If still blocked (corner case), try nudging perpendicular to escape
             if (!moved)
             {
-                // Try small perpendicular movements to escape corners
                 float nudge = 0.05f;
                 if (dx != 0)
                 {
-                    // Moving horizontally but blocked - try nudging up/down
-                    if (TryMove(ref pos, 0, nudge) || TryMove(ref pos, 0, -nudge))
+                    if (TryMove(ref pos, 0, nudge, isFlying) || TryMove(ref pos, 0, -nudge, isFlying))
                     {
                         // Nudged successfully, velocity will move us next frame
                     }
                 }
                 else if (dy != 0)
                 {
-                    // Moving vertically but blocked - try nudging left/right
-                    if (TryMove(ref pos, nudge, 0) || TryMove(ref pos, -nudge, 0))
+                    if (TryMove(ref pos, nudge, 0, isFlying) || TryMove(ref pos, -nudge, 0, isFlying))
                     {
                         // Nudged successfully
                     }
@@ -153,8 +156,10 @@ public sealed class MovementSystem : ISystem
 
     /// <summary>
     /// Attempts to move an entity by the given delta. Returns true if successful.
+    /// Ground creatures are hard-blocked by cliffs (large elevation differences between
+    /// adjacent positions). Flying creatures bypass this check entirely.
     /// </summary>
-    private bool TryMove(ref Position pos, float dx, float dy)
+    private bool TryMove(ref Position pos, float dx, float dy, bool isFlying)
     {
         if (dx == 0 && dy == 0)
             return false;
@@ -166,15 +171,18 @@ public sealed class MovementSystem : ISystem
         newX = Math.Clamp(newX, 0f, _worldSizeTiles - 0.01f);
         newY = Math.Clamp(newY, 0f, _worldSizeTiles - 0.01f);
 
-        // Check if destination is walkable
-        var destTile = _worldManager.GetTile(newX, newY);
-        if (destTile.IsWalkable())
+        // Ground creatures are blocked by cliff faces (steep elevation jumps).
+        // Gradual slopes just slow movement via the slope resistance in Process().
+        if (!isFlying)
         {
-            pos.X = newX;
-            pos.Y = newY;
-            return true;
+            float srcElev = _worldManager.GetElevation(pos.X, pos.Y);
+            float destElev = _worldManager.GetElevation(newX, newY);
+            if (MathF.Abs(destElev - srcElev) > CliffThreshold)
+                return false;
         }
 
-        return false;
+        pos.X = newX;
+        pos.Y = newY;
+        return true;
     }
 }

@@ -147,11 +147,6 @@ public sealed class Chunk
         }
     }
 
-    public bool IsWalkable(int localX, int localY)
-    {
-        return GetTile(localX, localY).IsWalkable();
-    }
-
     /// <summary>
     /// Check if a tile is safe to spawn creatures on.
     /// </summary>

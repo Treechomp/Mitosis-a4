@@ -166,14 +166,6 @@ public sealed class WorldManager
     }
 
     /// <summary>
-    /// Check if world position is walkable.
-    /// </summary>
-    public bool IsWalkable(float worldX, float worldY)
-    {
-        return GetTile(worldX, worldY).IsWalkable();
-    }
-
-    /// <summary>
     /// Check if any water tiles exist within the given radius of a position.
     /// </summary>
     public bool HasWaterNearby(float worldX, float worldY, int radius)
@@ -262,19 +254,19 @@ public sealed class WorldManager
     public int LoadedChunkCount => _chunks.Count;
 
     /// <summary>
-    /// Get random walkable positions in a chunk.
+    /// Get random spawnable positions in a chunk (land tiles, excludes water/lava/etc).
     /// </summary>
     public List<(float x, float y)> GetWalkablePositions(Chunk chunk, int count, Random rng)
     {
         var positions = new List<(float, float)>();
         var walkable = new List<(int, int)>();
 
-        // Collect all walkable tiles
+        // Collect all spawnable land tiles
         for (int ly = 0; ly < chunk.Size; ly++)
         {
             for (int lx = 0; lx < chunk.Size; lx++)
             {
-                if (chunk.IsWalkable(lx, ly))
+                if (chunk.IsSpawnable(lx, ly))
                     walkable.Add((lx, ly));
             }
         }

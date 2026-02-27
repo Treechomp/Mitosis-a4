@@ -50,16 +50,6 @@ public enum BiomeType : byte
 public static class TileTypeExtensions
 {
     /// <summary>
-    /// Check if a tile type is walkable by creatures.
-    /// Water and reef are passable but uncomfortable. Mountains and Lava block movement.
-    /// </summary>
-    public static bool IsWalkable(this TileType tile)
-    {
-        return tile != TileType.Mountain &&
-               tile != TileType.Lava;
-    }
-
-    /// <summary>
     /// Check if a tile is water (deep or shallow or river).
     /// </summary>
     public static bool IsWater(this TileType tile)
@@ -184,8 +174,8 @@ public static class TileTypeExtensions
             TileType.River => 0.35f,
             TileType.ShallowWater => 0.4f,
             TileType.DeepWater => 0.25f,
-            TileType.Mountain => 0.05f,
-            TileType.Lava => 0.05f,          // Impassable (not walkable)
+            TileType.Mountain => 0.35f,        // Rugged, slow but traversable
+            TileType.Lava => 0.2f,            // Very slow, hostile surface
             _ => 0.5f
         };
     }
@@ -248,8 +238,8 @@ public static class TileTypeExtensions
             TileType.River => 0.8f,
             TileType.ShallowWater => 0.75f,
             TileType.DeepWater => 0.95f,
-            TileType.Mountain => 1.0f,
-            TileType.Lava => 1.0f,            // Impassable
+            TileType.Mountain => 0.8f,         // Steep, strongly avoided
+            TileType.Lava => 0.95f,           // Near-lethal, almost always avoided
             _ => 0.5f
         };
     }

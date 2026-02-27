@@ -231,7 +231,7 @@ public sealed class CrystalSystem : ISystem
         float spawnX = x + MathF.Cos(angle) * 2f;
         float spawnY = y + MathF.Sin(angle) * 2f;
 
-        if (!_worldManager.IsWalkable(spawnX, spawnY))
+        if (!_worldManager.IsSpawnable(spawnX, spawnY))
         {
             spawnX = x;
             spawnY = y;

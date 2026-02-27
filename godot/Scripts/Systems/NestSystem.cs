@@ -142,7 +142,7 @@ public sealed class NestSystem : ISystem
             float spawnX = pos.X + offsetX;
             float spawnY = pos.Y + offsetY;
 
-            if (_worldManager.IsWalkable(spawnX, spawnY))
+            if (_worldManager.IsSpawnable(spawnX, spawnY))
             {
                 _pendingSpawns.Add((spawnX, spawnY, nest.ColonyId));
                 nest.SpawnsThisStage++;

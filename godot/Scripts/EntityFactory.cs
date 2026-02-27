@@ -250,7 +250,7 @@ public sealed class EntityFactory
             float x = centerX + _rng.Next(-10, 10);
             float y = centerY + _rng.Next(-10, 10);
 
-            if (worldManager.IsWalkable(x, y))
+            if (worldManager.IsSpawnable(x, y))
             {
                 int playerEntity = _entityManager.CreateEntity();
 
