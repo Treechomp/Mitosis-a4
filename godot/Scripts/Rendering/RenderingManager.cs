@@ -12,7 +12,8 @@ namespace Mitosis.Rendering;
 /// <summary>
 /// Handles all visual rendering: terrain chunk meshes (MeshInstance3D) and entity
 /// MultiMesh batching (MultiMeshInstance3D). Terrain uses smooth per-vertex normals
-/// for DirectionalLight shading; entities are rendered unshaded with instance colors.
+/// for DirectionalLight shading; entities use Godot 3D primitives (sphere, prism, box,
+/// capsule, cylinder, torus) as placeholder meshes, lit by the same DirectionalLight.
 /// </summary>
 public sealed class RenderingManager
 {
@@ -33,10 +34,6 @@ public sealed class RenderingManager
     private MultiMeshInstance3D[] _shapeMMIs = null!;
     private int[] _shapeIndices = null!;
 
-    // Rotation basis applied to all entity meshes to lay them flat in the XZ plane.
-    // Entity shapes are built in the XY plane (Z=0); rotating +90° around X maps Y→Z.
-    private static readonly Basis FlattenBasis = new Basis(Vector3.Right, MathF.PI / 2f);
-
     // Animation state
     private int _frameTick;
 
@@ -54,35 +51,75 @@ public sealed class RenderingManager
     /// <summary>
     /// Creates MultiMeshInstance3D nodes for all shape types.
     /// Returns them — the caller adds them as children to the scene tree.
+    /// Each ShapeType maps to a Godot primitive mesh standing upright on the terrain.
     /// </summary>
     public MultiMeshInstance3D[] CreateMultiMeshInstances()
     {
-        _shapeMMIs = new MultiMeshInstance3D[ShapeCount];
+        _shapeMMIs   = new MultiMeshInstance3D[ShapeCount];
         _shapeIndices = new int[ShapeCount];
 
-        // Unshaded material for entities (flat vertex colors, no lighting).
+        // Lit material: instance color tints the albedo so DirectionalLight
+        // adds shading and depth to each 3D primitive.
         var entityMat = new StandardMaterial3D();
-        entityMat.ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded;
         entityMat.VertexColorUseAsAlbedo = true;
+        entityMat.Roughness = 0.8f;
 
-        _shapeMMIs[(int)ShapeType.Circle]    = CreateMultiMeshInstance(CreateCircleMesh(16),    entityMat);
-        _shapeMMIs[(int)ShapeType.Triangle]  = CreateMultiMeshInstance(CreateTriangleMesh(),    entityMat);
-        _shapeMMIs[(int)ShapeType.Square]    = CreateMultiMeshInstance(CreateSquareMesh(),      entityMat);
-        _shapeMMIs[(int)ShapeType.Diamond]   = CreateMultiMeshInstance(CreateDiamondMesh(),     entityMat);
-        _shapeMMIs[(int)ShapeType.Star]      = CreateMultiMeshInstance(CreateStarMesh(6, 1.0f, 0.5f), entityMat);
-        _shapeMMIs[(int)ShapeType.Chevron]   = CreateMultiMeshInstance(CreateChevronMesh(),     entityMat);
-        _shapeMMIs[(int)ShapeType.FishShape] = CreateMultiMeshInstance(CreateFishMesh(),        entityMat);
-        _shapeMMIs[(int)ShapeType.Fin]       = CreateMultiMeshInstance(CreateFinMesh(),         entityMat);
-        _shapeMMIs[(int)ShapeType.Teardrop]  = CreateMultiMeshInstance(CreateTeardropMesh(),    entityMat);
-        _shapeMMIs[(int)ShapeType.Crescent]  = CreateMultiMeshInstance(CreateCrescentMesh(),    entityMat);
-        _shapeMMIs[(int)ShapeType.Serpent]   = CreateMultiMeshInstance(CreateSerpentMesh(),     entityMat);
-        _shapeMMIs[(int)ShapeType.Mushroom]  = CreateMultiMeshInstance(CreateMushroomMesh(),    entityMat);
-        _shapeMMIs[(int)ShapeType.Fangs]     = CreateMultiMeshInstance(CreateFangsMesh(),       entityMat);
+        // Circle  — herbivores, player: sphere
+        _shapeMMIs[(int)ShapeType.Circle]   = CreateMMI(
+            new SphereMesh { Radius = 0.5f, Height = 1.0f }, entityMat);
+
+        // Triangle — carnivores (wolf, fox): triangular prism
+        _shapeMMIs[(int)ShapeType.Triangle] = CreateMMI(
+            new PrismMesh(), entityMat);
+
+        // Square — Faelings (magic entities): cube
+        _shapeMMIs[(int)ShapeType.Square]   = CreateMMI(
+            new BoxMesh(), entityMat);
+
+        // Diamond — armored (boar, musk ox, turtle): wide flat box
+        _shapeMMIs[(int)ShapeType.Diamond]  = CreateMMI(
+            new BoxMesh { Size = new Vector3(1.4f, 0.5f, 1.0f) }, entityMat);
+
+        // Star — Sectids (colony insects): 6-sided cylinder
+        _shapeMMIs[(int)ShapeType.Star]     = CreateMMI(
+            new CylinderMesh { RadialSegments = 6, TopRadius = 0.4f, BottomRadius = 0.5f, Height = 1.0f }, entityMat);
+
+        // Chevron — birds (hawk, parrot): thin wide prism (wing wedge)
+        _shapeMMIs[(int)ShapeType.Chevron]  = CreateMMI(
+            new PrismMesh { Size = new Vector3(1.6f, 0.4f, 0.8f) }, entityMat);
+
+        // FishShape — fish: short wide capsule
+        _shapeMMIs[(int)ShapeType.FishShape] = CreateMMI(
+            new CapsuleMesh { Radius = 0.35f, Height = 1.1f }, entityMat);
+
+        // Fin — shark: tall narrow prism
+        _shapeMMIs[(int)ShapeType.Fin]      = CreateMMI(
+            new PrismMesh { Size = new Vector3(0.6f, 1.4f, 0.5f) }, entityMat);
+
+        // Teardrop — penguin, rabbit, tapir: standard capsule
+        _shapeMMIs[(int)ShapeType.Teardrop] = CreateMMI(
+            new CapsuleMesh { Radius = 0.4f, Height = 1.2f }, entityMat);
+
+        // Crescent — scorpion: torus
+        _shapeMMIs[(int)ShapeType.Crescent] = CreateMMI(
+            new TorusMesh { InnerRadius = 0.3f, OuterRadius = 0.6f }, entityMat);
+
+        // Serpent — snake: elongated thin capsule
+        _shapeMMIs[(int)ShapeType.Serpent]  = CreateMMI(
+            new CapsuleMesh { Radius = 0.18f, Height = 1.8f }, entityMat);
+
+        // Mushroom — shroomer: flattened sphere (cap placeholder)
+        _shapeMMIs[(int)ShapeType.Mushroom] = CreateMMI(
+            new SphereMesh { Radius = 0.6f, Height = 0.7f, Rings = 4 }, entityMat);
+
+        // Fangs — bear, jaguar, croc: broad squat box
+        _shapeMMIs[(int)ShapeType.Fangs]    = CreateMMI(
+            new BoxMesh { Size = new Vector3(1.5f, 0.7f, 1.0f) }, entityMat);
 
         return _shapeMMIs;
     }
 
-    private static MultiMeshInstance3D CreateMultiMeshInstance(Mesh mesh, StandardMaterial3D mat)
+    private static MultiMeshInstance3D CreateMMI(Mesh mesh, StandardMaterial3D mat)
     {
         var mm = new MultiMesh();
         mm.TransformFormat = MultiMesh.TransformFormatEnum.Transform3D;
@@ -94,221 +131,6 @@ public sealed class RenderingManager
         var mmi = new MultiMeshInstance3D { Multimesh = mm };
         mmi.MaterialOverride = mat;
         return mmi;
-    }
-
-    // ================================================================
-    // MESH GENERATORS
-    // ================================================================
-
-    /// <summary>Helper: build an ArrayMesh from vertex + index arrays (no normals — entity shapes).</summary>
-    private static ArrayMesh BuildMesh(Vector3[] vertices, int[] indices)
-    {
-        var mesh = new ArrayMesh();
-        var arrays = new Godot.Collections.Array();
-        arrays.Resize((int)Mesh.ArrayType.Max);
-        arrays[(int)Mesh.ArrayType.Vertex] = vertices;
-        arrays[(int)Mesh.ArrayType.Index] = indices;
-        mesh.AddSurfaceFromArrays(Mesh.PrimitiveType.Triangles, arrays);
-        return mesh;
-    }
-
-    // --- Circle ---
-    private static ArrayMesh CreateCircleMesh(int segments)
-    {
-        var vertices = new Vector3[segments + 1];
-        var indices = new int[segments * 3];
-
-        vertices[0] = Vector3.Zero;
-        for (int i = 0; i < segments; i++)
-        {
-            float angle = i * (MathF.PI * 2f / segments);
-            vertices[i + 1] = new Vector3(MathF.Cos(angle), MathF.Sin(angle), 0f);
-        }
-        for (int i = 0; i < segments; i++)
-        {
-            indices[i * 3] = 0;
-            indices[i * 3 + 1] = i + 1;
-            indices[i * 3 + 2] = (i + 1) % segments + 1;
-        }
-        return BuildMesh(vertices, indices);
-    }
-
-    // --- Triangle (pointing up) ---
-    private static ArrayMesh CreateTriangleMesh()
-    {
-        return BuildMesh(
-            new Vector3[] { new(0f, -1f, 0f), new(-0.866f, 0.5f, 0f), new(0.866f, 0.5f, 0f) },
-            new int[] { 0, 1, 2 });
-    }
-
-    // --- Square ---
-    private static ArrayMesh CreateSquareMesh()
-    {
-        return BuildMesh(
-            new Vector3[] { new(-0.5f, -0.5f, 0f), new(0.5f, -0.5f, 0f), new(0.5f, 0.5f, 0f), new(-0.5f, 0.5f, 0f) },
-            new int[] { 0, 1, 2, 0, 2, 3 });
-    }
-
-    // --- Diamond ---
-    private static ArrayMesh CreateDiamondMesh()
-    {
-        return BuildMesh(
-            new Vector3[] { new(0f, -1.1f, 0f), new(0.7f, 0f, 0f), new(0f, 0.9f, 0f), new(-0.7f, 0f, 0f) },
-            new int[] { 0, 1, 2, 0, 2, 3 });
-    }
-
-    // --- 6-pointed Star ---
-    private static ArrayMesh CreateStarMesh(int points, float outerR, float innerR)
-    {
-        int totalVerts = points * 2;
-        var vertices = new Vector3[totalVerts + 1];
-        var indices = new int[totalVerts * 3];
-
-        vertices[0] = Vector3.Zero;
-        for (int i = 0; i < totalVerts; i++)
-        {
-            float angle = i * MathF.PI / points - MathF.PI / 2f;
-            float r = (i % 2 == 0) ? outerR : innerR;
-            vertices[i + 1] = new Vector3(MathF.Cos(angle) * r, MathF.Sin(angle) * r, 0f);
-        }
-        for (int i = 0; i < totalVerts; i++)
-        {
-            indices[i * 3] = 0;
-            indices[i * 3 + 1] = i + 1;
-            indices[i * 3 + 2] = (i + 1) % totalVerts + 1;
-        }
-        return BuildMesh(vertices, indices);
-    }
-
-    // --- Chevron ---
-    private static ArrayMesh CreateChevronMesh()
-    {
-        return BuildMesh(
-            new Vector3[]
-            {
-                new(0f, -0.3f, 0f), new(-1f, 0.3f, 0f), new(-0.8f, 0.7f, 0f), new(0f, 0.15f, 0f),
-                new(1f, 0.3f, 0f),  new(0.8f, 0.7f, 0f),
-            },
-            new int[] { 0, 1, 2,  0, 2, 3,  0, 3, 5,  0, 5, 4 });
-    }
-
-    // --- Fish ---
-    private static ArrayMesh CreateFishMesh()
-    {
-        return BuildMesh(
-            new Vector3[]
-            {
-                new(-0.8f, 0f, 0f), new(0f, -0.5f, 0f), new(0.4f, 0f, 0f),
-                new(0f, 0.5f, 0f),  new(0.9f, -0.5f, 0f), new(0.9f, 0.5f, 0f),
-            },
-            new int[] { 0, 1, 2,  0, 2, 3,  2, 4, 5 });
-    }
-
-    // --- Fin ---
-    private static ArrayMesh CreateFinMesh()
-    {
-        return BuildMesh(
-            new Vector3[]
-            {
-                new(0f, -1.1f, 0f), new(-0.5f, 0.5f, 0f), new(0.7f, 0.5f, 0f), new(0.3f, 0.1f, 0f),
-            },
-            new int[] { 0, 1, 3, 0, 3, 2 });
-    }
-
-    // --- Teardrop ---
-    private static ArrayMesh CreateTeardropMesh()
-    {
-        const int segments = 8;
-        var vertices = new Vector3[segments + 2];
-        var idxList = new List<int>();
-
-        vertices[0] = new Vector3(0f, 0.1f, 0f);
-        for (int i = 0; i <= segments; i++)
-        {
-            float angle = MathF.PI * i / segments;
-            vertices[i + 1] = new Vector3(MathF.Cos(angle) * 0.8f, MathF.Sin(angle) * 0.6f + 0.1f, 0f);
-        }
-        for (int i = 0; i < segments; i++) { idxList.Add(0); idxList.Add(i + 1); idxList.Add(i + 2); }
-        int tipIdx = vertices.Length - 1;
-        vertices[tipIdx] = new Vector3(0f, -0.9f, 0f);
-        idxList.Add(tipIdx); idxList.Add(segments + 1); idxList.Add(1);
-        return BuildMesh(vertices, idxList.ToArray());
-    }
-
-    // --- Crescent ---
-    private static ArrayMesh CreateCrescentMesh()
-    {
-        const int segments = 8;
-        float outerR = 1.0f, innerR = 0.6f, arcSpan = MathF.PI * 0.8f;
-        var vertices = new Vector3[(segments + 1) * 2];
-        var idxList = new List<int>();
-
-        for (int i = 0; i <= segments; i++)
-        {
-            float t = (float)i / segments;
-            float angle = -arcSpan / 2f + t * arcSpan - MathF.PI / 2f;
-            vertices[i] = new Vector3(MathF.Cos(angle) * outerR, MathF.Sin(angle) * outerR, 0f);
-            vertices[segments + 1 + i] = new Vector3(MathF.Cos(angle) * innerR, MathF.Sin(angle) * innerR, 0f);
-        }
-        for (int i = 0; i < segments; i++)
-        {
-            int o0 = i, o1 = i + 1, i0 = segments + 1 + i, i1 = segments + 2 + i;
-            idxList.Add(o0); idxList.Add(o1); idxList.Add(i1);
-            idxList.Add(o0); idxList.Add(i1); idxList.Add(i0);
-        }
-        return BuildMesh(vertices, idxList.ToArray());
-    }
-
-    // --- Serpent ---
-    private static ArrayMesh CreateSerpentMesh()
-    {
-        const float w = 0.25f;
-        return BuildMesh(
-            new Vector3[]
-            {
-                new(-0.3f - w, -0.9f, 0f), new(-0.3f + w, -0.9f, 0f),
-                new(0.2f + w, -0.2f, 0f),  new(0.2f - w, -0.2f, 0f),
-                new(-0.2f + w, 0.3f, 0f),  new(-0.2f - w, 0.3f, 0f),
-                new(0.3f + w, 0.9f, 0f),   new(0.3f - w, 0.9f, 0f),
-            },
-            new int[] { 0, 1, 2, 0, 2, 3,  3, 2, 4, 3, 4, 5,  5, 4, 6, 5, 6, 7 });
-    }
-
-    // --- Mushroom ---
-    private static ArrayMesh CreateMushroomMesh()
-    {
-        const int capSegments = 8;
-        var vertList = new List<Vector3>();
-        var idxList = new List<int>();
-
-        int capCenter = 0;
-        vertList.Add(new Vector3(0f, -0.3f, 0f));
-        for (int i = 0; i <= capSegments; i++)
-        {
-            float angle = MathF.PI * i / capSegments;
-            vertList.Add(new Vector3(MathF.Cos(angle) * 0.9f, -MathF.Sin(angle) * 0.7f - 0.1f, 0f));
-        }
-        for (int i = 0; i < capSegments; i++) { idxList.Add(capCenter); idxList.Add(i + 1); idxList.Add(i + 2); }
-
-        int stemStart = vertList.Count;
-        vertList.Add(new Vector3(-0.2f, -0.2f, 0f)); vertList.Add(new Vector3(0.2f, -0.2f, 0f));
-        vertList.Add(new Vector3(0.2f, 0.8f, 0f));   vertList.Add(new Vector3(-0.2f, 0.8f, 0f));
-        idxList.Add(stemStart); idxList.Add(stemStart + 1); idxList.Add(stemStart + 2);
-        idxList.Add(stemStart); idxList.Add(stemStart + 2); idxList.Add(stemStart + 3);
-
-        return BuildMesh(vertList.ToArray(), idxList.ToArray());
-    }
-
-    // --- Fangs ---
-    private static ArrayMesh CreateFangsMesh()
-    {
-        return BuildMesh(
-            new Vector3[]
-            {
-                new(0f, -1.0f, 0f),    new(-0.9f, 0.6f, 0f),  new(-0.25f, 0.3f, 0f),
-                new(0f, 0.7f, 0f),     new(0.25f, 0.3f, 0f),  new(0.9f, 0.6f, 0f),
-            },
-            new int[] { 0, 1, 2,  0, 2, 4,  0, 4, 5,  2, 1, 3,  4, 3, 5 });
     }
 
     // ================================================================
@@ -464,8 +286,9 @@ public sealed class RenderingManager
 
     /// <summary>
     /// Updates entity MultiMesh buffers for rendering in 3D.
-    /// Entities are laid flat in the XZ plane (like terrain tokens) at their
-    /// terrain elevation. Non-circle shapes face their direction of movement.
+    /// Each entity is placed at its terrain elevation + a Y-offset so the primitive
+    /// mesh sits on the surface rather than clipping through it. Non-circle shapes
+    /// rotate around the world Y axis to face their direction of movement.
     /// </summary>
     public void UpdateEntityMultiMeshes(Camera3D camera)
     {
@@ -487,15 +310,21 @@ public sealed class RenderingManager
             ref var pos  = ref _entityManager.Positions[entity];
             ref var rend = ref _entityManager.Renderables[entity];
 
-            // 3D world position: XZ from abstract grid, Y from terrain elevation
+            // 3D world position: XZ from abstract grid, Y from terrain elevation.
             float elevation = _worldManager.GetElevation(pos.X, pos.Y);
             var pos3D = GridCoordinates.VertexToWorld3D(pos.X, pos.Y, _tileSize, elevation, _heightScale);
+
+            // Lift entity so the bottom of its mesh sits on the terrain surface.
+            // All primitives are unit-sized and centered at origin, so half-height ≈ 0.5.
+            // Torus (Crescent) is flat in XZ — use its tube radius (0.3) as the offset.
+            pos3D.Y += rend.Size * (rend.Shape == ShapeType.Crescent ? 0.3f : 0.5f);
 
             // Facing rotation around world Y axis
             float rotation = 0f;
 
             if (rend.Shape == ShapeType.Star)
             {
+                // Sectids oscillate slowly
                 float phase = entity * 1.7f;
                 rotation = MathF.Sin(_frameTick * 0.15f + phase) * 0.35f;
             }
@@ -507,14 +336,17 @@ public sealed class RenderingManager
                 if (speedSq > 0.0004f)
                 {
                     // Y-axis rotation so entity faces its movement direction in XZ.
-                    // vel.Dx = worldDX, vel.Dy = -worldDZ → atan2(worldDX, worldDZ).
                     rotation = MathF.Atan2(vel.Dx, -vel.Dy);
                 }
             }
 
-            // Build transform: flatten XY mesh to XZ plane, then rotate for facing, then scale.
-            var yawBasis = new Basis(Vector3.Up, rotation);
-            var basis = (yawBasis * FlattenBasis).Scaled(new Vector3(rend.Size, rend.Size, rend.Size));
+            // Diamond (armored) shows a corner-on profile — rotate 45° extra.
+            if (rend.Shape == ShapeType.Diamond)
+                rotation += MathF.PI / 4f;
+
+            // Build transform: Y-axis rotation for facing + uniform scale.
+            // No FlattenBasis — 3D primitives are already Y-up upright.
+            var basis = new Basis(Vector3.Up, rotation).Scaled(new Vector3(rend.Size, rend.Size, rend.Size));
             var transform = new Transform3D(basis, pos3D);
 
             int shapeIdx = (int)rend.Shape;
