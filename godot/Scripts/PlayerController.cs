@@ -103,9 +103,21 @@ public sealed class PlayerController
         float worldDZ = inputForward * cosY + inputRight * sinY;   // world +Z
 
         // Convert world-XZ to grid velocity.
-        //   world_X =  grid_X * tileSize  →  vel.Dx = worldDX * speed
-        //   world_Z = -grid_Y * tileSize  →  vel.Dy = -worldDZ * speed
-        vel.Dx = worldDX * speed;
+        //
+        // The grid→world mapping includes the row offset:
+        //   world_X =  grid_X * tileSize + SmoothRowOffset(grid_Y)
+        //   world_Z = -grid_Y * tileSize
+        //
+        // Inverting the Jacobian gives:
+        //   vel.Dx = (worldDX + offsetSlope * worldDZ) * speed
+        //   vel.Dy = -worldDZ * speed
+        //
+        // where offsetSlope = d(SmoothRowOffset)/d(grid_Y) / tileSize = ±0.5.
+        // Without this, any Y-axis movement causes visual X-zigzag because the
+        // alternating row offset shifts the rendered position left/right each row.
+        ref var pos = ref _entityManager.Positions[_playerEntity];
+        float offsetSlope = ((int)MathF.Floor(pos.Y) & 1) == 0 ? 0.5f : -0.5f;
+        vel.Dx = (worldDX + offsetSlope * worldDZ) * speed;
         vel.Dy = -worldDZ * speed;
     }
 
