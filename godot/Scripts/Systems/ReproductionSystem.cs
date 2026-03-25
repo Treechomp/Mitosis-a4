@@ -100,9 +100,9 @@ public sealed class ReproductionSystem : ISystem
 
             // Local density suppression — skip if too many same-species nearby
             // Prevents exponential population explosions in well-fed areas
+            var speciesDef = SpeciesRegistry.GetById(species.SpeciesId);
             if (_spatialHash != null)
             {
-                var speciesDef = SpeciesRegistry.GetById(species.SpeciesId);
                 float densityRadius = speciesDef.SocialRadius > 0 ? speciesDef.SocialRadius * 1.5f : 15f;
                 _nearbyBuffer.Clear();
                 _spatialHash.QueryRadius(pos.X, pos.Y, densityRadius, _nearbyBuffer);
