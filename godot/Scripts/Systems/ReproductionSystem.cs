@@ -76,13 +76,11 @@ public sealed class ReproductionSystem : ISystem
                 continue;
 
             ref var species = ref em.Species[entity];
+            var speciesDef = SpeciesRegistry.GetById(species.SpeciesId);
 
             // Skip faction species that reproduce via special systems
-            {
-                var speciesDef = SpeciesRegistry.GetById(species.SpeciesId);
-                if (speciesDef.NestBreeder || speciesDef.SporeReproducer || speciesDef.CrystalSpawned)
-                    continue;
-            }
+            if (speciesDef.NestBreeder || speciesDef.SporeReproducer || speciesDef.CrystalSpawned)
+                continue;
 
             ref var hunger = ref em.Hungers[entity];
             ref var energy = ref em.Energies[entity];
@@ -100,7 +98,6 @@ public sealed class ReproductionSystem : ISystem
 
             // Local density suppression — skip if too many same-species nearby
             // Prevents exponential population explosions in well-fed areas
-            var speciesDef = SpeciesRegistry.GetById(species.SpeciesId);
             if (_spatialHash != null)
             {
                 float densityRadius = speciesDef.SocialRadius > 0 ? speciesDef.SocialRadius * 1.5f : 15f;
