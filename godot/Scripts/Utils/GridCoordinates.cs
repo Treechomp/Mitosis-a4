@@ -1,3 +1,4 @@
+using System;
 using System.Runtime.CompilerServices;
 using Godot;
 
@@ -21,8 +22,30 @@ namespace Mitosis.Utils;
 public static class GridCoordinates
 {
     /// <summary>
+    /// Computes the smooth row offset for a given grid-Y position.
+    ///
+    /// In the offset-row triangulated grid, odd integer rows are shifted right
+    /// by half a tile. For fractional Y values (entity/camera positions), this
+    /// method linearly interpolates the offset between the floor and ceil rows,
+    /// preventing the visual snap that would occur with a hard binary switch.
+    ///
+    /// At integer Y values the result matches the discrete offset exactly,
+    /// so terrain mesh vertices (always at integer coords) are unaffected.
+    /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static float SmoothRowOffset(float vy, float tileSize)
+    {
+        int rowBelow = (int)MathF.Floor(vy);
+        float fy = vy - rowBelow;
+        float offsetBelow = (rowBelow & 1) != 0 ? tileSize * 0.5f : 0f;
+        float offsetAbove = ((rowBelow + 1) & 1) != 0 ? tileSize * 0.5f : 0f;
+        return offsetBelow + fy * (offsetAbove - offsetBelow);
+    }
+
+    /// <summary>
     /// Convert an abstract vertex position to screen (pixel) coordinates.
     /// Optionally lifts the vertex by elevation for faux-isometric or 2.5D rendering.
+    /// The row offset is smoothly interpolated for fractional Y positions.
     /// </summary>
     /// <param name="vx">Vertex X in abstract grid space (may be fractional).</param>
     /// <param name="vy">Vertex Y in abstract grid space (may be fractional).</param>
@@ -33,9 +56,8 @@ public static class GridCoordinates
     public static Vector2 VertexToScreen(float vx, float vy, float tileSize,
                                          float elevation = 0f, float heightScale = 0f)
     {
-        float offsetX = ((int)vy % 2 == 1) ? tileSize * 0.5f : 0f;
         return new Vector2(
-            vx * tileSize + offsetX,
+            vx * tileSize + SmoothRowOffset(vy, tileSize),
             vy * tileSize - elevation * heightScale
         );
     }
@@ -50,14 +72,14 @@ public static class GridCoordinates
     public static Vector2 ScreenToVertex(Vector2 screen, float tileSize)
     {
         float vy = screen.Y / tileSize;
-        float offsetX = ((int)vy % 2 == 1) ? tileSize * 0.5f : 0f;
-        float vx = (screen.X - offsetX) / tileSize;
+        float vx = (screen.X - SmoothRowOffset(vy, tileSize)) / tileSize;
         return new Vector2(vx, vy);
     }
 
     /// <summary>
     /// Convert an abstract vertex position to a 3D world position.
     /// The terrain lies in the XZ plane (Y-up); elevation lifts vertices along +Y.
+    /// The row offset is smoothly interpolated for fractional Y positions.
     /// </summary>
     /// <param name="vx">Vertex X in abstract grid space.</param>
     /// <param name="vy">Vertex Y in abstract grid space (becomes world -Z).</param>
@@ -68,12 +90,11 @@ public static class GridCoordinates
     public static Vector3 VertexToWorld3D(float vx, float vy, float tileSize,
                                           float elevation = 0f, float heightScale = 0f)
     {
-        float offsetX = ((int)vy % 2 == 1) ? tileSize * 0.5f : 0f;
         // Grid Y maps to world -Z so that:
         //   • +Y movement (south in grid) moves in -Z (away from camera), appearing to go up in the isometric view.
         //   • The terrain winding (vBL→vBR→vTL in XZ) produces +Y face normals, matching the directional light from above.
         return new Vector3(
-            vx * tileSize + offsetX,
+            vx * tileSize + SmoothRowOffset(vy, tileSize),
             elevation * heightScale,   // +Y is up in Godot 3D
             -vy * tileSize
         );

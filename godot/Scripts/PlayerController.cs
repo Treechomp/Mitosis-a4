@@ -149,9 +149,10 @@ public sealed class PlayerController
     /// <summary>Returns the world-space focus point for the player's current position.</summary>
     private Vector3 PlayerFocusPoint(float worldX, float worldY)
     {
-        // Use XZ only (Y=0) so the camera stays level regardless of terrain height.
-        float offsetX = ((int)worldY % 2 == 1) ? TileSize * 0.5f : 0f;
-        return new Vector3(worldX * TileSize + offsetX, 0f, -worldY * TileSize); // -Z matches VertexToWorld3D
+        // Use VertexToWorld3D with zero elevation so the camera stays level
+        // regardless of terrain height. The smooth row-offset interpolation
+        // in VertexToWorld3D prevents X-axis jumps at row boundaries.
+        return GridCoordinates.VertexToWorld3D(worldX, worldY, TileSize);
     }
 
     /// <summary>
