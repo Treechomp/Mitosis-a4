@@ -143,18 +143,10 @@ public sealed class RenderingManager
     /// </summary>
     public void InitializeChunkMeshes(Node parent)
     {
-        // Custom dither shader: flat tile-type ID (UV.x) + interpolated vertex colour
-        // lets the fragment shader identify the exact primary biome and find the correct
-        // secondary via palette search, then apply a Bayer ordered-dither at boundaries.
+        // Vertex-colour gradient shader: the GPU interpolates per-vertex biome colours
+        // across each triangle, and the fragment shader posterizes for a PS2-era banded look.
         var shader = GD.Load<Shader>("res://Shaders/TerrainDither.gdshader");
         _chunkMaterial = new ShaderMaterial { Shader = shader };
-
-        // Build palette matching Chunk.GetTileColor() order (index = TileType enum value).
-        var palette = new Color[20];
-        for (int i = 0; i < 20; i++)
-            palette[i] = Chunk.GetTileColor((TileType)i);
-        _chunkMaterial.SetShaderParameter("palette", palette);
-        _chunkMaterial.SetShaderParameter("tile_size", (float)_tileSize);
 
         foreach (var chunk in _worldManager.GetLoadedChunks())
         {
@@ -196,7 +188,6 @@ public sealed class RenderingManager
 
         var vertices = new Vector3[vertexCount];
         var colors   = new Color[vertexCount];
-        var uvs      = new Vector2[vertexCount]; // UV.x = TileType index for flat biome ID
         var normals  = new Vector3[vertexCount];
         var indices  = new int[quadCount * 6];  // 2 triangles × 3 indices per quad
 
@@ -217,7 +208,6 @@ public sealed class RenderingManager
 
                 vertices[ly * n + lx] = GridCoordinates.VertexToWorld3D(worldX, worldY, _tileSize, elevation, _heightScale);
                 colors[ly * n + lx]   = Chunk.GetTileColor(tile);
-                uvs[ly * n + lx]      = new Vector2((float)(byte)tile, 0f);
             }
         }
 
@@ -272,7 +262,6 @@ public sealed class RenderingManager
         arrays.Resize((int)Mesh.ArrayType.Max);
         arrays[(int)Mesh.ArrayType.Vertex] = vertices;
         arrays[(int)Mesh.ArrayType.Color]  = colors;
-        arrays[(int)Mesh.ArrayType.TexUV]  = uvs;
         arrays[(int)Mesh.ArrayType.Normal] = normals;
         arrays[(int)Mesh.ArrayType.Index]  = indices;
         mesh.AddSurfaceFromArrays(Mesh.PrimitiveType.Triangles, arrays);
