@@ -1,4 +1,11 @@
-# Mitosis Project Roadmap
+# Mitosis Project Roadmap (ARCHIVED)
+
+> **SUPERSEDED**: This is the original Python-era roadmap from January 2025, before the
+> migration to Godot 4.6 with C#. All tasks listed here were either implemented
+> differently in the Godot version or are no longer relevant.
+>
+> For the active roadmap, see **[godot-roadmap.md](godot-roadmap.md)**.
+> For current feature documentation, see **[FEATURES_AND_DESIGN.md](FEATURES_AND_DESIGN.md)**.
 
 ## Project Overview
 This document outlines the development roadmap for the Mitosis game project, organizing tasks by priority and tracking completion status.
