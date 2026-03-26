@@ -130,6 +130,10 @@ public sealed class RenderingManager
 
         var mmi = new MultiMeshInstance3D { Multimesh = mm };
         mmi.MaterialOverride = mat;
+        // Prevent Godot's frustum culling from hiding the batch when the
+        // auto-computed AABB doesn't encompass all instances. Without this,
+        // entities (including the player) can pop in/out as the camera moves.
+        mmi.ExtraCullMargin = 1e6f;
         return mmi;
     }
 
@@ -153,6 +157,7 @@ public sealed class RenderingManager
         foreach (var chunk in _worldManager.GetLoadedChunks())
         {
             var mmi = new MeshInstance3D { Mesh = BuildChunkMesh(chunk) };
+            mmi.ExtraCullMargin = _heightScale * 2f;
             parent.AddChild(mmi);
             _chunkMeshes[(chunk.ChunkX, chunk.ChunkY)] = mmi;
         }
