@@ -33,13 +33,28 @@ public static class GridCoordinates
     /// so terrain mesh vertices (always at integer coords) are unaffected.
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static float SmoothRowOffset(float vy, float tileSize)
+    public static float SmoothRowOffset(float vy, float tileSize)
     {
         int rowBelow = (int)MathF.Floor(vy);
         float fy = vy - rowBelow;
         float offsetBelow = (rowBelow & 1) != 0 ? tileSize * 0.5f : 0f;
         float offsetAbove = ((rowBelow + 1) & 1) != 0 ? tileSize * 0.5f : 0f;
         return offsetBelow + fy * (offsetAbove - offsetBelow);
+    }
+
+    /// <summary>
+    /// Convert a 3D world-space position (XZ plane) back to abstract grid coordinates.
+    /// Inverse of VertexToWorld3D (elevation/Y is ignored).
+    /// </summary>
+    /// <param name="worldX">World X position.</param>
+    /// <param name="worldZ">World Z position (grid Y maps to -Z).</param>
+    /// <param name="tileSize">World units per grid unit.</param>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static (float gridX, float gridY) WorldToGrid(float worldX, float worldZ, float tileSize)
+    {
+        float gridY = -worldZ / tileSize;
+        float gridX = (worldX - SmoothRowOffset(gridY, tileSize)) / tileSize;
+        return (gridX, gridY);
     }
 
     /// <summary>

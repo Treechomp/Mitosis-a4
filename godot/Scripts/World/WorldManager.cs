@@ -115,19 +115,80 @@ public sealed class WorldManager
     }
 
     /// <summary>
-    /// Get the raw elevation value (0–1) at world coordinates.
+    /// Get the elevation value (0–1) at world coordinates, interpolated across
+    /// the terrain mesh triangle that contains the point.
+    ///
+    /// The terrain mesh splits each grid quad into two triangles whose diagonal
+    /// alternates by row parity (matching BuildChunkMesh):
+    ///   Even rows (diagonal TL→BR): lower-left triangle if fx + fy ≤ 1
+    ///   Odd  rows (diagonal BL→TR): lower    triangle if fy ≤ fx
+    ///
+    /// Barycentric interpolation within the containing triangle produces an
+    /// elevation that exactly matches the GPU-rendered mesh surface, so entities
+    /// ride the terrain smoothly instead of snapping at tile boundaries.
     /// </summary>
     public float GetElevation(float worldX, float worldY)
     {
-        int chunkX = (int)(worldX / ChunkSize);
-        int chunkY = (int)(worldY / ChunkSize);
+        // Clamp to valid range to avoid out-of-bounds lookups at edges
+        float maxCoord = WorldSizeTiles - 1.001f;
+        float cx = Math.Clamp(worldX, 0f, maxCoord);
+        float cy = Math.Clamp(worldY, 0f, maxCoord);
 
+        int ix = (int)MathF.Floor(cx);
+        int iy = (int)MathF.Floor(cy);
+        float fx = cx - ix;
+        float fy = cy - iy;
+
+        // Sample elevation at the four corners of this grid quad
+        float eBL = GetElevationAt(ix,     iy);
+        float eBR = GetElevationAt(ix + 1, iy);
+        float eTL = GetElevationAt(ix,     iy + 1);
+        float eTR = GetElevationAt(ix + 1, iy + 1);
+
+        // Interpolate within the correct triangle (matches mesh triangulation)
+        if (iy % 2 == 0)
+        {
+            // Even row — diagonal TL→BR (from (0,1) to (1,0))
+            if (fx + fy <= 1f)
+            {
+                // Triangle BL, TL, BR
+                return eBL + (eTL - eBL) * fy + (eBR - eBL) * fx;
+            }
+            else
+            {
+                // Triangle BR, TL, TR
+                return eTR + (eTL - eTR) * (1f - fx) + (eBR - eTR) * (1f - fy);
+            }
+        }
+        else
+        {
+            // Odd row — diagonal BL→TR (from (0,0) to (1,1))
+            if (fy <= fx)
+            {
+                // Triangle BL, TR, BR
+                return eBR + (eBL - eBR) * (1f - fx) + (eTR - eBR) * fy;
+            }
+            else
+            {
+                // Triangle BL, TL, TR
+                return eTL + (eBL - eTL) * (1f - fy) + (eTR - eTL) * fx;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Raw per-vertex elevation lookup at integer grid coordinates.
+    /// Handles chunk boundary crossings.
+    /// </summary>
+    private float GetElevationAt(int worldX, int worldY)
+    {
+        int chunkX = worldX / ChunkSize;
+        int chunkY = worldY / ChunkSize;
         var chunk = GetChunk(chunkX, chunkY);
-        if (chunk == null)
-            return 0f;
-
-        int localX = (int)worldX % ChunkSize;
-        int localY = (int)worldY % ChunkSize;
+        if (chunk == null) return 0f;
+        int localX = worldX - chunkX * ChunkSize;
+        int localY = worldY - chunkY * ChunkSize;
+        if (localX >= chunk.Size || localY >= chunk.Size) return 0f;
         return chunk.GetElevation(localX, localY);
     }
 

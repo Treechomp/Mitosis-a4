@@ -102,23 +102,30 @@ public sealed class PlayerController
         float worldDX = inputForward * sinY - inputRight * cosY;   // world +X
         float worldDZ = inputForward * cosY + inputRight * sinY;   // world +Z
 
-        // Convert world-XZ to grid velocity.
+        // Convert world-space input to grid velocity via target-position.
         //
-        // The grid→world mapping includes the row offset:
-        //   world_X =  grid_X * tileSize + SmoothRowOffset(grid_Y)
-        //   world_Z = -grid_Y * tileSize
-        //
-        // Inverting the Jacobian gives:
-        //   vel.Dx = (worldDX + offsetSlope * worldDZ) * speed
-        //   vel.Dy = -worldDZ * speed
-        //
-        // where offsetSlope = d(SmoothRowOffset)/d(grid_Y) / tileSize = ±0.5.
-        // Without this, any Y-axis movement causes visual X-zigzag because the
-        // alternating row offset shifts the rendered position left/right each row.
+        // Rather than approximating the Jacobian (which has discretization error
+        // at row boundaries), compute the exact world-space target position and
+        // convert it back to grid coordinates. This produces the precise grid
+        // displacement needed for straight-line world-space movement, even when
+        // the step crosses a row boundary where the offset slope flips.
         ref var pos = ref _entityManager.Positions[_playerEntity];
-        float offsetSlope = ((int)MathF.Floor(pos.Y) & 1) == 0 ? 0.5f : -0.5f;
-        vel.Dx = (worldDX + offsetSlope * worldDZ) * speed;
-        vel.Dy = -worldDZ * speed;
+
+        // Current world position
+        float T = TileSize;
+        float curWorldX = pos.X * T + GridCoordinates.SmoothRowOffset(pos.Y, T);
+        float curWorldZ = -pos.Y * T;
+
+        // Target world position (one frame's displacement)
+        float targetWorldX = curWorldX + worldDX * speed * T;
+        float targetWorldZ = curWorldZ + worldDZ * speed * T;
+
+        // Convert back to grid coordinates
+        var (targetGridX, targetGridY) = GridCoordinates.WorldToGrid(targetWorldX, targetWorldZ, T);
+
+        // Grid velocity = displacement from current to target
+        vel.Dx = targetGridX - pos.X;
+        vel.Dy = targetGridY - pos.Y;
     }
 
     public void HandleZoomInput(Camera3D? camera)
