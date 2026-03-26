@@ -143,12 +143,12 @@ public sealed class RenderingManager
     /// </summary>
     public void InitializeChunkMeshes(Node parent)
     {
-        // Vertex-colour gradient shader: the GPU interpolates per-vertex biome colours
-        // across each triangle, and the fragment shader posterizes for a PS2-era banded look.
-        // Altitude-based brightness makes elevation clearly readable.
+        // Vertex-colour gradient shader with manual Lambert lighting for strong
+        // shadow contrast. Uses render_mode unshaded so terrain controls its own
+        // sun shadows independently of the scene DirectionalLight (which still
+        // lights entities).
         var shader = GD.Load<Shader>("res://Shaders/TerrainDither.gdshader");
         _chunkMaterial = new ShaderMaterial { Shader = shader };
-        _chunkMaterial.SetShaderParameter("max_height", _heightScale);
 
         foreach (var chunk in _worldManager.GetLoadedChunks())
         {
