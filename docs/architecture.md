@@ -194,13 +194,14 @@ Earlier versions had `TileType.IsWalkable()` marking Mountain/Lava impassable. T
 has been **removed**. Every tile is now traversable (Mountain and Lava are simply very slow
 and very uncomfortable). Movement difficulty comes from two places instead:
 
-- **`MovementSystem` slope resistance** — moving uphill scales speed down by the local
-  elevation rise (non-flying entities only).
-- **Spawn placement** — `WorldManager.GetSpawnablePositionsForSpecies` rejects tiles where
-  a neighbouring tile differs in elevation by more than a small threshold (a "cliff"), so
-  ground-dwellers don't spawn on sheer faces.
+- **`MovementSystem`** — non-flying creatures are slowed uphill by `max(0.25, 1 − rise×8)`,
+  and **cannot cross a "cliff"** where the destination elevation differs by more than
+  **0.28** (a hard movement block).
+- **`WorldManager.GetSpawnablePositionsForSpecies`** — ground species (not aquatic, not
+  flying) won't spawn on a tile whose cardinal neighbours differ in elevation by more than
+  **0.18**, so they don't start stranded on a sheer face.
 
-See FEATURES_AND_DESIGN.md for the exact thresholds.
+Flying and aquatic species bypass these checks.
 
 ---
 

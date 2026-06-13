@@ -31,9 +31,9 @@ Built with **Godot 4.6.3** and **C#**.
 
 | Input | Action |
 |-------|--------|
-| WASD / Arrows | Pan camera |
-| Shift | Sprint (faster pan) |
-| Mouse wheel / `+` `-` | Zoom (orthographic) |
+| WASD / Arrows | Move player (camera-relative; camera follows) |
+| Shift | Sprint (3× speed) |
+| Mouse wheel / `+` `-` | Zoom (orthographic, isometric view) |
 | F3 | Toggle per-system profiling + per-species population overlay |
 
 ## Configuration
