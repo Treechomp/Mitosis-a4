@@ -303,9 +303,19 @@ public sealed class RenderingManager
             for (int lx = 0; lx < n; lx++)
             {
                 bool interior = lx < chunk.Size && ly < chunk.Size;
-                TileType tile = interior
-                    ? chunk.GetTile(lx, ly)
-                    : _worldManager.GetTile(worldOffsetX + lx, worldOffsetY + ly);
+                TileType tile;
+                if (interior)
+                {
+                    tile = chunk.GetTile(lx, ly);
+                }
+                else
+                {
+                    // Outer +1 edge: sample the neighbouring tile, but clamp at the world
+                    // border so the outermost rim shows the edge biome instead of ocean.
+                    int wx = Math.Min(worldOffsetX + lx, _worldManager.WorldSizeTiles - 1);
+                    int wy = Math.Min(worldOffsetY + ly, _worldManager.WorldSizeTiles - 1);
+                    tile = _worldManager.GetTile(wx, wy);
+                }
                 colors[ly * n + lx] = Chunk.GetTileColor(tile);
             }
         }
