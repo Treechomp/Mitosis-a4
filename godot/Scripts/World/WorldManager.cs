@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using Mitosis.Components;
 using Mitosis.SpeciesData;
 using Mitosis.Utils;
 
@@ -113,6 +114,55 @@ public sealed class WorldManager
         DirtyChunks.Add((chunkX, chunkY));
         return true;
     }
+
+    /// <summary>
+    /// Faction terraforming: nudge the moisture parameter at a world position in the given
+    /// direction, then re-derive the tile type from the new params. Elevation and temperature
+    /// are unchanged, so terraforming only walks along the moisture spectrum within the tile's
+    /// climate band (it never turns land into water or mountains). The continuous terrain
+    /// colour follows automatically because it reads the params. Returns true if anything
+    /// changed (so the chunk is re-coloured). See docs/3d-terrain-plan.md (Phase 2b).
+    /// </summary>
+    public bool Terraform(float worldX, float worldY, TerraformDirection direction, float step)
+    {
+        int chunkX = (int)(worldX / ChunkSize);
+        int chunkY = (int)(worldY / ChunkSize);
+        var chunk = GetChunk(chunkX, chunkY);
+        if (chunk == null) return false;
+
+        int localX = (int)worldX % ChunkSize;
+        int localY = (int)worldY % ChunkSize;
+
+        var tile = chunk.GetTile(localX, localY);
+        if (!tile.IsTerraformable()) return false;
+
+        float m = chunk.GetMoisture(localX, localY);
+        float nm = direction switch
+        {
+            TerraformDirection.Wetter   => m + step,
+            TerraformDirection.Drier    => m - step,
+            TerraformDirection.Balanced => MoveToward(m, 0.4f, step), // 0.4 ≈ grass band
+            _ => m
+        };
+        nm = Math.Clamp(nm, 0f, 1f);
+        if (nm == m) return false;
+
+        chunk.SetMoisture(localX, localY, nm);
+
+        // Re-derive the discrete gameplay tile from the new params (Chunk.SetTile also resets
+        // nutrition for the new type). Even if the type doesn't cross a threshold, the colour
+        // still shifts, so the chunk is always marked dirty when moisture changed.
+        var newTile = TerrainGenerator.DetermineTileType(
+            chunk.GetElevation(localX, localY), nm, chunk.GetTemperature(localX, localY));
+        if (newTile != tile)
+            chunk.SetTile(localX, localY, newTile);
+
+        DirtyChunks.Add((chunkX, chunkY));
+        return true;
+    }
+
+    private static float MoveToward(float value, float target, float step)
+        => value < target ? Math.Min(target, value + step) : Math.Max(target, value - step);
 
     /// <summary>
     /// Get the elevation value (0–1) at world coordinates, interpolated across

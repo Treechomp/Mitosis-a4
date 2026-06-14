@@ -152,6 +152,10 @@ public sealed class TerraformSystem : ISystem
     private readonly World.WorldManager _worldManager;
     private readonly Random _rng = new();
 
+    // Moisture nudged per successful terraform event (continuous; classification + colour
+    // follow). Roughly one discrete biome step's worth of moisture. Tunable.
+    private const float MoistureStep = 0.05f;
+
     public TerraformSystem(World.WorldManager worldManager)
     {
         _worldManager = worldManager;
@@ -194,21 +198,9 @@ public sealed class TerraformSystem : ISystem
             float targetX = pos.X + offsetX;
             float targetY = pos.Y + offsetY;
 
-            var currentTile = _worldManager.GetTile(targetX, targetY);
-            if (!currentTile.IsTerraformable())
-                continue;
-
-            // Determine transformation based on direction
-            TileType? newTile = terraform.Direction switch
-            {
-                TerraformDirection.Wetter => currentTile.ShiftWetter(),
-                TerraformDirection.Drier => currentTile.ShiftDrier(),
-                TerraformDirection.Balanced => currentTile.ShiftBalanced(),
-                _ => null
-            };
-
-            if (newTile.HasValue)
-                _worldManager.SetTile(targetX, targetY, newTile.Value);
+            // Terraform nudges the moisture parameter; the tile's classification and its
+            // continuous colour follow from the new params (docs/3d-terrain-plan.md Phase 2b).
+            _worldManager.Terraform(targetX, targetY, terraform.Direction, MoistureStep);
         }
     }
 }
