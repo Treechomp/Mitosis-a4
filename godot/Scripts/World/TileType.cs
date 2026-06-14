@@ -264,6 +264,35 @@ public static class TileTypeExtensions
     }
 
     /// <summary>
+    /// Per-biome surface-ruggedness multiplier for the terrain detail noise: high for
+    /// mountains/volcanic, moderate for forest/jungle, low for plains, zero for water (flat).
+    /// Edit here like the other per-tile properties; see TerrainGenerator surface detail.
+    /// </summary>
+    public static float GetRuggedness(this TileType tile)
+    {
+        return tile switch
+        {
+            TileType.Mountain  => 1.6f,
+            TileType.Lava      => 1.3f,
+            TileType.Jungle    => 1.1f,
+            TileType.Forest    => 0.9f,
+            TileType.Taiga     => 0.9f,
+            TileType.Dirt      => 0.7f,
+            TileType.Arid      => 0.7f,
+            TileType.Sand      => 0.6f,   // mild dunes
+            TileType.Shrubland => 0.6f,
+            TileType.Savanna   => 0.5f,
+            TileType.Steppe    => 0.5f,
+            TileType.Grass     => 0.4f,
+            TileType.Bog       => 0.4f,
+            TileType.Tundra    => 0.35f,
+            TileType.Wetland   => 0.35f,
+            TileType.Ice       => 0.25f,
+            _ => 0.0f                     // water (DeepWater/ShallowWater/River/Reef): flat
+        };
+    }
+
+    /// <summary>
     /// Shift a tile one step wetter on the moisture spectrum.
     /// Returns null if at the wet extreme or not terraformable.
     /// </summary>

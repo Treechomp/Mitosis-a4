@@ -167,9 +167,11 @@ so the sea stays flat. The roughness mask modulates detail amplitude so some reg
 and others smooth. Tune live: raise `TerrainDetailAmplitude` and/or lower `WarpAmplitude` to
 push variety. Detail adds a little slope (rough ground slows movement slightly; never blocks).
 
+**Done:** biome-aware roughness — detail is scaled per biome by `TileType.GetRuggedness()`
+(mountains rugged, forest/jungle moderate, plains smooth, water flat).
+
 **Future levers (not done):** elevation redistribution / power curve for flat basins +
-concentrated mountain ranges; biome-aware roughness (e.g. ruggedness keyed to mountains).
-`WarpAmplitude` default lowered 30 → 12 (below ~15 reads best).
+concentrated mountain ranges. `WarpAmplitude` default lowered 30 → 12 (below ~15 reads best).
 
 ## Water rendering — flat depth-coloured sea  ✅ first pass
 

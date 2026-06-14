@@ -110,9 +110,10 @@ by `World/RiverMapper.cs`. All noise is Godot `FastNoiseLite`, `SimplexSmooth`, 
   warp noise (**amplitude 12 tiles** by default; lower = calmer boundaries), reducing blobby
   artifacts. Frequencies/amplitudes here are defaults — the key ones are tunable via GameManager
   exports (see Configuration Reference).
-- **Surface detail**: the Detail noise (scaled by the Roughness mask, faded out over water) is
-  added to the **stored/rendered** elevation only — classification uses the base elevation, so
-  biome boundaries and water levels are unaffected. It adds relief plus rugged/smooth variety.
+- **Surface detail**: the Detail noise — scaled by the Roughness mask and a per-biome
+  `TileType.GetRuggedness()` factor (mountains rugged, plains smooth, water flat), and faded out
+  over water — is added to the **stored/rendered** elevation only; classification uses the base
+  elevation, so biome boundaries and water levels are unaffected.
 - **Elevation range**: noise normalized to **0.0–1.0**.
 - **Temperature model**: `temp = 0.6·noise + 0.4·latitudeGradient` (latitude runs
   `worldY / worldSizeTiles`, top cold → bottom warm); high altitude cools via

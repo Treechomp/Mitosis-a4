@@ -170,7 +170,7 @@ public sealed class TerrainGenerator
                 float roughnessFactor = _roughnessFloor + (1f - _roughnessFloor) * roughness01;
                 float landFade = Math.Clamp((elevation - 0.40f) / 0.08f, 0f, 1f);
                 landFade = landFade * landFade * (3f - 2f * landFade); // smoothstep over the shore
-                float detail = _detailNoise.GetNoise2D(worldX, worldY) * _detailAmplitude * roughnessFactor * landFade;
+                float detail = _detailNoise.GetNoise2D(worldX, worldY) * _detailAmplitude * roughnessFactor * landFade * tile.GetRuggedness();
                 float storedElevation = Math.Clamp(elevation + detail, 0f, 1f);
 
                 chunk.SetElevation(localX, localY, storedElevation);
