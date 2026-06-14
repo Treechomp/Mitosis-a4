@@ -26,6 +26,13 @@ public partial class GameManager : Node3D
     [Export] public int WorldSeed = 0;
     [Export] public int TileSize = 16;
     [Export] public float ElevationHeightScale = 64f;  // World units of vertical lift per elevation unit
+    // Terrain noise tuning (see World/TerrainSettings.cs) — editable in the inspector.
+    [Export] public float ElevationFrequency = 0.012f;        // lower = larger landmasses
+    [Export] public float WarpAmplitude = 30f;                // higher = more swirled boundaries
+    [Export] public float TerrainDetailFrequency = 0.045f;    // surface relief frequency
+    [Export] public float TerrainDetailAmplitude = 0.035f;    // surface relief height (keep < ~0.1)
+    [Export] public float TerrainRoughnessFrequency = 0.006f; // size of rugged vs smooth regions
+    [Export] public float TerrainRoughnessFloor = 0.15f;      // min detail in smoothest areas (0..1)
     [Export] public int TargetTPS = 20;
     [Export] public int MaxPopulation = 2000;  // DEBUG: cap at 2000 (2500+ causes FPS drop)
     [Export] public int InitialPopulation = 500;  // DEBUG: standardized debug population
@@ -97,7 +104,15 @@ public partial class GameManager : Node3D
     {
         _entityManager = new EntityManager();
         int seed = WorldSeed != 0 ? WorldSeed : (int)(DateTime.UtcNow.Ticks & 0x7FFFFFFF);
-        _worldManager = new WorldManager(ChunkSize, WorldSizeChunks, seed);
+        _worldManager = new WorldManager(ChunkSize, WorldSizeChunks, seed, new TerrainSettings
+        {
+            ElevationFrequency = ElevationFrequency,
+            WarpAmplitude      = WarpAmplitude,
+            DetailFrequency    = TerrainDetailFrequency,
+            DetailAmplitude    = TerrainDetailAmplitude,
+            RoughnessFrequency = TerrainRoughnessFrequency,
+            RoughnessFloor     = TerrainRoughnessFloor,
+        });
         _simulationDt = 1.0 / TargetTPS;
 
         // Create extracted managers

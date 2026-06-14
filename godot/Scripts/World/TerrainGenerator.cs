@@ -16,23 +16,32 @@ public sealed class TerrainGenerator
     private readonly FastNoiseLite _warpNoiseX;
     private readonly FastNoiseLite _warpNoiseY;
     private readonly FastNoiseLite _landmarkNoise;
+    private readonly FastNoiseLite _detailNoise;     // fine surface relief on top of base elevation
+    private readonly FastNoiseLite _roughnessNoise;  // low-freq mask: where detail is strong vs flat
 
-    // Domain warping amplitude (in tiles) — larger value means more organic, winding boundaries
-    private const float WarpAmplitude = 30f;
+    // Domain warping amplitude (in tiles) — larger value means more organic, winding boundaries.
+    private readonly float WarpAmplitude;
+    // Surface-detail tuning (see TerrainSettings).
+    private readonly float _detailAmplitude;
+    private readonly float _roughnessFloor;
 
     // Flow-based river system (pre-computed before chunk generation)
     private RiverMapper? _riverMapper;
     private int _worldSizeTiles = 512; // Updated by PrecomputeRivers
 
-    public TerrainGenerator(int seed)
+    public TerrainGenerator(int seed, TerrainSettings? settings = null)
     {
         _seed = seed;
+        settings ??= new TerrainSettings();
+        WarpAmplitude = settings.WarpAmplitude;
+        _detailAmplitude = settings.DetailAmplitude;
+        _roughnessFloor = settings.RoughnessFloor;
 
         // Elevation noise — continent/landmass scale features
         _elevationNoise = new FastNoiseLite();
         _elevationNoise.NoiseType = FastNoiseLite.NoiseTypeEnum.SimplexSmooth;
         _elevationNoise.Seed = seed;
-        _elevationNoise.Frequency = 0.012f;
+        _elevationNoise.Frequency = settings.ElevationFrequency;
         _elevationNoise.FractalType = FastNoiseLite.FractalTypeEnum.Fbm;
         _elevationNoise.FractalOctaves = 4;
 
@@ -75,6 +84,24 @@ public sealed class TerrainGenerator
         _landmarkNoise.Frequency = 0.04f;
         _landmarkNoise.FractalType = FastNoiseLite.FractalTypeEnum.Fbm;
         _landmarkNoise.FractalOctaves = 2;
+
+        // Detail noise — fine surface relief added on top of the base elevation. Kept out of
+        // classification so biome boundaries stay on the base shape.
+        _detailNoise = new FastNoiseLite();
+        _detailNoise.NoiseType = FastNoiseLite.NoiseTypeEnum.SimplexSmooth;
+        _detailNoise.Seed = seed + 11000;
+        _detailNoise.Frequency = settings.DetailFrequency;
+        _detailNoise.FractalType = FastNoiseLite.FractalTypeEnum.Fbm;
+        _detailNoise.FractalOctaves = settings.DetailOctaves;
+
+        // Roughness mask — low-frequency field so some regions are rugged and others smooth,
+        // breaking the uniform "wrangled fabric" look.
+        _roughnessNoise = new FastNoiseLite();
+        _roughnessNoise.NoiseType = FastNoiseLite.NoiseTypeEnum.SimplexSmooth;
+        _roughnessNoise.Seed = seed + 13000;
+        _roughnessNoise.Frequency = settings.RoughnessFrequency;
+        _roughnessNoise.FractalType = FastNoiseLite.FractalTypeEnum.Fbm;
+        _roughnessNoise.FractalOctaves = 2;
     }
 
     /// <summary>
@@ -135,7 +162,18 @@ public sealed class TerrainGenerator
                 }
 
                 chunk.SetTile(localX, localY, tile);
-                chunk.SetElevation(localX, localY, elevation);
+
+                // Surface relief: add roughness-modulated detail to the stored/rendered
+                // elevation, faded out over water so the sea stays flat. Classification above
+                // used the base elevation, so biome boundaries are unaffected.
+                float roughness01 = (_roughnessNoise.GetNoise2D(worldX, worldY) + 1f) * 0.5f;
+                float roughnessFactor = _roughnessFloor + (1f - _roughnessFloor) * roughness01;
+                float landFade = Math.Clamp((elevation - 0.40f) / 0.08f, 0f, 1f);
+                landFade = landFade * landFade * (3f - 2f * landFade); // smoothstep over the shore
+                float detail = _detailNoise.GetNoise2D(worldX, worldY) * _detailAmplitude * roughnessFactor * landFade;
+                float storedElevation = Math.Clamp(elevation + detail, 0f, 1f);
+
+                chunk.SetElevation(localX, localY, storedElevation);
                 chunk.SetMoisture(localX, localY, moisture);
                 chunk.SetTemperature(localX, localY, temperature);
             }

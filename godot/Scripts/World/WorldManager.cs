@@ -20,14 +20,14 @@ public sealed class WorldManager
     private readonly TerrainGenerator _generator;
     public readonly SpatialHash SpatialHash;
 
-    public WorldManager(int chunkSize, int worldSizeChunks, int seed)
+    public WorldManager(int chunkSize, int worldSizeChunks, int seed, TerrainSettings? terrainSettings = null)
     {
         ChunkSize = chunkSize;
         WorldSizeChunks = worldSizeChunks;
         Seed = seed;
 
         _chunks = new Dictionary<(int, int), Chunk>(worldSizeChunks * worldSizeChunks);
-        _generator = new TerrainGenerator(seed);
+        _generator = new TerrainGenerator(seed, terrainSettings);
         SpatialHash = new SpatialHash(chunkSize);
 
         // Pre-compute flow-based rivers before any chunks are generated

@@ -146,6 +146,30 @@ squares with **zero** geometry/movement/alignment impact. Tune or disable in-edi
 - **Perf:** params add 2 floats/vertex (~2.6 MB at 18×18). Classification stays cached, so
   `GetTile` cost is unchanged.
 
+## Terrain shape & variety — surface detail + tunable noise  ✅ first pass
+
+To reduce the uniform "wrangled fabric" look, the generator layers roughness-modulated
+**surface detail** on top of the base elevation, and the key noise parameters are exposed as
+`GameManager` `[Export]`s (→ `TerrainSettings` → `TerrainGenerator`), editable in the inspector:
+
+| Export | Default | Effect |
+|--------|---------|--------|
+| `ElevationFrequency` | 0.012 | base shape scale; lower = larger landmasses |
+| `WarpAmplitude` | 30 | domain-warp swirl; lower = calmer/straighter (less "fabric") |
+| `TerrainDetailFrequency` | 0.045 | surface-relief frequency |
+| `TerrainDetailAmplitude` | 0.035 | surface-relief height added to elevation (keep < ~0.1 or slopes get steep) |
+| `TerrainRoughnessFrequency` | 0.006 | size of rugged vs smooth regions |
+| `TerrainRoughnessFloor` | 0.15 | minimum detail in the smoothest regions (0 = some areas fully flat) |
+
+Detail is added to the **stored/rendered** elevation only — classification uses the base
+elevation, so biome boundaries and water levels are unchanged — and it's faded out over water
+so the sea stays flat. The roughness mask modulates detail amplitude so some regions are rugged
+and others smooth. Tune live: raise `TerrainDetailAmplitude` and/or lower `WarpAmplitude` to
+push variety. Detail adds a little slope (rough ground slows movement slightly; never blocks).
+
+**Future levers (not done):** elevation redistribution / power curve for flat basins +
+concentrated mountain ranges; biome-aware roughness (e.g. ruggedness keyed to mountains).
+
 ## Order
 
 `Phase 1` → `Phase 2a` → `Phase 2b` → (optional) `Phase 3`. Each is independently shippable.
