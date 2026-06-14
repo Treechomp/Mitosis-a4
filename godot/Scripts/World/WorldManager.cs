@@ -212,6 +212,30 @@ public sealed class WorldManager
         return chunk.GetElevation(worldX - chunkX * ChunkSize, worldY - chunkY * ChunkSize);
     }
 
+    /// <summary>Clamped per-vertex moisture (0–1) at integer world coords (for mesh edges).</summary>
+    public float GetVertexMoisture(int worldX, int worldY)
+    {
+        if (worldX < 0) worldX = 0; else if (worldX >= WorldSizeTiles) worldX = WorldSizeTiles - 1;
+        if (worldY < 0) worldY = 0; else if (worldY >= WorldSizeTiles) worldY = WorldSizeTiles - 1;
+        int chunkX = worldX / ChunkSize;
+        int chunkY = worldY / ChunkSize;
+        var chunk = GetChunk(chunkX, chunkY);
+        if (chunk == null) return 0f;
+        return chunk.GetMoisture(worldX - chunkX * ChunkSize, worldY - chunkY * ChunkSize);
+    }
+
+    /// <summary>Clamped per-vertex temperature (0–1) at integer world coords (for mesh edges).</summary>
+    public float GetVertexTemperature(int worldX, int worldY)
+    {
+        if (worldX < 0) worldX = 0; else if (worldX >= WorldSizeTiles) worldX = WorldSizeTiles - 1;
+        if (worldY < 0) worldY = 0; else if (worldY >= WorldSizeTiles) worldY = WorldSizeTiles - 1;
+        int chunkX = worldX / ChunkSize;
+        int chunkY = worldY / ChunkSize;
+        var chunk = GetChunk(chunkX, chunkY);
+        if (chunk == null) return 0f;
+        return chunk.GetTemperature(worldX - chunkX * ChunkSize, worldY - chunkY * ChunkSize);
+    }
+
     /// <summary>
     /// Get the nutrition level at world coordinates (0.0 = depleted, 1.0 = full).
     /// </summary>

@@ -298,25 +298,42 @@ public sealed class RenderingManager
         int worldOffsetX = chunk.ChunkX * chunk.Size;
         int worldOffsetY = chunk.ChunkY * chunk.Size;
 
+        int maxTile = _worldManager.WorldSizeTiles - 1;
+
         for (int ly = 0; ly < n; ly++)
         {
             for (int lx = 0; lx < n; lx++)
             {
-                bool interior = lx < chunk.Size && ly < chunk.Size;
                 TileType tile;
-                if (interior)
+                float moisture, temperature, elevation;
+                if (lx < chunk.Size && ly < chunk.Size)
                 {
-                    tile = chunk.GetTile(lx, ly);
+                    tile        = chunk.GetTile(lx, ly);
+                    moisture    = chunk.GetMoisture(lx, ly);
+                    temperature = chunk.GetTemperature(lx, ly);
+                    elevation   = chunk.GetElevation(lx, ly);
                 }
                 else
                 {
-                    // Outer +1 edge: sample the neighbouring tile, but clamp at the world
-                    // border so the outermost rim shows the edge biome instead of ocean.
-                    int wx = Math.Min(worldOffsetX + lx, _worldManager.WorldSizeTiles - 1);
-                    int wy = Math.Min(worldOffsetY + ly, _worldManager.WorldSizeTiles - 1);
-                    tile = _worldManager.GetTile(wx, wy);
+                    // Outer +1 edge: sample the neighbour, clamped at the world border so the
+                    // rim shows the edge biome instead of ocean.
+                    int wx = Math.Min(worldOffsetX + lx, maxTile);
+                    int wy = Math.Min(worldOffsetY + ly, maxTile);
+                    tile        = _worldManager.GetTile(wx, wy);
+                    moisture    = _worldManager.GetVertexMoisture(wx, wy);
+                    temperature = _worldManager.GetVertexTemperature(wx, wy);
+                    elevation   = _worldManager.GetVertexElevation(wx, wy);
                 }
-                colors[ly * n + lx] = Chunk.GetTileColor(tile);
+
+                // Continuous "terrain cube" colour for pure-climate land; a discrete colour for
+                // water features (ocean/river/lake/reef) and for any tile overridden away from
+                // its climate classification (terraform, landmarks) so they stay distinct.
+                bool discrete = tile.IsWater()
+                             || tile == TileType.Reef
+                             || tile != TerrainGenerator.DetermineTileType(elevation, moisture, temperature);
+                colors[ly * n + lx] = discrete
+                    ? Chunk.GetTileColor(tile)
+                    : TerrainPalette.FromParams(moisture, temperature, elevation);
             }
         }
         return colors;

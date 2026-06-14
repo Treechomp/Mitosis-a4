@@ -15,6 +15,8 @@ public sealed class Chunk
     private readonly TileType[,] _tiles;
     private readonly float[,] _nutrition;
     private readonly float[,] _elevation;
+    private readonly float[,] _moisture;
+    private readonly float[,] _temperature;
 
     /// <summary>
     /// Maximum nutrition a tile can hold (1.0 = fully nourished).
@@ -34,6 +36,8 @@ public sealed class Chunk
         _tiles = new TileType[size, size];
         _nutrition = new float[size, size];
         _elevation = new float[size, size];
+        _moisture = new float[size, size];
+        _temperature = new float[size, size];
     }
 
     /// <summary>
@@ -101,6 +105,36 @@ public sealed class Chunk
     {
         if (localX >= 0 && localX < Size && localY >= 0 && localY < Size)
             _elevation[localX, localY] = value;
+    }
+
+    /// <summary>Get the moisture parameter (0–1) at a local vertex position.</summary>
+    public float GetMoisture(int localX, int localY)
+    {
+        if (localX < 0 || localX >= Size || localY < 0 || localY >= Size)
+            return 0f;
+        return _moisture[localX, localY];
+    }
+
+    /// <summary>Store the moisture parameter at a local vertex position (chunk generation).</summary>
+    public void SetMoisture(int localX, int localY, float value)
+    {
+        if (localX >= 0 && localX < Size && localY >= 0 && localY < Size)
+            _moisture[localX, localY] = value;
+    }
+
+    /// <summary>Get the temperature parameter (0–1) at a local vertex position.</summary>
+    public float GetTemperature(int localX, int localY)
+    {
+        if (localX < 0 || localX >= Size || localY < 0 || localY >= Size)
+            return 0f;
+        return _temperature[localX, localY];
+    }
+
+    /// <summary>Store the temperature parameter at a local vertex position (chunk generation).</summary>
+    public void SetTemperature(int localX, int localY, float value)
+    {
+        if (localX >= 0 && localX < Size && localY >= 0 && localY < Size)
+            _temperature[localX, localY] = value;
     }
 
     /// <summary>

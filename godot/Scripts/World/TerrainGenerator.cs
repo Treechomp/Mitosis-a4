@@ -136,6 +136,8 @@ public sealed class TerrainGenerator
 
                 chunk.SetTile(localX, localY, tile);
                 chunk.SetElevation(localX, localY, elevation);
+                chunk.SetMoisture(localX, localY, moisture);
+                chunk.SetTemperature(localX, localY, temperature);
             }
         }
 
@@ -170,7 +172,13 @@ public sealed class TerrainGenerator
         return Math.Clamp(temp, 0f, 1f);
     }
 
-    private static TileType DetermineTileType(float elevation, float moisture, float temperature)
+    /// <summary>
+    /// Classify a terrain point into a discrete <see cref="TileType"/> from its continuous
+    /// climate parameters (each 0–1). Public so the renderer can detect tiles overridden
+    /// away from their climate classification (rivers, landmarks, terraform) and colour them
+    /// discretely while pure-climate land uses the continuous palette.
+    /// </summary>
+    public static TileType DetermineTileType(float elevation, float moisture, float temperature)
     {
         // ── Water ──────────────────────────────────────────────────────────────────────
         if (elevation < 0.30f)
