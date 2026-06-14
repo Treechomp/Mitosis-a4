@@ -684,8 +684,15 @@ public sealed class HuntingSystem : ISystem
                                         ref var otherSocial = ref em.Socials[other];
                                         if (otherSocial.GroupId == groupId)
                                         {
+                                            // Feed packmates' bellies directly (hunger only, no carrier
+                                            // fill). For Sectids this means the kill sustains the swarm in
+                                            // the field while only the killer (which filled its carrier from
+                                            // its own share above) ferries the colony's load to the nest —
+                                            // instead of the whole pack peeling off to deliver tiny loads.
+                                            // Non-carrier packs (wolves) are unaffected: they only ever
+                                            // gained hunger here anyway.
                                             ref var otherHunger = ref em.Hungers[other];
-                                            ApplyFoodGain(other, perMember, em, ref otherHunger);
+                                            otherHunger.Current = MathF.Min(otherHunger.Max, otherHunger.Current + perMember);
                                         }
                                     }
                                 }

@@ -490,6 +490,16 @@ advances a stage; at max stage with surplus food it founds nearby nests or a dis
 Sectids cannot graze — they must hunt, so the economy is tuned so a kill is worth funding a
 larva: `MaxCarryFood` 12 (big kills aren't wasted at the carry cap) against an 18-food larva.
 
+**Swarm kills & field-feeding.** As a `Swarm` hunter, a Sectid's effective hunt mass scales with
+nearby same-species count, letting a dense swarm bring down prey far larger than one insect. For
+the pile-on to actually land hits, `AttackRange` (1.3) exceeds `SeparationRadius` (1.0) — earlier
+the reverse held them spaced just outside biting distance, so a swarm chased big prey but only
+landed the occasional jab. On a kill, the killer carries the colony's share toward the nest while
+packmates are fed **directly in the field** (hunger only, no carrier fill) — so the swarm sustains
+itself between kills and only one Sectid peels off to deliver, instead of the whole pack ferrying
+tiny loads back. Starter colonies spawn denser (`sectidsPerNest` 8, `SectidShare` 0.10) so a swarm
+reaches kill-mass immediately.
+
 **Hibernation (food floor).** A pure consumer faction starves wholesale when prey is scarce, so
 a hungry Sectid (below 35% hunger) that detects no huntable prey within 30 tiles for ~600 ticks
 retreats to its nest and goes **dormant**: metabolism drops to 10% (`HungerSystem` reads the

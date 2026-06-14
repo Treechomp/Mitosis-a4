@@ -379,8 +379,9 @@ public sealed class WorldSpawner
     {
         if (nestSystem == null) return;
 
-        // Derive counts from budget
-        const int sectidsPerNest = 5;
+        // Derive counts from budget. Denser starter swarms (matching PreferredGroupSize) so a
+        // colony can immediately field a kill-capable swarm instead of scattered individuals.
+        const int sectidsPerNest = 8;
         int totalNestTarget = Math.Max(1, populationBudget / sectidsPerNest);
         int colonyCount = Math.Max(1, (totalNestTarget + 1) / 2);
         int nestsPerColony = Math.Max(1, totalNestTarget / colonyCount);

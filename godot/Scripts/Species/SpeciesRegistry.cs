@@ -2445,7 +2445,8 @@ public static class SpeciesRegistry
             // Pack of 8: 0.5 * 8^0.8 = 3.03 — can hunt rabbits and foxes
             // Pack of 15: 0.5 * 15^0.8 = 5.18 — can threaten wolves and Shroomers
             HuntRange = 12f,       // Wider detection range for swarming
-            AttackRange = 0.5f,
+            AttackRange = 1.3f,    // Wide enough that a whole swarm dogpiles a target at once
+                                   // (must exceed SeparationRadius or only one bites at a time)
             AttackPower = 16f,     // Swarm overwhelms through numbers
             AttackCooldown = 10,   // Faster bite cycle
             BaseHuntSpeed = 0.13f, // Fast closing speed for swarm
@@ -2497,8 +2498,8 @@ public static class SpeciesRegistry
             FoodDeliveryRange = 4f,
             CarryingSpeed = 0.11f,  // Faster than hunt speed — motivated to deliver
 
-            // Separation - tiny, cluster tight
-            SeparationRadius = 1.5f,
+            // Separation - tiny, cluster tight (below AttackRange so the swarm can pile onto prey)
+            SeparationRadius = 1.0f,
             SeparationStrength = 0.015f,
 
             // Social - tight swarm, large groups

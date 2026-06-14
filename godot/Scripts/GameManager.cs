@@ -48,7 +48,7 @@ public partial class GameManager : Node3D
 
     // Faction spawning — proportions of InitialPopulation
     [Export] public float FaelingShare = 0.04f;
-    [Export] public float SectidShare  = 0.06f;
+    [Export] public float SectidShare  = 0.10f;  // Need denser starting swarms to reach kill-mass
 
     // Core systems
     private EntityManager _entityManager = null!;
