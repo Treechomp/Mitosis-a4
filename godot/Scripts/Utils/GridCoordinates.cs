@@ -5,41 +5,31 @@ using Godot;
 namespace Mitosis.Utils;
 
 /// <summary>
-/// Converts between abstract vertex grid coordinates and screen (pixel) coordinates
-/// for the offset-row triangulated grid.
+/// Converts between abstract vertex grid coordinates and screen / 3D-world coordinates.
 ///
-/// Every odd row (vy % 2 == 1) is shifted right by half a tile so that connecting
-/// adjacent vertices produces triangles rather than axis-aligned squares.
+/// The mapping is a plain linear square grid:
+///   worldX = vx * tileSize,  worldZ = -vy * tileSize,  worldY = elevation * heightScale
 ///
-/// Abstract grid space  →  screen space
-///   even row:  screenX = vx * tileSize
-///   odd  row:  screenX = vx * tileSize + tileSize * 0.5
-///              screenY = vy * tileSize  (both rows)
+/// (Historically odd rows were shifted half a tile to fake a hex/triangular look via
+/// SmoothRowOffset, but that made straight grid-space movement render as a zig-zag, so the
+/// offset was removed — see docs/3d-terrain-plan.md, Phase 1. SmoothRowOffset now returns 0
+/// and is retained only so call sites stay stable.)
 ///
-/// All gameplay systems (movement, pathfinding, spatial hash) continue to operate
-/// in abstract grid space. Only rendering and player input use screen space.
+/// All gameplay systems (movement, pathfinding, spatial hash) operate in abstract grid
+/// space; only rendering and player input convert to world space.
 /// </summary>
 public static class GridCoordinates
 {
     /// <summary>
-    /// Computes the smooth row offset for a given grid-Y position.
-    ///
-    /// In the offset-row triangulated grid, odd integer rows are shifted right
-    /// by half a tile. For fractional Y values (entity/camera positions), this
-    /// method linearly interpolates the offset between the floor and ceil rows,
-    /// preventing the visual snap that would occur with a hard binary switch.
-    ///
-    /// At integer Y values the result matches the discrete offset exactly,
-    /// so terrain mesh vertices (always at integer coords) are unaffected.
+    /// Row offset for the (former) offset-row layout. Disabled: returns 0 so the grid maps
+    /// linearly to world space and grid-space movement renders straight (no zig-zag).
+    /// Kept as a no-op for call-site stability; see docs/3d-terrain-plan.md (Phase 1).
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static float SmoothRowOffset(float vy, float tileSize)
     {
-        int rowBelow = (int)MathF.Floor(vy);
-        float fy = vy - rowBelow;
-        float offsetBelow = (rowBelow & 1) != 0 ? tileSize * 0.5f : 0f;
-        float offsetAbove = ((rowBelow + 1) & 1) != 0 ? tileSize * 0.5f : 0f;
-        return offsetBelow + fy * (offsetAbove - offsetBelow);
+        // Staggered odd-row offset removed (Phase 1) — linear square mapping.
+        return 0f;
     }
 
     /// <summary>
