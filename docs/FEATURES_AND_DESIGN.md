@@ -409,6 +409,16 @@ only stops hunting at ≥ 95% hunger. Target selection (spatial-hash query) scor
 preferred-prey bias, a generic terrain penalty, and a **species-specific terrain-comfort
 penalty** (e.g. Sectids avoid prey in Wetland); cannibalism and unhuntable targets are
 excluded; land predators reject targets across water. Velocity uses mass-based agility
+
+**Target viability re-evaluation**: predators abandon prey they can't actually bring down rather
+than fixating. Every `HuntReevalInterval` (150 ticks) a hunter checks how much of the target's HP
+it removed; near-zero progress (`HuntMinProgress`) means it can't catch or out-damage the prey, so
+it gives up. It also bails the instant a counterattacking target costs it `HuntSelfDamageBailFraction`
+(40%) of its own HP. A given-up target is blacklisted for `HuntAvoidDuration` (600 ticks) so the
+hunter switches to viable prey; a *collective* no-progress stall also clears the shared pack target
+(an individual peeling off because it's hurt does not, so a swarm that's winning isn't disrupted).
+Ambush hunters are exempt from the progress check (their stalk is legitimately damage-free). This is
+what stops a Sectid swarm from chasing a Crocodile forever. Velocity uses mass-based agility
 (`Clamp(1.5/bodyMass, …)`). On kill: solo takes all nutrition; packs give the killer
 `KillerShareRatio` and split the rest within `PackShareRadius`; Sectids carry a share to nests
 (`FallbackNutrition` 40 when a prey's nutrition is unset).

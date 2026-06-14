@@ -56,6 +56,15 @@ public struct Predator
     public float Stealth;        // 0-1: accumulated stealth level (ambush predators)
     public int PounceTimer;      // Ticks remaining in pounce burst (0 = not pouncing)
 
+    // === Target viability tracking ===
+    // Used to abandon prey we can't actually bring down (too fast to hit, out-healing our
+    // damage, or counterattacking too hard) and switch to a viable target instead of fixating.
+    public int HuntTicks;          // Ticks engaged with the current target (reset on new target)
+    public float TargetLastEnergy; // Target's energy at last progress checkpoint
+    public float SelfStartEnergy;  // Our own energy when this hunt began (damage-taken check)
+    public int AvoidTarget;        // Entity recently given up on — don't re-acquire (-1 = none)
+    public int AvoidTicks;         // Ticks remaining on the avoid suppression
+
     public Predator(
         float huntRange = 5f,
         float attackRange = 0.8f,  // Default: must be close but not fully overlapping
@@ -73,6 +82,11 @@ public struct Predator
         PhaseTimer = 0;
         Stealth = 0f;
         PounceTimer = 0;
+        HuntTicks = 0;
+        TargetLastEnergy = 0f;
+        SelfStartEnergy = 0f;
+        AvoidTarget = -1;
+        AvoidTicks = 0;
     }
 
     public readonly bool HasTarget => TargetEntity >= 0;

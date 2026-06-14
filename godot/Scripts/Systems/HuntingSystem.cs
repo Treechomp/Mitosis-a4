@@ -32,6 +32,15 @@ public sealed class HuntingSystem : ISystem
     private const float SporeBodyMass = 0.2f;
     private const float FallbackNutrition = 40f;
 
+    // === Target viability re-evaluation ===
+    // How often (ticks) to check whether a hunt is making progress, the minimum prey-HP we must
+    // have removed in that window to count as progress, how long to avoid a target we gave up on,
+    // and the fraction of our own HP we'll lose before bailing on a too-dangerous target.
+    private const int HuntReevalInterval = 150;
+    private const float HuntMinProgress = 5f;
+    private const int HuntAvoidDuration = 600;
+    private const float HuntSelfDamageBailFraction = 0.4f;
+
     public HuntingSystem(SpatialHash spatialHash, WorldManager? worldManager = null)
     {
         _spatialHash = spatialHash;
@@ -118,6 +127,12 @@ public sealed class HuntingSystem : ISystem
                 predator.CurrentCooldown -= tickMult;
             if (predator.PhaseTimer > 0)
                 predator.PhaseTimer -= tickMult;
+            if (predator.AvoidTicks > 0)
+            {
+                predator.AvoidTicks -= tickMult;
+                if (predator.AvoidTicks <= 0)
+                    predator.AvoidTarget = -1;
+            }
 
             // Passive stealth accumulation for ambush predators (builds while idle/wandering)
             if (speciesDef.HuntingTactic == HuntingTactic.Ambush && !predator.HasTarget && predator.PounceTimer <= 0)
@@ -176,6 +191,70 @@ public sealed class HuntingSystem : ISystem
                     predator.TargetEntity = -1;
                     predator.Phase = PackPhase.Idle;
                     predator.Role = PackRole.None;
+                }
+            }
+
+            // Target viability re-evaluation: give up on prey we can't actually bring down —
+            // too fast to land hits on, out-healing our damage, or hurting us too much — and
+            // briefly blacklist it so we switch to a viable target instead of fixating.
+            // (This is what stops a Sectid swarm from chasing a Crocodile forever.)
+            if (predator.HasTarget && em.IsAlive(predator.TargetEntity))
+            {
+                predator.HuntTicks += tickMult;
+
+                float targetEnergy = em.HasComponents(predator.TargetEntity, ComponentFlags.Energy)
+                    ? em.Energies[predator.TargetEntity].Current : 0f;
+
+                bool giveUp = false;
+                bool collectiveFail = false; // whole hunt is stalled (vs. just this one retreating hurt)
+
+                // Bail immediately if the hunt is costing us too much health (strong/counterattacking prey)
+                if (em.HasComponents(entity, ComponentFlags.Energy) && predator.SelfStartEnergy > 0f
+                    && em.Energies[entity].Current < predator.SelfStartEnergy * (1f - HuntSelfDamageBailFraction))
+                {
+                    giveUp = true;
+                }
+                else if (speciesDef.HuntingTactic != HuntingTactic.Ambush
+                         && predator.HuntTicks >= HuntReevalInterval)
+                {
+                    // Progress = prey HP removed since the last checkpoint. Near-zero means we're
+                    // not catching or out-damaging it (its regen is suppressed while we land hits,
+                    // so a full-health target after a full window means we simply aren't hitting it).
+                    // Skipped for ambush hunters, whose stalk phase is legitimately damage-free.
+                    float progress = predator.TargetLastEnergy - targetEnergy;
+                    if (progress < HuntMinProgress)
+                    {
+                        giveUp = true;
+                        collectiveFail = true; // nobody is making headway — the target is non-viable
+                    }
+                    predator.TargetLastEnergy = targetEnergy;
+                    predator.HuntTicks = 0;
+                }
+
+                if (giveUp)
+                {
+                    if (em.HasComponents(entity, ComponentFlags.Species))
+                    {
+                        ref var sp = ref em.Species[entity];
+                        EcosystemLogger.Instance?.LogHuntFail(sp.SpeciesId, entity, pos.X, pos.Y, "not_viable");
+                    }
+                    predator.AvoidTarget = predator.TargetEntity;
+                    predator.AvoidTicks = HuntAvoidDuration;
+                    // Only a collective stall clears the shared pack target. An individual peeling
+                    // off because it's hurt must not abandon a hunt the rest of the swarm is winning.
+                    if (collectiveFail && em.HasComponents(entity, ComponentFlags.Social))
+                    {
+                        int gid = em.Socials[entity].GroupId;
+                        if (gid >= 0 && _groupTargets.TryGetValue(gid, out int gt)
+                            && gt == predator.TargetEntity)
+                            _groupTargets.Remove(gid);
+                    }
+                    predator.TargetEntity = -1;
+                    predator.Phase = PackPhase.Idle;
+                    predator.Role = PackRole.None;
+                    // Suppress instant re-acquisition (longer for swarms to break fixation loops)
+                    predator.PhaseTimer = speciesDef.IsSwarmHunter ? 120 : 60;
+                    continue;
                 }
             }
 
@@ -289,8 +368,10 @@ public sealed class HuntingSystem : ISystem
                 }
 
                 // Adopt pack target — any member's chase triggers group hunt
-                // But only if the target is within reasonable range (3× hunt range)
-                if (isPack && _groupTargets.TryGetValue(groupId, out int packTarget) && em.IsAlive(packTarget))
+                // But only if the target is within reasonable range (3× hunt range) and we
+                // haven't personally given up on it as non-viable.
+                if (isPack && _groupTargets.TryGetValue(groupId, out int packTarget) && em.IsAlive(packTarget)
+                    && packTarget != predator.AvoidTarget)
                 {
                     if (!predator.HasTarget || predator.TargetEntity != packTarget)
                     {
@@ -300,6 +381,7 @@ public sealed class HuntingSystem : ISystem
                         if (packTargetDistSq <= adoptRange * adoptRange)
                         {
                             predator.TargetEntity = packTarget;
+                            BeginHuntTracking(em, entity, ref predator, packTarget);
                             AssignPackRole(entity, packTarget, em, ref predator, ref social, speciesDef);
                         }
                     }
@@ -360,6 +442,10 @@ public sealed class HuntingSystem : ISystem
                 foreach (int preyEntity in _nearbyEntities)
                 {
                     if (!em.IsAlive(preyEntity))
+                        continue;
+
+                    // Skip a target we recently gave up on as non-viable
+                    if (preyEntity == predator.AvoidTarget)
                         continue;
 
                     // Swarm hunters can target any living creature (including predators)
@@ -450,6 +536,7 @@ public sealed class HuntingSystem : ISystem
                 if (bestPrey >= 0)
                 {
                     predator.TargetEntity = bestPrey;
+                    BeginHuntTracking(em, entity, ref predator, bestPrey);
                     // Log hunt start
                     if (em.HasComponents(entity, ComponentFlags.Species) &&
                         em.HasComponents(bestPrey, ComponentFlags.Species))
@@ -1202,6 +1289,20 @@ public sealed class HuntingSystem : ISystem
     {
         vel.Dx += (targetDx - vel.Dx) * agility;
         vel.Dy += (targetDy - vel.Dy) * agility;
+    }
+
+    /// <summary>
+    /// Record the baselines used by target-viability re-evaluation when a hunt begins:
+    /// the target's current HP (to measure damage progress) and our own HP (to detect when a
+    /// counterattacking target is hurting us too much to be worth it).
+    /// </summary>
+    private static void BeginHuntTracking(EntityManager em, int self, ref Predator predator, int target)
+    {
+        predator.HuntTicks = 0;
+        predator.TargetLastEnergy = em.HasComponents(target, ComponentFlags.Energy)
+            ? em.Energies[target].Current : 0f;
+        predator.SelfStartEnergy = em.HasComponents(self, ComponentFlags.Energy)
+            ? em.Energies[self].Current : 0f;
     }
 
     /// <summary>
