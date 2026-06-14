@@ -103,9 +103,16 @@ by `World/RiverMapper.cs`. All noise is Godot `FastNoiseLite`, `SimplexSmooth`, 
 | Temperature | 0.005 | 2 | +5000 | Large-scale climate gradient |
 | Warp X / Warp Y | 0.008 | 2 | +7000 / +8000 | Domain warping (organic boundaries) |
 | Landmark | 0.04 | 2 | +9000 | Feature placement (oases, clearings, caves) |
+| Detail | 0.045 | 3 | +11000 | Surface relief added to the **rendered** elevation (not classification) |
+| Roughness | 0.006 | 2 | +13000 | Low-freq mask: which regions are rugged vs smooth |
 
 - **Domain warping**: elevation/moisture/temperature are sampled at coordinates offset by the
-  warp noise (**amplitude 30 tiles**), eliminating blobby artifacts.
+  warp noise (**amplitude 12 tiles** by default; lower = calmer boundaries), reducing blobby
+  artifacts. Frequencies/amplitudes here are defaults — the key ones are tunable via GameManager
+  exports (see Configuration Reference).
+- **Surface detail**: the Detail noise (scaled by the Roughness mask, faded out over water) is
+  added to the **stored/rendered** elevation only — classification uses the base elevation, so
+  biome boundaries and water levels are unaffected. It adds relief plus rugged/smooth variety.
 - **Elevation range**: noise normalized to **0.0–1.0**.
 - **Temperature model**: `temp = 0.6·noise + 0.4·latitudeGradient` (latitude runs
   `worldY / worldSizeTiles`, top cold → bottom warm); high altitude cools via
@@ -515,7 +522,12 @@ Rendering is 3D (`Rendering/RenderingManager.cs`); it only reads simulation stat
   sun shading + screen-space slope-edge darkening (`dFdx/dFdy` on elevation) + PS2-era
   posterization (24 color levels). Sun direction matches the scene `DirectionalLight3D` at
   (−50°, 45°, 0°).
-- Meshes rebuild only for chunks in `WorldManager.DirtyChunks` (e.g. after terraforming).
+- **Water**: sea vertices (below sea level 0.40) are flattened to a level surface and coloured
+  by depth (shallow→deep blue) so the seabed shape isn't visible; lakes/rivers (≥ sea level)
+  follow the terrain as shallow water. Movement still uses the real floor elevation. (A single
+  global ocean plane — per-water-body levels / fluid are future work.)
+- Meshes rebuild only for chunks in `WorldManager.DirtyChunks`; a terraform changes only tile
+  colour, so just the colour stream is rebuilt (cached geometry/normals are reused).
 
 ### Entities
 
@@ -523,9 +535,13 @@ Rendering is 3D (`Rendering/RenderingManager.cs`); it only reads simulation stat
   Circle→sphere, Triangle→prism, Square→box, Diamond→flat box, Star→6-sided cylinder,
   Chevron→wing prism, FishShape→capsule, Fin→tall prism, Teardrop→capsule, Crescent→torus,
   Serpent→thin capsule, Mushroom→flattened sphere, Fangs→broad box.
-- Each instance sits at its terrain elevation (lifted by half its height), rotates to face its
-  velocity, is tinted by `Renderable.Color`, and scaled by `Renderable.Size` (× `Growth`). A
-  large `ExtraCullMargin` keeps the batch from popping under Godot's culling.
+- Each instance sits at its terrain elevation (lifted by half its height; clamped to the water
+  surface so aquatic creatures stay visible), rotates to face its velocity, is tinted by
+  `Renderable.Color`, and scaled by `Renderable.Size` (× `Growth`). A large `ExtraCullMargin`
+  keeps the batch from popping under Godot's culling.
+- **Render interpolation**: positions are interpolated between the previous and current sim tick
+  by the inter-tick fraction, so fast movers (the player at high speed) glide instead of stepping
+  at 20 TPS.
 
 ### Camera & controls
 
@@ -567,6 +583,12 @@ TBD once all features are in and compute/render costs are known):
 | WorldSeed | 0 | 0 | 0 = random; non-zero = reproducible |
 | TileSize | 16 | 16 | World units per tile |
 | ElevationHeightScale | 64 | 64 | World units of lift per elevation unit (3D) |
+| ElevationFrequency | 0.012 | 0.012 | Base elevation frequency (lower = larger landmasses) |
+| WarpAmplitude | 12 | 12 | Domain-warp swirl in tiles (lower = calmer boundaries) |
+| TerrainDetailFrequency | 0.045 | 0.045 | Surface-relief noise frequency |
+| TerrainDetailAmplitude | 0.035 | 0.035 | Surface-relief height added to elevation (0 disables) |
+| TerrainRoughnessFrequency | 0.006 | 0.006 | Size of rugged vs smooth regions |
+| TerrainRoughnessFloor | 0.15 | 0.15 | Min detail in smoothest regions (0–1) |
 | TargetTPS | 20 | 20 | Simulation ticks/second |
 | MaxPopulation | 2000 | ~10000 | Hard entity cap |
 | InitialPopulation | 500 | ~1500 | Starting creatures (incl. faction budgets) |
