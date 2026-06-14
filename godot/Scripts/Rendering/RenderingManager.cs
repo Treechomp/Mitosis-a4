@@ -366,7 +366,7 @@ public sealed class RenderingManager
     /// mesh sits on the surface rather than clipping through it. Non-circle shapes
     /// rotate around the world Y axis to face their direction of movement.
     /// </summary>
-    public void UpdateEntityMultiMeshes(Camera3D camera)
+    public void UpdateEntityMultiMeshes(Camera3D camera, float alpha)
     {
         _frameTick++;
 
@@ -384,11 +384,17 @@ public sealed class RenderingManager
         foreach (int entity in _entityManager.Query(required))
         {
             ref var pos  = ref _entityManager.Positions[entity];
+            ref var prev = ref _entityManager.PrevPositions[entity];
             ref var rend = ref _entityManager.Renderables[entity];
 
+            // Interpolate between the previous and current tick positions so fast movers
+            // (e.g. the player at high exploration speed) glide instead of stepping at 20 TPS.
+            float rx = prev.X + (pos.X - prev.X) * alpha;
+            float ry = prev.Y + (pos.Y - prev.Y) * alpha;
+
             // 3D world position: XZ from abstract grid, Y from terrain elevation.
-            float elevation = _worldManager.GetElevation(pos.X, pos.Y);
-            var pos3D = GridCoordinates.VertexToWorld3D(pos.X, pos.Y, _tileSize, elevation, _heightScale);
+            float elevation = _worldManager.GetElevation(rx, ry);
+            var pos3D = GridCoordinates.VertexToWorld3D(rx, ry, _tileSize, elevation, _heightScale);
 
             // Lift entity so the bottom of its mesh sits on the terrain surface.
             // All primitives are unit-sized and centered at origin, so half-height ≈ 0.5.

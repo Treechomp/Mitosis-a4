@@ -211,6 +211,9 @@ public partial class GameManager : Node3D
         _playerController.SetPlayerEntity(playerEntity, TileSize, _camera);
         _lodSystem?.SetPlayerEntity(_playerController.PlayerEntity);
 
+        // Seed render-interpolation previous positions so nothing streaks on the first frame.
+        _entityManager.SnapshotPositions();
+
         // Terrain meshes (behind entities in scene tree)
         _renderingManager.InitializeChunkMeshes(this);
         // Terrain shader is unshaded and computes its own Lambert term, so point its sun
@@ -283,6 +286,7 @@ public partial class GameManager : Node3D
         _simulationAccumulator += delta;
         while (_simulationAccumulator >= _simulationDt)
         {
+            _entityManager.SnapshotPositions();   // previous-tick positions for render lerp
             _tickStopwatch.Restart();
             for (int i = 0; i < _systems.Count; i++)
             {
@@ -293,6 +297,7 @@ public partial class GameManager : Node3D
                 _systemTimingsMs[i] += (ms - _systemTimingsMs[i]) * SmoothingFactor;
             }
             _tickStopwatch.Stop();
+            _entityManager.FinalizeNewborns();    // entities spawned this tick: prev = spawn pos
             double tickMs = _tickStopwatch.Elapsed.TotalMilliseconds;
             _totalTickMs += (tickMs - _totalTickMs) * SmoothingFactor;
             _simulationAccumulator -= _simulationDt;
@@ -304,9 +309,13 @@ public partial class GameManager : Node3D
 
         _renderingManager.UpdateDirtyChunkMeshes();
 
+        // Fraction into the next tick, for smooth inter-tick entity rendering.
+        float renderAlpha = (float)(_simulationAccumulator / _simulationDt);
+        if (renderAlpha < 0f) renderAlpha = 0f; else if (renderAlpha > 1f) renderAlpha = 1f;
+
         _renderStopwatch.Restart();
         if (_camera != null)
-            _renderingManager.UpdateEntityMultiMeshes(_camera);
+            _renderingManager.UpdateEntityMultiMeshes(_camera, renderAlpha);
         _renderStopwatch.Stop();
         {
             double ms = _renderStopwatch.Elapsed.TotalMilliseconds;

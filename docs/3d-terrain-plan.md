@@ -115,10 +115,10 @@ squares with **zero** geometry/movement/alignment impact. Tune or disable in-edi
   resolution / fractal elevation detail, for more relief without re-introducing wobble.
 - True 3D surface locomotion: movement direction follows the slope, AI distances measured on
   the surface. Today's model (2D move + elevation affects speed/cliffs) is kept unless wanted.
-- **Entity/player render interpolation** (reported June 2026): entity transforms are set from
-  sim positions every render frame, but positions only change on sim ticks (20 TPS), so fast
-  movers (e.g. the player at high speed) visibly step. Fix: lerp render position between the
-  previous and current tick positions by the tick fraction. Rendering-only; no sim impact.
+- **Entity/player render interpolation** ✅ done: entity render positions are now lerped
+  between the previous and current tick positions by the inter-tick fraction (`EntityManager`
+  snapshots positions each tick; the renderer interpolates by `alpha = accumulator/dt`).
+  Fast movers (the player at high speed) glide instead of stepping at 20 TPS. Rendering-only.
 
 ---
 

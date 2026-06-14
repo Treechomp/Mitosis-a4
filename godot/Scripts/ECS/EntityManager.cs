@@ -89,6 +89,17 @@ public sealed class EntityManager
     /// </summary>
     public readonly bool[] DueThisTick;
 
+    /// <summary>
+    /// Position at the start of the current tick. Used by the renderer to interpolate entity
+    /// positions between simulation ticks (rendering runs faster than the 20 TPS sim).
+    /// </summary>
+    public readonly Position[] PrevPositions;
+
+    // Entities created since the last snapshot; their PrevPositions is matched to their spawn
+    // position at tick end so newly-spawned entities don't render-interpolate from a stale
+    // (recycled) slot.
+    private readonly List<int> _newbornsThisTick = new(256);
+
     public EntityManager()
     {
         _alive = new bool[MaxEntities];
@@ -124,6 +135,7 @@ public sealed class EntityManager
         RangedAttacks = new RangedAttack[MaxEntities];
         VenomEffects = new VenomEffect[MaxEntities];
         DueThisTick = new bool[MaxEntities];
+        PrevPositions = new Position[MaxEntities];
     }
 
     public int EntityCount => _entityCount;
@@ -148,7 +160,32 @@ public sealed class EntityManager
         _alive[id] = true;
         _componentFlags[id] = ComponentFlags.None;
         _entityCount++;
+        _newbornsThisTick.Add(id);
         return id;
+    }
+
+    /// <summary>
+    /// Snapshot current positions into <see cref="PrevPositions"/> for render interpolation.
+    /// Call at the start of each simulation tick (before systems run).
+    /// </summary>
+    public void SnapshotPositions()
+    {
+        Array.Copy(Positions, PrevPositions, _nextId);
+        _newbornsThisTick.Clear();
+    }
+
+    /// <summary>
+    /// Match PrevPositions to current positions for entities spawned during this tick, so they
+    /// render at their spawn position instead of streaking from a recycled slot. Call at tick end.
+    /// </summary>
+    public void FinalizeNewborns()
+    {
+        for (int i = 0; i < _newbornsThisTick.Count; i++)
+        {
+            int id = _newbornsThisTick[i];
+            PrevPositions[id] = Positions[id];
+        }
+        _newbornsThisTick.Clear();
     }
 
     /// <summary>
