@@ -213,6 +213,9 @@ public partial class GameManager : Node3D
 
         // Terrain meshes (behind entities in scene tree)
         _renderingManager.InitializeChunkMeshes(this);
+        // Terrain shader is unshaded and computes its own Lambert term, so point its sun
+        // at the real DirectionalLight (toward-sun = +Z basis, since lights face -Z).
+        _renderingManager.SetSunDirection(dirLight.GlobalTransform.Basis.Z);
 
         // Entity MultiMesh nodes
         var shapeMMIs = _renderingManager.CreateMultiMeshInstances();

@@ -23,8 +23,17 @@ public sealed class RenderingManager
     private readonly int _worldSizeChunks;
     private readonly int _tileSize;
 
-    // Chunk mesh nodes — one MeshInstance3D per loaded chunk
-    private readonly Dictionary<(int, int), MeshInstance3D> _chunkMeshes = new();
+    // Chunk mesh nodes — one per loaded chunk. Geometry (positions/normals/indices)
+    // is cached so terraform updates (which change only tile colour) can skip recomputing
+    // it and rewrite the colour stream alone.
+    private sealed class ChunkMeshData
+    {
+        public MeshInstance3D Instance = null!;
+        public Vector3[] Vertices = null!;
+        public Vector3[] Normals = null!;
+        public int[] Indices = null!;
+    }
+    private readonly Dictionary<(int, int), ChunkMeshData> _chunkMeshes = new();
     private ShaderMaterial _chunkMaterial = null!;
     private readonly float _heightScale;
 
@@ -142,29 +151,52 @@ public sealed class RenderingManager
     // ================================================================
 
     /// <summary>
-    /// Creates MeshInstance3D nodes for all loaded chunks and adds them as children
-    /// of the given parent node. Terrain renders in the XZ plane with elevation as Y.
+    /// Creates a MeshInstance3D for every loaded chunk and adds it under the given parent.
+    /// Geometry (positions, normals, indices) is built once and cached per chunk so later
+    /// terraform updates only rewrite vertex colours. Terrain renders in the XZ plane with
+    /// elevation on +Y.
     /// </summary>
     public void InitializeChunkMeshes(Node parent)
     {
-        // Vertex-colour gradient shader with manual Lambert lighting for strong
-        // shadow contrast. Uses render_mode unshaded so terrain controls its own
-        // sun shadows independently of the scene DirectionalLight (which still
-        // lights entities).
+        // Vertex-colour gradient shader with manual Lambert lighting + slope shading.
+        // render_mode unshaded: terrain computes its own sun term, so the sun direction
+        // is supplied via SetSunDirection() to match the scene DirectionalLight.
         var shader = GD.Load<Shader>("res://Shaders/TerrainDither.gdshader");
         _chunkMaterial = new ShaderMaterial { Shader = shader };
 
         foreach (var chunk in _worldManager.GetLoadedChunks())
         {
-            var mmi = new MeshInstance3D { Mesh = BuildChunkMesh(chunk) };
+            BuildChunkGeometry(chunk, out var vertices, out var normals, out var indices);
+            var colors = BuildChunkColors(chunk);
+
+            var mmi = new MeshInstance3D { Mesh = AssembleMesh(vertices, colors, normals, indices) };
             mmi.ExtraCullMargin = _heightScale * 2f;
             parent.AddChild(mmi);
-            _chunkMeshes[(chunk.ChunkX, chunk.ChunkY)] = mmi;
+
+            _chunkMeshes[(chunk.ChunkX, chunk.ChunkY)] = new ChunkMeshData
+            {
+                Instance = mmi,
+                Vertices = vertices,
+                Normals  = normals,
+                Indices  = indices,
+            };
         }
     }
 
     /// <summary>
-    /// Rebuilds the mesh for any chunk flagged dirty since the last call.
+    /// Points the terrain shader's sun at a world-space "toward the sun" direction so the
+    /// self-lit terrain matches the scene DirectionalLight that lights entities.
+    /// </summary>
+    public void SetSunDirection(Vector3 towardSun)
+    {
+        if (towardSun.LengthSquared() > 0f)
+            _chunkMaterial?.SetShaderParameter("sun_direction", towardSun.Normalized());
+    }
+
+    /// <summary>
+    /// Rebuilds dirty chunks. Terraforming only changes tile TYPE (colour) — never
+    /// elevation — so positions, normals, and indices are reused from the cache and only
+    /// the colour stream is recomputed.
     /// </summary>
     public void UpdateDirtyChunkMeshes()
     {
@@ -172,36 +204,38 @@ public sealed class RenderingManager
 
         foreach (var key in _worldManager.DirtyChunks)
         {
-            if (_chunkMeshes.TryGetValue(key, out var mmi))
-            {
-                var chunk = _worldManager.GetChunk(key.Item1, key.Item2);
-                if (chunk != null)
-                    mmi.Mesh = BuildChunkMesh(chunk);
-            }
+            if (!_chunkMeshes.TryGetValue(key, out var data)) continue;
+            var chunk = _worldManager.GetChunk(key.Item1, key.Item2);
+            if (chunk == null) continue;
+
+            var colors = BuildChunkColors(chunk);
+            data.Instance.Mesh = AssembleMesh(data.Vertices, colors, data.Normals, data.Indices);
         }
         _worldManager.DirtyChunks.Clear();
     }
 
     /// <summary>
-    /// Builds a 3D triangle mesh for one chunk.
-    /// Vertices are placed in world XZ (terrain XY) with elevation on world Y (+Y = up).
-    /// Smooth per-vertex normals are computed for DirectionalLight shading.
+    /// Builds chunk geometry: vertex positions, triangle indices, and seam-free analytic
+    /// normals. Depends only on elevation (fixed after generation), so it is built once.
     /// </summary>
-    private ArrayMesh BuildChunkMesh(Chunk chunk)
+    private void BuildChunkGeometry(Chunk chunk, out Vector3[] vertices, out Vector3[] normals, out int[] indices)
     {
         int n = chunk.Size + 1;  // vertices per side: 33 for a 32-tile chunk
         int vertexCount = n * n;
         int quadCount = chunk.Size * chunk.Size;
 
-        var vertices = new Vector3[vertexCount];
-        var colors   = new Color[vertexCount];
-        var normals  = new Vector3[vertexCount];
-        var indices  = new int[quadCount * 6];  // 2 triangles × 3 indices per quad
+        vertices = new Vector3[vertexCount];
+        normals  = new Vector3[vertexCount];
+        indices  = new int[quadCount * 6];  // 2 triangles × 3 indices per quad
 
         int worldOffsetX = chunk.ChunkX * chunk.Size;
         int worldOffsetY = chunk.ChunkY * chunk.Size;
 
-        // --- Pass 1: vertex positions and colors ---
+        // --- Vertex positions + analytic heightfield normals ---
+        // Normals are central differences on the GLOBAL elevation field, so a vertex shared
+        // by two chunks resolves to the same normal in both (no lighting seam at chunk
+        // borders). Grid Y maps to world -Z and elevation to world +Y, giving an upward
+        // normal of (eLeft - eRight, 2*tileSize, eUp - eDown).
         for (int ly = 0; ly < n; ly++)
         {
             for (int lx = 0; lx < n; lx++)
@@ -210,16 +244,25 @@ public sealed class RenderingManager
                 int worldY = worldOffsetY + ly;
 
                 bool interior = lx < chunk.Size && ly < chunk.Size;
-                TileType tile = interior ? chunk.GetTile(lx, ly) : _worldManager.GetTile(worldX, worldY);
-                float elevation = interior ? chunk.GetElevation(lx, ly) : _worldManager.GetElevation(worldX, worldY);
-
+                float elevation = interior
+                    ? chunk.GetElevation(lx, ly)
+                    : _worldManager.GetElevation(worldX, worldY);
                 vertices[ly * n + lx] = GridCoordinates.VertexToWorld3D(worldX, worldY, _tileSize, elevation, _heightScale);
-                colors[ly * n + lx]   = Chunk.GetTileColor(tile);
+
+                float eL = _worldManager.GetVertexElevation(worldX - 1, worldY);
+                float eR = _worldManager.GetVertexElevation(worldX + 1, worldY);
+                float eD = _worldManager.GetVertexElevation(worldX, worldY - 1);
+                float eU = _worldManager.GetVertexElevation(worldX, worldY + 1);
+                normals[ly * n + lx] = new Vector3(
+                    (eL - eR) * _heightScale,
+                    2f * _tileSize,
+                    (eU - eD) * _heightScale).Normalized();
             }
         }
 
-        // --- Pass 2: triangle indices ---
-        // Diagonal alternates each row to match the offset-row stagger.
+        // --- Triangle indices ---
+        // Diagonal alternates each row to match the offset-row stagger. With grid Y mapped
+        // to world -Z, this winding stays CCW (front-facing) in screen space.
         int idx = 0;
         for (int ly = 0; ly < chunk.Size; ly++)
         {
@@ -230,9 +273,6 @@ public sealed class RenderingManager
                 int vTL = (ly + 1) * n + lx;
                 int vTR = (ly + 1) * n + lx + 1;
 
-                // With grid Y mapped to world -Z, the original BL→BR→TL winding becomes
-                // CW in screen space and is back-face culled.  Swap v1↔v2 within each
-                // triangle to restore CCW screen-space winding (visible to camera).
                 if ((worldOffsetY + ly) % 2 == 0)
                 {
                     indices[idx++] = vBL; indices[idx++] = vTL; indices[idx++] = vBR;
@@ -245,25 +285,38 @@ public sealed class RenderingManager
                 }
             }
         }
+    }
 
-        // --- Pass 3: smooth per-vertex normals (area-weighted average of face normals) ---
-        for (int i = 0; i < indices.Length; i += 3)
+    /// <summary>
+    /// Builds the per-vertex colour stream for a chunk from its current tile types.
+    /// Cheap to recompute, so it is rebuilt on every terraform update.
+    /// </summary>
+    private Color[] BuildChunkColors(Chunk chunk)
+    {
+        int n = chunk.Size + 1;
+        var colors = new Color[n * n];
+        int worldOffsetX = chunk.ChunkX * chunk.Size;
+        int worldOffsetY = chunk.ChunkY * chunk.Size;
+
+        for (int ly = 0; ly < n; ly++)
         {
-            var v0 = vertices[indices[i]];
-            var v1 = vertices[indices[i + 1]];
-            var v2 = vertices[indices[i + 2]];
-            // Face normal (not normalized — area-weighted by default)
-            var faceN = (v1 - v0).Cross(v2 - v0);
-            normals[indices[i]]     += faceN;
-            normals[indices[i + 1]] += faceN;
-            normals[indices[i + 2]] += faceN;
+            for (int lx = 0; lx < n; lx++)
+            {
+                bool interior = lx < chunk.Size && ly < chunk.Size;
+                TileType tile = interior
+                    ? chunk.GetTile(lx, ly)
+                    : _worldManager.GetTile(worldOffsetX + lx, worldOffsetY + ly);
+                colors[ly * n + lx] = Chunk.GetTileColor(tile);
+            }
         }
-        // The reversed CCW winding (required after the Z-axis flip) makes cross products
-        // point in -Y; negate to restore +Y face normals so DirectionalLight from above
-        // illuminates the terrain surface correctly.
-        for (int i = 0; i < normals.Length; i++)
-            normals[i] = (-normals[i]).Normalized();
+        return colors;
+    }
 
+    /// <summary>
+    /// Packs vertex/colour/normal/index arrays into an ArrayMesh with the terrain material.
+    /// </summary>
+    private ArrayMesh AssembleMesh(Vector3[] vertices, Color[] colors, Vector3[] normals, int[] indices)
+    {
         var mesh = new ArrayMesh();
         var arrays = new Godot.Collections.Array();
         arrays.Resize((int)Mesh.ArrayType.Max);

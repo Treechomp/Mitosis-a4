@@ -119,7 +119,7 @@ public sealed class WorldManager
     /// the terrain mesh triangle that contains the point.
     ///
     /// The terrain mesh splits each grid quad into two triangles whose diagonal
-    /// alternates by row parity (matching BuildChunkMesh):
+    /// alternates by row parity (matching the terrain mesh triangulation):
     ///   Even rows (diagonal TL→BR): lower-left triangle if fx + fy ≤ 1
     ///   Odd  rows (diagonal BL→TR): lower    triangle if fy ≤ fx
     ///
@@ -190,6 +190,26 @@ public sealed class WorldManager
         int localY = worldY - chunkY * ChunkSize;
         if (localX >= chunk.Size || localY >= chunk.Size) return 0f;
         return chunk.GetElevation(localX, localY);
+    }
+
+    /// <summary>
+    /// Raw per-vertex elevation (0–1) at integer world grid coordinates, clamped to world
+    /// bounds (no interpolation). Used for seam-free analytic terrain normals: because the
+    /// result is a pure function of world position, a vertex shared by adjacent chunks
+    /// resolves to the same elevation (and therefore the same normal) in both.
+    /// </summary>
+    public float GetVertexElevation(int worldX, int worldY)
+    {
+        if (worldX < 0) worldX = 0;
+        else if (worldX >= WorldSizeTiles) worldX = WorldSizeTiles - 1;
+        if (worldY < 0) worldY = 0;
+        else if (worldY >= WorldSizeTiles) worldY = WorldSizeTiles - 1;
+
+        int chunkX = worldX / ChunkSize;
+        int chunkY = worldY / ChunkSize;
+        var chunk = GetChunk(chunkX, chunkY);
+        if (chunk == null) return 0f;
+        return chunk.GetElevation(worldX - chunkX * ChunkSize, worldY - chunkY * ChunkSize);
     }
 
     /// <summary>

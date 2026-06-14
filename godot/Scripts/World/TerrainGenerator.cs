@@ -278,7 +278,11 @@ public sealed class TerrainGenerator
                 // --- Oases: small grass/water patches in desert ---
                 if (currentTile == TileType.Arid || currentTile == TileType.Sand)
                 {
-                    float moisture = (_moistureNoise.GetNoise2D(worldX, worldY) + 1f) * 0.5f;
+                    // Sample moisture with the same domain warp used in classification,
+                    // so the oasis test matches the moisture that produced this tile.
+                    float oWarpX = _warpNoiseX.GetNoise2D(worldX, worldY) * WarpAmplitude;
+                    float oWarpY = _warpNoiseY.GetNoise2D(worldX, worldY) * WarpAmplitude;
+                    float moisture = (_moistureNoise.GetNoise2D(worldX + oWarpX, worldY + oWarpY) + 1f) * 0.5f;
                     if (lmNoise > 0.7f && moisture > 0.35f)
                     {
                         chunk.SetTile(localX, localY, TileType.Grass);
@@ -339,7 +343,9 @@ public sealed class TerrainGenerator
                 // --- Surface Caves: walkable grass centers in mountain edges ---
                 if (currentTile == TileType.Mountain)
                 {
-                    float elevation = (_elevationNoise.GetNoise2D(worldX, worldY) + 1f) * 0.5f;
+                    // Use the actual stored (domain-warped) elevation for this tile rather
+                    // than re-sampling unwarped noise, so caves sit on genuine low mountains.
+                    float elevation = chunk.GetElevation(localX, localY);
                     if (lmNoise > 0.75f && elevation < 0.85f)
                     {
                         chunk.SetTile(localX, localY, TileType.Grass);
