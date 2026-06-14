@@ -50,6 +50,10 @@ public sealed class WanderSystem : ISystem
             if (!em.DueThisTick[entity])
                 continue;
 
+            // Hibernating Sectids stay dormant near their nest (movement handled by NestSystem)
+            if (em.HasComponents(entity, ComponentFlags.FoodCarrier) && em.FoodCarriers[entity].IsHibernating)
+                continue;
+
             ref var wander = ref em.Wanders[entity];
             ref var vel = ref em.Velocities[entity];
             ref var pos = ref em.Positions[entity];

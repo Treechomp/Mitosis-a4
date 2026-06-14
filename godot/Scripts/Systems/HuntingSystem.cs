@@ -89,6 +89,10 @@ public sealed class HuntingSystem : ISystem
             if (!em.DueThisTick[entity])
                 continue;
 
+            // Hibernating Sectids are dormant — NestSystem wakes them when prey strays near
+            if (em.HasComponents(entity, ComponentFlags.FoodCarrier) && em.FoodCarriers[entity].IsHibernating)
+                continue;
+
             // LOD tick multiplier: attack/phase cooldowns count down at correct rate
             int tickMult = em.HasComponents(entity, ComponentFlags.SimulationLOD)
                 ? em.SimulationLODs[entity].TickInterval : 1;

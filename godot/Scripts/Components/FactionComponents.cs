@@ -49,11 +49,20 @@ public struct FoodCarrier
     public float MaxCarry;      // Maximum food a single Sectid can hold
     public int TargetNest;      // Entity ID of nest being delivered to (-1 = none)
 
+    // Hibernation: a hungry Sectid that finds no prey for a prolonged time retreats to its
+    // nest and goes dormant (greatly reduced metabolism) instead of wandering off to starve.
+    // It wakes when huntable prey strays within range — a defensive, ambush-from-the-nest posture
+    // that keeps a minimal viable colony alive through prey troughs.
+    public bool IsHibernating;  // Dormant near nest, low metabolism, waiting for prey
+    public int NoFoodTicks;     // Consecutive ticks hungry with no prey detected nearby
+
     public FoodCarrier(float maxCarry = 5f)
     {
         FoodCarried = 0f;
         MaxCarry = maxCarry;
         TargetNest = -1;
+        IsHibernating = false;
+        NoFoodTicks = 0;
     }
 
     public readonly bool IsCarrying => FoodCarried > 0f;

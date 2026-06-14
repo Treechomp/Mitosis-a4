@@ -291,7 +291,7 @@ There are **28 species**: 5 generalists, 20 biome-specific, and 3 factions.
 | Jaguar | Carnivore | 7.0 | 0.04 / 0.12 | Ambush | Semi-aquatic; jungle stealth |
 | Tapir | Herbivore | 5.0 | 0.025 / – | – | Tropical; semi-aquatic; panics |
 | **Shroomer** | Terraformer | 2.5 | 0.02 / – | – | Spore reproduction; AoE + thorns; grows to 4× |
-| **Sectid** | Terraformer | 0.5 | 0.06 / 0.13 | Swarm | Nest breeding; carries food |
+| **Sectid** | Terraformer | 0.5 | 0.06 / 0.13 | Swarm | Nest breeding; carries food; hibernates when prey-starved |
 | **Faeling** | Terraformer | 3.0 | 0.09 / – | – | Crystal-spawned; unhuntable; starvation-immune |
 
 Trait flags: **Flying** = Hawk, Parrot · **Aquatic** = Fish, Shark · **Venom** = Scorpion,
@@ -366,7 +366,8 @@ period (`WrongElementGraceTicks` / `WrongElementDamageRate`).
 
 ### 6.4 Hunger — `SurvivalSystems.cs` (gated)
 
-Decays hunger (× tick interval); starvation drains energy by `StarvationDamage`; zero energy →
+Decays hunger (× tick interval; hibernating Sectids run at 10% metabolism — see §7.2);
+starvation drains energy by `StarvationDamage`; zero energy →
 death. Skips structures (Nests/Crystals) and starvation-immune species (Faelings). Regenerates
 energy when not starving and off combat cooldown (`RegenCooldown`). Applies active
 `VenomEffect` damage-over-time. Faeling death passes 50% power to its crystal.
@@ -484,9 +485,18 @@ Shroomer. Shroomers **grow** continuously (to 4× scale), scaling via an S-curve
 
 Sectids carry food from kills to the nearest nest (`FoodCarrier`, faster `CarryingSpeed`,
 self-feed on delivery). Nests have **3 stages** (each adds a larva slot, up to 3); accumulating
-`FoodPerSpawn` starts a larva timer that hatches a new Sectid. After 3 spawns a nest advances a
-stage; at max stage with surplus food it founds nearby nests or a distant colony. Sectids
-cannot graze — they must hunt.
+`FoodPerSpawn` (18) starts a larva timer that hatches a new Sectid. After 3 spawns a nest
+advances a stage; at max stage with surplus food it founds nearby nests or a distant colony.
+Sectids cannot graze — they must hunt, so the economy is tuned so a kill is worth funding a
+larva: `MaxCarryFood` 12 (big kills aren't wasted at the carry cap) against an 18-food larva.
+
+**Hibernation (food floor).** A pure consumer faction starves wholesale when prey is scarce, so
+a hungry Sectid (below 35% hunger) that detects no huntable prey within 30 tiles for ~600 ticks
+retreats to its nest and goes **dormant**: metabolism drops to 10% (`HungerSystem` reads the
+`FoodCarrier.IsHibernating` flag) and it idles motionless while `WanderSystem`/`HuntingSystem`
+skip it. It **wakes** the moment huntable prey strays within 14 tiles (or it picks up food),
+rejoining the hunt. This keeps a minimal viable colony alive through prey troughs as a
+defensive, ambush-from-the-nest posture instead of the swarm wandering off to die.
 
 ### 7.3 Faeling / Crystal — `CrystalSystem.cs`
 

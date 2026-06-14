@@ -2470,8 +2470,8 @@ public static class SpeciesRegistry
             MaxLifespan = 25000,
             MaturityAge = 800,   // Mature quickly
 
-            // Survival - fragile individually
-            MaxEnergy = 60f,
+            // Survival - fragile individually (but not one-shot; 60 starved/died too fast)
+            MaxEnergy = 90f,
             EnergyRegenRate = 0.4f, // Fragile but fast recovery
 
             // Hunting behavior
@@ -2483,7 +2483,7 @@ public static class SpeciesRegistry
 
             // Reproduction — via nests only (NestSystem handles this)
             NestBreeder = true,
-            MaxCarryFood = 5f,    // How much food one Sectid can carry to nest
+            MaxCarryFood = 12f,   // Larger loads so big kills aren't wasted at the carry cap
             ReproCooldown = 9999, // Effectively disabled in ReproductionSystem
 
             // Nest breeding parameters
@@ -2491,7 +2491,7 @@ public static class SpeciesRegistry
             NestsForExpedition = 5,
             NestSearchRadius = 15f,
             ExpeditionDistance = 80f,
-            NestFoodPerSpawn = 30f,
+            NestFoodPerSpawn = 18f,  // Cheaper larva so a collapsing prey base can still fund the swarm
             NestSpawnDuration = 200f,
             NestEnergy = 200f,
             FoodDeliveryRange = 4f,

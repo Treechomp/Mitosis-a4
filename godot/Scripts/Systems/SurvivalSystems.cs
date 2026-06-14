@@ -39,8 +39,11 @@ public sealed class HungerSystem : ISystem
 
             ref var hunger = ref em.Hungers[entity];
 
-            // Decay hunger
-            hunger.Current -= hunger.DecayRate * tickMult;
+            // Decay hunger — hibernating Sectids run a low metabolism while dormant at their nest
+            float decayRate = hunger.DecayRate;
+            if (em.HasComponents(entity, ComponentFlags.FoodCarrier) && em.FoodCarriers[entity].IsHibernating)
+                decayRate *= 0.1f;
+            hunger.Current -= decayRate * tickMult;
 
             // Starvation damage
             if (hunger.IsStarving && em.HasComponents(entity, ComponentFlags.Energy))

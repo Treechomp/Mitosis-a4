@@ -108,8 +108,8 @@ public sealed class NestSystem : ISystem
             }
         }
 
-        // === FOOD CARRIER SYSTEM (Sectids delivering food) ===
-        ProcessFoodCarriers(em);
+        // === SECTID LIFE (food delivery + hibernation/waking) ===
+        ProcessSectids(em);
 
         // === SPAWN PENDING SECTIDS (respect population cap) ===
         var sectidSpeciesId = SpeciesRegistry.GetId("Sectid");
@@ -196,62 +196,172 @@ public sealed class NestSystem : ISystem
         }
     }
 
-    private void ProcessFoodCarriers(EntityManager em)
-    {
-        var carrierSpeciesDef = SpeciesRegistry.Get("Sectid");
-        const ComponentFlags carrierRequired = ComponentFlags.Position | ComponentFlags.Velocity |
-                                                ComponentFlags.FoodCarrier | ComponentFlags.Species;
+    // === Hibernation tuning ===
+    // A hungry Sectid that detects no prey within ForageDetectRadius for HibernateNoFoodTicks
+    // consecutive ticks retreats to its nest and goes dormant (low metabolism). It wakes when
+    // huntable prey strays within WakeRadius. This keeps a minimal viable colony alive through
+    // prey troughs instead of the swarm wandering off and starving en masse.
+    private const float HibernateHungerRatio = 0.35f; // Only consider dormancy when quite hungry
+    private const int HibernateNoFoodTicks = 600;     // ~30s at 20 TPS of no prey before dormancy
+    private const float ForageDetectRadius = 30f;     // Scanned for prey while deciding to hibernate
+    private const float WakeRadius = 14f;             // Prey within this wakes a dormant Sectid
 
-        foreach (int entity in em.Query(carrierRequired))
+    private void ProcessSectids(EntityManager em)
+    {
+        var sectidDef = SpeciesRegistry.Get("Sectid");
+        const ComponentFlags required = ComponentFlags.Position | ComponentFlags.Velocity |
+                                        ComponentFlags.FoodCarrier | ComponentFlags.Species |
+                                        ComponentFlags.Hunger;
+
+        foreach (int entity in em.Query(required))
         {
             // LOD gate: skip if not due for update this tick
             if (!em.DueThisTick[entity])
                 continue;
 
-            ref var carrier = ref em.FoodCarriers[entity];
-            if (!carrier.IsCarrying) continue;
+            int tickMult = em.HasComponents(entity, ComponentFlags.SimulationLOD)
+                ? em.SimulationLODs[entity].TickInterval : 1;
 
+            ref var carrier = ref em.FoodCarriers[entity];
             ref var pos = ref em.Positions[entity];
             ref var vel = ref em.Velocities[entity];
 
-            // Find nearest nest if no target or target dead
-            if (carrier.TargetNest < 0 || !em.IsAlive(carrier.TargetNest) ||
-                !em.HasComponents(carrier.TargetNest, ComponentFlags.Nest))
+            // === Carrying food: deliver to nest (takes priority, cancels dormancy) ===
+            if (carrier.IsCarrying)
             {
-                carrier.TargetNest = FindNearestNest(em, pos.X, pos.Y);
-                if (carrier.TargetNest < 0) continue; // No nest found
+                carrier.IsHibernating = false;
+                carrier.NoFoodTicks = 0;
+                DeliverFoodToNest(em, entity, ref carrier, ref pos, ref vel, sectidDef);
+                continue;
             }
 
-            ref var nestPos = ref em.Positions[carrier.TargetNest];
-            float dx = nestPos.X - pos.X;
-            float dy = nestPos.Y - pos.Y;
-            float distSq = dx * dx + dy * dy;
-
-            // Arrived at nest — deliver food
-            float deliveryRange = carrierSpeciesDef.FoodDeliveryRange;
-            if (distSq < deliveryRange * deliveryRange)
+            // === Dormant: idle at nest, wake when prey approaches ===
+            if (carrier.IsHibernating)
             {
-                ref var nest = ref em.Nests[carrier.TargetNest];
-                nest.FoodStored += carrier.FoodCarried;
-                carrier.FoodCarried = 0f;
-                carrier.TargetNest = -1;
-
-                // Also feed self a bit from the delivery
-                if (em.HasComponents(entity, ComponentFlags.Hunger))
+                if (HuntablePreyNearby(em, entity, pos.X, pos.Y, WakeRadius))
                 {
-                    ref var hunger = ref em.Hungers[entity];
-                    hunger.Current = MathF.Min(hunger.Max, hunger.Current + 3f);
+                    carrier.IsHibernating = false; // Prey in reach — rejoin the hunt
+                    continue;
+                }
+
+                int nest = FindNearestNest(em, pos.X, pos.Y);
+                if (nest < 0)
+                {
+                    carrier.IsHibernating = false; // No refuge left — resume normal behavior
+                    continue;
+                }
+
+                // Drift toward the nest and settle motionless once there.
+                ref var nestPos = ref em.Positions[nest];
+                float dx = nestPos.X - pos.X;
+                float dy = nestPos.Y - pos.Y;
+                float distSq = dx * dx + dy * dy;
+                float settleRange = sectidDef.FoodDeliveryRange;
+                if (distSq <= settleRange * settleRange)
+                {
+                    vel.Dx = 0f;
+                    vel.Dy = 0f;
+                }
+                else
+                {
+                    float dist = MathF.Sqrt(distSq);
+                    float speed = sectidDef.CarryingSpeed;
+                    vel.Dx = (dx / dist) * speed;
+                    vel.Dy = (dy / dist) * speed;
+                }
+                continue;
+            }
+
+            // === Active and hungry with no prey around: count down toward dormancy ===
+            ref var hunger = ref em.Hungers[entity];
+            if (hunger.Current / hunger.Max < HibernateHungerRatio)
+            {
+                if (HuntablePreyNearby(em, entity, pos.X, pos.Y, ForageDetectRadius))
+                {
+                    carrier.NoFoodTicks = 0; // Food is around — keep hunting
+                }
+                else
+                {
+                    carrier.NoFoodTicks += tickMult;
+                    if (carrier.NoFoodTicks >= HibernateNoFoodTicks &&
+                        FindNearestNest(em, pos.X, pos.Y) >= 0)
+                    {
+                        carrier.IsHibernating = true;
+                        carrier.NoFoodTicks = 0;
+                    }
                 }
             }
             else
             {
-                // Move toward nest (override wander velocity)
-                float dist = MathF.Sqrt(distSq);
-                float speed = carrierSpeciesDef.CarryingSpeed;
-                vel.Dx = (dx / dist) * speed;
-                vel.Dy = (dy / dist) * speed;
+                carrier.NoFoodTicks = 0;
             }
         }
+    }
+
+    /// <summary>
+    /// Carry-and-deliver logic: steer a food-laden Sectid to its nearest nest, deposit the
+    /// food on arrival, and feed the carrier a little from the delivery.
+    /// </summary>
+    private void DeliverFoodToNest(EntityManager em, int entity, ref FoodCarrier carrier,
+        ref Position pos, ref Velocity vel, SpeciesDefinition sectidDef)
+    {
+        // Find nearest nest if no target or target dead
+        if (carrier.TargetNest < 0 || !em.IsAlive(carrier.TargetNest) ||
+            !em.HasComponents(carrier.TargetNest, ComponentFlags.Nest))
+        {
+            carrier.TargetNest = FindNearestNest(em, pos.X, pos.Y);
+            if (carrier.TargetNest < 0) return; // No nest found
+        }
+
+        ref var nestPos = ref em.Positions[carrier.TargetNest];
+        float dx = nestPos.X - pos.X;
+        float dy = nestPos.Y - pos.Y;
+        float distSq = dx * dx + dy * dy;
+
+        // Arrived at nest — deliver food
+        float deliveryRange = sectidDef.FoodDeliveryRange;
+        if (distSq < deliveryRange * deliveryRange)
+        {
+            ref var nest = ref em.Nests[carrier.TargetNest];
+            nest.FoodStored += carrier.FoodCarried;
+            carrier.FoodCarried = 0f;
+            carrier.TargetNest = -1;
+
+            // Also feed self a bit from the delivery
+            if (em.HasComponents(entity, ComponentFlags.Hunger))
+            {
+                ref var hunger = ref em.Hungers[entity];
+                hunger.Current = MathF.Min(hunger.Max, hunger.Current + 3f);
+            }
+        }
+        else
+        {
+            // Move toward nest (override wander velocity)
+            float dist = MathF.Sqrt(distSq);
+            float speed = sectidDef.CarryingSpeed;
+            vel.Dx = (dx / dist) * speed;
+            vel.Dy = (dy / dist) * speed;
+        }
+    }
+
+    /// <summary>
+    /// True if a huntable prey entity (anything with Prey that isn't another Sectid) is within
+    /// the given radius. Shroomer spores and herbivores count as food; same-faction Sectids do not.
+    /// </summary>
+    private bool HuntablePreyNearby(EntityManager em, int self, float x, float y, float radius)
+    {
+        _nearbyBuffer.Clear();
+        _spatialHash.QueryRadius(x, y, radius, _nearbyBuffer);
+        foreach (int other in _nearbyBuffer)
+        {
+            if (other == self || !em.IsAlive(other)) continue;
+            if (!em.HasComponents(other, ComponentFlags.Prey)) continue;
+            if (em.HasComponents(other, ComponentFlags.Species) &&
+                em.Species[other].Type == SpeciesType.Sectid)
+                continue; // Don't count our own kind as food
+            return true;
+        }
+        return false;
     }
 
     private int FindNearestNest(EntityManager em, float x, float y)
