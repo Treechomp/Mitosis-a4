@@ -28,7 +28,7 @@ public partial class GameManager : Node3D
     [Export] public float ElevationHeightScale = 64f;  // World units of vertical lift per elevation unit
     // Terrain noise tuning (see World/TerrainSettings.cs) — editable in the inspector.
     [Export] public float ElevationFrequency = 0.012f;        // lower = larger landmasses
-    [Export] public float WarpAmplitude = 30f;                // higher = more swirled boundaries
+    [Export] public float WarpAmplitude = 12f;                // higher = more swirled boundaries
     [Export] public float TerrainDetailFrequency = 0.045f;    // surface relief frequency
     [Export] public float TerrainDetailAmplitude = 0.035f;    // surface relief height (keep < ~0.1)
     [Export] public float TerrainRoughnessFrequency = 0.006f; // size of rugged vs smooth regions

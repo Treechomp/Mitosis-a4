@@ -37,6 +37,11 @@ public sealed class RenderingManager
     private ShaderMaterial _chunkMaterial = null!;
     private readonly float _heightScale;
 
+    // Visual sea level: vertices below this are rendered as a flat surface (seabed shape hidden)
+    // and coloured by depth. Matches the land/water classification boundary in TerrainGenerator.
+    // Rivers and lakes sit at/above this (land elevation) so they follow the terrain.
+    private const float SeaLevel = 0.40f;
+
     // MultiMesh entity rendering — one per ShapeType
     private const int ShapeCount = 13; // ShapeType values 0..12
     private const int MultiMeshInitialCapacity = 4096;
@@ -247,12 +252,17 @@ public sealed class RenderingManager
                 float elevation = interior
                     ? chunk.GetElevation(lx, ly)
                     : _worldManager.GetElevation(worldX, worldY);
-                vertices[ly * n + lx] = GridCoordinates.VertexToWorld3D(worldX, worldY, _tileSize, elevation, _heightScale);
+                // Flatten the sea to a level surface so the seabed shape isn't visible (deep
+                // water is coloured by depth instead). Land and rivers/lakes (>= SeaLevel) are
+                // unaffected.
+                float meshElev = elevation < SeaLevel ? SeaLevel : elevation;
+                vertices[ly * n + lx] = GridCoordinates.VertexToWorld3D(worldX, worldY, _tileSize, meshElev, _heightScale);
 
-                float eL = _worldManager.GetVertexElevation(worldX - 1, worldY);
-                float eR = _worldManager.GetVertexElevation(worldX + 1, worldY);
-                float eD = _worldManager.GetVertexElevation(worldX, worldY - 1);
-                float eU = _worldManager.GetVertexElevation(worldX, worldY + 1);
+                // Normals from the same sea-flattened field so the sea reads as flat-shaded.
+                float eL = MathF.Max(_worldManager.GetVertexElevation(worldX - 1, worldY), SeaLevel);
+                float eR = MathF.Max(_worldManager.GetVertexElevation(worldX + 1, worldY), SeaLevel);
+                float eD = MathF.Max(_worldManager.GetVertexElevation(worldX, worldY - 1), SeaLevel);
+                float eU = MathF.Max(_worldManager.GetVertexElevation(worldX, worldY + 1), SeaLevel);
                 normals[ly * n + lx] = new Vector3(
                     (eL - eR) * _heightScale,
                     2f * _tileSize,
@@ -325,18 +335,41 @@ public sealed class RenderingManager
                     elevation   = _worldManager.GetVertexElevation(wx, wy);
                 }
 
-                // Continuous "terrain cube" colour for pure-climate land; a discrete colour for
-                // water features (ocean/river/lake/reef) and for any tile overridden away from
-                // its climate classification (terraform, landmarks) so they stay distinct.
-                bool discrete = tile.IsWater()
-                             || tile == TileType.Reef
-                             || tile != TerrainGenerator.DetermineTileType(elevation, moisture, temperature);
-                colors[ly * n + lx] = discrete
-                    ? Chunk.GetTileColor(tile)
-                    : TerrainPalette.FromParams(moisture, temperature, elevation);
+                // Water (ocean/river/lake/reef): coloured by depth so the flat sea reads as
+                // water, not blue terrain. Tiles overridden away from their climate class
+                // (terraform, landmarks) keep a discrete colour; pure-climate land uses the
+                // continuous parameter palette.
+                if (tile.IsWater() || tile == TileType.Reef)
+                {
+                    colors[ly * n + lx] = WaterColor(elevation);
+                }
+                else if (tile != TerrainGenerator.DetermineTileType(elevation, moisture, temperature))
+                {
+                    colors[ly * n + lx] = Chunk.GetTileColor(tile);
+                }
+                else
+                {
+                    colors[ly * n + lx] = TerrainPalette.FromParams(moisture, temperature, elevation);
+                }
             }
         }
         return colors;
+    }
+
+    /// <summary>
+    /// Water colour by depth: shallow near the shore, darker toward deep water. Floors at/above
+    /// sea level (rivers, lakes on land) read as shallow water.
+    /// </summary>
+    private static Color WaterColor(float floorElevation)
+    {
+        const float maxDepth = 0.30f;
+        float depth = SeaLevel - floorElevation;
+        if (depth < 0f) depth = 0f;
+        float t = depth / maxDepth;
+        if (t > 1f) t = 1f;
+        var shallow = new Color(0.30f, 0.55f, 0.72f);
+        var deep    = new Color(0.05f, 0.13f, 0.38f);
+        return shallow.Lerp(deep, t);
     }
 
     /// <summary>
@@ -393,7 +426,10 @@ public sealed class RenderingManager
             float ry = prev.Y + (pos.Y - prev.Y) * alpha;
 
             // 3D world position: XZ from abstract grid, Y from terrain elevation.
+            // Clamp to sea level so entities over water sit on the (flat) surface, not the
+            // hidden seabed.
             float elevation = _worldManager.GetElevation(rx, ry);
+            if (elevation < SeaLevel) elevation = SeaLevel;
             var pos3D = GridCoordinates.VertexToWorld3D(rx, ry, _tileSize, elevation, _heightScale);
 
             // Lift entity so the bottom of its mesh sits on the terrain surface.

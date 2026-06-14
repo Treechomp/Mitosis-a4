@@ -12,7 +12,7 @@ public sealed class TerrainSettings
     public float ElevationFrequency = 0.012f;
     /// <summary>Domain-warp amplitude in tiles. Higher = more swirled/stretched ("fabric")
     /// boundaries; lower = straighter, calmer shapes.</summary>
-    public float WarpAmplitude = 30f;
+    public float WarpAmplitude = 12f;
 
     // --- Surface detail (added to the rendered/stored elevation only, NOT to classification,
     //     so biome boundaries stay on the base shape; gives relief + a little slope) ---

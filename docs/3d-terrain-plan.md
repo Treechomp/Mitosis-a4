@@ -169,6 +169,23 @@ push variety. Detail adds a little slope (rough ground slows movement slightly; 
 
 **Future levers (not done):** elevation redistribution / power curve for flat basins +
 concentrated mountain ranges; biome-aware roughness (e.g. ruggedness keyed to mountains).
+`WarpAmplitude` default lowered 30 → 12 (below ~15 reads best).
+
+## Water rendering — flat depth-coloured sea  ✅ first pass
+
+The sea now renders as a flat surface at `SeaLevel` (0.40), coloured by depth (shallow → deep
+blue) instead of showing the seabed relief — so deep water no longer looks like "blue terrain".
+In `RenderingManager`: vertices/normals below sea level are flattened; `WaterColor(depth)` tints
+by depth; entities over water are clamped to the surface so they stay visible. Movement is
+unaffected (it still uses the real floor elevation).
+
+**Scope / deferred:** this is a single global ocean plane. **Lakes at altitude** keep their own
+floor level (rendered as shallow water following the terrain) and **rivers** follow the terrain.
+Proper per-water-body surface levels — and any wave/fluid sim — are the larger "water-level
+approximation" and remain future work.
+
+Also done: **B3** (coastline crispness via the flat sea + crisp shore) and **G3** (negative
+world-coordinate guards on `GetTile`/`SetTile`/nutrition/`Terraform`).
 
 ## Order
 

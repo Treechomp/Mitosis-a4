@@ -79,6 +79,7 @@ public sealed class WorldManager
     /// </summary>
     public TileType GetTile(float worldX, float worldY)
     {
+        if (worldX < 0f || worldY < 0f) return TileType.DeepWater; // out of world
         int chunkX = (int)(worldX / ChunkSize);
         int chunkY = (int)(worldY / ChunkSize);
 
@@ -101,6 +102,7 @@ public sealed class WorldManager
 
     public bool SetTile(float worldX, float worldY, TileType type)
     {
+        if (worldX < 0f || worldY < 0f) return false;
         int chunkX = (int)(worldX / ChunkSize);
         int chunkY = (int)(worldY / ChunkSize);
 
@@ -125,6 +127,7 @@ public sealed class WorldManager
     /// </summary>
     public bool Terraform(float worldX, float worldY, TerraformDirection direction, float step)
     {
+        if (worldX < 0f || worldY < 0f) return false;
         int chunkX = (int)(worldX / ChunkSize);
         int chunkY = (int)(worldY / ChunkSize);
         var chunk = GetChunk(chunkX, chunkY);
@@ -291,6 +294,7 @@ public sealed class WorldManager
     /// </summary>
     public float GetNutrition(float worldX, float worldY)
     {
+        if (worldX < 0f || worldY < 0f) return 0f;
         int chunkX = (int)(worldX / ChunkSize);
         int chunkY = (int)(worldY / ChunkSize);
 
@@ -308,6 +312,7 @@ public sealed class WorldManager
     /// </summary>
     public float ConsumeNutrition(float worldX, float worldY, float amount)
     {
+        if (worldX < 0f || worldY < 0f) return 0f;
         int chunkX = (int)(worldX / ChunkSize);
         int chunkY = (int)(worldY / ChunkSize);
 
