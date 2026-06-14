@@ -111,6 +111,18 @@ public sealed class WanderSystem : ISystem
                     {
                         // Target already set toward damaged terrain
                     }
+                    // Hungry grazers: steer toward the best nearby food instead of wandering blind.
+                    // This gives herbivores (and FeedTile species) the directed food-seeking that
+                    // predators already have via prey tracking — the core fix for starving in place
+                    // on depleted/barren terrain while food exists elsewhere on the map.
+                    else if (wanderSpeciesDef != null
+                        && _worldManager != null
+                        && hungerUrgency > 0.3f
+                        && (wanderSpeciesDef.CanGraze || wanderSpeciesDef.FeedTiles != null)
+                        && TryFindFoodTarget(pos.X, pos.Y, roamDistance, wanderSpeciesDef, out targetX, out targetY))
+                    {
+                        // Target already set toward food
+                    }
                     else
                     {
                         // Default: random direction
@@ -306,52 +318,133 @@ public sealed class WanderSystem : ISystem
             return false;
         }
 
-        // Herbivores/Terraformers: roam when food competition is too high
-        // (too many same-diet creatures competing for the same food tiles)
+        // Herbivores / grazing factions: seek food when hungry, spread out when crowded.
         if (em.HasComponents(entity, ComponentFlags.Species | ComponentFlags.Hunger))
         {
             ref var hunger = ref em.Hungers[entity];
             float hungerRatio = hunger.Current / hunger.Max;
 
-            // Only consider roaming when hunger is dropping (below 50%)
-            if (hungerRatio >= 0.5f) return false;
-
-            float checkRadius = 12f;
-            _nearbyBuffer.Clear();
-            _spatialHash.QueryRadius(pos.X, pos.Y, checkRadius, _nearbyBuffer);
+            // Well-fed creatures stay put and graze locally.
+            if (hungerRatio >= 0.7f) return false;
 
             ref var mySpecies = ref em.Species[entity];
             var myDef = SpeciesRegistry.GetById(mySpecies.SpeciesId);
 
-            // Count creatures competing for the same food source
-            int competitorCount = 0;
-            foreach (int other in _nearbyBuffer)
+            // Primary driver: if there's no food where we're standing, migrate to find some.
+            // Without this, hungry grazers random-walk and starve on depleted/barren tiles
+            // even when grazing exists nearby. Eagerness scales with hunger.
+            if (!HasFoodAt(pos.X, pos.Y, myDef))
             {
-                if (other == entity || !em.IsAlive(other)) continue;
-                if (!em.HasComponents(other, ComponentFlags.Species)) continue;
-
-                ref var otherSpecies = ref em.Species[other];
-                var otherDef = SpeciesRegistry.GetById(otherSpecies.SpeciesId);
-
-                // Same diet = competing for same food
-                if (otherDef.Diet == myDef.Diet)
-                    competitorCount++;
+                float urgency = 1f - hungerRatio;            // 0.3 .. 1
+                float roamChance = 0.03f + urgency * 0.12f;  // ~0.07 .. 0.15
+                return _rng.NextDouble() < roamChance;
             }
 
-            // High competition + low hunger = migrate to find better grazing
-            float competitionPressure = competitorCount / Math.Max(1f,
-                em.HasComponents(entity, ComponentFlags.Social)
-                    ? em.Socials[entity].PreferredGroupSize * 2f
-                    : 6f);
-
-            if (competitionPressure > 1.0f)
+            // Food is here, but the patch may be overcrowded — occasionally spread out to
+            // less contested grazing so a herd doesn't strip a single spot bare.
+            if (hungerRatio < 0.5f)
             {
-                float roamChance = hungerRatio < 0.3f ? 0.02f : 0.008f;
-                return _rng.NextDouble() < roamChance;
+                float checkRadius = 12f;
+                _nearbyBuffer.Clear();
+                _spatialHash.QueryRadius(pos.X, pos.Y, checkRadius, _nearbyBuffer);
+
+                // Count creatures competing for the same food source
+                int competitorCount = 0;
+                foreach (int other in _nearbyBuffer)
+                {
+                    if (other == entity || !em.IsAlive(other)) continue;
+                    if (!em.HasComponents(other, ComponentFlags.Species)) continue;
+
+                    ref var otherSpecies = ref em.Species[other];
+                    var otherDef = SpeciesRegistry.GetById(otherSpecies.SpeciesId);
+
+                    // Same diet = competing for same food
+                    if (otherDef.Diet == myDef.Diet)
+                        competitorCount++;
+                }
+
+                float competitionPressure = competitorCount / Math.Max(1f,
+                    em.HasComponents(entity, ComponentFlags.Social)
+                        ? em.Socials[entity].PreferredGroupSize * 2f
+                        : 6f);
+
+                if (competitionPressure > 1.0f)
+                    return _rng.NextDouble() < 0.01f;
             }
         }
 
         return false;
+    }
+
+    /// <summary>
+    /// True if the tile at the given world position currently offers food for this species:
+    /// a grazeable tile with remaining nutrition, or one of the species' FeedTiles.
+    /// </summary>
+    private bool HasFoodAt(float x, float y, SpeciesDefinition def)
+    {
+        if (_worldManager == null) return true; // No world to evaluate — assume fed, don't roam
+        var tile = _worldManager.GetTile(x, y);
+        if (def.CanGraze && tile.IsGrazeable())
+            return _worldManager.GetNutrition(x, y) > 0.1f;
+        if (def.FeedTiles != null && def.FeedTiles.Contains(tile))
+            return true;
+        return false;
+    }
+
+    /// <summary>
+    /// Find a roam target toward the best nearby food for a grazing species.
+    /// Samples 8 compass directions out to roamDistance, scoring each by food availability
+    /// (tile nutrition for grazers, presence for FeedTile species), with a mild bias toward
+    /// closer food. Mirrors TryFindDamagedTerrainTarget but for hunger-driven foraging.
+    /// </summary>
+    private bool TryFindFoodTarget(float x, float y, float roamDistance, SpeciesDefinition def,
+        out float targetX, out float targetY)
+    {
+        targetX = x;
+        targetY = y;
+        float bestScore = 0f;
+
+        for (int i = 0; i < 8; i++)
+        {
+            float angle = i * MathF.PI / 4f;
+            float dx = MathF.Cos(angle);
+            float dy = MathF.Sin(angle);
+
+            // Sample points along this direction; nearer food is weighted slightly higher.
+            float dirScore = 0f;
+            for (float t = 0.2f; t <= 1.0f; t += 0.2f)
+            {
+                float sampleX = x + dx * roamDistance * t;
+                float sampleY = y + dy * roamDistance * t;
+                dirScore += GetFoodScore(sampleX, sampleY, def) * (1.2f - t * 0.4f);
+            }
+
+            if (dirScore > bestScore)
+            {
+                bestScore = dirScore;
+                float dist = roamDistance * (0.5f + (float)_rng.NextDouble() * 0.5f);
+                targetX = x + dx * dist;
+                targetY = y + dy * dist;
+            }
+        }
+
+        return bestScore > 0.2f; // Only commit if meaningful food was detected
+    }
+
+    /// <summary>
+    /// Score a tile as a food source for the given species. Grazers score by remaining
+    /// nutrition (0-1); FeedTile species score a flat amount. Hostile terrain scores 0 so
+    /// foraging never steers a creature into water/lava/mountains.
+    /// </summary>
+    private float GetFoodScore(float x, float y, SpeciesDefinition def)
+    {
+        var tile = _worldManager!.GetTile(x, y);
+        if (tile.GetAvoidanceWeight() > 0.6f) return 0f;
+        if (def.CanGraze && tile.IsGrazeable())
+            return _worldManager.GetNutrition(x, y);
+        if (def.FeedTiles != null && def.FeedTiles.Contains(tile))
+            return 1f;
+        return 0f;
     }
 
     /// <summary>

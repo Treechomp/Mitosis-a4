@@ -382,11 +382,15 @@ at max hunger.
 Primary idle movement, with **angular interpolation** for smooth turning: turn rate
 `Clamp(0.4 / bodyMass, 0.06, 0.3)` (heavy = ponderous, light = nimble), speed held constant
 through turns. Random direction changes; terrain look-ahead (1.5 tiles) avoidance sampling 8
-directions; **roaming** (long-distance travel when hungry predators find no prey, or
-herbivores are overcrowded) with hunger-scaled speed and arrival at 5 tiles;
-**hysteresis discomfort escape** (enter at discomfort ratio > 0.6, exit < 0.1; direction-change
-chance cut ~70% while escaping). Faelings instead seek damaged (non-Grass) terrain. Skips
-entities fleeing or actively hunting.
+directions; **roaming** (long-distance travel when hungry predators find no prey, when a
+hungry grazer has no food underfoot, or when herbivores are overcrowded) with hunger-scaled
+speed and arrival at 5 tiles; **directed foraging** — a hungry grazer (or FeedTile species)
+aims its roam at the best nearby food by sampling 8 directions out to its roam distance,
+scoring tiles by remaining nutrition (grazers) or FeedTile presence, biased toward closer
+food and never steering into hostile terrain (mirrors predator prey-tracking); **hysteresis
+discomfort escape** (enter at discomfort ratio > 0.6, exit < 0.1; direction-change chance cut
+~70% while escaping). Faelings instead seek damaged (non-Grass) terrain. Skips entities
+fleeing or actively hunting.
 
 ### 6.7 Hunting — `HuntingSystem.cs` (gated)
 
