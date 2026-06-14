@@ -493,10 +493,12 @@ larva: `MaxCarryFood` 12 (big kills aren't wasted at the carry cap) against an 1
 **Hibernation (food floor).** A pure consumer faction starves wholesale when prey is scarce, so
 a hungry Sectid (below 35% hunger) that detects no huntable prey within 30 tiles for ~600 ticks
 retreats to its nest and goes **dormant**: metabolism drops to 10% (`HungerSystem` reads the
-`FoodCarrier.IsHibernating` flag) and it idles motionless while `WanderSystem`/`HuntingSystem`
-skip it. It **wakes** the moment huntable prey strays within 14 tiles (or it picks up food),
-rejoining the hunt. This keeps a minimal viable colony alive through prey troughs as a
-defensive, ambush-from-the-nest posture instead of the swarm wandering off to die.
+`FoodCarrier.IsHibernating` flag), it idles motionless, stops terraforming (`TerraformSystem`
+skips it), and stops registering as a threat (`FleeingSystem` excludes it, so prey neither flee
+nor fear a sleeping swarm) while `WanderSystem`/`HuntingSystem` skip it. It **wakes** the moment
+huntable prey strays within 14 tiles (or it picks up food), rejoining the hunt. This keeps a
+minimal viable colony alive through prey troughs as a defensive, ambush-from-the-nest posture
+instead of the swarm wandering off to die.
 
 ### 7.3 Faeling / Crystal — `CrystalSystem.cs`
 

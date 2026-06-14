@@ -43,6 +43,10 @@ public sealed class FleeingSystem : ISystem
 
         foreach (int entity in em.Query(predatorRequired))
         {
+            // Dormant Sectids aren't a threat — exclude them so prey neither flee nor fear them
+            if (em.HasComponents(entity, ComponentFlags.FoodCarrier) && em.FoodCarriers[entity].IsHibernating)
+                continue;
+
             // Resize arrays if needed
             if (_predatorCount >= _predatorXs.Length)
             {

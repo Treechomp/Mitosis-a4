@@ -171,6 +171,10 @@ public sealed class TerraformSystem : ISystem
             if (!em.DueThisTick[entity])
                 continue;
 
+            // Dormant Sectids are inactive — they don't reshape terrain while hibernating
+            if (em.HasComponents(entity, ComponentFlags.FoodCarrier) && em.FoodCarriers[entity].IsHibernating)
+                continue;
+
             // LOD tick multiplier: terraform cooldowns count down at correct rate
             int tickMult = em.HasComponents(entity, ComponentFlags.SimulationLOD)
                 ? em.SimulationLODs[entity].TickInterval : 1;
