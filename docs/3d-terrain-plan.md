@@ -72,7 +72,7 @@ follows straight; entities still sit on the surface (elevation sampling unchange
 
 ## Phase 2 — Per-vertex parameters + continuous colour
 
-### 2a — Visual: store params + "cube" palette (no gameplay change)  ⬅ starting this turn
+### 2a — Visual: store params + "cube" palette (no gameplay change)  ✅ done
 
 - `Chunk`: add `_moisture[,]`, `_temperature[,]` + get/set (mirrors `_elevation`).
 - `TerrainGenerator.GenerateChunk`: persist the moisture & temperature it already computes.
@@ -87,7 +87,7 @@ follows straight; entities still sit on the surface (elevation sampling unchange
 Gameplay is untouched in 2a (`GetTile` still returns the cached classified tile; terraform
 still discrete). This delivers the continuous look with low risk.
 
-### 2b — Gameplay: classify-on-demand + terraform-on-moisture
+### 2b — Gameplay: classify-on-demand + terraform-on-moisture  ✅ done
 
 - Make `_tiles` an explicit derived cache: `Chunk.ReclassifyTile(x,y)` runs the existing
   `DetermineTileType` on the stored params; called at generation and whenever a param changes.
@@ -104,14 +104,21 @@ No consumer of `GetTile` changes in 2b either — only how the cached value is p
 
 ---
 
-## Phase 3 — (optional, larger) organic detail / true surface movement
+## Phase 3 — (optional, larger) organic detail / true surface movement  ◑ partial
 
+**Done:** subtle procedural surface detail in `TerrainDither.gdshader` (world-space value
+noise modulating brightness; uniforms `detail_strength` / `detail_scale`) — breaks up flat
+squares with **zero** geometry/movement/alignment impact. Tune or disable in-editor.
+
+**Deferred (future):**
 - Smooth deterministic XZ vertex warp (low-frequency noise, visual only) + higher mesh
-  resolution / fractal elevation detail, so the square base never reads as a grid — without
-  re-introducing wobble (a smooth warp doesn't reverse per row).
-- Optional true 3D surface locomotion: movement direction follows the slope, AI distances
-  measured on the surface. Today's model (2D move + elevation affects speed/cliffs) is kept
-  unless this is explicitly wanted; it's the heaviest item and lowest priority.
+  resolution / fractal elevation detail, for more relief without re-introducing wobble.
+- True 3D surface locomotion: movement direction follows the slope, AI distances measured on
+  the surface. Today's model (2D move + elevation affects speed/cliffs) is kept unless wanted.
+- **Entity/player render interpolation** (reported June 2026): entity transforms are set from
+  sim positions every render frame, but positions only change on sim ticks (20 TPS), so fast
+  movers (e.g. the player at high speed) visibly step. Fix: lerp render position between the
+  previous and current tick positions by the tick fraction. Rendering-only; no sim impact.
 
 ---
 
