@@ -50,6 +50,7 @@ public sealed class EntityManager
         FaelingPower = 1 << 22,
         RangedAttack = 1 << 23,
         VenomEffect = 1 << 24,
+        Carrion = 1 << 25,
     }
 
     private readonly ComponentFlags[] _componentFlags;
@@ -80,6 +81,7 @@ public sealed class EntityManager
     public readonly FaelingPower[] FaelingPowers;
     public readonly RangedAttack[] RangedAttacks;
     public readonly VenomEffect[] VenomEffects;
+    public readonly Carrion[] Carrions;
 
     /// <summary>
     /// Per-entity LOD gate flag. True = entity is due for processing this tick.
@@ -134,6 +136,7 @@ public sealed class EntityManager
         FaelingPowers = new FaelingPower[MaxEntities];
         RangedAttacks = new RangedAttack[MaxEntities];
         VenomEffects = new VenomEffect[MaxEntities];
+        Carrions = new Carrion[MaxEntities];
         DueThisTick = new bool[MaxEntities];
         PrevPositions = new Position[MaxEntities];
     }

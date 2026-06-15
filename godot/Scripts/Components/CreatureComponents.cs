@@ -332,3 +332,30 @@ public struct VenomEffect
 
     public readonly bool IsActive => RemainingTicks > 0;
 }
+
+/// <summary>
+/// A corpse left behind when a creature dies. Holds an edible nutrient pool that predators,
+/// omnivores and Sectids consume over time (carrion scavenging). Stays fresh for a grace
+/// period, then slowly rots away on its own.
+/// </summary>
+[StructLayout(LayoutKind.Sequential)]
+public struct Carrion
+{
+    public float Nutrition;       // Remaining edible nutrients
+    public float MaxNutrition;    // Initial pool (for decay scaling / visuals)
+    public int GraceTicks;        // Ticks before self-rot begins (a fresh carcass)
+    public float DecayPerTick;    // Nutrition lost per tick once rotting
+    public int SourceSpeciesId;   // Species the corpse came from (visuals / future use)
+
+    public Carrion(float nutrition, int graceTicks, float decayPerTick, int sourceSpeciesId)
+    {
+        Nutrition = nutrition;
+        MaxNutrition = nutrition;
+        GraceTicks = graceTicks;
+        DecayPerTick = decayPerTick;
+        SourceSpeciesId = sourceSpeciesId;
+    }
+
+    public readonly bool IsDepleted => Nutrition <= 0f;
+    public readonly float Freshness => MaxNutrition > 0f ? Nutrition / MaxNutrition : 0f;
+}

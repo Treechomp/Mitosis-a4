@@ -146,6 +146,10 @@ public partial class GameManager : Node3D
         _systems.Add(new CollisionSystem(spatialHash, collisionRadiusScale: 0.5f, tileSize: TileSize));
         _systems.Add(new HuntingSystem(spatialHash, _worldManager));
         _systems.Add(new FleeingSystem(spatialHash, _worldManager));
+        // Carrion: corpses persist and are scavenged over time. Runs after hunting/fleeing so it
+        // can steer idle hungry predators to carcasses, and before NestSystem so a chopping Sectid
+        // is fed/held at the corpse before NestSystem decides whether to ferry the load home.
+        _systems.Add(new CarrionSystem(spatialHash));
         _systems.Add(new AgingSystem());
         _systems.Add(new ReproductionSystem(_worldManager, MaxPopulation, spatialHash));
         _systems.Add(new TerraformSystem(_worldManager));

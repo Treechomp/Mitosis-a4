@@ -76,8 +76,8 @@ are **gone** from the code:
 - **Simulation loop**: `GameManager` runs a fixed-timestep accumulator at **20 TPS**. System
   execution order (see [architecture.md](architecture.md#system-execution-order)) is
   LOD → Movement → SpatialHashUpdate → TerrainDiscomfort → Hunger → Grazing → Wander →
-  Herding → Separation → Collision → Hunting → Fleeing → Aging → Reproduction → Terraform →
-  TileRegeneration → Nest → Spore → Crystal → (EcosystemLogger).
+  Herding → Separation → Collision → Hunting → Fleeing → Carrion → Aging → Reproduction →
+  Terraform → TileRegeneration → Nest → Spore → Crystal → (EcosystemLogger).
 
 ### Coordinate model
 
@@ -480,7 +480,27 @@ tileSize`), pushing overlapping pairs apart by half the overlap each.
 Increments age (× tick interval); death at `MaxLifespan`. Skips structures. Faeling death
 passes power to its crystal.
 
-### 6.12 Reproduction — `ReproductionSystem.cs` (gated)
+### 6.12 Carrion — `CarrionSystem.cs`
+
+Corpses persist and are scavenged — predators feed **after** a kill, not instantly. Any creature
+death (predation, starvation, old age, drowning) calls `CarrionSystem.SpawnCorpse`, which leaves a
+corpse entity (`Carrion` component + a dark Diamond renderable) holding an edible nutrient pool
+scaled by **body size** (`EffectiveNutrition`) and **condition** (hunger ratio at death — a
+well-fed animal leaves more; floor 0.4×) and growth scale (big Shroomers). Faelings/structures/
+spores leave nothing. The kill site that used to grant instant pack-shared nutrition now just
+spawns the corpse, so "sharing" is emergent — everyone eats the same carcass.
+
+Each tick the system (1) **decays** corpses: a grace period (~200 ticks fresh), then nutrition
+rots away (~1400 ticks), shrinking the renderable; depleted corpses are removed. (2) **Feeds
+scavengers**: a hungry predator/omnivore/Sectid with no live target moves to the nearest corpse
+within seek range and eats at a rate set by its `MaxHunger` (sated at 95%). A short feed-commit
+on the killer (and refreshed while eating) keeps it on the kill instead of immediately re-hunting.
+**Sectids** chop fast into their carrier sacks; `NestSystem` holds a Sectid at the carcass until
+its sacks are full, then ferries the load home — so a large kill takes repeated trips, often the
+whole colony, to clear. This gives the obligate-hunter factions and NPC predators a food source
+that smooths the hunger-vs-procurement gap.
+
+### 6.13 Reproduction — `ReproductionSystem.cs` (gated)
 
 Standard reproduction for non-faction species. Requires: under population cap, off cooldown,
 mature, hunger ≥ threshold, energy ≥ threshold, local same-species density below

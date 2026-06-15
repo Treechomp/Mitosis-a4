@@ -138,7 +138,9 @@ public sealed class TerrainDiscomfortSystem : ISystem
             }
         }
 
-        // Kill drowned/suffocated entities
+        // Kill drowned/suffocated entities (leaving scavengeable remains)
+        foreach (int entity in _toKill)
+            CarrionSystem.SpawnCorpse(em, entity);
         em.DestroyEntities(_toKill);
     }
 }

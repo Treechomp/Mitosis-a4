@@ -24,13 +24,11 @@ public sealed class HuntingSystem : ISystem
     private readonly WorldManager? _worldManager;
     private readonly List<int> _nearbyEntities = new(64);
     private readonly List<int> _packMembers = new(8);
-    private readonly List<int> _shareBuffer = new(16);
     private readonly List<int> _entitiesToKill = new(16);
     private readonly Dictionary<int, int> _groupTargets = new(16);  // groupId -> target entity
     private readonly Dictionary<int, (float x, float y)> _groupLeaderPositions = new(16);  // groupId -> leader pos
     private readonly Dictionary<int, bool> _groupConverging = new(16);  // groupId -> leader triggered convergence
     private const float SporeBodyMass = 0.2f;
-    private const float FallbackNutrition = 40f;
 
     // === Target viability re-evaluation ===
     // How often (ticks) to check whether a hunt is making progress, the minimum prey-HP we must
@@ -822,66 +820,16 @@ public sealed class HuntingSystem : ISystem
                                     killPos.X, killPos.Y);
                             }
 
-                            // Nutrition scales with prey mass (and growth for Shroomers)
-                            float nutrition = GetPreyNutrition(predator.TargetEntity, em);
-
-                            // Pack food sharing: killer gets half, rest split among nearby pack
-                            if (isPack)
-                            {
-                                float killerPortion = nutrition * speciesDef.KillerShareRatio;
-                                float sharePortion = nutrition - killerPortion;
-
-                                ApplyFoodGain(entity, killerPortion, em, ref hunger);
-
-                                // Find nearby same-species pack members to share with
-                                _shareBuffer.Clear();
-                                _spatialHash.QueryRadius(pos.X, pos.Y, speciesDef.PackShareRadius, _shareBuffer);
-                                int shareCount = 0;
-                                foreach (int other in _shareBuffer)
-                                {
-                                    if (other == entity || !em.IsAlive(other)) continue;
-                                    if (!em.HasComponents(other, ComponentFlags.Hunger | ComponentFlags.Social)) continue;
-                                    ref var otherSocial = ref em.Socials[other];
-                                    if (otherSocial.GroupId == groupId)
-                                        shareCount++;
-                                }
-                                if (shareCount > 0)
-                                {
-                                    float perMember = sharePortion / shareCount;
-                                    foreach (int other in _shareBuffer)
-                                    {
-                                        if (other == entity || !em.IsAlive(other)) continue;
-                                        if (!em.HasComponents(other, ComponentFlags.Hunger | ComponentFlags.Social)) continue;
-                                        ref var otherSocial = ref em.Socials[other];
-                                        if (otherSocial.GroupId == groupId)
-                                        {
-                                            // Feed packmates' bellies directly (hunger only, no carrier
-                                            // fill). For Sectids this means the kill sustains the swarm in
-                                            // the field while only the killer (which filled its carrier from
-                                            // its own share above) ferries the colony's load to the nest —
-                                            // instead of the whole pack peeling off to deliver tiny loads.
-                                            // Non-carrier packs (wolves) are unaffected: they only ever
-                                            // gained hunger here anyway.
-                                            ref var otherHunger = ref em.Hungers[other];
-                                            otherHunger.Current = MathF.Min(otherHunger.Max, otherHunger.Current + perMember);
-                                        }
-                                    }
-                                }
-                                else
-                                {
-                                    // No pack members nearby — killer gets everything
-                                    ApplyFoodGain(entity, sharePortion, em, ref hunger);
-                                }
-                            }
-                            else
-                            {
-                                // Solo hunter gets all the nutrition
-                                ApplyFoodGain(entity, nutrition, em, ref hunger);
-                            }
+                            // Leave a corpse instead of granting nutrition instantly. The killer
+                            // (and packmates, and any scavenger) feed from it over time — see
+                            // CarrionSystem. Pack "sharing" is now emergent: everyone eats the carcass.
+                            CarrionSystem.SpawnCorpse(em, predator.TargetEntity);
 
                             predator.TargetEntity = -1;
                             predator.Phase = PackPhase.Idle;
                             predator.Role = PackRole.None;
+                            // Linger on the fresh kill to feed rather than immediately re-hunting.
+                            predator.PhaseTimer = Math.Max(predator.PhaseTimer, 30);
                         }
                     }
                     predator.CurrentCooldown = predator.AttackCooldown;
@@ -1443,24 +1391,6 @@ public sealed class HuntingSystem : ISystem
             ? em.Energies[self].Current : 0f;
     }
 
-    /// <summary>
-    /// Apply food gain to an entity, handling Sectid food carriers specially.
-    /// </summary>
-    private static void ApplyFoodGain(int entity, float nutrition, EntityManager em, ref Hunger hunger)
-    {
-        if (em.HasComponents(entity, ComponentFlags.FoodCarrier))
-        {
-            ref var carrier = ref em.FoodCarriers[entity];
-            float foodGain = MathF.Min(nutrition, carrier.MaxCarry - carrier.FoodCarried);
-            carrier.FoodCarried += foodGain;
-            // Sectids eat half themselves (need sustenance since they can't graze)
-            hunger.Current = MathF.Min(hunger.Max, hunger.Current + nutrition * 0.5f);
-        }
-        else
-        {
-            hunger.Current = MathF.Min(hunger.Max, hunger.Current + nutrition);
-        }
-    }
 
     /// <summary>
     /// Steer velocity away from water tiles ahead. Checks 2 tiles in the movement
@@ -1552,31 +1482,5 @@ public sealed class HuntingSystem : ISystem
         }
 
         return 1f;
-    }
-
-    /// <summary>
-    /// Get the nutrition value of a prey entity. Scales with growth for growing creatures.
-    /// </summary>
-    private float GetPreyNutrition(int preyEntity, EntityManager em)
-    {
-        if (em.HasComponents(preyEntity, ComponentFlags.Spore))
-            return SporeBodyMass * 20f;
-
-        if (em.HasComponents(preyEntity, ComponentFlags.Species))
-        {
-            ref var preySpecies = ref em.Species[preyEntity];
-            var preyDef = SpeciesRegistry.GetById(preySpecies.SpeciesId);
-            float nutrition = preyDef.EffectiveNutrition;
-
-            if (em.HasComponents(preyEntity, ComponentFlags.Growth))
-            {
-                ref var growth = ref em.Growths[preyEntity];
-                nutrition *= growth.CurrentScale;
-            }
-
-            return nutrition;
-        }
-
-        return FallbackNutrition;
     }
 }

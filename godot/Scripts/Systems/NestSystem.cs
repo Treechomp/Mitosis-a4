@@ -233,6 +233,11 @@ public sealed class NestSystem : ISystem
             {
                 carrier.IsHibernating = false;
                 carrier.NoFoodTicks = 0;
+                // Keep stripping a carcass until the sacks are full; only then ferry it home.
+                // (CarrionSystem handles the feeding/holding-position while we're at the corpse.)
+                // A big kill therefore takes repeated trips, often the whole colony, to clear.
+                if (!carrier.IsFull && CorpseNearby(em, pos.X, pos.Y))
+                    continue;
                 DeliverFoodToNest(em, entity, ref carrier, ref pos, ref vel, sectidDef);
                 continue;
             }
@@ -348,6 +353,20 @@ public sealed class NestSystem : ISystem
     /// True if a huntable prey entity (anything with Prey that isn't another Sectid) is within
     /// the given radius. Shroomer spores and herbivores count as food; same-faction Sectids do not.
     /// </summary>
+    /// <summary>True if an edible carcass is right here (a Sectid still chopping it).</summary>
+    private bool CorpseNearby(EntityManager em, float x, float y)
+    {
+        const float radius = 3f;
+        _nearbyBuffer.Clear();
+        _spatialHash.QueryRadius(x, y, radius, _nearbyBuffer);
+        foreach (int other in _nearbyBuffer)
+        {
+            if (!em.IsAlive(other) || !em.HasComponents(other, ComponentFlags.Carrion)) continue;
+            if (!em.Carrions[other].IsDepleted) return true;
+        }
+        return false;
+    }
+
     private bool HuntablePreyNearby(EntityManager em, int self, float x, float y, float radius)
     {
         _nearbyBuffer.Clear();
