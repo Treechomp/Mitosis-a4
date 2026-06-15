@@ -197,14 +197,16 @@ public sealed class NestSystem : ISystem
     }
 
     // === Hibernation tuning ===
-    // A hungry Sectid that detects no prey within ForageDetectRadius for HibernateNoFoodTicks
-    // consecutive ticks retreats to its nest and goes dormant (low metabolism). It wakes when
-    // huntable prey strays within WakeRadius. This keeps a minimal viable colony alive through
-    // prey troughs instead of the swarm wandering off and starving en masse.
-    private const float HibernateHungerRatio = 0.35f; // Only consider dormancy when quite hungry
-    private const int HibernateNoFoodTicks = 600;     // ~30s at 20 TPS of no prey before dormancy
-    private const float ForageDetectRadius = 30f;     // Scanned for prey while deciding to hibernate
-    private const float WakeRadius = 14f;             // Prey within this wakes a dormant Sectid
+    // A Sectid that stays hungry (failing to actually feed) for HibernateNoFoodTicks ticks — or
+    // that drops to a critical hunger floor — retreats to its nest and goes dormant (low
+    // metabolism). It wakes when huntable prey strays within WakeRadius. Driving this off feeding
+    // success rather than prey *detection* is deliberate: detection within ~30 tiles was resetting
+    // the timer every tick (there's nearly always a spore or stray herbivore around) so they never
+    // went dormant and starved instead. This keeps a minimal viable colony alive through prey troughs.
+    private const float HibernateHungerRatio = 0.35f;  // Below this, start counting toward dormancy
+    private const float HibernateCriticalRatio = 0.15f; // At/below this, shelter immediately (no wait)
+    private const int HibernateNoFoodTicks = 600;      // ~30s at 20 TPS of sustained hunger before dormancy
+    private const float WakeRadius = 14f;              // Prey within this wakes a dormant Sectid
 
     private void ProcessSectids(EntityManager em)
     {
@@ -272,28 +274,26 @@ public sealed class NestSystem : ISystem
                 continue;
             }
 
-            // === Active and hungry with no prey around: count down toward dormancy ===
+            // === Hungry and failing to feed: count down toward dormancy ===
+            // Based on sustained low hunger (actual feeding failure), not prey detection — a Sectid
+            // surrounded by prey it can't catch must still shelter rather than starve. The critical
+            // floor guarantees it goes dormant before starving whenever a nest is reachable.
             ref var hunger = ref em.Hungers[entity];
-            if (hunger.Current / hunger.Max < HibernateHungerRatio)
+            float hungerRatio = hunger.Current / hunger.Max;
+            if (hungerRatio < HibernateHungerRatio)
             {
-                if (HuntablePreyNearby(em, entity, pos.X, pos.Y, ForageDetectRadius))
+                carrier.NoFoodTicks += tickMult;
+                bool critical = hungerRatio < HibernateCriticalRatio;
+                if ((carrier.NoFoodTicks >= HibernateNoFoodTicks || critical) &&
+                    FindNearestNest(em, pos.X, pos.Y) >= 0)
                 {
-                    carrier.NoFoodTicks = 0; // Food is around — keep hunting
-                }
-                else
-                {
-                    carrier.NoFoodTicks += tickMult;
-                    if (carrier.NoFoodTicks >= HibernateNoFoodTicks &&
-                        FindNearestNest(em, pos.X, pos.Y) >= 0)
-                    {
-                        carrier.IsHibernating = true;
-                        carrier.NoFoodTicks = 0;
-                    }
+                    carrier.IsHibernating = true;
+                    carrier.NoFoodTicks = 0;
                 }
             }
             else
             {
-                carrier.NoFoodTicks = 0;
+                carrier.NoFoodTicks = 0; // recovered — fed enough, stay active
             }
         }
     }
