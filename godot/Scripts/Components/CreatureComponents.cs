@@ -356,6 +356,9 @@ public struct Carrion
         SourceSpeciesId = sourceSpeciesId;
     }
 
-    public readonly bool IsDepleted => Nutrition <= 0f;
+    // Treat a non-finite pool as depleted: a NaN nutrition value makes `<= 0f` false,
+    // which would otherwise leave an immortal corpse that never rots and becomes a
+    // permanent scavenger magnet (predators pile on it and never re-hunt).
+    public readonly bool IsDepleted => !(Nutrition > 0f);
     public readonly float Freshness => MaxNutrition > 0f ? Nutrition / MaxNutrition : 0f;
 }
