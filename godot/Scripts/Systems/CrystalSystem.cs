@@ -193,6 +193,17 @@ public sealed class CrystalSystem : ISystem
                 ranged.CurrentCooldown = ranged.Cooldown;
                 ranged.TargetEntity = bestTarget;
 
+                if (EcosystemLogger.TrackedSpeciesId >= 0
+                    && em.HasComponents(entity, ComponentFlags.Species)
+                    && em.HasComponents(bestTarget, ComponentFlags.Species))
+                {
+                    ref var tPos = ref em.Positions[bestTarget];
+                    EcosystemLogger.Instance?.LogCombatHit(
+                        em.Species[entity].SpeciesId, entity,
+                        em.Species[bestTarget].SpeciesId, bestTarget,
+                        ranged.BaseDamage, tPos.X, tPos.Y, "ranged");
+                }
+
                 // Check if kill — award power
                 if (targetEnergy.IsDead)
                 {

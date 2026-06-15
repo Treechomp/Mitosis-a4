@@ -172,6 +172,28 @@ public sealed class EcosystemLogger : ISystem
         WriteEvent($"{_tick},hunt_fail,{predName},{predatorId},{x:F1},{y:F1},{reason}");
     }
 
+    /// <summary>
+    /// Log a combat damage hit for tracked-species analysis.
+    /// Emits a "damage_dealt" line when the attacker is the tracked species and/or a
+    /// "damage_taken" line when the target is, so both perspectives appear in the events log.
+    /// No-ops when <see cref="TrackedSpeciesId"/> is -1 or neither side matches it.
+    /// </summary>
+    public void LogCombatHit(int attackerSid, int attackerId,
+                              int targetSid,   int targetId,
+                              float damage, float x, float y, string source)
+    {
+        int tracked = TrackedSpeciesId;
+        if (tracked < 0 || (attackerSid != tracked && targetSid != tracked)) return;
+        var aName = SpeciesRegistry.GetById(attackerSid)?.Name ?? attackerSid.ToString();
+        var tName = SpeciesRegistry.GetById(targetSid)?.Name   ?? targetSid.ToString();
+        if (attackerSid == tracked)
+            WriteEvent($"{_tick},damage_dealt,{aName},{attackerId},{x:F1},{y:F1}," +
+                       $"target:{tName}:{targetId} dmg={damage:F1} src={source}");
+        if (targetSid == tracked)
+            WriteEvent($"{_tick},damage_taken,{tName},{targetId},{x:F1},{y:F1}," +
+                       $"from:{aName}:{attackerId} dmg={damage:F1} src={source}");
+    }
+
     /// <summary>Log a spore creation.</summary>
     public void LogSporeCreated(float x, float y)
         => WriteEvent($"{_tick},spore_created,Shroomer,-1,{x:F1},{y:F1},");

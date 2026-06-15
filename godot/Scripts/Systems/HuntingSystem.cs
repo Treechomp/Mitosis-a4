@@ -774,8 +774,21 @@ public sealed class HuntingSystem : ISystem
                     if (em.HasComponents(predator.TargetEntity, ComponentFlags.Energy))
                     {
                         ref var preyEnergy = ref em.Energies[predator.TargetEntity];
-                        preyEnergy.Current -= predator.AttackPower * attackMult;
+                        float actualDamage = predator.AttackPower * attackMult;
+                        preyEnergy.Current -= actualDamage;
                         preyEnergy.RegenCooldown = 60; // 3s combat cooldown at 20 TPS
+
+                        if (EcosystemLogger.TrackedSpeciesId >= 0
+                            && em.HasComponents(predator.TargetEntity, ComponentFlags.Species))
+                        {
+                            int aSid = em.HasComponents(entity, ComponentFlags.Species)
+                                ? em.Species[entity].SpeciesId : -1;
+                            ref var hitPos = ref em.Positions[predator.TargetEntity];
+                            EcosystemLogger.Instance?.LogCombatHit(
+                                aSid, entity,
+                                em.Species[predator.TargetEntity].SpeciesId, predator.TargetEntity,
+                                actualDamage, hitPos.X, hitPos.Y, "melee");
+                        }
 
                         // Mark the attacker on victims that can fight back, so a pack/swarm member
                         // rallies its group to mob us (see DEFENSIVE RALLY). Also wakes a dormant
@@ -807,6 +820,14 @@ public sealed class HuntingSystem : ISystem
                                     ref var predEnergy = ref em.Energies[entity];
                                     predEnergy.Current -= thornDamage;
                                     predEnergy.RegenCooldown = 30;
+                                    if (EcosystemLogger.TrackedSpeciesId >= 0
+                                        && em.HasComponents(entity, ComponentFlags.Species))
+                                    {
+                                        EcosystemLogger.Instance?.LogCombatHit(
+                                            preySpecies.SpeciesId, predator.TargetEntity,
+                                            em.Species[entity].SpeciesId, entity,
+                                            thornDamage, pos.X, pos.Y, "thorn");
+                                    }
                                 }
                             }
                         }
