@@ -409,13 +409,19 @@ public sealed class HuntingSystem : ISystem
                 }
 
                 // === DEFENSIVE RALLY (call-to-action) ===
-                // If we were recently attacked and have groupmates nearby, summon the group to mob
-                // the attacker instead of being picked off one by one. Lone members (too few allies)
-                // skip this and fall through to flee. Overrides food-hunting — defense comes first.
-                if (groupId >= 0 && predator.LastAttackedTicks > 0 && em.IsAlive(predator.LastAttacker)
-                    && predator.LastAttacker != predator.AvoidTarget)
+                // Pick a threat: reactively from a recent attacker (cheap), or — for an idle member —
+                // proactively by spotting a predator stalking us or a groupmate. If we have enough
+                // groupmates nearby and the threat is still close, summon the group to mob it.
+                // Lone members (too few allies) skip this and fall through to flee.
+                int threat = -1;
+                if (predator.LastAttackedTicks > 0 && em.IsAlive(predator.LastAttacker))
+                    threat = predator.LastAttacker;
+                else if (groupId >= 0 && !predator.HasTarget)
+                    threat = FindProactiveThreat(entity, groupId, pos.X, pos.Y, speciesDef, em);
+
+                if (groupId >= 0 && threat >= 0 && em.IsAlive(threat)
+                    && threat != predator.AvoidTarget)
                 {
-                    int threat = predator.LastAttacker;
                     ref var threatPos = ref em.Positions[threat];
                     float threatDistSq = MathUtils.DistanceSquared(pos.X, pos.Y, threatPos.X, threatPos.Y);
                     float rallyRange = predator.HuntRange * RallyRangeMult;
@@ -439,8 +445,11 @@ public sealed class HuntingSystem : ISystem
 
                         if (allies >= RallyAllyThreshold)
                         {
-                            // Broadcast the mob target so groupmates converge (the summon), and lock
-                            // onto it ourselves. Bypasses the normal prey mass/hunger gates.
+                            // Remember the threat so we keep rallying without re-scanning every tick,
+                            // broadcast it so groupmates converge (the summon), and lock onto it.
+                            // Bypasses the normal prey mass/hunger gates.
+                            predator.LastAttacker = threat;
+                            predator.LastAttackedTicks = RallyAlertDuration;
                             _groupTargets[groupId] = threat;
                             if (predator.TargetEntity != threat)
                             {
@@ -1364,6 +1373,60 @@ public sealed class HuntingSystem : ISystem
     {
         vel.Dx += (targetDx - vel.Dx) * agility;
         vel.Dy += (targetDy - vel.Dy) * agility;
+    }
+
+    /// <summary>
+    /// Proactive threat detection for the defensive rally: find the nearest predator of another
+    /// species that is either hunting us / a groupmate, or intruding close into our space. Returns
+    /// -1 if none. Lets an idle pack/swarm member spot a stalker and rally before being bitten.
+    /// </summary>
+    private int FindProactiveThreat(int self, int groupId, float x, float y,
+        SpeciesDefinition speciesDef, EntityManager em)
+    {
+        int mySpeciesId = em.HasComponents(self, ComponentFlags.Species) ? em.Species[self].SpeciesId : -1;
+        float detectRange = speciesDef.HuntRange;
+        float intrudeRangeSq = (detectRange * 0.5f) * (detectRange * 0.5f);
+
+        _nearbyEntities.Clear();
+        _spatialHash.QueryRadius(x, y, detectRange, _nearbyEntities);
+
+        int best = -1;
+        float bestDistSq = float.MaxValue;
+        foreach (int other in _nearbyEntities)
+        {
+            if (other == self || !em.IsAlive(other)) continue;
+            if (!em.HasComponents(other, ComponentFlags.Predator | ComponentFlags.Position)) continue;
+            // Don't rally against our own faction
+            if (em.HasComponents(other, ComponentFlags.Species) && em.Species[other].SpeciesId == mySpeciesId)
+                continue;
+            // A dormant Sectid is no threat
+            if (em.HasComponents(other, ComponentFlags.FoodCarrier) && em.FoodCarriers[other].IsHibernating)
+                continue;
+
+            ref var op = ref em.Positions[other];
+            float dSq = MathUtils.DistanceSquared(x, y, op.X, op.Y);
+
+            ref var otherPred = ref em.Predators[other];
+            bool huntingUs = otherPred.HasTarget && IsSelfOrGroupmate(otherPred.TargetEntity, self, groupId, em);
+            bool intruding = dSq <= intrudeRangeSq;
+            if (!huntingUs && !intruding) continue;
+
+            if (dSq < bestDistSq)
+            {
+                bestDistSq = dSq;
+                best = other;
+            }
+        }
+        return best;
+    }
+
+    /// <summary>True if <paramref name="target"/> is the entity itself or one of its groupmates.</summary>
+    private static bool IsSelfOrGroupmate(int target, int self, int groupId, EntityManager em)
+    {
+        if (target == self) return true;
+        if (groupId < 0 || !em.IsAlive(target)) return false;
+        if (!em.HasComponents(target, ComponentFlags.Social)) return false;
+        return em.Socials[target].GroupId == groupId;
     }
 
     /// <summary>
