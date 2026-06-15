@@ -107,6 +107,7 @@ public static class SpeciesRegistry
         Register(new SpeciesDefinition
         {
             Name = "Deer",
+            MaxEnergy = 105f,           // HP scaled to body mass (previously the default 100)
             Diet = DietType.Herbivore,
             DefaultSocialType = SocialType.Herd,
             SpawnWeight = 1.5f,
@@ -187,6 +188,7 @@ public static class SpeciesRegistry
         Register(new SpeciesDefinition
         {
             Name = "Rabbit",
+            MaxEnergy = 85f,            // HP scaled to body mass (previously the default 100)
             Diet = DietType.Herbivore,
             DefaultSocialType = SocialType.Herd,
             SpawnWeight = 1.5f,
@@ -273,6 +275,7 @@ public static class SpeciesRegistry
         Register(new SpeciesDefinition
         {
             Name = "Wolf",
+            MaxEnergy = 115f,           // HP scaled to body mass (previously the default 100)
             Diet = DietType.Carnivore,
             DefaultSocialType = SocialType.Pack,
             SpawnWeight = 1.5f,
@@ -372,6 +375,7 @@ public static class SpeciesRegistry
         Register(new SpeciesDefinition
         {
             Name = "Fox",
+            MaxEnergy = 90f,            // HP scaled to body mass (previously the default 100)
             Diet = DietType.Carnivore,
             DefaultSocialType = SocialType.Solitary,
             SpawnWeight = 1.2f,
@@ -564,6 +568,7 @@ public static class SpeciesRegistry
         Register(new SpeciesDefinition
         {
             Name = "Fish",
+            MaxEnergy = 45f,            // small/fragile (previously the default 100)
             Diet = DietType.Herbivore,
             DefaultSocialType = SocialType.Herd,
             SpawnWeight = 0.8f,
@@ -596,10 +601,10 @@ public static class SpeciesRegistry
 
             // Reproduction - still prolific but costlier per litter
             ReproHungerThreshold = 100f,
-            ReproEnergyThreshold = 60f,
+            ReproEnergyThreshold = 32f,  // lowered to fit the smaller MaxEnergy (45)
             ReproCooldown = 700,
             ReproHungerCost = 45f,
-            ReproEnergyCost = 30f,
+            ReproEnergyCost = 18f,       // scaled to the smaller MaxEnergy (45)
             OffspringCount = 2,
 
             // Social - tight schools
@@ -741,6 +746,7 @@ public static class SpeciesRegistry
         Register(new SpeciesDefinition
         {
             Name = "Frog",
+            MaxEnergy = 40f,            // small/fragile (previously the default 100)
             Diet = DietType.Herbivore,
             DefaultSocialType = SocialType.Solitary,
             SpawnWeight = 0.7f,
@@ -770,10 +776,10 @@ public static class SpeciesRegistry
 
             // Reproduction - controlled breeding
             ReproHungerThreshold = 120f,
-            ReproEnergyThreshold = 60f,
+            ReproEnergyThreshold = 30f,  // lowered to fit the smaller MaxEnergy (Frog 40 / Lizard 45)
             ReproCooldown = 750,
             ReproHungerCost = 40f,
-            ReproEnergyCost = 25f,
+            ReproEnergyCost = 15f,       // scaled to the smaller MaxEnergy
             OffspringCount = 2,
 
             // Social - solitary
@@ -1159,6 +1165,7 @@ public static class SpeciesRegistry
         Register(new SpeciesDefinition
         {
             Name = "Hawk",
+            MaxEnergy = 88f,            // HP scaled to body mass (previously the default 100)
             Diet = DietType.Carnivore,
             DefaultSocialType = SocialType.Solitary,
             IsFlying = true,
@@ -1233,6 +1240,7 @@ public static class SpeciesRegistry
         Register(new SpeciesDefinition
         {
             Name = "Lizard",
+            MaxEnergy = 45f,            // small/fragile (previously the default 100)
             Diet = DietType.Herbivore,
             DefaultSocialType = SocialType.Solitary,
             SpawnWeight = 0.7f,
@@ -1262,10 +1270,10 @@ public static class SpeciesRegistry
 
             // Reproduction - controlled breeding
             ReproHungerThreshold = 120f,
-            ReproEnergyThreshold = 60f,
+            ReproEnergyThreshold = 30f,  // lowered to fit the smaller MaxEnergy (Frog 40 / Lizard 45)
             ReproCooldown = 750,
             ReproHungerCost = 40f,
-            ReproEnergyCost = 25f,
+            ReproEnergyCost = 15f,       // scaled to the smaller MaxEnergy
             OffspringCount = 2,
 
             // Social - solitary
@@ -1316,6 +1324,7 @@ public static class SpeciesRegistry
         Register(new SpeciesDefinition
         {
             Name = "Scorpion",
+            MaxEnergy = 82f,            // HP scaled to body mass (previously the default 100)
             Diet = DietType.Carnivore,
             DefaultSocialType = SocialType.Solitary,
             SpawnWeight = 0.6f,
@@ -1499,6 +1508,7 @@ public static class SpeciesRegistry
         Register(new SpeciesDefinition
         {
             Name = "Snake",
+            MaxEnergy = 85f,            // HP scaled to body mass (previously the default 100)
             Diet = DietType.Carnivore,
             DefaultSocialType = SocialType.Solitary,
             SpawnWeight = 0.6f,
@@ -1602,6 +1612,7 @@ public static class SpeciesRegistry
         Register(new SpeciesDefinition
         {
             Name = "Penguin",
+            MaxEnergy = 90f,            // HP scaled to body mass (previously the default 100)
             Diet = DietType.Herbivore,
             DefaultSocialType = SocialType.Herd,
             SemiAquatic = true,
@@ -1776,6 +1787,7 @@ public static class SpeciesRegistry
         Register(new SpeciesDefinition
         {
             Name = "Arctic Fox",
+            MaxEnergy = 92f,            // HP scaled to body mass (previously the default 100)
             Diet = DietType.Carnivore,
             DefaultSocialType = SocialType.Solitary,
             WrongElementGraceTicks = 50,    // Small, freezing water
@@ -1953,6 +1965,7 @@ public static class SpeciesRegistry
         Register(new SpeciesDefinition
         {
             Name = "Monkey",
+            MaxEnergy = 84f,            // HP scaled to body mass (previously the default 100)
             Diet = DietType.Herbivore,
             DefaultSocialType = SocialType.Herd,
             WrongElementGraceTicks = 80,    // Some monkeys swim
@@ -2038,6 +2051,7 @@ public static class SpeciesRegistry
         Register(new SpeciesDefinition
         {
             Name = "Parrot",
+            MaxEnergy = 42f,            // small/fragile (previously the default 100)
             Diet = DietType.Herbivore,
             DefaultSocialType = SocialType.Herd,
             IsFlying = true,
@@ -2066,10 +2080,10 @@ public static class SpeciesRegistry
 
             // Reproduction
             ReproHungerThreshold = 110f,
-            ReproEnergyThreshold = 65f,
+            ReproEnergyThreshold = 30f,  // lowered to fit the smaller MaxEnergy (42)
             ReproCooldown = 550,
             ReproHungerCost = 30f,
-            ReproEnergyCost = 20f,
+            ReproEnergyCost = 14f,       // scaled to the smaller MaxEnergy (42)
 
             // Social - flocks
             GroupAffinity = 0.8f,
