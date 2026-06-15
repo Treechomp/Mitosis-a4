@@ -135,8 +135,16 @@ public sealed class FleeingSystem : ISystem
                 ref var predator = ref em.Predators[entity];
                 if (predator.HasTarget)
                 {
-                    // Extreme fear overrides hunting — abandon hunt to flee
-                    if (hasFear && fearRatio > 0.8f)
+                    // A predator rallying to mob its attacker stays committed: fear must NOT pull it
+                    // off, or it gets stuck oscillating between approaching (Hunting) and fleeing
+                    // (here) and never closes — a swarm hovering uselessly until it starves. If the
+                    // mob is actually losing, HuntingSystem's self-damage/no-progress bail clears the
+                    // target, after which fear can take over and it flees normally.
+                    bool committedToMob = predator.LastAttackedTicks > 0
+                                          && predator.TargetEntity == predator.LastAttacker;
+
+                    // Extreme fear overrides hunting — abandon hunt to flee (unless mobbing)
+                    if (hasFear && fearRatio > 0.8f && !committedToMob)
                     {
                         predator.TargetEntity = -1;
                         predator.Phase = PackPhase.Idle;
@@ -146,7 +154,7 @@ public sealed class FleeingSystem : ISystem
                     else
                     {
                         prey.IsFleeing = false;
-                        continue; // Not scared enough — keep hunting
+                        continue; // Committed/hunting — don't flee
                     }
                 }
             }

@@ -434,9 +434,12 @@ what stops a Sectid swarm from chasing a Crocodile forever. Velocity uses mass-b
   (`RallyRangeMult` × hunt range), it broadcasts the threat as the group target — summoning the
   colony/pack to **mob** it (bypassing the usual prey mass/hunger gates; defense overrides
   food-hunting, and even a sated member joins). Committing also stamps the reactive timer so the
-  group keeps rallying without re-scanning each tick. Lone members with too few allies skip the
-  rally and flee instead. This is what makes a Sectid colony swarm a Fox that's picking it off
-  (or closing in) rather than getting eaten one by one; a bite also wakes a dormant Sectid.
+  group keeps rallying without re-scanning each tick, and a committed mobber **won't flee its mob
+  target** (FleeingSystem keeps it engaged so it isn't stuck oscillating between approach and
+  flight) — if the mob is actually losing, the viability/self-damage bail clears the target and
+  fear then takes over. Lone members with too few allies skip the rally and flee instead. This is
+  what makes a Sectid colony swarm a Fox that's picking it off (or closing in) rather than getting
+  eaten one by one; a bite also wakes a dormant Sectid.
 - **Ambush**: stealth accrues while moving slowly (semi-aquatic ambushers gain extra on water);
   at/above the stealth threshold within pounce range, the predator bursts at `PounceSpeedMult`
   speed and `PounceAttackMult` damage, then reverts to a slow open chase. Pouncing resets
