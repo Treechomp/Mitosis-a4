@@ -46,6 +46,10 @@ public partial class GameManager : Node3D
     [Export] public float ZoomMax = 5.0f;   // Multiplied by TileSize*32 for camera size max
     [Export] public float ZoomSpeed = 0.15f;
 
+    // Logging — set in Inspector before Play to enable per-entity tracking for one species.
+    // Exact species name (e.g. "Wolf", "Sectid", "Deer"). Empty = tracking off.
+    [Export] public string TrackSpecies = "";
+
     // Faction spawning — proportions of InitialPopulation
     [Export] public float FaelingShare = 0.04f;
     [Export] public float SectidShare  = 0.10f;  // Need denser starting swarms to reach kill-mass
@@ -166,6 +170,11 @@ public partial class GameManager : Node3D
         _systems.Add(_crystalSystem);
 
         _ecosystemLogger = new EcosystemLogger();
+        if (!string.IsNullOrWhiteSpace(TrackSpecies))
+        {
+            EcosystemLogger.TrackedSpeciesId = SpeciesRegistry.GetId(TrackSpecies);
+            GD.Print($"[Logger] Tracking species: {TrackSpecies} (id={EcosystemLogger.TrackedSpeciesId})");
+        }
         _systems.Add(_ecosystemLogger);
 
         _systemNames    = new string[_systems.Count];
