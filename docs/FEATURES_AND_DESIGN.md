@@ -426,6 +426,14 @@ what stops a Sectid swarm from chasing a Crocodile forever. Velocity uses mass-b
 - **Pack flanking**: Leader holds at distance and triggers an all-in **Converging** phase (on
   timeout, a flanker reaching the prey's far side, or prey isolation); Flankers circle behind;
   Disruptors rush/retreat to scatter the herd.
+- **Defensive rally (call-to-action)**: when a pack/swarm predator is attacked it records the
+  attacker (`Predator.LastAttacker`, remembered `RallyAlertDuration` ticks). If it has at least
+  `RallyAllyThreshold` groupmates within `PackCoordinationRadius` and the attacker is still close
+  (`RallyRangeMult` × hunt range), it broadcasts the attacker as the group target — summoning the
+  colony/pack to **mob** it (bypassing the usual prey mass/hunger gates; defense overrides
+  food-hunting, and even a sated member joins). Lone members with too few allies skip the rally
+  and flee instead. This is what makes a Sectid colony swarm a Fox that's picking it off, rather
+  than getting eaten one by one; a bite also wakes a dormant Sectid so it can react.
 - **Ambush**: stealth accrues while moving slowly (semi-aquatic ambushers gain extra on water);
   at/above the stealth threshold within pounce range, the predator bursts at `PounceSpeedMult`
   speed and `PounceAttackMult` damage, then reverts to a slow open chase. Pouncing resets

@@ -65,6 +65,12 @@ public struct Predator
     public int AvoidTarget;        // Entity recently given up on — don't re-acquire (-1 = none)
     public int AvoidTicks;         // Ticks remaining on the avoid suppression
 
+    // === Defensive rally ===
+    // Who hit us last and for how long we remember it — drives the "call to action" where a
+    // pack/swarm member summons nearby groupmates to mob its attacker instead of being picked off.
+    public int LastAttacker;       // Entity that most recently attacked us (-1 = none)
+    public int LastAttackedTicks;  // Ticks remaining that we'll rally against LastAttacker
+
     public Predator(
         float huntRange = 5f,
         float attackRange = 0.8f,  // Default: must be close but not fully overlapping
@@ -87,6 +93,8 @@ public struct Predator
         SelfStartEnergy = 0f;
         AvoidTarget = -1;
         AvoidTicks = 0;
+        LastAttacker = -1;
+        LastAttackedTicks = 0;
     }
 
     public readonly bool HasTarget => TargetEntity >= 0;

@@ -41,6 +41,13 @@ public sealed class HuntingSystem : ISystem
     private const int HuntAvoidDuration = 600;
     private const float HuntSelfDamageBailFraction = 0.4f;
 
+    // === Defensive rally (call-to-action) ===
+    // How long an attacked pack/swarm member remembers and rallies against its attacker, how many
+    // groupmates must be near to commit to a mob (otherwise it flees), and how far the threat can be.
+    private const int RallyAlertDuration = 150;
+    private const int RallyAllyThreshold = 2;
+    private const float RallyRangeMult = 2f; // × HuntRange: don't mob a threat that already fled far
+
     public HuntingSystem(SpatialHash spatialHash, WorldManager? worldManager = null)
     {
         _spatialHash = spatialHash;
@@ -132,6 +139,12 @@ public sealed class HuntingSystem : ISystem
                 predator.AvoidTicks -= tickMult;
                 if (predator.AvoidTicks <= 0)
                     predator.AvoidTarget = -1;
+            }
+            if (predator.LastAttackedTicks > 0)
+            {
+                predator.LastAttackedTicks -= tickMult;
+                if (predator.LastAttackedTicks <= 0)
+                    predator.LastAttacker = -1;
             }
 
             // Passive stealth accumulation for ambush predators (builds while idle/wandering)
@@ -264,7 +277,9 @@ public sealed class HuntingSystem : ISystem
             // Between HuntThreshold and 95%, predators hunt opportunistically
             // This encourages predation when prey is abundant, keeping herbivores in check
             const float fullThreshold = 0.95f;
-            if (hungerRatio >= fullThreshold)
+            // A full predator stops hunting — unless it was just attacked, in which case it still
+            // needs to defend itself / rally the group below.
+            if (hungerRatio >= fullThreshold && predator.LastAttackedTicks <= 0)
             {
                 predator.TargetEntity = -1;
                 predator.Phase = PackPhase.Idle;
@@ -391,6 +406,51 @@ public sealed class HuntingSystem : ISystem
                 if (isPack && _groupConverging.ContainsKey(groupId))
                 {
                     predator.Phase = PackPhase.Converging;
+                }
+
+                // === DEFENSIVE RALLY (call-to-action) ===
+                // If we were recently attacked and have groupmates nearby, summon the group to mob
+                // the attacker instead of being picked off one by one. Lone members (too few allies)
+                // skip this and fall through to flee. Overrides food-hunting — defense comes first.
+                if (groupId >= 0 && predator.LastAttackedTicks > 0 && em.IsAlive(predator.LastAttacker)
+                    && predator.LastAttacker != predator.AvoidTarget)
+                {
+                    int threat = predator.LastAttacker;
+                    ref var threatPos = ref em.Positions[threat];
+                    float threatDistSq = MathUtils.DistanceSquared(pos.X, pos.Y, threatPos.X, threatPos.Y);
+                    float rallyRange = predator.HuntRange * RallyRangeMult;
+
+                    if (threatDistSq <= rallyRange * rallyRange)
+                    {
+                        // Count nearby groupmates — only commit to a mob with strength in numbers
+                        _packMembers.Clear();
+                        _spatialHash.QueryRadius(pos.X, pos.Y, speciesDef.PackCoordinationRadius, _packMembers);
+                        int allies = 0;
+                        foreach (int other in _packMembers)
+                        {
+                            if (other == entity || !em.IsAlive(other)) continue;
+                            if (!em.HasComponents(other, ComponentFlags.Predator | ComponentFlags.Social)) continue;
+                            if (em.Socials[other].GroupId == groupId)
+                            {
+                                allies++;
+                                if (allies >= RallyAllyThreshold) break;
+                            }
+                        }
+
+                        if (allies >= RallyAllyThreshold)
+                        {
+                            // Broadcast the mob target so groupmates converge (the summon), and lock
+                            // onto it ourselves. Bypasses the normal prey mass/hunger gates.
+                            _groupTargets[groupId] = threat;
+                            if (predator.TargetEntity != threat)
+                            {
+                                predator.TargetEntity = threat;
+                                BeginHuntTracking(em, entity, ref predator, threat);
+                            }
+                            predator.Role = PackRole.Leader;
+                            predator.Phase = PackPhase.Converging;
+                        }
+                    }
                 }
             }
 
@@ -693,6 +753,21 @@ public sealed class HuntingSystem : ISystem
                         ref var preyEnergy = ref em.Energies[predator.TargetEntity];
                         preyEnergy.Current -= predator.AttackPower * attackMult;
                         preyEnergy.RegenCooldown = 60; // 3s combat cooldown at 20 TPS
+
+                        // Mark the attacker on victims that can fight back, so a pack/swarm member
+                        // rallies its group to mob us (see DEFENSIVE RALLY). Also wakes a dormant
+                        // Sectid being eaten so it can defend or flee instead of sleeping through it.
+                        if (em.HasComponents(predator.TargetEntity, ComponentFlags.Predator))
+                        {
+                            ref var victimPred = ref em.Predators[predator.TargetEntity];
+                            victimPred.LastAttacker = entity;
+                            victimPred.LastAttackedTicks = RallyAlertDuration;
+                        }
+                        if (em.HasComponents(predator.TargetEntity, ComponentFlags.FoodCarrier))
+                        {
+                            ref var victimCarrier = ref em.FoodCarriers[predator.TargetEntity];
+                            victimCarrier.IsHibernating = false;
+                        }
 
                         // Thorn defense — attackers take growth-scaled counter-damage
                         if (em.HasComponents(predator.TargetEntity, ComponentFlags.Growth | ComponentFlags.Species))

@@ -2463,7 +2463,9 @@ public static class SpeciesRegistry
             FearDecayRate = 1.2f,
             FearVigilanceDecay = 0.4f,
             FearVigilanceDuration = 80,
-            DefaultFearResponse = FearResponse.Panic,
+            // Lone Sectids flee cleanly instead of jittering in place; grouped Sectids rally and
+            // mob the attacker instead (DEFENSIVE RALLY in HuntingSystem).
+            DefaultFearResponse = FearResponse.Flee,
 
             // Survival - moderate metabolism, moderate lifespan
             MaxHunger = 165f,
