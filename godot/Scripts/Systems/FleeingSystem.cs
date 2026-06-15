@@ -202,9 +202,7 @@ public sealed class FleeingSystem : ISystem
                         break;
 
                     case FearResponse.Defensive:
-                        // TODO: Implement defensive grouping behavior
-                        // For now, fall through to normal flee
-                        ApplyFleeResponse(ref pos, ref vel, ref wander, ref prey, fleeDir, fearRatio, discomfortRatio, agility);
+                        ApplyDefensiveResponse(entity, ref vel, ref prey, agility, em);
                         break;
 
                     case FearResponse.Flee:
@@ -276,6 +274,33 @@ public sealed class FleeingSystem : ISystem
         }
 
         return (Vector2.Zero, false, closestDistSq);
+    }
+
+    /// <summary>
+    /// Defensive response: hold ground rather than flee.
+    /// Predator entities (Boar) dampen velocity and let HuntingSystem handle the counter-attack
+    /// via LastAttacker/LastAttackedTicks (set when the attacker struck them). Herbivore entities
+    /// (Musk Ox) slow to a near-stop and face the threat — the herd's mass is their defense.
+    /// </summary>
+    private static void ApplyDefensiveResponse(int entity, ref Velocity vel, ref Prey prey,
+        float agility, EntityManager em)
+    {
+        prey.IsFleeing = false;
+        if (em.HasComponents(entity, ComponentFlags.Predator))
+        {
+            // Pack predator (Boar): hold ground, suppress flee. HuntingSystem counter-attacks
+            // via LastAttacker when the pack has enough allies to mob the threat.
+            vel.Dx *= 0.75f;
+            vel.Dy *= 0.75f;
+        }
+        else
+        {
+            // Herbivore (Musk Ox): plant hooves and stand firm. Heavy creatures change
+            // direction slowly, so agility is very low; dampen proportionally.
+            float brake = 1f - agility * 0.4f;
+            vel.Dx *= brake;
+            vel.Dy *= brake;
+        }
     }
 
     /// <summary>

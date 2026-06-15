@@ -406,19 +406,20 @@ public sealed class HuntingSystem : ISystem
                     predator.Phase = PackPhase.Converging;
                 }
 
-                // === DEFENSIVE RALLY (call-to-action) ===
-                // Pick a threat: reactively from a recent attacker (cheap), or — for an idle member —
-                // proactively by spotting a predator stalking us or a groupmate. If we have enough
-                // groupmates nearby and the threat is still close, summon the group to mob it.
-                // Lone members (too few allies) skip this and fall through to flee.
+                // === DEFENSIVE RALLY / SOLITARY COUNTER-ATTACK ===
+                // Pick a threat: reactively from a recent attacker, or proactively (idle pack member
+                // spots a stalker/intruder via FindProactiveThreat). Then act on it:
+                //   Solitary apex (Bear, Croc, Jaguar, Polar Bear): turn and fight immediately —
+                //   no ally check, no pack needed. They're individually strong enough.
+                //   Pack/Swarm (Wolves, Boars, Sectids): need a minimum number of allies before
+                //   committing to a mob. A lone member falls through and may flee instead.
                 int threat = -1;
                 if (predator.LastAttackedTicks > 0 && em.IsAlive(predator.LastAttacker))
                     threat = predator.LastAttacker;
                 else if (groupId >= 0 && !predator.HasTarget)
                     threat = FindProactiveThreat(entity, groupId, pos.X, pos.Y, speciesDef, em);
 
-                if (groupId >= 0 && threat >= 0 && em.IsAlive(threat)
-                    && threat != predator.AvoidTarget)
+                if (threat >= 0 && em.IsAlive(threat) && threat != predator.AvoidTarget)
                 {
                     ref var threatPos = ref em.Positions[threat];
                     float threatDistSq = MathUtils.DistanceSquared(pos.X, pos.Y, threatPos.X, threatPos.Y);
@@ -426,36 +427,51 @@ public sealed class HuntingSystem : ISystem
 
                     if (threatDistSq <= rallyRange * rallyRange)
                     {
-                        // Count nearby groupmates — only commit to a mob with strength in numbers
-                        _packMembers.Clear();
-                        _spatialHash.QueryRadius(pos.X, pos.Y, speciesDef.PackCoordinationRadius, _packMembers);
-                        int allies = 0;
-                        foreach (int other in _packMembers)
-                        {
-                            if (other == entity || !em.IsAlive(other)) continue;
-                            if (!em.HasComponents(other, ComponentFlags.Predator | ComponentFlags.Social)) continue;
-                            if (em.Socials[other].GroupId == groupId)
-                            {
-                                allies++;
-                                if (allies >= RallyAllyThreshold) break;
-                            }
-                        }
+                        bool isSolitary = !em.HasComponents(entity, ComponentFlags.Social)
+                            || em.Socials[entity].Type == SocialType.Solitary;
 
-                        if (allies >= RallyAllyThreshold)
+                        if (isSolitary)
                         {
-                            // Remember the threat so we keep rallying without re-scanning every tick,
-                            // broadcast it so groupmates converge (the summon), and lock onto it.
-                            // Bypasses the normal prey mass/hunger gates.
+                            // Apex predator: turn and counter-attack immediately, no allies needed.
                             predator.LastAttacker = threat;
                             predator.LastAttackedTicks = RallyAlertDuration;
-                            _groupTargets[groupId] = threat;
                             if (predator.TargetEntity != threat)
                             {
                                 predator.TargetEntity = threat;
                                 BeginHuntTracking(em, entity, ref predator, threat);
                             }
-                            predator.Role = PackRole.Leader;
-                            predator.Phase = PackPhase.Converging;
+                        }
+                        else if (groupId >= 0)
+                        {
+                            // Pack/swarm: only commit to a mob with strength in numbers.
+                            _packMembers.Clear();
+                            _spatialHash.QueryRadius(pos.X, pos.Y, speciesDef.PackCoordinationRadius, _packMembers);
+                            int allies = 0;
+                            foreach (int other in _packMembers)
+                            {
+                                if (other == entity || !em.IsAlive(other)) continue;
+                                if (!em.HasComponents(other, ComponentFlags.Predator | ComponentFlags.Social)) continue;
+                                if (em.Socials[other].GroupId == groupId)
+                                {
+                                    allies++;
+                                    if (allies >= RallyAllyThreshold) break;
+                                }
+                            }
+
+                            if (allies >= RallyAllyThreshold)
+                            {
+                                // Remember the threat, broadcast it so groupmates converge.
+                                predator.LastAttacker = threat;
+                                predator.LastAttackedTicks = RallyAlertDuration;
+                                _groupTargets[groupId] = threat;
+                                if (predator.TargetEntity != threat)
+                                {
+                                    predator.TargetEntity = threat;
+                                    BeginHuntTracking(em, entity, ref predator, threat);
+                                }
+                                predator.Role = PackRole.Leader;
+                                predator.Phase = PackPhase.Converging;
+                            }
                         }
                     }
                 }
