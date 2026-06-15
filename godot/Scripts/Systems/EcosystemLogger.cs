@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using Godot;
 using Mitosis.ECS;
@@ -187,11 +188,9 @@ public sealed class EcosystemLogger : ISystem
         var aName = SpeciesRegistry.GetById(attackerSid)?.Name ?? attackerSid.ToString();
         var tName = SpeciesRegistry.GetById(targetSid)?.Name   ?? targetSid.ToString();
         if (attackerSid == tracked)
-            WriteEvent($"{_tick},damage_dealt,{aName},{attackerId},{x:F1},{y:F1}," +
-                       $"target:{tName}:{targetId} dmg={damage:F1} src={source}");
+            WriteEvent($"{_tick},damage_dealt,{aName},{attackerId},{x:F1},{y:F1},target:{tName}:{targetId} dmg={damage:F1} src={source}");
         if (targetSid == tracked)
-            WriteEvent($"{_tick},damage_taken,{tName},{targetId},{x:F1},{y:F1}," +
-                       $"from:{aName}:{attackerId} dmg={damage:F1} src={source}");
+            WriteEvent($"{_tick},damage_taken,{tName},{targetId},{x:F1},{y:F1},from:{aName}:{attackerId} dmg={damage:F1} src={source}");
     }
 
     /// <summary>Log a spore creation.</summary>
@@ -288,9 +287,10 @@ public sealed class EcosystemLogger : ISystem
             float avgEnergy = pop > 0 ? eSum / pop * 100f : 0f;
 
             var name = SpeciesRegistry.GetById(sid)?.Name ?? sid.ToString();
-            var statsLine =
+            // InvariantCulture so the F1 averages use '.' decimals (a ',' would break columns).
+            var statsLine = FormattableString.Invariant(
                 $"{_tick},{name},{pop},{births},{dStarve},{dAge},{dPred},{dEnv},{kills}," +
-                $"{avgHunger:F1},{avgEnergy:F1}";
+                $"{avgHunger:F1},{avgEnergy:F1}");
             _statsLog.WriteLine(statsLine);
             _latestStatsLog.WriteLine(statsLine);
 
@@ -300,11 +300,7 @@ public sealed class EcosystemLogger : ISystem
             int prevPop = pop + totalDeaths - births; // approximate previous pop in the interval
             if (prevPop >= 5 && totalDeaths > 0 && (float)totalDeaths / prevPop >= 0.4f)
             {
-                string alert =
-                    $"{_tick},MASS_PERISH,{name},-1,0,0," +
-                    $"lost {totalDeaths}/{prevPop} ({100f * totalDeaths / prevPop:F0}%)" +
-                    $" starve={dStarve} age={dAge} pred={dPred} env={dEnv}";
-                WriteEvent(alert);
+                WriteEvent($"{_tick},MASS_PERISH,{name},-1,0,0,lost {totalDeaths}/{prevPop} ({100f * totalDeaths / prevPop:F0}%) starve={dStarve} age={dAge} pred={dPred} env={dEnv}");
             }
         }
 
@@ -342,16 +338,19 @@ public sealed class EcosystemLogger : ISystem
 
         ref var pos = ref em.Positions[entity];
         var name = SpeciesRegistry.GetById(sid)?.Name ?? sid.ToString();
-        WriteEvent(
-            $"{_tick},TRACKED,{name},{entity},{pos.X:F1},{pos.Y:F1}," +
-            $"hunger={hungerPct:F0}%,energy={energyPct:F0}%," +
-            $"hunting={hunting},fleeing={fleeing}");
+        WriteEvent($"{_tick},TRACKED,{name},{entity},{pos.X:F1},{pos.Y:F1},hunger={hungerPct:F0}%;energy={energyPct:F0}%;hunting={hunting};fleeing={fleeing}");
     }
 
-    private void WriteEvent(string line)
+    /// <summary>
+    /// Write a CSV event line to both the timestamped and latest event logs. Formats with
+    /// <see cref="CultureInfo.InvariantCulture"/> so floats always use a '.' decimal separator —
+    /// a ',' separator (the default on many locales) would inject stray commas and break columns.
+    /// </summary>
+    private void WriteEvent(FormattableString line)
     {
-        _eventLog.WriteLine(line);
-        _latestEventLog.WriteLine(line);
+        string s = FormattableString.Invariant(line);
+        _eventLog.WriteLine(s);
+        _latestEventLog.WriteLine(s);
     }
 
     private static void Increment(Dictionary<int, int> d, int key, int by = 1)
