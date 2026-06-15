@@ -125,8 +125,12 @@ public sealed class LODSystem : ISystem
             // Per-entity hysteresis is preserved: currentLevel is still the entity's own level
             var newLevel = SimulationLOD.GetLevelForDistance(cellDist, visRadius, lod.Level);
 
-            // If level changed (entity moved closer/farther), force immediate update
-            if (newLevel != lod.Level)
+            // If level changed (entity moved closer/farther), force immediate update.
+            // Also repair a zero/uninitialized TickInterval: a default-constructed
+            // SimulationLOD zero-inits TickInterval to 0, and if the entity's real level
+            // already equals the default (Full) the level-change branch never fires —
+            // leaving TickInterval at 0, which causes divide-by-zero (NaN) downstream.
+            if (newLevel != lod.Level || lod.TickInterval <= 0)
             {
                 lod.Level = newLevel;
                 lod.TickInterval = SimulationLOD.GetTickInterval(newLevel);

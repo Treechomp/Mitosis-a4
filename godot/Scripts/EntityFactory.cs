@@ -88,7 +88,7 @@ public sealed class EntityFactory
         );
         _entityManager.AddComponent(entity, ComponentFlags.Reproduction);
 
-        _entityManager.SimulationLODs[entity] = new SimulationLOD();
+        _entityManager.SimulationLODs[entity] = new SimulationLOD(LODLevel.Full);
         _entityManager.AddComponent(entity, ComponentFlags.SimulationLOD);
 
         // Species type based on diet

@@ -166,7 +166,7 @@ public sealed class ReproductionSystem : ISystem
         em.ChunkPositions[entity] = new ChunkPosition();
         em.AddComponent(entity, ComponentFlags.ChunkPosition);
 
-        em.SimulationLODs[entity] = new SimulationLOD();
+        em.SimulationLODs[entity] = new SimulationLOD(LODLevel.Full);
         em.AddComponent(entity, ComponentFlags.SimulationLOD);
 
         // Use SpeciesRegistry to inherit parent stats where possible

@@ -67,8 +67,12 @@ public sealed class CarrionSystem : ISystem
         if (em.HasComponents(source, ComponentFlags.Hunger))
         {
             ref var h = ref em.Hungers[source];
+            // Guard against a non-finite ratio: Math.Clamp(NaN, 0, 1) returns NaN, which
+            // would otherwise produce a NaN-nutrition corpse and infect every scavenger
+            // that feeds on it. Fall back to the condition floor in that case.
             float ratio = h.Max > 0f ? h.Current / h.Max : 0f;
-            condition = ConditionFloor + (1f - ConditionFloor) * Math.Clamp(ratio, 0f, 1f);
+            float clampedRatio = float.IsFinite(ratio) ? Math.Clamp(ratio, 0f, 1f) : 0f;
+            condition = ConditionFloor + (1f - ConditionFloor) * clampedRatio;
         }
         float nutrition = def.EffectiveNutrition * condition;
         // Large grown bodies (Shroomers) carry proportionally more.

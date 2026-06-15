@@ -225,9 +225,12 @@ public sealed class GrazingSystem : ISystem
                     float nutrition = _worldManager.GetNutrition(pos.X, pos.Y);
                     if (nutrition > 0.05f)
                     {
-                        float consumed = _worldManager.ConsumeNutrition(pos.X, pos.Y, nutritionConsumeRate * tickMult);
-                        // Food gained scales with tile nutrition level
-                        float foodGained = herbDef.GrazeNutrition * (consumed / (nutritionConsumeRate * tickMult));
+                        float requested = nutritionConsumeRate * tickMult;
+                        float consumed = _worldManager.ConsumeNutrition(pos.X, pos.Y, requested);
+                        // Food gained scales with tile nutrition level. Guard the ratio:
+                        // requested can only be 0 if tickMult is 0, which would make this 0/0 = NaN.
+                        float richness = requested > 0f ? consumed / requested : 0f;
+                        float foodGained = herbDef.GrazeNutrition * richness;
                         hunger.Current = MathF.Min(hunger.Max, hunger.Current + foodGained * tickMult);
                     }
                 }

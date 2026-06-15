@@ -225,15 +225,19 @@ public sealed class EcosystemLogger : ISystem
             if (em.HasComponents(entity, ComponentFlags.Hunger))
             {
                 ref var h = ref em.Hungers[entity];
+                float hRatio = h.Max > 0f ? h.Current / h.Max : 0f;
+                if (!float.IsFinite(hRatio)) hRatio = 0f; // one bad entity must not blank the column
                 hungerSums.TryGetValue(sid, out float hs);
-                hungerSums[sid] = hs + (h.Max > 0f ? h.Current / h.Max : 0f);
+                hungerSums[sid] = hs + hRatio;
             }
 
             if (em.HasComponents(entity, ComponentFlags.Energy))
             {
                 ref var e = ref em.Energies[entity];
+                float eRatio = e.Max > 0f ? e.Current / e.Max : 0f;
+                if (!float.IsFinite(eRatio)) eRatio = 0f;
                 energySums.TryGetValue(sid, out float es);
-                energySums[sid] = es + (e.Max > 0f ? e.Current / e.Max : 0f);
+                energySums[sid] = es + eRatio;
             }
 
             // Verbose per-entity snapshot for the tracked species.

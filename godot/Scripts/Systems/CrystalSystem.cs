@@ -259,7 +259,7 @@ public sealed class CrystalSystem : ISystem
         em.ChunkPositions[entity] = new ChunkPosition();
         em.AddComponent(entity, ComponentFlags.ChunkPosition);
 
-        em.SimulationLODs[entity] = new SimulationLOD();
+        em.SimulationLODs[entity] = new SimulationLOD(LODLevel.Full);
         em.AddComponent(entity, ComponentFlags.SimulationLOD);
 
         em.Species[entity] = new Species(SpeciesType.Faeling, 0, SpeciesRegistry.GetId("Faeling"));
