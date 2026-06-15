@@ -162,6 +162,19 @@ public sealed class Chunk
     }
 
     /// <summary>
+    /// Add nutrition to a grazeable tile (decomposing remains enriching the soil),
+    /// clamped to <see cref="MaxNutrition"/>. No effect on non-grazeable tiles.
+    /// </summary>
+    public void AddNutrition(int localX, int localY, float amount)
+    {
+        if (localX < 0 || localX >= Size || localY < 0 || localY >= Size)
+            return;
+        if (!_tiles[localX, localY].IsGrazeable())
+            return;
+        _nutrition[localX, localY] = MathF.Min(MaxNutrition, _nutrition[localX, localY] + amount);
+    }
+
+    /// <summary>
     /// Regenerate nutrition for all grazeable tiles in this chunk.
     /// Called periodically by TileRegenerationSystem.
     /// <param name="tickMultiplier">Number of ticks since last regeneration (rate scaled accordingly).</param>

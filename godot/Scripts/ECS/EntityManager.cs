@@ -102,6 +102,14 @@ public sealed class EntityManager
     // (recycled) slot.
     private readonly List<int> _newbornsThisTick = new(256);
 
+    /// <summary>
+    /// Invoked for an entity the instant before it is destroyed, while its components are still
+    /// intact. Lets gameplay react to *any* death from a single place (e.g. leaving a corpse)
+    /// without the ECS core depending on gameplay systems. Handlers may create new entities but
+    /// must not destroy the dying entity again.
+    /// </summary>
+    public Action<int>? OnEntityDying;
+
     public EntityManager()
     {
         _alive = new bool[MaxEntities];
@@ -199,6 +207,8 @@ public sealed class EntityManager
         if (entityId < 0 || entityId >= MaxEntities || !_alive[entityId])
             return;
 
+        OnEntityDying?.Invoke(entityId);
+
         _alive[entityId] = false;
         _componentFlags[entityId] = ComponentFlags.None;
         _freeIds.Enqueue(entityId);
@@ -216,6 +226,7 @@ public sealed class EntityManager
         {
             if (entityId >= 0 && entityId < MaxEntities && _alive[entityId])
             {
+                OnEntityDying?.Invoke(entityId);
                 _alive[entityId] = false;
                 _componentFlags[entityId] = ComponentFlags.None;
                 _freeIds.Enqueue(entityId);

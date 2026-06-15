@@ -820,11 +820,9 @@ public sealed class HuntingSystem : ISystem
                                     killPos.X, killPos.Y);
                             }
 
-                            // Leave a corpse instead of granting nutrition instantly. The killer
-                            // (and packmates, and any scavenger) feed from it over time — see
-                            // CarrionSystem. Pack "sharing" is now emergent: everyone eats the carcass.
-                            CarrionSystem.SpawnCorpse(em, predator.TargetEntity);
-
+                            // No instant nutrition — the death drops a corpse (via the ECS death
+                            // hook) that the killer, packmates and scavengers feed from over time
+                            // (CarrionSystem). Pack "sharing" is now emergent: all eat the carcass.
                             predator.TargetEntity = -1;
                             predator.Phase = PackPhase.Idle;
                             predator.Role = PackRole.None;

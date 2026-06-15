@@ -5,6 +5,7 @@ using Mitosis.Components;
 using Mitosis.ECS;
 using Mitosis.SpeciesData;
 using Mitosis.Utils;
+using Mitosis.World;
 using static Mitosis.ECS.EntityManager;
 
 namespace Mitosis.Systems;
@@ -19,6 +20,7 @@ namespace Mitosis.Systems;
 public sealed class CarrionSystem : ISystem
 {
     private readonly SpatialHash _spatialHash;
+    private readonly WorldManager _worldManager;
     private readonly List<int> _toRemove = new(32);
     private readonly List<int> _nearby = new(32);
 
@@ -31,10 +33,12 @@ public sealed class CarrionSystem : ISystem
     private const float SeekRadius = 18f;          // eaters notice corpses within this
     private const float SectidChopRate = 6f;       // Sectids strip a carcass fast (into carrier sacks)
     private const int FeedCommitTicks = 20;        // suppress re-hunting while feeding on a corpse
+    private const float DecompositionEnrich = 0.01f; // fraction of rotted nutrition that fertilises soil
 
-    public CarrionSystem(SpatialHash spatialHash)
+    public CarrionSystem(SpatialHash spatialHash, WorldManager worldManager)
     {
         _spatialHash = spatialHash;
+        _worldManager = worldManager;
     }
 
     /// <summary>
@@ -116,7 +120,11 @@ public sealed class CarrionSystem : ISystem
             }
             else
             {
+                // Rot: the carcass loses nutrition, and a fraction of it fertilises the soil
+                // beneath, speeding the tile's grazeable-nutrient regrowth (decomposition).
                 carrion.Nutrition -= carrion.DecayPerTick;
+                ref var cpos = ref em.Positions[entity];
+                _worldManager.AddNutrition(cpos.X, cpos.Y, carrion.DecayPerTick * DecompositionEnrich);
             }
 
             if (carrion.IsDepleted)

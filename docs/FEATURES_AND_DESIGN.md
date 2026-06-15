@@ -482,19 +482,24 @@ passes power to its crystal.
 
 ### 6.12 Carrion — `CarrionSystem.cs`
 
-Corpses persist and are scavenged — predators feed **after** a kill, not instantly. Any creature
-death (predation, starvation, old age, drowning) calls `CarrionSystem.SpawnCorpse`, which leaves a
-corpse entity (`Carrion` component + a dark Diamond renderable) holding an edible nutrient pool
-scaled by **body size** (`EffectiveNutrition`) and **condition** (hunger ratio at death — a
-well-fed animal leaves more; floor 0.4×) and growth scale (big Shroomers). Faelings/structures/
-spores leave nothing. The kill site that used to grant instant pack-shared nutrition now just
-spawns the corpse, so "sharing" is emergent — everyone eats the same carcass.
+Corpses persist and are scavenged — predators feed **after** a kill, not instantly. Corpse
+creation is tied to the *event of dying itself*: `EntityManager.OnEntityDying` fires for every
+entity the instant before it's destroyed (from **any** cause — predation, starvation, age,
+drowning, faction AoE/ranged, or anything added later), and the registered handler calls
+`CarrionSystem.SpawnCorpse`. That leaves a corpse entity (`Carrion` component + a dark Diamond
+renderable) holding an edible nutrient pool scaled by **body size** (`EffectiveNutrition`) and
+**condition** (hunger ratio at death — a well-fed animal leaves more; floor 0.4×) and growth scale
+(big Shroomers). `SpawnCorpse` self-filters structures/spores/Faelings, so the hook stays generic
+and the ECS core needs no knowledge of gameplay. The kill site that used to grant instant
+pack-shared nutrition now grants nothing — "sharing" is emergent, everyone eats the same carcass.
 
 Each tick the system (1) **decays** corpses: a grace period (~200 ticks fresh), then nutrition
-rots away (~1400 ticks), shrinking the renderable; depleted corpses are removed. (2) **Feeds
-scavengers**: a hungry predator/omnivore/Sectid with no live target moves to the nearest corpse
-within seek range and eats at a rate set by its `MaxHunger` (sated at 95%). A short feed-commit
-on the killer (and refreshed while eating) keeps it on the kill instead of immediately re-hunting.
+rots away (~1400 ticks), shrinking the renderable; depleted corpses are removed. Rotting also
+**fertilises the soil** — a fraction of each tick's decay is added to the tile's grazeable
+nutrition (`WorldManager.AddNutrition`), so naturally decomposing remains speed local regrowth.
+(2) **Feeds scavengers**: a hungry predator/omnivore/Sectid with no live target moves to the
+nearest corpse within seek range and eats at a rate set by its `MaxHunger` (sated at 95%). A short
+feed-commit on the killer (refreshed while eating) keeps it on the kill instead of re-hunting.
 **Sectids** chop fast into their carrier sacks; `NestSystem` holds a Sectid at the carcass until
 its sacks are full, then ferries the load home — so a large kill takes repeated trips, often the
 whole colony, to clear. This gives the obligate-hunter factions and NPC predators a food source

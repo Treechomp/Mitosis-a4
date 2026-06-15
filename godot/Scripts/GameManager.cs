@@ -103,6 +103,9 @@ public partial class GameManager : Node3D
     public override void _Ready()
     {
         _entityManager = new EntityManager();
+        // Any death, from any cause, leaves a corpse (CarrionSystem.SpawnCorpse self-filters
+        // structures/spores/Faelings). Centralised here so future death causes need no extra wiring.
+        _entityManager.OnEntityDying = id => CarrionSystem.SpawnCorpse(_entityManager, id);
         int seed = WorldSeed != 0 ? WorldSeed : (int)(DateTime.UtcNow.Ticks & 0x7FFFFFFF);
         _worldManager = new WorldManager(ChunkSize, WorldSizeChunks, seed, new TerrainSettings
         {
@@ -149,7 +152,7 @@ public partial class GameManager : Node3D
         // Carrion: corpses persist and are scavenged over time. Runs after hunting/fleeing so it
         // can steer idle hungry predators to carcasses, and before NestSystem so a chopping Sectid
         // is fed/held at the corpse before NestSystem decides whether to ferry the load home.
-        _systems.Add(new CarrionSystem(spatialHash));
+        _systems.Add(new CarrionSystem(spatialHash, _worldManager));
         _systems.Add(new AgingSystem());
         _systems.Add(new ReproductionSystem(_worldManager, MaxPopulation, spatialHash));
         _systems.Add(new TerraformSystem(_worldManager));

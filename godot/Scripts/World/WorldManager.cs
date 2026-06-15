@@ -326,6 +326,24 @@ public sealed class WorldManager
     }
 
     /// <summary>
+    /// Add nutrition to a grazeable tile (e.g. a decomposing corpse enriching the soil).
+    /// Clamped to the tile's maximum; no effect on non-grazeable tiles.
+    /// </summary>
+    public void AddNutrition(float worldX, float worldY, float amount)
+    {
+        if (worldX < 0f || worldY < 0f || amount <= 0f) return;
+        int chunkX = (int)(worldX / ChunkSize);
+        int chunkY = (int)(worldY / ChunkSize);
+
+        var chunk = GetChunk(chunkX, chunkY);
+        if (chunk == null) return;
+
+        int localX = (int)worldX % ChunkSize;
+        int localY = (int)worldY % ChunkSize;
+        chunk.AddNutrition(localX, localY, amount);
+    }
+
+    /// <summary>
     /// Check if any water tiles exist within the given radius of a position.
     /// </summary>
     public bool HasWaterNearby(float worldX, float worldY, int radius)

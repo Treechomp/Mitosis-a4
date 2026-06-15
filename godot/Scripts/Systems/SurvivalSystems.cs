@@ -95,8 +95,7 @@ public sealed class HungerSystem : ISystem
 
         foreach (int entity in _toKill)
         {
-            CarrionSystem.SpawnCorpse(em, entity); // leave scavengeable remains (skips Faelings/structures)
-
+            // Corpse is left automatically via the ECS death hook (CarrionSystem).
             // Faeling death from starvation: pass power to crystal
             if (em.HasComponents(entity, ComponentFlags.FaelingPower))
             {
@@ -161,8 +160,7 @@ public sealed class AgingSystem : ISystem
 
         foreach (int entity in _toKill)
         {
-            CarrionSystem.SpawnCorpse(em, entity); // leave scavengeable remains (skips Faelings/structures)
-
+            // Corpse is left automatically via the ECS death hook (CarrionSystem).
             // Faeling death: pass power to crystal for next spawn
             if (em.HasComponents(entity, ComponentFlags.FaelingPower))
             {
