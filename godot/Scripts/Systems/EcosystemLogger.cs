@@ -289,8 +289,7 @@ public sealed class EcosystemLogger : ISystem
             var name = SpeciesRegistry.GetById(sid)?.Name ?? sid.ToString();
             // InvariantCulture so the F1 averages use '.' decimals (a ',' would break columns).
             var statsLine = FormattableString.Invariant(
-                $"{_tick},{name},{pop},{births},{dStarve},{dAge},{dPred},{dEnv},{kills}," +
-                $"{avgHunger:F1},{avgEnergy:F1}");
+                $"{_tick},{name},{pop},{births},{dStarve},{dAge},{dPred},{dEnv},{kills},{avgHunger:F1},{avgEnergy:F1}");
             _statsLog.WriteLine(statsLine);
             _latestStatsLog.WriteLine(statsLine);
 
