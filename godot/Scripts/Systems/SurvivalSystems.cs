@@ -17,6 +17,12 @@ public sealed class HungerSystem : ISystem
 {
     private readonly List<int> _toKill = new(32);
 
+    // Global multiplier on every species' hunger decay. Below 1 it slows starvation across the
+    // board. Predators benefit most — they die almost entirely of starvation between kills
+    // (logs showed ~274 starvation vs ~11 predation deaths) — while continuously-grazing
+    // herbivores sit near full regardless, so this mainly raises the predator carrying capacity.
+    private const float HungerDecayScale = 0.6f;
+
     public void Process(EntityManager em)
     {
         _toKill.Clear();
@@ -40,7 +46,7 @@ public sealed class HungerSystem : ISystem
             ref var hunger = ref em.Hungers[entity];
 
             // Decay hunger — hibernating Sectids run a low metabolism while dormant at their nest
-            float decayRate = hunger.DecayRate;
+            float decayRate = hunger.DecayRate * HungerDecayScale;
             if (em.HasComponents(entity, ComponentFlags.FoodCarrier) && em.FoodCarriers[entity].IsHibernating)
                 decayRate *= 0.1f;
             hunger.Current -= decayRate * tickMult;
