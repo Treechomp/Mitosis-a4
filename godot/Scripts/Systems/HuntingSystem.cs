@@ -46,6 +46,11 @@ public sealed class HuntingSystem : ISystem
     private const int RallyAllyThreshold = 2;
     private const float RallyRangeMult = 2f; // × HuntRange: don't mob a threat that already fled far
 
+    // Fraction of a prey's nutrition the killer eats immediately on the kill (the "prime cut").
+    // The remainder still drops as a corpse for packmates and scavengers. Without an eat-on-kill
+    // bonus, predators relied solely on slow corpse-scavenging and starved before they could breed.
+    private const float KillNutritionShare = 0.6f;
+
     public HuntingSystem(SpatialHash spatialHash, WorldManager? worldManager = null)
     {
         _spatialHash = spatialHash;
@@ -857,9 +862,17 @@ public sealed class HuntingSystem : ISystem
                                     killPos.X, killPos.Y);
                             }
 
-                            // No instant nutrition — the death drops a corpse (via the ECS death
-                            // hook) that the killer, packmates and scavengers feed from over time
-                            // (CarrionSystem). Pack "sharing" is now emergent: all eat the carcass.
+                            // The killer eats first: a successful kill grants an immediate "prime
+                            // cut" of nutrition scaled to prey size. The death still drops a corpse
+                            // (via the ECS death hook) that packmates and scavengers feed from over
+                            // time (CarrionSystem). Pack "sharing" of the remainder stays emergent.
+                            if (em.HasComponents(predator.TargetEntity, ComponentFlags.Species))
+                            {
+                                var killedDef = SpeciesRegistry.GetById(
+                                    em.Species[predator.TargetEntity].SpeciesId);
+                                float killFeed = killedDef.EffectiveNutrition * KillNutritionShare;
+                                hunger.Current = MathF.Min(hunger.Max, hunger.Current + killFeed);
+                            }
                             predator.TargetEntity = -1;
                             predator.Phase = PackPhase.Idle;
                             predator.Role = PackRole.None;
