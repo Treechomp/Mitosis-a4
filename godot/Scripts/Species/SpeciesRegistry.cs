@@ -188,7 +188,7 @@ public static class SpeciesRegistry
         Register(new SpeciesDefinition
         {
             Name = "Rabbit",
-            MaxEnergy = 85f,            // HP scaled to body mass (previously the default 100)
+            MaxEnergy = 40f,            // Frail: a small rabbit drops in ~2 hits (Fox/Wolf) once caught
             Diet = DietType.Herbivore,
             DefaultSocialType = SocialType.Herd,
             SpawnWeight = 1.5f,
@@ -221,7 +221,7 @@ public static class SpeciesRegistry
             // Reproduction - breeds moderately (controlled by predation pressure)
             ReproHungerThreshold = 180f,
             ReproEnergyThreshold = 70f,
-            ReproCooldown = 800,   // Slower breeding to prevent overpopulation
+            ReproCooldown = 600,   // Breeds a bit faster to offset higher predation losses
 
             // Social - loose groups
             GroupAffinity = 0.4f,
