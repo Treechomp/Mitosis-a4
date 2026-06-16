@@ -51,6 +51,11 @@ public sealed class HuntingSystem : ISystem
     // bonus, predators relied solely on slow corpse-scavenging and starved before they could breed.
     private const float KillNutritionShare = 0.6f;
 
+    // Upper bound on viable prey scored per neighbour scan. Caps per-tick work in dense prey
+    // clusters (cost otherwise scales with prey density, not predator count). High enough that
+    // ordinary neighbourhoods are unaffected; only pathological crowds get clamped.
+    private const int MaxHuntCandidates = 48;
+
     public HuntingSystem(SpatialHash spatialHash, WorldManager? worldManager = null)
     {
         _spatialHash = spatialHash;
@@ -526,6 +531,7 @@ public sealed class HuntingSystem : ISystem
 
                 float bestScore = float.MaxValue;
                 int bestPrey = -1;
+                int evaluated = 0;
 
                 foreach (int preyEntity in _nearbyEntities)
                 {
@@ -574,6 +580,10 @@ public sealed class HuntingSystem : ISystem
                     if (distSq >= huntRangeSq)
                         continue;
 
+                    // Bound expensive scoring/path work in dense clusters.
+                    if (++evaluated > MaxHuntCandidates)
+                        break;
+
                     float score = distSq;
 
                     // Terrain penalty
@@ -594,15 +604,6 @@ public sealed class HuntingSystem : ISystem
                             // Urgency reduces penalty (desperate hunters tolerate more)
                             score += comfortPenalty * 20f * (1f - urgency * 0.5f);
                         }
-
-                        // Land predators reject targets across water
-                        if (!speciesDef.SemiAquatic)
-                        {
-                            float waterFrac = _worldManager.GetWaterFractionOnPath(
-                                pos.X, pos.Y, preyPos.X, preyPos.Y);
-                            if (waterFrac > 0.15f)
-                                continue; // Too much water between us and prey
-                        }
                     }
 
                     // Preferred prey bias: familiar prey scores better (lower)
@@ -616,6 +617,14 @@ public sealed class HuntingSystem : ISystem
 
                     if (score < bestScore)
                     {
+                        // Defer the across-water test until a candidate would actually win — only
+                        // the prospective best pays for path sampling, not every prey in range.
+                        // (Equivalent to the old per-candidate reject: a worse-scoring candidate
+                        // never displaced the best, so its water state never mattered.)
+                        if (!speciesDef.SemiAquatic && _worldManager != null
+                            && _worldManager.GetWaterFractionOnPath(pos.X, pos.Y, preyPos.X, preyPos.Y) > 0.15f)
+                            continue; // Too much water between us and prey
+
                         bestScore = score;
                         bestPrey = preyEntity;
                     }
@@ -655,6 +664,7 @@ public sealed class HuntingSystem : ISystem
 
                 float bestTrackDistSq = float.MaxValue;
                 int bestTrackTarget = -1;
+                int trackEvaluated = 0;
 
                 foreach (int preyEntity in _nearbyEntities)
                 {
@@ -677,22 +687,23 @@ public sealed class HuntingSystem : ISystem
                     }
 
                     ref var preyPos2 = ref em.Positions[preyEntity];
-
-                    // Land predators skip tracking targets across water
-                    if (!speciesDef.SemiAquatic && _worldManager != null)
-                    {
-                        float waterFrac = _worldManager.GetWaterFractionOnPath(
-                            pos.X, pos.Y, preyPos2.X, preyPos2.Y);
-                        if (waterFrac > 0.15f)
-                            continue;
-                    }
-
                     float trackDistSq = MathUtils.DistanceSquared(pos.X, pos.Y, preyPos2.X, preyPos2.Y);
-                    if (trackDistSq < bestTrackDistSq)
-                    {
-                        bestTrackDistSq = trackDistSq;
-                        bestTrackTarget = preyEntity;
-                    }
+                    if (trackDistSq >= bestTrackDistSq)
+                        continue;
+
+                    // Bound work in dense crowds (TrackingRange is wide — up to 80 tiles).
+                    if (++trackEvaluated > MaxHuntCandidates)
+                        break;
+
+                    // Land predators skip tracking targets across water. Deferred to the
+                    // prospective-best only, so path sampling runs a handful of times, not once
+                    // per entity in the (large) tracking radius.
+                    if (!speciesDef.SemiAquatic && _worldManager != null
+                        && _worldManager.GetWaterFractionOnPath(pos.X, pos.Y, preyPos2.X, preyPos2.Y) > 0.15f)
+                        continue;
+
+                    bestTrackDistSq = trackDistSq;
+                    bestTrackTarget = preyEntity;
                 }
 
                 if (bestTrackTarget >= 0)
