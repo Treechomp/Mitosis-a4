@@ -38,6 +38,10 @@ public sealed class HuntingSystem : ISystem
     private const float HuntMinProgress = 5f;
     private const int HuntAvoidDuration = 600;
     private const float HuntSelfDamageBailFraction = 0.4f;
+    // The "non-viable" progress check only runs once a predator is within this distance of its
+    // target (or AttackRange×4, whichever is larger). Beyond it the predator is still closing in,
+    // where dealing no damage is expected and must not count as a failed hunt.
+    private const float HuntEngageRange = 4f;
 
     // === Defensive rally (call-to-action) ===
     // How long an attacked pack/swarm member remembers and rallies against its attacker, how many
@@ -221,10 +225,18 @@ public sealed class HuntingSystem : ISystem
             // (This is what stops a Sectid swarm from chasing a Crocodile forever.)
             if (predator.HasTarget && em.IsAlive(predator.TargetEntity))
             {
-                predator.HuntTicks += tickMult;
-
                 float targetEnergy = em.HasComponents(predator.TargetEntity, ComponentFlags.Energy)
                     ? em.Energies[predator.TargetEntity].Current : 0f;
+
+                // The non-viable timer only runs once we're actually engaged (in striking distance).
+                // While still closing the gap, dealing no damage is expected — counting it as failure
+                // made predators abandon mid-approach and never land a hit, so they starved without
+                // ever killing. Prey we genuinely can't catch is handled by the prey_escaped abandon
+                // (3× hunt range) above.
+                ref var tgtPos = ref em.Positions[predator.TargetEntity];
+                float tgtDistSq = MathUtils.DistanceSquared(pos.X, pos.Y, tgtPos.X, tgtPos.Y);
+                float engageRange = MathF.Max(predator.AttackRange * 4f, HuntEngageRange);
+                bool engaged = tgtDistSq <= engageRange * engageRange;
 
                 bool giveUp = false;
                 bool collectiveFail = false; // whole hunt is stalled (vs. just this one retreating hurt)
@@ -235,21 +247,31 @@ public sealed class HuntingSystem : ISystem
                 {
                     giveUp = true;
                 }
-                else if (speciesDef.HuntingTactic != HuntingTactic.Ambush
-                         && predator.HuntTicks >= HuntReevalInterval)
+                else if (engaged && speciesDef.HuntingTactic != HuntingTactic.Ambush)
                 {
-                    // Progress = prey HP removed since the last checkpoint. Near-zero means we're
-                    // not catching or out-damaging it (its regen is suppressed while we land hits,
-                    // so a full-health target after a full window means we simply aren't hitting it).
-                    // Skipped for ambush hunters, whose stalk phase is legitimately damage-free.
-                    float progress = predator.TargetLastEnergy - targetEnergy;
-                    if (progress < HuntMinProgress)
+                    predator.HuntTicks += tickMult;
+                    if (predator.HuntTicks >= HuntReevalInterval)
                     {
-                        giveUp = true;
-                        collectiveFail = true; // nobody is making headway — the target is non-viable
+                        // Progress = prey HP removed since the last checkpoint. Near-zero while
+                        // engaged means we're not out-damaging it (its regen is suppressed while we
+                        // land hits, so a full-health target after a full in-range window means we
+                        // simply can't hit it). Skipped for ambush hunters (damage-free stalk).
+                        float progress = predator.TargetLastEnergy - targetEnergy;
+                        if (progress < HuntMinProgress)
+                        {
+                            giveUp = true;
+                            collectiveFail = true; // nobody is making headway — the target is non-viable
+                        }
+                        predator.TargetLastEnergy = targetEnergy;
+                        predator.HuntTicks = 0;
                     }
-                    predator.TargetLastEnergy = targetEnergy;
+                }
+                else
+                {
+                    // Still closing in (or an ambush stalk): pause the engagement clock and keep the
+                    // damage baseline current so the window measures only in-range, engaged time.
                     predator.HuntTicks = 0;
+                    predator.TargetLastEnergy = targetEnergy;
                 }
 
                 if (giveUp)
