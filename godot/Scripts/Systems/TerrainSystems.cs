@@ -171,7 +171,12 @@ public sealed class TerraformSystem : ISystem
             if (!em.DueThisTick[entity])
                 continue;
 
-            // Dormant Sectids are inactive — they don't reshape terrain while hibernating
+            // Nest-breeders (Sectids) no longer terraform while roaming — they move too fast to
+            // leave a meaningful imprint. Their colonies reshape the land from the (stationary)
+            // nest on each hatch instead (see NestSystem). Dormant carriers are inactive regardless.
+            if (em.HasComponents(entity, ComponentFlags.Species)
+                && SpeciesRegistry.GetById(em.Species[entity].SpeciesId).NestBreeder)
+                continue;
             if (em.HasComponents(entity, ComponentFlags.FoodCarrier) && em.FoodCarriers[entity].IsHibernating)
                 continue;
 

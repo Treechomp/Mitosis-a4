@@ -61,11 +61,11 @@ public sealed class NestSystem : ISystem
 
             // === LARVAE PROCESSING ===
             // Check each larvae slot (up to nest.Stage slots active)
-            ProcessLarvaeSlot(ref nest.SpawnTimer0, ref nest, ref pos, em, entity);
+            ProcessLarvaeSlot(ref nest.SpawnTimer0, ref nest, ref pos, em, entity, sectidDef);
             if (nest.Stage >= 2)
-                ProcessLarvaeSlot(ref nest.SpawnTimer1, ref nest, ref pos, em, entity);
+                ProcessLarvaeSlot(ref nest.SpawnTimer1, ref nest, ref pos, em, entity, sectidDef);
             if (nest.Stage >= 3)
-                ProcessLarvaeSlot(ref nest.SpawnTimer2, ref nest, ref pos, em, entity);
+                ProcessLarvaeSlot(ref nest.SpawnTimer2, ref nest, ref pos, em, entity, sectidDef);
 
             // === FOOD → LARVAE CONVERSION ===
             // Try to fill empty larvae slots with food
@@ -129,7 +129,7 @@ public sealed class NestSystem : ISystem
     }
 
     private void ProcessLarvaeSlot(ref float timer, ref Nest nest, ref Position pos,
-                                    EntityManager em, int nestEntity)
+                                    EntityManager em, int nestEntity, SpeciesDefinition sectidDef)
     {
         if (timer < 0f) return; // Empty slot
 
@@ -146,8 +146,26 @@ public sealed class NestSystem : ISystem
             {
                 _pendingSpawns.Add((spawnX, spawnY, nest.ColonyId));
                 nest.SpawnsThisStage++;
+                // The colony reshapes the land around its nest as a brood emerges. Concentrated
+                // at the stationary nest, so the imprint actually accumulates over many hatches.
+                TerraformAroundNest(pos.X, pos.Y, sectidDef);
             }
             timer = -1f; // Clear slot
+        }
+    }
+
+    // Moisture nudge per hatch tile, matching TerraformSystem's MoistureStep.
+    private const float NestTerraformStep = 0.05f;
+
+    private void TerraformAroundNest(float x, float y, SpeciesDefinition sectidDef)
+    {
+        const int nudges = 6;
+        float radius = sectidDef.TerraformRadius;
+        for (int i = 0; i < nudges; i++)
+        {
+            float ox = ((float)_rng.NextDouble() * 2f - 1f) * radius;
+            float oy = ((float)_rng.NextDouble() * 2f - 1f) * radius;
+            _worldManager.Terraform(x + ox, y + oy, sectidDef.TerraformDir, NestTerraformStep);
         }
     }
 

@@ -160,10 +160,6 @@ public sealed class CarrionSystem : ISystem
                 continue;
 
             ref var predator = ref em.Predators[entity];
-            // Busy chasing live prey — handled by HuntingSystem.
-            if (predator.HasTarget)
-                continue;
-
             ref var hunger = ref em.Hungers[entity];
             if (hunger.Current >= hunger.Max * 0.95f)
                 continue; // sated
@@ -181,7 +177,16 @@ public sealed class CarrionSystem : ISystem
                 continue;
 
             ref var pos = ref em.Positions[entity];
-            int corpse = FindNearestCorpse(em, pos.X, pos.Y);
+
+            // Corpse-seek range starts small and grows as hunger rises for dedicated hunters, so a
+            // well-fed predator won't abandon the hunt to wander to a distant carcass. Sectids are
+            // foragers and always range out to the full radius.
+            float hungerRatio = hunger.Max > 0f ? hunger.Current / hunger.Max : 0f;
+            float seek = isSectid ? SeekRadius : SeekRadius * Math.Clamp(1f - hungerRatio, 0.15f, 1f);
+
+            // Land foragers won't path across water to a carcass (they'd drown getting there).
+            bool avoidWater = !def.SemiAquatic && !def.IsAquatic;
+            int corpse = FindNearestCorpse(em, pos.X, pos.Y, seek, avoidWater);
             if (corpse < 0)
                 continue;
 
@@ -189,6 +194,22 @@ public sealed class CarrionSystem : ISystem
             float dx = corpsePos.X - pos.X;
             float dy = corpsePos.Y - pos.Y;
             float distSq = dx * dx + dy * dy;
+
+            // Live-prey hunting normally takes priority over scavenging (HuntingSystem owns the
+            // chase). Sectids instead weigh a corpse and live prey equally and commit to whichever
+            // is closer — so a Sectid only diverts to a corpse nearer than its current target.
+            if (predator.HasTarget)
+            {
+                if (!isSectid)
+                    continue;
+                if (em.IsAlive(predator.TargetEntity))
+                {
+                    ref var tp = ref em.Positions[predator.TargetEntity];
+                    if (MathUtils.DistanceSquared(pos.X, pos.Y, tp.X, tp.Y) <= distSq)
+                        continue; // prey is closer — stay on the hunt
+                    predator.TargetEntity = -1; // corpse is closer — drop the chase and scavenge
+                }
+            }
 
             ref var vel = ref em.Velocities[entity];
 
@@ -228,12 +249,13 @@ public sealed class CarrionSystem : ISystem
         }
     }
 
-    private int FindNearestCorpse(EntityManager em, float x, float y)
+    private int FindNearestCorpse(EntityManager em, float x, float y, float radius, bool avoidWater)
     {
         _nearby.Clear();
-        _spatialHash.QueryRadius(x, y, SeekRadius, _nearby);
+        _spatialHash.QueryRadius(x, y, radius, _nearby);
         int best = -1;
         float bestDistSq = float.MaxValue;
+        float radiusSq = radius * radius;
         foreach (int other in _nearby)
         {
             if (!em.IsAlive(other) || !em.HasComponents(other, ComponentFlags.Carrion | ComponentFlags.Position))
@@ -242,11 +264,14 @@ public sealed class CarrionSystem : ISystem
                 continue;
             ref var op = ref em.Positions[other];
             float dSq = MathUtils.DistanceSquared(x, y, op.X, op.Y);
-            if (dSq < bestDistSq)
-            {
-                bestDistSq = dSq;
-                best = other;
-            }
+            // QueryRadius is cell-granular, so enforce the (now hunger-scaled) radius exactly.
+            if (dSq >= bestDistSq || dSq > radiusSq)
+                continue;
+            // Don't pick a carcass on the far side of water — reaching it would mean drowning.
+            if (avoidWater && _worldManager.GetWaterFractionOnPath(x, y, op.X, op.Y) > 0.15f)
+                continue;
+            bestDistSq = dSq;
+            best = other;
         }
         return best;
     }

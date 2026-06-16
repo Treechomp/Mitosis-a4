@@ -75,6 +75,12 @@ public sealed class MovementSystem : ISystem
                     isFlying = true;
                     speedMult = 1f;
                 }
+                else if (speciesDef.IsAquatic && !currentTile.IsWater())
+                {
+                    // Beached: an aquatic creature (e.g. Shark, Fish) flounders on land, barely
+                    // able to move while it suffocates. Stops them roaming inland after prey/corpses.
+                    speedMult *= 0.05f;
+                }
             }
 
             // Slope resistance: uphill movement is slower (non-flying only)
