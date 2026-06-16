@@ -238,6 +238,19 @@ public sealed class HuntingSystem : ISystem
                 float engageRange = MathF.Max(predator.AttackRange * 4f, HuntEngageRange);
                 bool engaged = tgtDistSq <= engageRange * engageRange;
 
+                // A pack member following coordination tactics (flanking/positioning/disrupting)
+                // deliberately holds off attacking until the convergence rush. Judging it by its
+                // own damage output during that dance is a false failure: flankers circle within
+                // engage range without striking, and one whose timer fires mid-positioning aborts
+                // the whole pack hunt (collectiveFail) right before the kill lands. The check still
+                // applies once committed (Converging) and to solo hunters, so a pack that genuinely
+                // can't hurt its target still gives up.
+                bool packCoordinating =
+                    em.HasComponents(entity, ComponentFlags.Social)
+                    && em.Socials[entity].Type == SocialType.Pack
+                    && predator.Role != PackRole.None
+                    && predator.Phase != PackPhase.Converging;
+
                 bool giveUp = false;
                 bool collectiveFail = false; // whole hunt is stalled (vs. just this one retreating hurt)
 
@@ -247,7 +260,7 @@ public sealed class HuntingSystem : ISystem
                 {
                     giveUp = true;
                 }
-                else if (engaged && speciesDef.HuntingTactic != HuntingTactic.Ambush)
+                else if (engaged && !packCoordinating && speciesDef.HuntingTactic != HuntingTactic.Ambush)
                 {
                     predator.HuntTicks += tickMult;
                     if (predator.HuntTicks >= HuntReevalInterval)
@@ -268,8 +281,9 @@ public sealed class HuntingSystem : ISystem
                 }
                 else
                 {
-                    // Still closing in (or an ambush stalk): pause the engagement clock and keep the
-                    // damage baseline current so the window measures only in-range, engaged time.
+                    // Still closing in, coordinating the pack, or an ambush stalk: pause the
+                    // engagement clock and keep the damage baseline current, so the window measures
+                    // only in-range attacking time (and a committing pack gets a fresh full window).
                     predator.HuntTicks = 0;
                     predator.TargetLastEnergy = targetEnergy;
                 }
