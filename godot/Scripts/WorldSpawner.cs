@@ -31,14 +31,18 @@ public sealed class WorldSpawner
     {
         int spawned = 0;
 
-        // Collect all species by category
-        // Sectids spawn from nests, Faelings from crystals — only Shroomers use normal spawning
-        var herbivoreSpecies = new List<SpeciesDefinition>(SpeciesRegistry.GetHerbivores());
-        var predatorSpecies = new List<SpeciesDefinition>(SpeciesRegistry.GetPredators());
+        // Collect all species by category, honouring the per-species enable/disable toggles.
+        // Sectids spawn from nests, Faelings from crystals — only Shroomers use normal spawning.
+        var herbivoreSpecies = new List<SpeciesDefinition>();
+        foreach (var s in SpeciesRegistry.GetHerbivores())
+            if (SpeciesToggle.IsEnabled(s)) herbivoreSpecies.Add(s);
+        var predatorSpecies = new List<SpeciesDefinition>();
+        foreach (var s in SpeciesRegistry.GetPredators())
+            if (SpeciesToggle.IsEnabled(s)) predatorSpecies.Add(s);
         var terraformerSpecies = new List<SpeciesDefinition>();
         foreach (var tf in SpeciesRegistry.GetTerraformers())
         {
-            if (!tf.NestBreeder && !tf.CrystalSpawned)
+            if (!tf.NestBreeder && !tf.CrystalSpawned && SpeciesToggle.IsEnabled(tf))
                 terraformerSpecies.Add(tf); // Only Shroomers
         }
 
@@ -343,6 +347,11 @@ public sealed class WorldSpawner
     public void SpawnCrystals(CrystalSystem crystalSystem, EntityManager entityManager, int populationBudget)
     {
         if (crystalSystem == null) return;
+        if (!SpeciesToggle.IsEnabled(SpeciesRegistry.GetId("Faeling")))
+        {
+            GD.Print("  Faeling crystals: disabled (species toggle)");
+            return;
+        }
 
         // Each crystal sustains a small group of Faelings
         int crystalCount = Math.Max(1, populationBudget / 10);
@@ -378,6 +387,11 @@ public sealed class WorldSpawner
                                    int populationBudget)
     {
         if (nestSystem == null) return;
+        if (!SpeciesToggle.IsEnabled(SpeciesRegistry.GetId("Sectid")))
+        {
+            GD.Print("  Sectid nests: disabled (species toggle)");
+            return;
+        }
 
         // Derive counts from budget. Denser starter swarms (matching PreferredGroupSize) so a
         // colony can immediately field a kill-capable swarm instead of scattered individuals.

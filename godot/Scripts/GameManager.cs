@@ -50,6 +50,14 @@ public partial class GameManager : Node3D
     // Exact species name (e.g. "Wolf", "Sectid", "Deer"). Empty = tracking off.
     [Export] public string TrackSpecies = "";
 
+    // Species toggles — set in Inspector before Play to include/exclude species for a run.
+    // Exact species names to DISABLE, separated by comma or newline (e.g. "Shroomer, Wolf").
+    // A disabled species never spawns (initial seeding or faction spread). Empty = all enabled.
+    [Export(PropertyHint.MultilineText)] public string DisabledSpecies = "";
+    // Convenience: disable all faction species (Shroomer, Sectid, Faeling) — e.g. to check whether
+    // the ecosystem is viable with no factions present. Combines with DisabledSpecies above.
+    [Export] public bool DisableFactionSpecies = false;
+
     // Faction spawning — proportions of InitialPopulation
     [Export] public float FaelingShare = 0.04f;
     [Export] public float SectidShare  = 0.10f;  // Need denser starting swarms to reach kill-mass
@@ -222,9 +230,20 @@ public partial class GameManager : Node3D
         });
         GD.Print($"World generated: {_worldManager.LoadedChunkCount} chunks");
 
-        // Spawn faction structures
-        int faelingBudget  = (int)(InitialPopulation * FaelingShare);
-        int sectidBudget   = (int)(InitialPopulation * SectidShare);
+        // Apply species enable/disable toggles before any spawning.
+        var unknownSpecies = SpeciesToggle.Configure(DisabledSpecies, DisableFactionSpecies);
+        foreach (var name in unknownSpecies)
+            GD.PushWarning($"[SpeciesToggle] Unknown species name ignored: '{name}'");
+        GD.Print(SpeciesToggle.DisabledCount > 0
+            ? $"[SpeciesToggle] Disabled {SpeciesToggle.DisabledCount} species: {string.Join(", ", SpeciesToggle.DisabledNames)}"
+            : "[SpeciesToggle] All species enabled");
+
+        // Spawn faction structures. A disabled faction's budget folds back into the creature
+        // budget so a "no-faction" run still spawns a full InitialPopulation of other species.
+        bool faelingEnabled = SpeciesToggle.IsEnabled(SpeciesRegistry.GetId("Faeling"));
+        bool sectidEnabled  = SpeciesToggle.IsEnabled(SpeciesRegistry.GetId("Sectid"));
+        int faelingBudget  = faelingEnabled ? (int)(InitialPopulation * FaelingShare) : 0;
+        int sectidBudget   = sectidEnabled  ? (int)(InitialPopulation * SectidShare)  : 0;
         int creatureBudget = InitialPopulation - faelingBudget - sectidBudget;
 
         GD.Print("Spawning faction structures...");

@@ -155,6 +155,10 @@ public sealed class ReproductionSystem : ISystem
     private void SpawnCreature(EntityManager em, float x, float y, SpeciesType speciesType, int speciesId)
     {
         if (em.EntityCount >= _maxPopulation) return;
+        // Disabled species never spawn, even via reproduction (belt-and-suspenders: with no
+        // initial population a disabled species can't reproduce anyway, but this keeps the
+        // toggle a hard guarantee regardless of how offspring are queued).
+        if (!SpeciesToggle.IsEnabled(speciesId)) return;
         int entity = em.CreateEntity();
 
         em.Positions[entity] = new Position(x, y);
