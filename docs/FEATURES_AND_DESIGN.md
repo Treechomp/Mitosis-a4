@@ -266,7 +266,7 @@ There are **28 species**: 5 generalists, 20 biome-specific, and 3 factions.
 | Species | Type | Mass | Wander / Hunt | Tactic | Notable |
 |---------|------|------|---------------|--------|---------|
 | Deer | Herbivore | 4.0 | 0.03 / – | – | Herd; main wolf prey |
-| Rabbit | Herbivore | 1.0 | 0.04 / – | – | Herd; 2 offspring; panics |
+| Rabbit | Herbivore | 1.0 | 0.04 / – | – | Herd; frail (low HP), fast-breeding; panics |
 | Wolf | Carnivore | 3.5 | 0.06 / 0.12 | PackCoordinated | Prefers Deer/Rabbit |
 | Fox | Carnivore | 2.0 | 0.05 / 0.11 | Solo | Rabbit specialist |
 | Crocodile | Carnivore | 8.0 | 0.02 / 0.08 | Ambush | Semi-aquatic; water stealth + pounce |
@@ -344,7 +344,10 @@ is decrement-first (`TicksUntilUpdate--`, due when ≤ 0), so newly spawned / re
 process immediately at any tier. Rate-sensitive systems multiply per-tick deltas by
 `SimulationLOD.TickInterval` so a throttled entity ages/starves at the correct rate.
 **Invariant**: a resource producer (Grazing) and its consumer (Hunger) must share a gate
-level, or distant entities starve unfairly.
+level, or distant entities starve unfairly. Every spawn site constructs `SimulationLOD` with an
+explicit level (so `TickInterval` starts at 1, never 0), and `LODSystem` repairs any
+`TickInterval ≤ 0` even when the tier doesn't change — a zero interval would otherwise feed a
+divide-by-zero into rate math (it once produced `NaN` hunger that spread through the food web).
 
 ### 6.2 Movement — `MovementSystem.cs` (gated)
 
@@ -354,7 +357,8 @@ and a **hard cliff block** (non-flying creatures can't cross an elevation jump >
 sampling elevation via `WorldManager`; attempts diagonal then axis-aligned sliding; clamps to
 world bounds; updates `ChunkPosition`; then damps creature velocity by **0.85/frame**
 (micro-drift below 0.01 zeroed). Flying creatures bypass slope/cliff; the player bypasses
-clamp/damping.
+clamp/damping. **Aquatic creatures beached on land** (e.g. Shark, Fish off water) move at 5%
+speed — they flounder in place and suffocate (§6.3) rather than chasing prey/corpses inland.
 
 ### 6.3 Terrain Discomfort — `TerrainSystems.cs` (gated)
 
@@ -366,17 +370,24 @@ period (`WrongElementGraceTicks` / `WrongElementDamageRate`).
 
 ### 6.4 Hunger — `SurvivalSystems.cs` (gated)
 
-Decays hunger (× tick interval; hibernating Sectids run at 10% metabolism — see §7.2);
-starvation drains energy by `StarvationDamage`; zero energy →
+Decays hunger (× tick interval, × global `HungerDecayScale`; hibernating Sectids run at 10%
+metabolism — see §7.2); starvation drains energy by `StarvationDamage`; zero energy →
 death. Skips structures (Nests/Crystals) and starvation-immune species (Faelings). Regenerates
 energy when not starving and off combat cooldown (`RegenCooldown`). Applies active
 `VenomEffect` damage-over-time. Faeling death passes 50% power to its crystal.
 
+`HungerDecayScale` (0.6) is a single global dial that slows starvation for every species at
+once. Predators — which die almost entirely of starvation between kills — gain the most
+survival runway and breeding headroom; continuously-grazing herbivores sit near full
+regardless, so the imbalance isn't worsened. It is the primary lever for predator carrying
+capacity.
+
 ### 6.5 Grazing — `SurvivalSystems.cs` (gated)
 
 Herbivores on grazeable tiles consume tile nutrition (0.02/tick) and gain food scaled by what
-remained; omnivores (Boar) graze and hunt; faction species feed on their `FeedTiles`. Capped
-at max hunger.
+remained (the consumed/requested ratio is guarded against a zero tick interval, which would
+otherwise be `0/0 = NaN`); omnivores (Boar) graze and hunt; faction species feed on their
+`FeedTiles`. Capped at max hunger.
 
 ### 6.6 Wander — `WanderSystem.cs` (gated)
 
@@ -408,20 +419,39 @@ Hunting is **opportunistic**: urgency scales from starving (1.0) to well-fed, an
 only stops hunting at ≥ 95% hunger. Target selection (spatial-hash query) scores by distance,
 preferred-prey bias, a generic terrain penalty, and a **species-specific terrain-comfort
 penalty** (e.g. Sectids avoid prey in Wetland); cannibalism and unhuntable targets are
-excluded; land predators reject targets across water. Velocity uses mass-based agility
+excluded; land predators reject targets across water (both in target selection and the wide
+`TrackingRange` scent scan).
+
+**Performance**: the across-water test (`GetWaterFractionOnPath`, which samples tiles along the
+predator→prey line) is the dominant per-candidate cost and scales with prey *density*, not
+predator count. It's a pure rejection filter, so it's deferred to only the candidate that would
+actually become the new best (O(best-improvements) calls instead of O(candidates) — behaviour-
+equivalent). Each scan also caps the number of scored candidates (`MaxHuntCandidates`, 48) to
+bound work in pathological prey crowds. (Pack/isolation/flanking queries don't sample water and
+are left for a future consolidation pass into a single neighbour query per predator per tick.)
 
 **Target viability re-evaluation**: predators abandon prey they can't actually bring down rather
-than fixating. Every `HuntReevalInterval` (150 ticks) a hunter checks how much of the target's HP
-it removed; near-zero progress (`HuntMinProgress`) means it can't catch or out-damage the prey, so
-it gives up. It also bails the instant a counterattacking target costs it `HuntSelfDamageBailFraction`
-(40%) of its own HP. A given-up target is blacklisted for `HuntAvoidDuration` (600 ticks) so the
-hunter switches to viable prey; a *collective* no-progress stall also clears the shared pack target
-(an individual peeling off because it's hurt does not, so a swarm that's winning isn't disrupted).
-Ambush hunters are exempt from the progress check (their stalk is legitimately damage-free). This is
-what stops a Sectid swarm from chasing a Crocodile forever. Velocity uses mass-based agility
-(`Clamp(1.5/bodyMass, …)`). On kill: solo takes all nutrition; packs give the killer
-`KillerShareRatio` and split the rest within `PackShareRadius`; Sectids carry a share to nests
-(`FallbackNutrition` 40 when a prey's nutrition is unset).
+than fixating — but only once **engaged** (within striking distance, `max(AttackRange×4, 4)`
+tiles). While still closing the gap, dealing no damage is expected and does **not** count as
+failure (counting it made predators bail mid-approach and never land a hit, so they starved
+without ever killing). Once engaged, every `HuntReevalInterval` (150 ticks) a hunter checks how
+much of the target's HP it removed; near-zero progress (`HuntMinProgress`) means it can't
+out-damage the prey, so it gives up. It also bails the instant a counterattacking target costs
+it `HuntSelfDamageBailFraction` (40%) of its own HP. A given-up target is blacklisted for
+`HuntAvoidDuration` (600 ticks); a *collective* no-progress stall also clears the shared pack
+target (an individual peeling off because it's hurt does not). **Pack members are exempt from
+the check while coordinating** (a Pack role in a non-`Converging` phase): a flanker circles
+within engage range without striking, so judging it by its own damage output falsely aborted
+the whole hunt right before the convergence kill landed. Prey that genuinely can't be caught is
+still abandoned via the across-water/`3× hunt range` escape, and ambush hunters skip the
+progress check entirely (their stalk is legitimately damage-free). This is what stops a Sectid
+swarm chasing a Crocodile forever without breaking ordinary pack hunts.
+
+Velocity uses mass-based agility (`Clamp(1.5/bodyMass, …)`). **On kill** the killer eats first —
+an immediate "prime cut" of `prey.EffectiveNutrition × KillNutritionShare` (0.6, body-mass
+scaled). The body still drops as a corpse (via the death hook, §6.12) for packmates and
+scavengers, so pack sharing of the remainder stays emergent. Without this eat-on-kill bonus
+predators relied solely on slow corpse-scavenging and starved before they could breed.
 
 - **Pack flanking**: Leader holds at distance and triggers an all-in **Converging** phase (on
   timeout, a flanker reaching the prey's far side, or prey isolation); Flankers circle behind;
@@ -489,21 +519,27 @@ drowning, faction AoE/ranged, or anything added later), and the registered handl
 `CarrionSystem.SpawnCorpse`. That leaves a corpse entity (`Carrion` component + a dark Diamond
 renderable) holding an edible nutrient pool scaled by **body size** (`EffectiveNutrition`) and
 **condition** (hunger ratio at death — a well-fed animal leaves more; floor 0.4×) and growth scale
-(big Shroomers). `SpawnCorpse` self-filters structures/spores/Faelings, so the hook stays generic
-and the ECS core needs no knowledge of gameplay. The kill site that used to grant instant
-pack-shared nutrition now grants nothing — "sharing" is emergent, everyone eats the same carcass.
+(big Shroomers). The condition factor guards a non-finite hunger ratio (falls back to the floor)
+so a `NaN` can't propagate into corpse nutrition. `SpawnCorpse` self-filters structures/spores/
+Faelings, so the hook stays generic and the ECS core needs no knowledge of gameplay. The corpse
+holds the *remainder* after the killer's prime cut (§6.7) — pack "sharing" of it is emergent.
 
 Each tick the system (1) **decays** corpses: a grace period (~200 ticks fresh), then nutrition
-rots away (~1400 ticks), shrinking the renderable; depleted corpses are removed. Rotting also
-**fertilises the soil** — a fraction of each tick's decay is added to the tile's grazeable
-nutrition (`WorldManager.AddNutrition`), so naturally decomposing remains speed local regrowth.
-(2) **Feeds scavengers**: a hungry predator/omnivore/Sectid with no live target moves to the
-nearest corpse within seek range and eats at a rate set by its `MaxHunger` (sated at 95%). A short
-feed-commit on the killer (refreshed while eating) keeps it on the kill instead of re-hunting.
-**Sectids** chop fast into their carrier sacks; `NestSystem` holds a Sectid at the carcass until
-its sacks are full, then ferries the load home — so a large kill takes repeated trips, often the
-whole colony, to clear. This gives the obligate-hunter factions and NPC predators a food source
-that smooths the hunger-vs-procurement gap.
+rots away (~1400 ticks), shrinking the renderable; depleted corpses are removed. `IsDepleted`
+treats a non-finite pool as depleted (`!(Nutrition > 0)`) so a stray `NaN` corpse can't become
+an immortal scavenger magnet (predators once piled motionless on such corpses and stopped
+hunting). Rotting also **fertilises the soil** — a fraction of each tick's decay is added to the
+tile's grazeable nutrition (`WorldManager.AddNutrition`), so naturally decomposing remains speed
+local regrowth. (2) **Feeds scavengers**: a hungry predator/omnivore/Sectid with no live target
+moves to the nearest corpse and eats at a rate set by its `MaxHunger` (sated at 95%). The
+corpse-seek radius **scales with hunger** for dedicated hunters — small when well-fed, full
+(`SeekRadius`) when starving — so a fed predator won't abandon the hunt to wander to a distant
+carcass. Land/insect foragers won't path to a corpse across water (they'd drown). **Sectids**
+range out to the full radius always and weigh a corpse and live prey equally — diverting to a
+corpse only when it's nearer than their current target. A short feed-commit on the killer keeps
+it on the kill instead of re-hunting; Sectids chop fast into their carrier sacks and `NestSystem`
+holds one at the carcass until full, then ferries the load home — so a large kill takes repeated
+trips, often the whole colony, to clear.
 
 ### 6.13 Reproduction — `ReproductionSystem.cs` (gated)
 
@@ -513,7 +549,7 @@ mature, hunger ≥ threshold, energy ≥ threshold, local same-species density b
 (linear ramp: 100% pass at ≤50% of cap → 0% at cap). Deducts hunger/energy, resets cooldown,
 spawns `OffspringCount` offspring on a valid tile near the parent (offspring start at 60%
 hunger, 100% energy, age 0). Both the spawn loop and `EntityFactory.SpawnCreature` re-check the
-hard cap.
+hard cap, and offspring of a species disabled via the species toggle (§9) are refused here too.
 
 ---
 
@@ -552,9 +588,16 @@ reaches kill-mass immediately.
 **Hibernation (food floor).** A pure consumer faction starves wholesale when prey is scarce, so
 a hungry Sectid (below 35% hunger) that detects no huntable prey within 30 tiles for ~600 ticks
 retreats to its nest and goes **dormant**: metabolism drops to 10% (`HungerSystem` reads the
-`FoodCarrier.IsHibernating` flag), it idles motionless, stops terraforming (`TerraformSystem`
-skips it), and stops registering as a threat (`FleeingSystem` excludes it, so prey neither flee
-nor fear a sleeping swarm) while `WanderSystem`/`HuntingSystem` skip it. It **wakes** the moment
+`FoodCarrier.IsHibernating` flag), it idles motionless, and stops registering as a threat
+(`FleeingSystem` excludes it, so prey neither flee nor fear a sleeping swarm) while
+`WanderSystem`/`HuntingSystem` skip it.
+
+**Nest-based terraforming.** Sectids no longer reshape terrain while roaming — they moved too
+fast to leave a meaningful imprint (unlike slow, lingering Shroomers). Instead, the *nest*
+terraforms its surroundings on each **hatch**: when a larva emerges, a concentrated burst of
+moisture nudges is applied around the (stationary) nest, so the colony's drying influence
+actually accumulates in one place. `TerraformSystem` skips all nest-breeders (and abandoned
+nests don't terraform — it's gated on a successful hatch). It **wakes** the moment
 huntable prey strays within 14 tiles (or it picks up food), rejoining the hunt. This keeps a
 minimal viable colony alive through prey troughs as a defensive, ambush-from-the-nest posture
 instead of the swarm wandering off to die.
@@ -570,15 +613,16 @@ terrain discomfort, and predation, and attack Sectids/Shroomers at range (LOD-ga
 
 ### 7.4 Terraform summary — `TerrainSystems.cs` (TerraformSystem)
 
-| Faction | Direction | Effect | Radius | Strength | Cooldown |
-|---------|-----------|--------|--------|----------|----------|
-| Shroomer | Wetter | toward Wetland/Bog | 2.0 | 0.03 | 8 |
-| Sectid | Drier | toward Arid | 1.5 | 0.04 | 6 |
-| Faeling | Balanced | extremes toward Grass | 3.0 | 0.03 | 8 |
+| Faction | Direction | Effect | Radius | Strength | Cooldown | Applied by |
+|---------|-----------|--------|--------|----------|----------|------------|
+| Shroomer | Wetter | toward Wetland/Bog | 2.0 | 0.03 | 8 | the roaming creature (`TerraformSystem`) |
+| Sectid | Drier | toward Arid | 1.5 | 0.04 | 6 | the **nest, on each hatch** (§7.2) |
+| Faeling | Balanced | extremes toward Grass | 3.0 | 0.03 | 8 | the roaming creature (`TerraformSystem`) |
 
 A tile change marks its chunk dirty so the renderer rebuilds that mesh. Three-way conflict:
 Shroomers wet the world (helping themselves, hurting Sectids), Sectids dry it, Faelings
-rebalance toward Grass.
+rebalance toward Grass. Shroomers and Faelings terraform from the moving creature;
+`TerraformSystem` skips nest-breeders (Sectids), whose drying comes from their nests instead.
 
 ---
 
@@ -639,10 +683,21 @@ smoothly follows the player entity (a yellow sphere). WASD moves the player **ca
 `EcosystemLogger` (registered as the final `ISystem`) writes to `logs/`:
 
 - `events_YYYYMMDD_HHmmss.csv` (+ `latest_events.csv`): columns `tick, event, species,
-  entity_id, x, y, detail`; events `birth`, `reproduce`, `kill`, `hunt_start`, `hunt_fail`,
-  `starvation`, `age_death`, `environment_death`, `spore_created`, `spore_matured`.
+  entity_id, x, y, detail`; events `birth`, `reproduce`, `kill`, `hunt_start`, `hunt_fail`
+  (detail carries the reason: `not_viable`, `prey_escaped`, `discomfort`, `target_died`),
+  `starvation`, `age_death`, `environment_death`, `spore_created`, `spore_matured`, and — when a
+  species is tracked (below) — `damage_dealt` / `damage_taken` (melee/thorn/aoe/ranged source).
 - `population_YYYYMMDD_HHmmss.csv` (+ `latest_population.csv`): per-species counts every 100
   ticks (~5 s at 20 TPS).
+- `species_stats_YYYYMMDD_HHmmss.csv` (+ `latest_species_stats.csv`): per-species per-interval
+  breakdown — population, births, deaths split by cause (`starve`/`age`/`predation`/
+  `environment`), `kills_made`, and average hunger/energy %. A `MASS_PERISH` alert is emitted
+  when a species loses ≥ 40% of its population in one interval. (Death-cause ratios here — e.g.
+  starvation vs predation — are the key signal for predator-balance tuning.)
+
+All floats are written with `InvariantCulture` so a comma-decimal locale can't corrupt CSV
+columns. Set **`TrackSpecies`** (Inspector, §9) to one species' exact name to additionally log
+per-entity `TRACKED` snapshots and that species' inbound/outbound combat damage.
 
 ---
 
@@ -671,9 +726,20 @@ TBD once all features are in and compute/render costs are known):
 | HerbivoreRatio | 0.85 | 0.85 | Herbivore share of non-faction creatures |
 | CreaturesPerChunk | 2.0 | 2.0 | Spawn-density hint |
 | FaelingShare | 0.04 | 0.04 | Faeling (crystal) budget as share of initial pop |
-| SectidShare | 0.06 | 0.06 | Sectid (nest) budget as share of initial pop |
+| SectidShare | 0.10 | 0.06 | Sectid (nest) budget as share of initial pop |
 | PlayerSpeed / Sprint | 1.0 / 3.0 | – | Player move speed and sprint multiplier |
 | ZoomMin / Max / Speed | 0.1 / 5.0 / 0.15 | – | Orthographic zoom range and step |
+| TrackSpecies | "" | "" | Exact species name to deep-log (per-entity `TRACKED` snapshots + combat); empty = off |
+| DisabledSpecies | "" | "" | Species names to exclude this run (comma/newline separated); empty = all enabled |
+| DisableFactionSpecies | false | false | Disable all factions (Shroomer/Sectid/Faeling) for a "no-faction" run |
+
+**Species toggles** (`SpeciesToggle`, configured from the two fields above before spawning): a
+disabled species never spawns — `WorldSpawner` filters it from the spawn lists, Faeling crystal
+and Sectid nest seeding are skipped, and `ReproductionSystem` refuses it as a runtime safety net.
+A disabled faction's spawn budget folds back into the creature budget, so a no-faction run still
+spawns a full `InitialPopulation`. Unknown names are validated against the registry and logged as
+warnings; the active disable set is printed at startup. Use this for granular balance snapshots
+(e.g. ecosystem viability with no factions, or isolating why one species thrives/perishes).
 
 **Initial population split** (`WorldSpawner`): Faeling budget = `InitialPopulation ×
 FaelingShare` (spawned as **crystals**, ~1 per 10 Faelings); Sectid budget = `× SectidShare`
@@ -724,7 +790,8 @@ godot/
     │   └── RiverMapper.cs                          # flow-based rivers/lakes (hex topology)
     ├── Species/
     │   ├── SpeciesDefinition.cs                    # 100+ property data class
-    │   └── SpeciesRegistry.cs                      # all 28 species
+    │   ├── SpeciesRegistry.cs                      # all 28 species
+    │   └── SpeciesToggle.cs                        # per-species enable/disable for balance runs
     ├── Rendering/RenderingManager.cs               # 3D chunk meshes + entity MultiMesh3D
     ├── Utils/
     │   ├── GridCoordinates.cs                      # grid ↔ screen/3D-world + row offset
