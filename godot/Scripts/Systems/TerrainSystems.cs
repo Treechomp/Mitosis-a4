@@ -102,7 +102,16 @@ public sealed class TerrainDiscomfortSystem : ISystem
             // === Drowning / Suffocation ===
             if (speciesDef != null && em.HasComponents(entity, ComponentFlags.Energy))
             {
-                bool isDrowning = inWater && !speciesDef.IsAquatic && !speciesDef.SemiAquatic;
+                // Depth-aware: aquatic/semi-aquatic never drown; non-swimmers (AvoidsWater, e.g.
+                // insects) drown in any water; ordinary land creatures wade shallow/river safely
+                // and only drown in deep water. Aquatic species suffocate out of any water.
+                bool isDrowning;
+                if (speciesDef.IsAquatic || speciesDef.SemiAquatic)
+                    isDrowning = false;
+                else if (speciesDef.AvoidsWater)
+                    isDrowning = inWater;
+                else
+                    isDrowning = tile.IsDeepWater();
                 bool isSuffocating = !inWater && speciesDef.IsAquatic;
 
                 if (isDrowning || isSuffocating)

@@ -1332,6 +1332,7 @@ public static class SpeciesRegistry
             SpawnWeight = 0.6f,
             WrongElementGraceTicks = 25,    // Cannot swim at all
             WrongElementDamageRate = 4.0f,
+            AvoidsWater = true,             // Routes around (and drowns in) any water, even shallow
 
             // Movement - slow, ambush
             BaseWanderSpeed = 0.02f,
@@ -2451,6 +2452,7 @@ public static class SpeciesRegistry
             DefaultSocialType = SocialType.Pack,  // Pack hunters — swarm tactics
             WrongElementGraceTicks = 40,    // Insects drown quickly
             WrongElementDamageRate = 2.5f,
+            AvoidsWater = true,             // Routes around (and drowns in) any water, even shallow
 
             // Movement - quick, numerous insects
             BaseWanderSpeed = 0.06f,

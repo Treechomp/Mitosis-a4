@@ -59,6 +59,13 @@ public static class TileTypeExtensions
                tile == TileType.River;
     }
 
+    /// <summary>Open/deep water — land creatures route around it and drown in it.</summary>
+    public static bool IsDeepWater(this TileType tile) => tile == TileType.DeepWater;
+
+    /// <summary>Wadeable water — shallow/river that land creatures cross and fish in safely.</summary>
+    public static bool IsWadeableWater(this TileType tile)
+        => tile == TileType.ShallowWater || tile == TileType.River;
+
     /// <summary>
     /// Check if a tile is safe to spawn land creatures on.
     /// Excludes water, mountains, river, reef, lava, and ice tiles.

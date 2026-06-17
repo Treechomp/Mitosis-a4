@@ -36,7 +36,7 @@ Authoritative tuning lives in `SpeciesRegistry.cs`; this doc is the design spec.
 
 ## 2. Cross-cutting mechanics (new)
 
-### M1 — Depth-aware water model  ☐
+### M1 — Depth-aware water model  ☑
 Tiles already distinguish `ShallowWater` / `River` / `Reef` vs `DeepWater`.
 - **Hunting/pathing:** land creatures route around **deep** water only; **wade shallow/river**
   freely. True water-avoiders (insects — Sectid, Scorpion) get an explicit `AvoidsWater` and
@@ -106,7 +106,10 @@ lowering predator `ReproHungerThreshold` to ~**70–75%** so a good meal or two 
 ## 5. Proposed implementation order (incremental)
 
 1. **M1 — depth-aware water model** (wade/drown by depth; `AvoidsWater` for insects). Unblocks
-   Bear fishing + confirms Shark.
+   Bear fishing + confirms Shark. ☑ Done — land creatures wade shallow/river and only drown in
+   deep water; Sectid/Scorpion (`AvoidsWater`) route around and drown in any water; hunting,
+   scavenging and drowning are all depth-aware. (Also landed: Rabbit repro energy budget fix and
+   `HungerDecayScale` → 0.3.)
 2. **Fox → ambush/scavenger; Bear → burst + shallow fishing** (depends on M1).
 3. **M2 — prey flee stamina.**
 4. **Predator viability audit fixes** (RepHT cuts, Hawk decay, Crocodile nerf, biome prey).

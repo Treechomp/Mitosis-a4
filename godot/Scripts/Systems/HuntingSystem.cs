@@ -658,7 +658,8 @@ public sealed class HuntingSystem : ISystem
                         // (Equivalent to the old per-candidate reject: a worse-scoring candidate
                         // never displaced the best, so its water state never mattered.)
                         if (speciesDef.AvoidsOpenWater && _worldManager != null
-                            && _worldManager.GetWaterFractionOnPath(pos.X, pos.Y, preyPos.X, preyPos.Y) > 0.15f)
+                            && _worldManager.GetWaterFractionOnPath(pos.X, pos.Y, preyPos.X, preyPos.Y,
+                                   deepOnly: !speciesDef.AvoidsWater) > 0.15f)
                             continue; // Too much water between us and prey
 
                         bestScore = score;
@@ -735,7 +736,8 @@ public sealed class HuntingSystem : ISystem
                     // prospective-best only, so path sampling runs a handful of times, not once
                     // per entity in the (large) tracking radius.
                     if (speciesDef.AvoidsOpenWater && _worldManager != null
-                        && _worldManager.GetWaterFractionOnPath(pos.X, pos.Y, preyPos2.X, preyPos2.Y) > 0.15f)
+                        && _worldManager.GetWaterFractionOnPath(pos.X, pos.Y, preyPos2.X, preyPos2.Y,
+                               deepOnly: !speciesDef.AvoidsWater) > 0.15f)
                         continue;
 
                     bestTrackDistSq = trackDistSq;
@@ -757,7 +759,7 @@ public sealed class HuntingSystem : ISystem
                     vel.Dy += (trackDir.Y * trackSpeed - vel.Dy) * trackAgility;
 
                     if (speciesDef.AvoidsOpenWater)
-                        SteerAroundWater(ref vel, pos.X, pos.Y);
+                        SteerAroundWater(ref vel, pos.X, pos.Y, deepOnly: !speciesDef.AvoidsWater);
 
                     continue;  // Skip normal hunt movement — we're just tracking
                 }
@@ -989,7 +991,7 @@ public sealed class HuntingSystem : ISystem
                     // Ambush predators skip water avoidance when stalking or pouncing
                     bool skipWaterAvoid = isAmbush && (predator.Stealth > 0.1f || predator.PounceTimer > 0);
                     if (speciesDef.AvoidsOpenWater && !skipWaterAvoid)
-                        SteerAroundWater(ref vel, pos.X, pos.Y);
+                        SteerAroundWater(ref vel, pos.X, pos.Y, deepOnly: !speciesDef.AvoidsWater);
                 }
             }
         }
@@ -1491,7 +1493,12 @@ public sealed class HuntingSystem : ISystem
     /// Steer velocity away from water tiles ahead. Checks 2 tiles in the movement
     /// direction; if water is found, tries ±45° and ±90° offsets and picks the clearest.
     /// </summary>
-    private void SteerAroundWater(ref Velocity vel, float posX, float posY)
+    // Water a steering creature treats as an obstacle: deep water only for waders (land
+    // predators), any water for non-swimmers (insects passing deepOnly = false).
+    private static bool IsBlockingWater(TileType tile, bool deepOnly)
+        => deepOnly ? tile.IsDeepWater() : tile.IsWater();
+
+    private void SteerAroundWater(ref Velocity vel, float posX, float posY, bool deepOnly)
     {
         if (_worldManager == null || (vel.Dx == 0 && vel.Dy == 0)) return;
 
@@ -1499,11 +1506,11 @@ public sealed class HuntingSystem : ISystem
         float nx = vel.Dx / speed;
         float ny = vel.Dy / speed;
 
-        // Look ahead 2 tiles for water
+        // Look ahead 2 tiles for water (deep-only for waders, any water for non-swimmers)
         bool waterAhead = false;
         for (float d = 1f; d <= 2f; d += 1f)
         {
-            if (_worldManager.GetTile(posX + nx * d, posY + ny * d).IsWater())
+            if (IsBlockingWater(_worldManager.GetTile(posX + nx * d, posY + ny * d), deepOnly))
             {
                 waterAhead = true;
                 break;
@@ -1530,7 +1537,7 @@ public sealed class HuntingSystem : ISystem
             int waterCount = 0;
             for (float d = 1f; d <= 2f; d += 1f)
             {
-                if (_worldManager.GetTile(posX + rnx * d, posY + rny * d).IsWater())
+                if (IsBlockingWater(_worldManager.GetTile(posX + rnx * d, posY + rny * d), deepOnly))
                     waterCount++;
             }
 

@@ -211,14 +211,20 @@ public sealed class SpeciesDefinition
     public bool IsFlying { get; init; } = false;
 
     /// <summary>
-    /// Whether this species routes around open water when hunting/tracking (and won't path to
-    /// prey/corpses across it). Aquatic and semi-aquatic species never do — open water is their
-    /// element or fully traversable — so this excludes them. NOTE: currently derived; a future
-    /// pass may make it a per-species trait so only true water-avoiders (e.g. insects) route
-    /// around water while land predators wade in. (Bug history: gating on `!SemiAquatic` alone
-    /// made aquatic Sharks reject every in-water target and starve with zero kills.)
+    /// Land creature that routes around water when hunting/tracking. Aquatic and semi-aquatic
+    /// species are excluded (water is their element / fully traversable). By default a land
+    /// creature only avoids and drowns in DEEP water and wades shallow/river freely; set
+    /// <see cref="AvoidsWater"/> for species that can't swim at all and avoid/drown in any water.
+    /// (Bug history: gating on `!SemiAquatic` alone made aquatic Sharks reject every in-water
+    /// target and starve with zero kills.)
     /// </summary>
     public bool AvoidsOpenWater => !IsAquatic && !SemiAquatic;
+
+    /// <summary>
+    /// Cannot swim at all — routes around ALL water (even shallow/river) and drowns in any of it.
+    /// For insects/desert species (e.g. Sectid, Scorpion). Land creatures otherwise wade shallow.
+    /// </summary>
+    public bool AvoidsWater { get; init; } = false;
 
     /// <summary>Ticks in wrong element (water for land, land for aquatic) before damage starts.
     /// Good swimmers get longer grace; panicky species drown fast. Default 60 (3 sec at 20 TPS).</summary>

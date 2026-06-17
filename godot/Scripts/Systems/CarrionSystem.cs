@@ -184,9 +184,10 @@ public sealed class CarrionSystem : ISystem
             float hungerRatio = hunger.Max > 0f ? hunger.Current / hunger.Max : 0f;
             float seek = isSectid ? SeekRadius : SeekRadius * Math.Clamp(1f - hungerRatio, 0.15f, 1f);
 
-            // Land foragers won't path across water to a carcass (they'd drown getting there).
-            bool avoidWater = !def.SemiAquatic && !def.IsAquatic;
-            int corpse = FindNearestCorpse(em, pos.X, pos.Y, seek, avoidWater);
+            // Land foragers won't path across water to a carcass: deep water for waders, any
+            // water for non-swimmers (insects). Aquatic/semi-aquatic don't avoid it at all.
+            bool avoidWater = def.AvoidsOpenWater;
+            int corpse = FindNearestCorpse(em, pos.X, pos.Y, seek, avoidWater, deepOnly: !def.AvoidsWater);
             if (corpse < 0)
                 continue;
 
@@ -249,7 +250,7 @@ public sealed class CarrionSystem : ISystem
         }
     }
 
-    private int FindNearestCorpse(EntityManager em, float x, float y, float radius, bool avoidWater)
+    private int FindNearestCorpse(EntityManager em, float x, float y, float radius, bool avoidWater, bool deepOnly)
     {
         _nearby.Clear();
         _spatialHash.QueryRadius(x, y, radius, _nearby);
@@ -268,7 +269,7 @@ public sealed class CarrionSystem : ISystem
             if (dSq >= bestDistSq || dSq > radiusSq)
                 continue;
             // Don't pick a carcass on the far side of water — reaching it would mean drowning.
-            if (avoidWater && _worldManager.GetWaterFractionOnPath(x, y, op.X, op.Y) > 0.15f)
+            if (avoidWater && _worldManager.GetWaterFractionOnPath(x, y, op.X, op.Y, deepOnly) > 0.15f)
                 continue;
             bestDistSq = dSq;
             best = other;

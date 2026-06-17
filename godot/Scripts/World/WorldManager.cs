@@ -366,7 +366,10 @@ public sealed class WorldManager
     /// Returns the fraction of sampled tiles that are water (0.0 to 1.0).
     /// Samples one tile per unit distance for efficiency.
     /// </summary>
-    public float GetWaterFractionOnPath(float x1, float y1, float x2, float y2)
+    /// <param name="deepOnly">When true, count only deep water — land creatures wade shallow/
+    /// river freely, so only deep crossings should deter them. When false, count all water
+    /// (for species that can't swim at all, e.g. insects).</param>
+    public float GetWaterFractionOnPath(float x1, float y1, float x2, float y2, bool deepOnly = false)
     {
         float dx = x2 - x1;
         float dy = y2 - y1;
@@ -384,7 +387,8 @@ public sealed class WorldManager
         {
             float sx = x1 + stepX * i;
             float sy = y1 + stepY * i;
-            if (GetTile(sx, sy).IsWater())
+            var t = GetTile(sx, sy);
+            if (deepOnly ? t.IsDeepWater() : t.IsWater())
                 waterCount++;
         }
 
