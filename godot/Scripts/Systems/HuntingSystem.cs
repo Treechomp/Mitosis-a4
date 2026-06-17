@@ -657,7 +657,7 @@ public sealed class HuntingSystem : ISystem
                         // the prospective best pays for path sampling, not every prey in range.
                         // (Equivalent to the old per-candidate reject: a worse-scoring candidate
                         // never displaced the best, so its water state never mattered.)
-                        if (!speciesDef.SemiAquatic && _worldManager != null
+                        if (speciesDef.AvoidsOpenWater && _worldManager != null
                             && _worldManager.GetWaterFractionOnPath(pos.X, pos.Y, preyPos.X, preyPos.Y) > 0.15f)
                             continue; // Too much water between us and prey
 
@@ -734,7 +734,7 @@ public sealed class HuntingSystem : ISystem
                     // Land predators skip tracking targets across water. Deferred to the
                     // prospective-best only, so path sampling runs a handful of times, not once
                     // per entity in the (large) tracking radius.
-                    if (!speciesDef.SemiAquatic && _worldManager != null
+                    if (speciesDef.AvoidsOpenWater && _worldManager != null
                         && _worldManager.GetWaterFractionOnPath(pos.X, pos.Y, preyPos2.X, preyPos2.Y) > 0.15f)
                         continue;
 
@@ -756,7 +756,7 @@ public sealed class HuntingSystem : ISystem
                     vel.Dx += (trackDir.X * trackSpeed - vel.Dx) * trackAgility;
                     vel.Dy += (trackDir.Y * trackSpeed - vel.Dy) * trackAgility;
 
-                    if (!speciesDef.SemiAquatic)
+                    if (speciesDef.AvoidsOpenWater)
                         SteerAroundWater(ref vel, pos.X, pos.Y);
 
                     continue;  // Skip normal hunt movement — we're just tracking
@@ -988,7 +988,7 @@ public sealed class HuntingSystem : ISystem
                     // Land predators steer around water during pursuit
                     // Ambush predators skip water avoidance when stalking or pouncing
                     bool skipWaterAvoid = isAmbush && (predator.Stealth > 0.1f || predator.PounceTimer > 0);
-                    if (!speciesDef.SemiAquatic && !skipWaterAvoid)
+                    if (speciesDef.AvoidsOpenWater && !skipWaterAvoid)
                         SteerAroundWater(ref vel, pos.X, pos.Y);
                 }
             }

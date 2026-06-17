@@ -210,6 +210,16 @@ public sealed class SpeciesDefinition
     public bool IsAquatic { get; init; } = false;
     public bool IsFlying { get; init; } = false;
 
+    /// <summary>
+    /// Whether this species routes around open water when hunting/tracking (and won't path to
+    /// prey/corpses across it). Aquatic and semi-aquatic species never do — open water is their
+    /// element or fully traversable — so this excludes them. NOTE: currently derived; a future
+    /// pass may make it a per-species trait so only true water-avoiders (e.g. insects) route
+    /// around water while land predators wade in. (Bug history: gating on `!SemiAquatic` alone
+    /// made aquatic Sharks reject every in-water target and starve with zero kills.)
+    /// </summary>
+    public bool AvoidsOpenWater => !IsAquatic && !SemiAquatic;
+
     /// <summary>Ticks in wrong element (water for land, land for aquatic) before damage starts.
     /// Good swimmers get longer grace; panicky species drown fast. Default 60 (3 sec at 20 TPS).</summary>
     public int WrongElementGraceTicks { get; init; } = 60;
