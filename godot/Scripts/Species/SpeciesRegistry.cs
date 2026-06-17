@@ -218,9 +218,10 @@ public static class SpeciesRegistry
             MaxLifespan = 15000,
             MaturityAge = 1000,
 
-            // Reproduction - breeds moderately (controlled by predation pressure)
+            // Reproduction - breeds easily (energy values fit the frail 40 HP budget: a 70
+            // threshold against MaxEnergy 40 made reproduction impossible).
             ReproHungerThreshold = 180f,
-            ReproEnergyThreshold = 70f,
+            ReproEnergyThreshold = 25f,
             ReproCooldown = 600,   // Breeds a bit faster to offset higher predation losses
 
             // Social - loose groups
@@ -251,9 +252,10 @@ public static class SpeciesRegistry
             SeparationRadius = 1.5f,
             SeparationStrength = 0.02f,
 
-            // Reproduction costs - meaningful investment per litter
+            // Reproduction costs - hunger is the real investment; energy cost kept below the
+            // 25 threshold so breeding never pushes a 40 HP rabbit into starvation/death.
             ReproHungerCost = 55f,
-            ReproEnergyCost = 35f,
+            ReproEnergyCost = 15f,
             OffspringCount = 2,
             SpawnRadius = 2f,
 

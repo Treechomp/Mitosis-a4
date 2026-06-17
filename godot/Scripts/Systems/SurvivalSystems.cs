@@ -21,7 +21,7 @@ public sealed class HungerSystem : ISystem
     // board. Predators benefit most — they die almost entirely of starvation between kills
     // (logs showed ~274 starvation vs ~11 predation deaths) — while continuously-grazing
     // herbivores sit near full regardless, so this mainly raises the predator carrying capacity.
-    private const float HungerDecayScale = 0.6f;
+    private const float HungerDecayScale = 0.3f;
 
     public void Process(EntityManager em)
     {
