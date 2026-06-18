@@ -45,7 +45,7 @@ Tiles already distinguish `ShallowWater` / `River` / `Reef` vs `DeepWater`.
   river is safe or long-grace, so wading to fish isn't fatal.
 - Enables Bears/others to fish at the water's edge; keeps wolves crossing rivers but not lakes.
 
-### M2 — Prey flee stamina  ☐
+### M2 — Prey flee stamina  ☑
 Prey flee at full `FleeSpeedMultiplier` (burst), which **decays over sustained fleeing** toward
 a tired floor (~walk pace) and **recovers at rest**. Stops deer/rabbits outrunning an endless
 relay of predators. New `Prey` stamina fields + per-species `FleeBurst*/StaminaDecay/Recovery`
@@ -115,7 +115,9 @@ lowering predator `ReproHungerThreshold` to ~**70–75%** so a good meal or two 
    180→120 and the stray `PackHunterChance` removed; Bear is an `Ambush` charger (high
    `PounceSpeedMult` burst), fishes shallows (Fish added to preferred prey, wading via M1), RepHT
    300→245.
-3. **M2 — prey flee stamina.**
+3. **M2 — prey flee stamina.** ☑ Done — `Prey.Stamina` (0..1) drains while fleeing
+   (`FleeStaminaDrain`), recovers at rest (`FleeStaminaRecovery`), and the flee burst fades toward
+   `FleeTiredSpeedFloor` of `FleeSpeedMultiplier` as it empties. Applied to Flee + Panic responses.
 4. **Predator viability audit fixes** (RepHT cuts, Hawk decay, Crocodile nerf, biome prey).
 
 Each lands as its own commit for testing between steps.

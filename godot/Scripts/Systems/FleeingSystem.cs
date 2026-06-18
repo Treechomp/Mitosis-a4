@@ -159,6 +159,15 @@ public sealed class FleeingSystem : ISystem
                 }
             }
 
+            // Flee stamina: drains while fleeing, recovers at rest (LOD-scaled).
+            int tickMult = em.HasComponents(entity, ComponentFlags.SimulationLOD)
+                ? em.SimulationLODs[entity].TickInterval : 1;
+            var speciesDef = em.HasComponents(entity, ComponentFlags.Species)
+                ? SpeciesRegistry.GetById(em.Species[entity].SpeciesId) : null;
+            float staminaDrain = speciesDef?.FleeStaminaDrain ?? 0.005f;
+            float staminaRecover = speciesDef?.FleeStaminaRecovery ?? 0.0025f;
+            float tiredFloor = speciesDef?.FleeTiredSpeedFloor ?? 0.5f;
+
             // Determine behavior based on fear level and response type
             if (hasThreat || (hasFear && fearRatio > 0.5f))
             {
@@ -173,21 +182,21 @@ public sealed class FleeingSystem : ISystem
                     if (discomfort.ExceedsThreshold && fearRatio < 0.9f)
                     {
                         prey.IsFleeing = false;
+                        prey.Stamina = MathF.Min(1f, prey.Stamina + staminaRecover * tickMult);
                         continue;  // Let wander system handle escape
                     }
                 }
 
                 prey.IsFleeing = true;
 
+                // Sustained fleeing tires the prey: drain stamina and fade the flee burst toward
+                // the tired floor, so prey can't outrun an endless relay of predators.
+                prey.Stamina = MathF.Max(0f, prey.Stamina - staminaDrain * tickMult);
+                float staminaFactor = tiredFloor + (1f - tiredFloor) * prey.Stamina;
+
                 // Mass-based agility: smaller creatures change direction faster,
                 // allowing rabbits to juke while deer commit to a direction.
-                float bodyMass = 1f;
-                if (em.HasComponents(entity, ComponentFlags.Species))
-                {
-                    var speciesDef = SpeciesRegistry.GetById(em.Species[entity].SpeciesId);
-                    if (speciesDef != null)
-                        bodyMass = speciesDef.BodyMass;
-                }
+                float bodyMass = speciesDef?.BodyMass ?? 1f;
                 float agility = Math.Clamp(1.5f / bodyMass, 0.25f, 1f);
 
                 // Apply fear response behavior
@@ -198,7 +207,7 @@ public sealed class FleeingSystem : ISystem
                         break;
 
                     case FearResponse.Panic:
-                        ApplyPanicResponse(ref pos, ref vel, ref wander, ref prey, fleeDir, fearRatio, discomfortRatio, agility);
+                        ApplyPanicResponse(ref pos, ref vel, ref wander, ref prey, fleeDir, fearRatio, discomfortRatio, agility, staminaFactor);
                         break;
 
                     case FearResponse.Defensive:
@@ -207,13 +216,14 @@ public sealed class FleeingSystem : ISystem
 
                     case FearResponse.Flee:
                     default:
-                        ApplyFleeResponse(ref pos, ref vel, ref wander, ref prey, fleeDir, fearRatio, discomfortRatio, agility);
+                        ApplyFleeResponse(ref pos, ref vel, ref wander, ref prey, fleeDir, fearRatio, discomfortRatio, agility, staminaFactor);
                         break;
                 }
             }
             else
             {
                 prey.IsFleeing = false;
+                prey.Stamina = MathF.Min(1f, prey.Stamina + staminaRecover * tickMult);
             }
         }
     }
@@ -321,9 +331,9 @@ public sealed class FleeingSystem : ISystem
     /// </summary>
     private void ApplyPanicResponse(ref Position pos, ref Velocity vel, ref Wander wander,
                                      ref Prey prey, Vector2 fleeDir, float fearRatio, float discomfortRatio,
-                                     float agility)
+                                     float agility, float staminaFactor)
     {
-        float panicSpeed = wander.Speed * prey.FleeSpeedMultiplier * (1f + fearRatio * 0.5f);
+        float panicSpeed = wander.Speed * prey.FleeSpeedMultiplier * staminaFactor * (1f + fearRatio * 0.5f);
 
         // Add randomness to flee direction based on fear level
         float randomAngle = (float)((_rng.NextDouble() - 0.5) * Math.PI * fearRatio);
@@ -347,9 +357,9 @@ public sealed class FleeingSystem : ISystem
     /// </summary>
     private void ApplyFleeResponse(ref Position pos, ref Velocity vel, ref Wander wander,
                                     ref Prey prey, Vector2 fleeDir, float fearRatio, float discomfortRatio,
-                                    float agility)
+                                    float agility, float staminaFactor)
     {
-        float fleeSpeed = wander.Speed * prey.FleeSpeedMultiplier;
+        float fleeSpeed = wander.Speed * prey.FleeSpeedMultiplier * staminaFactor;
 
         // Speed boost when very afraid
         if (fearRatio > 0.7f)

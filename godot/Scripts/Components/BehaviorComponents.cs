@@ -109,12 +109,14 @@ public struct Prey
     public float FleeRange;
     public float FleeSpeedMultiplier;
     public bool IsFleeing;
+    public float Stamina;   // 0..1 flee-burst reserve: drains while fleeing, recovers at rest
 
     public Prey(float fleeRange = 8f, float fleeSpeedMultiplier = 1.5f)
     {
         FleeRange = fleeRange;
         FleeSpeedMultiplier = fleeSpeedMultiplier;
         IsFleeing = false;
+        Stamina = 1f;
     }
 }
 

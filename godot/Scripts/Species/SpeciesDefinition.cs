@@ -122,6 +122,17 @@ public sealed class SpeciesDefinition
     public float FleeRange { get; init; } = 6f;
     public float FleeSpeedMultiplier { get; init; } = 2f;
 
+    // === FLEE STAMINA ===
+    // Prey flee at full FleeSpeedMultiplier (burst), but stamina drains while fleeing and the
+    // burst fades toward FleeTiredSpeedFloor of it (a tired jog), recovering at rest — so prey
+    // can't outrun an endless relay of predators.
+    /// <summary>Stamina (0..1) drained per tick while actively fleeing. Higher = tires sooner.</summary>
+    public float FleeStaminaDrain { get; init; } = 0.005f;
+    /// <summary>Stamina recovered per tick while not fleeing.</summary>
+    public float FleeStaminaRecovery { get; init; } = 0.0025f;
+    /// <summary>Fraction of FleeSpeedMultiplier still available when fully exhausted.</summary>
+    public float FleeTiredSpeedFloor { get; init; } = 0.5f;
+
     // === FEAR RESPONSE ===
     public float FearThreshold { get; init; } = 50f;
     public float FearMax { get; init; } = 100f;
