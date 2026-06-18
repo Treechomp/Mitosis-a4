@@ -184,6 +184,7 @@ public enum ShapeType : byte
     Serpent = 10,    // Snake (S-curve)
     Mushroom = 11,   // Shroomer (cap on stem)
     Fangs = 12,      // Bear, Polar Bear, Jaguar, Crocodile (wide jaw)
+    Carcass = 13,    // Corpses — a flat splayed disc lying on the ground (clearly not a creature)
 }
 
 /// <summary>

@@ -43,7 +43,7 @@ public sealed class RenderingManager
     private const float SeaLevel = 0.40f;
 
     // MultiMesh entity rendering — one per ShapeType
-    private const int ShapeCount = 13; // ShapeType values 0..12
+    private const int ShapeCount = 14; // ShapeType values 0..13
     private const int MultiMeshInitialCapacity = 4096;
     private MultiMeshInstance3D[] _shapeMMIs = null!;
     private int[] _shapeIndices = null!;
@@ -90,9 +90,11 @@ public sealed class RenderingManager
         _shapeMMIs[(int)ShapeType.Square]   = CreateMMI(
             new BoxMesh(), entityMat);
 
-        // Diamond — armored (boar, musk ox, turtle): wide flat box
+        // Diamond — armored (boar, musk ox, turtle, lizard): a true 4-sided pyramid (pointed
+        // gem), so it reads distinctly from the predators' wide Fangs box rather than as another
+        // wide rectangle.
         _shapeMMIs[(int)ShapeType.Diamond]  = CreateMMI(
-            new BoxMesh { Size = new Vector3(1.4f, 0.5f, 1.0f) }, entityMat);
+            new CylinderMesh { RadialSegments = 4, TopRadius = 0.0f, BottomRadius = 0.8f, Height = 1.0f }, entityMat);
 
         // Star — Sectids (colony insects): 6-sided cylinder
         _shapeMMIs[(int)ShapeType.Star]     = CreateMMI(
@@ -129,6 +131,11 @@ public sealed class RenderingManager
         // Fangs — bear, jaguar, croc: broad squat box
         _shapeMMIs[(int)ShapeType.Fangs]    = CreateMMI(
             new BoxMesh { Size = new Vector3(1.5f, 0.7f, 1.0f) }, entityMat);
+
+        // Carcass — corpses: a flat, low splayed disc lying on the ground, unmistakably not an
+        // upright creature (was reusing Diamond, which looked like the armored herbivores).
+        _shapeMMIs[(int)ShapeType.Carcass]  = CreateMMI(
+            new CylinderMesh { RadialSegments = 8, TopRadius = 0.55f, BottomRadius = 0.65f, Height = 0.15f }, entityMat);
 
         return _shapeMMIs;
     }
@@ -435,7 +442,9 @@ public sealed class RenderingManager
             // Lift entity so the bottom of its mesh sits on the terrain surface.
             // All primitives are unit-sized and centered at origin, so half-height ≈ 0.5.
             // Torus (Crescent) is flat in XZ — use its tube radius (0.3) as the offset.
-            pos3D.Y += rend.Size * (rend.Shape == ShapeType.Crescent ? 0.3f : 0.5f);
+            pos3D.Y += rend.Size * (rend.Shape == ShapeType.Crescent ? 0.3f
+                                    : rend.Shape == ShapeType.Carcass ? 0.075f
+                                    : 0.5f);
 
             // Facing rotation around world Y axis
             float rotation = 0f;

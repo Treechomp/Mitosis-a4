@@ -99,7 +99,7 @@ public sealed class CarrionSystem : ISystem
 
         // Dark fleshy mound; size scales with how much meat is on it.
         float size = Math.Clamp(4f + nutrition * 0.08f, 4f, 14f);
-        em.Renderables[corpse] = new Renderable(new Color(0.32f, 0.22f, 0.18f), size, ShapeType.Diamond);
+        em.Renderables[corpse] = new Renderable(new Color(0.32f, 0.22f, 0.18f), size, ShapeType.Carcass);
         em.AddComponent(corpse, ComponentFlags.Renderable);
     }
 
