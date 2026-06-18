@@ -195,9 +195,12 @@ public sealed class TerrainGenerator
         float noiseTemp = (_temperatureNoise.GetNoise2D(worldX, worldY) + 1f) * 0.5f;
 
         // Gradient gives pole-to-equator feel; noise adds regional variation.
-        // Increased gradient weight for clearer biome banding on larger maps.
-        float gradientWeight = 0.4f;
-        float noiseWeight = 0.6f;
+        // Gradient-weighted toward the latitude band so the cold (top) and hot (bottom) extremes
+        // reliably produce polar and desert regions, instead of noise washing them out to thin,
+        // sparse patches. This gives biome-specialist species (Penguin/Polar Bear/Arctic Fox/Musk
+        // Ox; Camel/Scorpion/Lizard) enough of their home biome — and their prey — to be viable.
+        float gradientWeight = 0.52f;
+        float noiseWeight = 0.48f;
         float gradient = (float)worldY / _worldSizeTiles;
         gradient = Math.Clamp(gradient, 0f, 1f);
 
