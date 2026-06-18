@@ -386,13 +386,24 @@ public static class SpeciesRegistry
             BaseWanderSpeed = 0.05f,
             DirectionChangeChance = 0.012f,
 
-            // Combat — solitary direct-chase hunter
-            HuntingTactic = HuntingTactic.Solo,
+            // Combat — opportunistic ambusher/scavenger (no burrow to model: stalks, pounces on
+            // small prey, and leans on carrion between kills).
+            HuntingTactic = HuntingTactic.Ambush,
             HuntRange = 8f,
             AttackRange = 0.6f,
             AttackPower = 20f,
             AttackCooldown = 15,
             BaseHuntSpeed = 0.11f,
+
+            // Ambush — quick, low-commitment pounce on small prey
+            AmbushStealthGain = 0.012f,
+            AmbushStealthDecay = 0.05f,
+            AmbushSpeedThreshold = 0.5f,
+            PounceRange = 2.5f,
+            PounceSpeedMult = 3.5f,
+            PounceAttackMult = 2.0f,
+            PounceDuration = 10,
+            PounceStealthThreshold = 0.55f,
 
             // Survival - solitary hunter, needs to sustain longer between kills
             MaxHunger = 180f,
@@ -401,7 +412,7 @@ public static class SpeciesRegistry
             MaturityAge = 1200,
 
             // Reproduction
-            ReproHungerThreshold = 180f,
+            ReproHungerThreshold = 120f,
             ReproEnergyThreshold = 70f,
             ReproCooldown = 800,
 
@@ -423,7 +434,6 @@ public static class SpeciesRegistry
             PreferredGroupSize = 1f,
             CohesionStrength = 0.005f,
             AlignmentStrength = 0.003f,
-            PackHunterChance = 0.1f,
 
             // Terrain - good in varied terrain
             DiscomfortThreshold = 55f,
@@ -1099,13 +1109,24 @@ public static class SpeciesRegistry
             BaseWanderSpeed = 0.02f,
             DirectionChangeChance = 0.004f,
 
-            // Combat — solo apex predator, direct chase
-            HuntingTactic = HuntingTactic.Solo,
+            // Combat — solo apex ambusher: lumbers slowly, then explodes into a short high-speed
+            // charge. Also wades shallows/rivers to bat fish (see M1 water model).
+            HuntingTactic = HuntingTactic.Ambush,
             HuntRange = 10f,
             AttackRange = 1.5f,
             AttackPower = 60f,
             AttackCooldown = 35,
             BaseHuntSpeed = 0.09f,
+
+            // Ambush — rare but explosive burst (high PounceSpeedMult), longer charge range
+            AmbushStealthGain = 0.01f,
+            AmbushStealthDecay = 0.04f,
+            AmbushSpeedThreshold = 0.5f,
+            PounceRange = 3.5f,
+            PounceSpeedMult = 4.0f,
+            PounceAttackMult = 1.8f,
+            PounceDuration = 14,
+            PounceStealthThreshold = 0.5f,
 
             // Survival - large, long-lived
             MaxHunger = 350f,
@@ -1121,7 +1142,7 @@ public static class SpeciesRegistry
             TrackingRange = 60f,
 
             // Reproduction - slow
-            ReproHungerThreshold = 300f,
+            ReproHungerThreshold = 245f,
             ReproEnergyThreshold = 90f,
             ReproCooldown = 1500,
             ReproHungerCost = 90f,
@@ -1154,7 +1175,7 @@ public static class SpeciesRegistry
             // Trophic - apex predator, very high mass
             BodyMass = 12.0f,
             SoloHuntMaxRatio = 1.5f,
-            PreferredPrey = new List<string> { "Deer", "Elk", "Boar" },
+            PreferredPrey = new List<string> { "Deer", "Elk", "Boar", "Fish" },
             PreferredPreyBias = 0.4f,
 
             // Visuals - large dark brown

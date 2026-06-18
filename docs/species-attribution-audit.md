@@ -110,7 +110,11 @@ lowering predator `ReproHungerThreshold` to ~**70–75%** so a good meal or two 
    deep water; Sectid/Scorpion (`AvoidsWater`) route around and drown in any water; hunting,
    scavenging and drowning are all depth-aware. (Also landed: Rabbit repro energy budget fix and
    `HungerDecayScale` → 0.3.)
-2. **Fox → ambush/scavenger; Bear → burst + shallow fishing** (depends on M1).
+2. **Fox → ambush/scavenger; Bear → burst + shallow fishing** (depends on M1). ☑ Done — Fox is
+   now an `Ambush` predator (quick low-commitment pounce) that leans on carrion, with RepHT
+   180→120 and the stray `PackHunterChance` removed; Bear is an `Ambush` charger (high
+   `PounceSpeedMult` burst), fishes shallows (Fish added to preferred prey, wading via M1), RepHT
+   300→245.
 3. **M2 — prey flee stamina.**
 4. **Predator viability audit fixes** (RepHT cuts, Hawk decay, Crocodile nerf, biome prey).
 
