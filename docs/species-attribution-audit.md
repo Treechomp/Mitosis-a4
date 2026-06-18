@@ -118,6 +118,12 @@ lowering predator `ReproHungerThreshold` to ~**70–75%** so a good meal or two 
 3. **M2 — prey flee stamina.** ☑ Done — `Prey.Stamina` (0..1) drains while fleeing
    (`FleeStaminaDrain`), recovers at rest (`FleeStaminaRecovery`), and the flee burst fades toward
    `FleeTiredSpeedFloor` of `FleeSpeedMultiplier` as it empties. Applied to Flee + Panic responses.
-4. **Predator viability audit fixes** (RepHT cuts, Hawk decay, Crocodile nerf, biome prey).
+4. **Predator viability audit fixes** (RepHT cuts, Hawk decay, Crocodile nerf, biome prey). ◐
+   Done: per-species `ReproHungerThreshold` cut to ~70–75% for the starving solo/ambush predators
+   (Hawk, Scorpion, Snake, Polar Bear, Arctic Fox, Jaguar, Shark; Fox/Bear in step 2); Hawk
+   `HungerDecayRate` 0.05→0.035; Crocodile nerf (`TrackingRange` 40→22, `SoloHuntMaxRatio`
+   1.5→1.2). Wolf and Crocodile thresholds left as-is (already viable/dominant).
+   **Still open:** biome prey co-location (Polar Bear/Scorpion logging 0 kills looks like a
+   *spawn placement* issue, not a stat one) — needs a `WorldSpawner` change, tracked in §4.
 
 Each lands as its own commit for testing between steps.

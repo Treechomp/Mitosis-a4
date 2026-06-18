@@ -500,7 +500,7 @@ public static class SpeciesRegistry
             // Hunting behavior - ambush hunter
             HuntThreshold = 0.75f,
             TrackingHungerThreshold = 0.6f,
-            TrackingRange = 40f,
+            TrackingRange = 22f,   // Nerf: was 40 — ambush at the water's edge, don't track the map
 
             // Ambush tactics — lurk in water, build stealth, pounce with burst speed
             AmbushStealthGain = 0.008f,    // ~125 ticks (6s) to full stealth when still
@@ -560,7 +560,7 @@ public static class SpeciesRegistry
             // Croc (mass 8.0) vs Rabbit (mass 1.0): easily
             // Croc is solitary so no pack bonuses, but high solo mass
             BodyMass = 8.0f,
-            SoloHuntMaxRatio = 1.5f,  // Powerful ambush can take large prey
+            SoloHuntMaxRatio = 1.2f,  // Nerf: was 1.5 — can't gorge on the very largest prey (Musk Ox)
 
             // Grazing
             CanGraze = false,
@@ -703,7 +703,7 @@ public static class SpeciesRegistry
             TrackingRange = 100f,
 
             // Reproduction - slow
-            ReproHungerThreshold = 250f,
+            ReproHungerThreshold = 200f,   // ~71% (predator viability; pairs with the water fix)
             ReproEnergyThreshold = 90f,
             ReproCooldown = 2000,
             ReproHungerCost = 80f,
@@ -1208,7 +1208,7 @@ public static class SpeciesRegistry
 
             // Survival
             MaxHunger = 160f,
-            HungerDecayRate = 0.05f,
+            HungerDecayRate = 0.035f,  // Was 0.05 (highest) — it starved despite good kills
             MaxLifespan = 20000,
             MaturityAge = 1200,
             EnergyRegenRate = 0.15f,
@@ -1219,7 +1219,7 @@ public static class SpeciesRegistry
             TrackingRange = 80f,
 
             // Reproduction
-            ReproHungerThreshold = 140f,
+            ReproHungerThreshold = 112f,   // ~70% of MaxHunger (was 87%) — predator viability
             ReproEnergyThreshold = 75f,
             ReproCooldown = 1000,
             ReproHungerCost = 40f,
@@ -1394,7 +1394,7 @@ public static class SpeciesRegistry
             TrackingRange = 30f,
 
             // Reproduction
-            ReproHungerThreshold = 170f,
+            ReproHungerThreshold = 140f,   // ~70% (predator viability)
             ReproEnergyThreshold = 70f,
             ReproCooldown = 900,
             ReproHungerCost = 40f,
@@ -1578,7 +1578,7 @@ public static class SpeciesRegistry
             TrackingRange = 40f,
 
             // Reproduction
-            ReproHungerThreshold = 190f,
+            ReproHungerThreshold = 155f,   // ~70% (predator viability)
             ReproEnergyThreshold = 70f,
             ReproCooldown = 800,
             ReproHungerCost = 45f,
@@ -1754,7 +1754,7 @@ public static class SpeciesRegistry
             TrackingRange = 80f,
 
             // Reproduction - slow
-            ReproHungerThreshold = 330f,
+            ReproHungerThreshold = 270f,   // ~71% (predator viability)
             ReproEnergyThreshold = 90f,
             ReproCooldown = 1800,
             ReproHungerCost = 100f,
@@ -1843,7 +1843,7 @@ public static class SpeciesRegistry
             TrackingRange = 60f,
 
             // Reproduction
-            ReproHungerThreshold = 150f,
+            ReproHungerThreshold = 120f,   // ~70% (predator viability)
             ReproEnergyThreshold = 70f,
             ReproCooldown = 700,
             ReproHungerCost = 35f,
@@ -2188,7 +2188,7 @@ public static class SpeciesRegistry
             TrackingRange = 70f,
 
             // Reproduction
-            ReproHungerThreshold = 230f,
+            ReproHungerThreshold = 185f,   // ~71% (predator viability)
             ReproEnergyThreshold = 85f,
             ReproCooldown = 1200,
             ReproHungerCost = 70f,
