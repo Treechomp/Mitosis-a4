@@ -231,7 +231,7 @@ def print_species_summary(events, pop_path):
     print(f"  {'species':<12} {'start':>6} {'end':>6} {'peak':>6} {'kills':>6}   deaths(cause)")
     for s in names:
         st, en, pk = pop.get(s, (0, 0, 0))
-        dcauses = ", ".join(f"{c}:{n}" for c, n in died.get(s, {}).most_common())
+        dcauses = ", ".join(f"{c}:{n}" for c, n in died.get(s, Counter()).most_common())
         print(f"  {s:<12} {st:>6} {en:>6} {pk:>6} {kills.get(s,0):>6}   {dcauses}")
 
 
