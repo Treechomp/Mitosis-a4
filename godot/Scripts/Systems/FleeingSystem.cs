@@ -21,13 +21,8 @@ public sealed class FleeingSystem : ISystem
     private readonly WorldManager? _worldManager;
     private readonly Random _rng = new();
 
-    // Pre-allocated arrays for predator positions and species
-    private float[] _predatorXs = new float[128];
-    private float[] _predatorYs = new float[128];
-    private float[] _predatorDistSq = new float[128];  // Store squared distances
-    private int[] _predatorSpeciesIds = new int[128];   // Species ID per predator (for same-species filtering)
-    private float[] _predatorStealth = new float[128];  // Stealth level per predator (ambush detection reduction)
-    private int _predatorCount;
+    // Reused buffer for the per-prey nearby-predator spatial query.
+    private readonly List<int> _nearbyPredators = new(64);
 
     public FleeingSystem(SpatialHash spatialHash, WorldManager? worldManager = null)
     {
@@ -37,45 +32,11 @@ public sealed class FleeingSystem : ISystem
 
     public void Process(EntityManager em)
     {
-        // Collect predator positions with species info
-        const ComponentFlags predatorRequired = ComponentFlags.Position | ComponentFlags.Predator;
-        _predatorCount = 0;
-
-        foreach (int entity in em.Query(predatorRequired))
-        {
-            // Dormant Sectids aren't a threat — exclude them so prey neither flee nor fear them
-            if (em.HasComponents(entity, ComponentFlags.FoodCarrier) && em.FoodCarriers[entity].IsHibernating)
-                continue;
-
-            // Resize arrays if needed
-            if (_predatorCount >= _predatorXs.Length)
-            {
-                int newSize = _predatorXs.Length * 2;
-                Array.Resize(ref _predatorXs, newSize);
-                Array.Resize(ref _predatorYs, newSize);
-                Array.Resize(ref _predatorDistSq, newSize);
-                Array.Resize(ref _predatorSpeciesIds, newSize);
-                Array.Resize(ref _predatorStealth, newSize);
-            }
-
-            ref var pos = ref em.Positions[entity];
-            _predatorXs[_predatorCount] = pos.X;
-            _predatorYs[_predatorCount] = pos.Y;
-            _predatorSpeciesIds[_predatorCount] = em.HasComponents(entity, ComponentFlags.Species)
-                ? em.Species[entity].SpeciesId : 0;
-            // Track predator stealth for ambush detection reduction
-            ref var pred = ref em.Predators[entity];
-            _predatorStealth[_predatorCount] = pred.Stealth;
-            _predatorCount++;
-        }
-
-        // Process prey
+        // Each prey scans only its own neighbourhood for predators via the spatial hash, instead
+        // of every prey checking every predator. Was O(prey × all-predators); now O(prey ×
+        // predators within FleeRange) — a large win in big, sparse worlds where most prey have no
+        // predator anywhere near them.
         const ComponentFlags preyRequired = ComponentFlags.Position | ComponentFlags.Prey | ComponentFlags.Velocity | ComponentFlags.Wander;
-
-        var predXSpan = _predatorXs.AsSpan(0, _predatorCount);
-        var predYSpan = _predatorYs.AsSpan(0, _predatorCount);
-        var predSpeciesSpan = _predatorSpeciesIds.AsSpan(0, _predatorCount);
-        var predStealthSpan = _predatorStealth.AsSpan(0, _predatorCount);
 
         foreach (int entity in em.Query(preyRequired))
         {
@@ -94,12 +55,13 @@ public sealed class FleeingSystem : ISystem
             int mySpeciesId = em.HasComponents(entity, ComponentFlags.Species)
                 ? em.Species[entity].SpeciesId : 0;
 
-            // Calculate flee direction and find closest threat distance
-            // Stealth-aware: stealthed predators reduce effective detection range
-            var (fleeDir, hasThreat, closestDistSq) = CalculateFleeVectorWithDistance(
-                pos.X, pos.Y,
-                predXSpan, predYSpan, predSpeciesSpan, predStealthSpan,
-                fleeRangeSq, mySpeciesId);
+            // Calculate flee direction and find closest threat distance.
+            // Stealth-aware: stealthed predators reduce effective detection range. Only predators
+            // within FleeRange matter, so query just that neighbourhood from the spatial hash.
+            _nearbyPredators.Clear();
+            _spatialHash.QueryRadius(pos.X, pos.Y, prey.FleeRange, _nearbyPredators);
+            var (fleeDir, hasThreat, closestDistSq) = CalculateFleeVector(
+                em, pos.X, pos.Y, _nearbyPredators, fleeRangeSq, mySpeciesId);
 
             // Always update fear state — even while hunting
             bool hasFear = em.HasComponents(entity, ComponentFlags.Fear);
@@ -233,36 +195,38 @@ public sealed class FleeingSystem : ISystem
     /// Filters out predators of the same species (e.g., Sectids don't flee from Sectids).
     /// Stealth-aware: stealthed predators have reduced effective detection range.
     /// </summary>
-    private (Vector2 dir, bool hasThreat, float closestDistSq) CalculateFleeVectorWithDistance(
-        float x, float y,
-        ReadOnlySpan<float> predX, ReadOnlySpan<float> predY, ReadOnlySpan<int> predSpecies,
-        ReadOnlySpan<float> predStealth,
-        float maxDistSq, int mySpeciesId)
+    private (Vector2 dir, bool hasThreat, float closestDistSq) CalculateFleeVector(
+        EntityManager em, float x, float y, List<int> nearby, float maxDistSq, int mySpeciesId)
     {
         float fleeX = 0, fleeY = 0;
         float closestDistSq = float.MaxValue;
         bool hasThreat = false;
 
-        for (int i = 0; i < predX.Length; i++)
+        foreach (int p in nearby)
         {
-            // Skip same-species predators (swarm mates are not threats)
-            if (mySpeciesId != 0 && predSpecies[i] == mySpeciesId)
+            // Only predators are threats…
+            if (!em.HasComponents(p, ComponentFlags.Predator))
+                continue;
+            // …dormant Sectids aren't (prey neither flee nor fear a sleeping swarm)…
+            if (em.HasComponents(p, ComponentFlags.FoodCarrier) && em.FoodCarriers[p].IsHibernating)
+                continue;
+            // …and same-species predators (swarm mates) aren't.
+            int pSpecies = em.HasComponents(p, ComponentFlags.Species) ? em.Species[p].SpeciesId : 0;
+            if (mySpeciesId != 0 && pSpecies == mySpeciesId)
                 continue;
 
-            float dx = x - predX[i];
-            float dy = y - predY[i];
+            ref var ppos = ref em.Positions[p];
+            float dx = x - ppos.X;
+            float dy = y - ppos.Y;
             float distSq = dx * dx + dy * dy;
 
             // Stealth reduces effective detection range:
-            // At stealth 0 → full range, at stealth 1 → 10% range (nearly invisible)
-            // Pouncing predators (stealth reset to 0) are fully visible again
-            float stealth = predStealth[i];
+            // At stealth 0 → full range, at stealth 1 → 10% range (nearly invisible).
+            // Pouncing predators (stealth reset to 0) are fully visible again.
+            float stealth = em.Predators[p].Stealth;
             float effectiveMaxDistSq = maxDistSq;
             if (stealth > 0f)
-            {
-                float detectionMult = 1f - stealth * 0.9f; // 0.1 at full stealth
-                effectiveMaxDistSq = maxDistSq * detectionMult;
-            }
+                effectiveMaxDistSq = maxDistSq * (1f - stealth * 0.9f); // 0.1 at full stealth
 
             if (distSq < effectiveMaxDistSq && distSq > 0.001f)
             {

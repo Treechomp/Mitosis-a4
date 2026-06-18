@@ -14,6 +14,10 @@ public sealed class Chunk
 
     private readonly TileType[,] _tiles;
     private readonly float[,] _nutrition;
+    // True while any grazeable tile is below MaxNutrition. Lets TileRegenerationSystem skip the
+    // full per-tile scan for fully-regenerated chunks (the vast majority in a large, sparse world).
+    // Set on consumption / tile change; cleared by a regen pass that finds nothing left to top up.
+    private bool _hasDepleted = true;
     private readonly float[,] _elevation;
     private readonly float[,] _moisture;
     private readonly float[,] _temperature;
@@ -84,6 +88,8 @@ public sealed class Chunk
                 _nutrition[localX, localY] = 0.15f;
             else
                 _nutrition[localX, localY] = MaxNutrition;
+            // A type change may leave a grazeable tile below max (Tundra/Arid) — re-arm regen.
+            if (_nutrition[localX, localY] < MaxNutrition) _hasDepleted = true;
         }
     }
 
@@ -158,6 +164,7 @@ public sealed class Chunk
         float available = _nutrition[localX, localY];
         float consumed = MathF.Min(available, amount);
         _nutrition[localX, localY] = available - consumed;
+        if (consumed > 0f) _hasDepleted = true; // tile is now below max — needs regen
         return consumed;
     }
 
@@ -181,7 +188,10 @@ public sealed class Chunk
     /// </summary>
     public void RegenerateNutrition(int tickMultiplier = 1)
     {
+        if (!_hasDepleted) return; // fully topped up — nothing to do (skips the whole scan)
+
         float rate = RegenerationRate * tickMultiplier;
+        bool anyStillDepleted = false;
         for (int y = 0; y < Size; y++)
         {
             for (int x = 0; x < Size; x++)
@@ -189,9 +199,11 @@ public sealed class Chunk
                 if (_tiles[x, y].IsGrazeable() && _nutrition[x, y] < MaxNutrition)
                 {
                     _nutrition[x, y] = MathF.Min(MaxNutrition, _nutrition[x, y] + rate);
+                    if (_nutrition[x, y] < MaxNutrition) anyStillDepleted = true;
                 }
             }
         }
+        _hasDepleted = anyStillDepleted;
     }
 
     /// <summary>
