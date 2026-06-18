@@ -201,6 +201,39 @@ h1{{font-size:20px}} h3{{font-size:14px;margin:6px 0}} .sub{{color:#888;font-wei
         f.write(out)
     print(f"Wrote {args.out}  ({len(events)} events, world x[{minx:.0f},{maxx:.0f}] y[{miny:.0f},{maxy:.0f}])")
 
+    print_species_summary(events, args.population)
+
+
+def print_species_summary(events, pop_path):
+    """Human-readable, name-keyed digest (immune to column-position misreads of the wide
+    population CSV): start/end/peak population + kills made + deaths by cause, per species."""
+    # Population start/end/peak by species name (header-keyed).
+    pop = {}
+    if pop_path and os.path.exists(pop_path):
+        ticks, totals, series = load_population(pop_path)
+        for s, vals in series.items():
+            if vals and max(vals) > 0:
+                pop[s] = (vals[0], vals[-1], max(vals))
+    # Kills made (attacker, parsed from detail "killed_by:Species:id") and deaths by cause (victim).
+    kills = Counter(); died = defaultdict(Counter)
+    for e in events:
+        ev = e["event"]
+        if ev == "kill":
+            died[e["species"]]["predation"] += 1
+            d = e.get("detail", "")
+            if d.startswith("killed_by:"):
+                kills[d.split(":")[1]] += 1
+        elif ev in DEATH_EVENTS:
+            died[e["species"]][ev.replace("_death", "").replace("environment", "env")] += 1
+
+    names = sorted(set(pop) | set(kills) | {s for s in died}, key=lambda s: pop.get(s, (0,0,0))[1], reverse=True)
+    print("\nPer-species summary (name-keyed — read this, not the wide population CSV):")
+    print(f"  {'species':<12} {'start':>6} {'end':>6} {'peak':>6} {'kills':>6}   deaths(cause)")
+    for s in names:
+        st, en, pk = pop.get(s, (0, 0, 0))
+        dcauses = ", ".join(f"{c}:{n}" for c, n in died.get(s, {}).most_common())
+        print(f"  {s:<12} {st:>6} {en:>6} {pk:>6} {kills.get(s,0):>6}   {dcauses}")
+
 
 if __name__ == "__main__":
     main()

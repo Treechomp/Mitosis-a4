@@ -1208,7 +1208,7 @@ public static class SpeciesRegistry
 
             // Survival
             MaxHunger = 160f,
-            HungerDecayRate = 0.035f,  // Was 0.05 (highest) — it starved despite good kills
+            HungerDecayRate = 0.05f,   // Reverted: Hawk feasts on abundant carrion, doesn't starve
             MaxLifespan = 20000,
             MaturityAge = 1200,
             EnergyRegenRate = 0.15f,
@@ -1219,7 +1219,7 @@ public static class SpeciesRegistry
             TrackingRange = 80f,
 
             // Reproduction
-            ReproHungerThreshold = 112f,   // ~70% of MaxHunger (was 87%) — predator viability
+            ReproHungerThreshold = 140f,   // Reverted from 112: unlimited small-prey/carrion let it boom to 160+
             ReproEnergyThreshold = 75f,
             ReproCooldown = 1000,
             ReproHungerCost = 40f,
