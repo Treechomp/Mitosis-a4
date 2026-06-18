@@ -949,7 +949,18 @@ public sealed class HuntingSystem : ISystem
                 {
                     ref var vel = ref em.Velocities[entity];
 
-                    float huntSpeed = speciesDef.BaseHuntSpeed * speedMultiplier;
+                    // We only reach the movement branch when NOT striking this tick. If we're
+                    // already in attack range, that means the attack is on cooldown — so hold and
+                    // brake rather than steering into the prey and shoving it around the map (which
+                    // read as ineffective "pushing" hunts). Re-strike the instant cooldown clears.
+                    if (distSq < attackRangeSq)
+                    {
+                        vel.Dx *= 0.4f;
+                        vel.Dy *= 0.4f;
+                    }
+                    else
+                    {
+                        float huntSpeed = speciesDef.BaseHuntSpeed * speedMultiplier;
 
                     // === TACTIC-BASED MOVEMENT DISPATCH ===
                     switch (speciesDef.HuntingTactic)
@@ -987,11 +998,12 @@ public sealed class HuntingSystem : ISystem
                         }
                     }
 
-                    // Land predators steer around water during pursuit
-                    // Ambush predators skip water avoidance when stalking or pouncing
-                    bool skipWaterAvoid = isAmbush && (predator.Stealth > 0.1f || predator.PounceTimer > 0);
-                    if (speciesDef.AvoidsOpenWater && !skipWaterAvoid)
-                        SteerAroundWater(ref vel, pos.X, pos.Y, deepOnly: !speciesDef.AvoidsWater);
+                        // Land predators steer around water during pursuit
+                        // Ambush predators skip water avoidance when stalking or pouncing
+                        bool skipWaterAvoid = isAmbush && (predator.Stealth > 0.1f || predator.PounceTimer > 0);
+                        if (speciesDef.AvoidsOpenWater && !skipWaterAvoid)
+                            SteerAroundWater(ref vel, pos.X, pos.Y, deepOnly: !speciesDef.AvoidsWater);
+                    }
                 }
             }
         }
