@@ -2474,6 +2474,7 @@ public static class SpeciesRegistry
             WrongElementGraceTicks = 40,    // Insects drown quickly
             WrongElementDamageRate = 2.5f,
             AvoidsWater = true,             // Routes around (and drowns in) any water, even shallow
+            CarrionChopRate = 6f,           // Strips carcasses fast into carrier sacks (was hardcoded)
 
             // Movement - quick, numerous insects
             BaseWanderSpeed = 0.06f,

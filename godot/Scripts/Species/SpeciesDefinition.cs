@@ -145,6 +145,10 @@ public sealed class SpeciesDefinition
     // === SURVIVAL ===
     public float MaxHunger { get; init; } = 240f;
     public float HungerDecayRate { get; init; } = 0.05f;
+    /// <summary>How fast this species strips nutrition from a carcass per feed tick. -1 = use the
+    /// default (MaxHunger×0.02, floored at 2). Lets a species' feeding behaviour live on the
+    /// species instead of as a hardcoded branch in CarrionSystem (e.g. Sectids chop fast).</summary>
+    public float CarrionChopRate { get; init; } = -1f;
     public float StarvationDamage { get; init; } = 1f;
     public float MaxEnergy { get; init; } = 100f;
     public float EnergyRegenRate { get; init; } = 0.25f; // HP/tick when out of combat and not starving

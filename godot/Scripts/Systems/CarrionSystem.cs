@@ -31,7 +31,6 @@ public sealed class CarrionSystem : ISystem
     private const float ConditionFloor = 0.4f;     // a starved corpse still yields this fraction of base
     private const float EatRange = 1.8f;           // must be this close to feed
     private const float SeekRadius = 18f;          // eaters notice corpses within this
-    private const float SectidChopRate = 6f;       // Sectids strip a carcass fast (into carrier sacks)
     private const int FeedCommitTicks = 20;        // suppress re-hunting while feeding on a corpse
     private const float DecompositionEnrich = 0.01f; // fraction of rotted nutrition that fertilises soil
 
@@ -218,7 +217,7 @@ public sealed class CarrionSystem : ISystem
             {
                 // At the carcass — feed.
                 ref var carrion = ref em.Carrions[corpse];
-                float rate = isSectid ? SectidChopRate : MathF.Max(2f, def.MaxHunger * 0.02f);
+                float rate = def.CarrionChopRate >= 0f ? def.CarrionChopRate : MathF.Max(2f, def.MaxHunger * 0.02f);
                 float taken = MathF.Min(rate, carrion.Nutrition);
                 carrion.Nutrition -= taken;
 
