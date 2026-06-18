@@ -303,7 +303,7 @@ public static class SpeciesRegistry
             MaturityAge = 1500,
 
             // Reproduction - lower thresholds since hunts are risky
-            ReproHungerThreshold = 195f,
+            ReproHungerThreshold = 165f,   // ~79%: was 195 (93%) — the one predator never cut in step 4, so it bred far less than peers and dwindled
             ReproEnergyThreshold = 75f,
             ReproCooldown = 1000,  // Longer cooldown
 
@@ -1365,14 +1365,16 @@ public static class SpeciesRegistry
             AttackRange = 0.6f,
             AttackPower = 15f,
             AttackCooldown = 25,
-            BaseHuntSpeed = 0.07f,
+            BaseHuntSpeed = 0.09f,   // was 0.07 (too slow even to reposition vs wandering prey)
 
-            // Ambush tactics
+            // Ambush tactics — a venom ambusher only needs to land ONE bite (DOT finishes the prey),
+            // so the pounce must actually connect. Was structurally broken: 2.5× from 1.5 tiles
+            // couldn't close on Lizard (flees 0.13) → literally 0 kills in every run.
             AmbushStealthGain = 0.01f,
             AmbushStealthDecay = 0.05f,
             AmbushSpeedThreshold = 0.5f,
-            PounceRange = 1.5f,
-            PounceSpeedMult = 2.5f,
+            PounceRange = 2.5f,
+            PounceSpeedMult = 4.5f,   // was 2.5 — now the lunge outruns fleeing desert prey to land the venom bite
             PounceAttackMult = 2.0f,
             PounceDuration = 10,
             PounceStealthThreshold = 0.6f,

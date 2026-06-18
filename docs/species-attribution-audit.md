@@ -4,6 +4,35 @@ Working document for the attribution pass. Goal: stop the ecosystem collapsing i
 dominant strategies by giving species distinct, viable niches. Based on the **no-faction run**
 (`20260617_224800`, 28.2k ticks, Sectid/Shroomer/Faeling disabled).
 
+## Balance philosophy — toward world-dependent, not fixed, outcomes
+
+We want runs to differ: some species thrive in one world and struggle in another depending on
+how terrain/biomes roll, but the *ecosystem* shouldn't always fail the same way. The lever is to
+separate two kinds of struggle and only fix one:
+
+- **Structural failure (fix it):** a species that loses in *every* world regardless of the roll —
+  almost always because its niche is non-functional. Diagnose via the name-keyed summary:
+  - *Can it convert?* e.g. Scorpion logged **0 kills every run** — a slow ambusher whose pounce
+    couldn't catch its prey, so no world ever lets it feed. Fixed by repairing the hunt mechanic.
+  - *Can it reach prey?* a predator whose only prey is water-bound/sparse where it can't go.
+  - *Is it consistently out-competed by a sibling on the same stat axis?* e.g. Wolf kept a 93%
+    RepHT while every peer dropped to ~70%, so it always dwindled. Fixed by aligning the knob.
+- **World-dependent struggle (leave it):** a species that's viable *in principle* but loses this
+  particular run because its biome/prey was scarce (e.g. Arctic Fox in a small-polar world). This
+  is the variety we want — don't paper over it with buffs; bigger/varied worlds (larger
+  landmasses, separated biomes) make these swing run-to-run.
+
+**A species' niche is viable iff:** (1) it has reachable prey/food in a biome that exists, and
+(2) its hunt/feed mechanic can actually convert that food. Tune to satisfy those two, then let the
+world decide who wins. Avoid strict always-winners (Crocodile was one → nerfed) and add negative
+feedback so no single strategy monotonically dominates — the open **density-dependent herbivore
+reproduction** item is the big one here: without it the world always herbivore-booms to the cap
+(the same disbalance every run) instead of cycling.
+
+Default test world (per current play): **size 36, init pop 2000, ceiling 12000**, tuned toward
+larger landmasses and stronger biome separation.
+
+
 Status legend for proposals: ☐ not started · ◐ in progress · ☑ done.
 Authoritative tuning lives in `SpeciesRegistry.cs`; this doc is the design spec.
 
