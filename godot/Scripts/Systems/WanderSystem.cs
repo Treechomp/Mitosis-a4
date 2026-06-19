@@ -173,7 +173,7 @@ public sealed class WanderSystem : ISystem
                     var roamDir = new Vector2(dx / dist, dy / dist);
                     if (_worldManager != null)
                     {
-                        var avoidance = GetTerrainAvoidance(pos.X, pos.Y, roamDir);
+                        var avoidance = GetTerrainAvoidance(pos.X, pos.Y, roamDir, wanderSpeciesDef?.IsAquatic ?? false);
                         if (avoidance.LengthSquared() > 0.01f)
                             roamDir = (roamDir + avoidance * 2f).Normalized();
                     }
@@ -205,7 +205,7 @@ public sealed class WanderSystem : ISystem
                 {
                     needsEscape = true;
                     // Find direction to escape (toward lowest avoidance terrain)
-                    var escapeDir = FindEscapeDirection(pos.X, pos.Y);
+                    var escapeDir = FindEscapeDirection(pos.X, pos.Y, wanderSpeciesDef?.IsAquatic ?? false);
                     if (escapeDir.LengthSquared() > 0.01f)
                     {
                         // Blend escape direction strongly with current direction
@@ -219,7 +219,7 @@ public sealed class WanderSystem : ISystem
             // Terrain avoidance (proactive - avoid entering bad terrain)
             if (_worldManager != null && !needsEscape)
             {
-                var avoidance = GetTerrainAvoidance(pos.X, pos.Y, wander.CurrentDirection);
+                var avoidance = GetTerrainAvoidance(pos.X, pos.Y, wander.CurrentDirection, wanderSpeciesDef?.IsAquatic ?? false);
                 if (avoidance.LengthSquared() > 0.01f)
                 {
                     wander.CurrentDirection = (wander.CurrentDirection + avoidance * 2f).Normalized();
@@ -454,7 +454,7 @@ public sealed class WanderSystem : ISystem
     /// <summary>
     /// Find the best direction to escape uncomfortable terrain.
     /// </summary>
-    private Vector2 FindEscapeDirection(float x, float y)
+    private Vector2 FindEscapeDirection(float x, float y, bool isAquatic)
     {
         if (_worldManager == null)
             return Vector2.Zero;
@@ -471,7 +471,8 @@ public sealed class WanderSystem : ISystem
 
             float testX = x + dx * _lookAheadDistance;
             float testY = y + dy * _lookAheadDistance;
-            float avoidance = _worldManager.GetTile(testX, testY).GetAvoidanceWeight();
+            // Aquatic creatures escape toward water; everyone else toward calmer land.
+            float avoidance = Weight(_worldManager.GetTile(testX, testY), isAquatic);
 
             if (avoidance < bestAvoidance)
             {
@@ -486,7 +487,7 @@ public sealed class WanderSystem : ISystem
     /// <summary>
     /// Calculate avoidance vector based on nearby terrain.
     /// </summary>
-    private Vector2 GetTerrainAvoidance(float x, float y, Vector2 currentDir)
+    private Vector2 GetTerrainAvoidance(float x, float y, Vector2 currentDir, bool isAquatic)
     {
         if (_worldManager == null)
             return Vector2.Zero;
@@ -499,7 +500,7 @@ public sealed class WanderSystem : ISystem
         float aheadY = y + currentDir.Y * _lookAheadDistance;
 
         var aheadTile = _worldManager.GetTile(aheadX, aheadY);
-        float aheadAvoidance = aheadTile.GetAvoidanceWeight();
+        float aheadAvoidance = Weight(aheadTile, isAquatic);
 
         if (aheadAvoidance > 0.2f)
         {
@@ -517,8 +518,8 @@ public sealed class WanderSystem : ISystem
         float rightX = x - perpX * _lookAheadDistance;
         float rightY = y - perpY * _lookAheadDistance;
 
-        float leftAvoidance = _worldManager.GetTile(leftX, leftY).GetAvoidanceWeight();
-        float rightAvoidance = _worldManager.GetTile(rightX, rightY).GetAvoidanceWeight();
+        float leftAvoidance = Weight(_worldManager.GetTile(leftX, leftY), isAquatic);
+        float rightAvoidance = Weight(_worldManager.GetTile(rightX, rightY), isAquatic);
 
         // Steer toward better side
         if (leftAvoidance < rightAvoidance)
@@ -534,6 +535,14 @@ public sealed class WanderSystem : ISystem
 
         return new Vector2(avoidX, avoidY);
     }
+
+    /// <summary>
+    /// Per-species terrain avoidance weight. Aquatic creatures have inverted preferences — land is
+    /// near-lethal to them (1.0) and water is home (0) — so they don't flop ashore. Everyone else
+    /// uses the standard tile weights (where water is the thing to avoid).
+    /// </summary>
+    private static float Weight(TileType tile, bool isAquatic)
+        => isAquatic ? (tile.IsWater() ? 0f : 1.0f) : tile.GetAvoidanceWeight();
 
     /// <summary>
     /// Find a roam target toward the most damaged (non-balanced) terrain.
