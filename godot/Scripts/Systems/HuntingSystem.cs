@@ -769,6 +769,19 @@ public sealed class HuntingSystem : ISystem
                 }
             }
 
+            // Sit-and-wait ambushers snap their target onto whatever prey has wandered into pounce
+            // range while they lurk, so they strike whatever comes close — not only the one prey
+            // they first locked onto (which rarely strays into the small pounce zone on its own).
+            if (speciesDef.AmbushDormant && predator.Stealth >= speciesDef.PounceStealthThreshold)
+            {
+                int snap = FindNearestPreyInRange(entity, pos.X, pos.Y, speciesDef.PounceRange, predator.AvoidTarget, em);
+                if (snap >= 0 && snap != predator.TargetEntity)
+                {
+                    predator.TargetEntity = snap;
+                    BeginHuntTracking(em, entity, ref predator, snap);
+                }
+            }
+
             // Hunt the target
             if (predator.HasTarget && em.IsAlive(predator.TargetEntity))
             {
@@ -1582,6 +1595,32 @@ public sealed class HuntingSystem : ISystem
 
     /// <summary>
     /// Get the effective body mass of a prey entity for hunting eligibility.
+    /// <summary>
+    /// Nearest huntable prey within <paramref name="range"/> of (x,y), excluding self, same-species,
+    /// and the avoid target. Used by sit-and-wait ambushers to snap onto prey that strays into
+    /// pounce range while they lurk. Returns -1 if none.
+    /// </summary>
+    private int FindNearestPreyInRange(int self, float x, float y, float range, int avoid, EntityManager em)
+    {
+        _nearbyEntities.Clear();
+        _spatialHash.QueryRadius(x, y, range, _nearbyEntities);
+        int mySpecies = em.HasComponents(self, ComponentFlags.Species) ? em.Species[self].SpeciesId : 0;
+        int best = -1;
+        float bestDistSq = range * range;
+        foreach (int p in _nearbyEntities)
+        {
+            if (p == self || p == avoid || !em.IsAlive(p)) continue;
+            if (!em.HasComponents(p, ComponentFlags.Prey)) continue;
+            if (mySpecies != 0 && em.HasComponents(p, ComponentFlags.Species)
+                && em.Species[p].SpeciesId == mySpecies) continue;
+            ref var pp = ref em.Positions[p];
+            float d = MathUtils.DistanceSquared(x, y, pp.X, pp.Y);
+            if (d < bestDistSq) { bestDistSq = d; best = p; }
+        }
+        return best;
+    }
+
+    /// <summary>
     /// Spores use a small fixed mass. Growing creatures scale mass with CurrentScale.
     /// </summary>
     private float GetPreyBodyMass(int preyEntity, EntityManager em)
