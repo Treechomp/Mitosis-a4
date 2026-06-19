@@ -972,6 +972,19 @@ public sealed class HuntingSystem : ISystem
                 {
                     ref var vel = ref em.Velocities[entity];
 
+                    // In attack range but mid-cooldown (and not mid-pounce): pace the prey — match
+                    // its velocity to stay locked alongside it and strike the instant cooldown
+                    // clears, instead of steering into it and shoving it across the map (the
+                    // "prolonged push" that looked so off, worst on the slow long-cooldown predators).
+                    if (distSq < attackRangeSq && predator.PounceTimer <= 0
+                        && em.HasComponents(predator.TargetEntity, ComponentFlags.Velocity))
+                    {
+                        ref var preyVel = ref em.Velocities[predator.TargetEntity];
+                        vel.Dx = preyVel.Dx;
+                        vel.Dy = preyVel.Dy;
+                    }
+                    else
+                    {
                     float huntSpeed = speciesDef.BaseHuntSpeed * speedMultiplier;
 
                     // === TACTIC-BASED MOVEMENT DISPATCH ===
@@ -1015,6 +1028,7 @@ public sealed class HuntingSystem : ISystem
                     bool skipWaterAvoid = isAmbush && (predator.Stealth > 0.1f || predator.PounceTimer > 0);
                     if (speciesDef.AvoidsOpenWater && !skipWaterAvoid)
                         SteerAroundWater(ref vel, pos.X, pos.Y, deepOnly: !speciesDef.AvoidsWater);
+                    }
                 }
             }
         }

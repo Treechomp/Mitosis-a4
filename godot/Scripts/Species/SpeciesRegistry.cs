@@ -488,7 +488,7 @@ public static class SpeciesRegistry
             HuntRange = 6f,
             AttackRange = 1.2f,
             AttackPower = 50f,
-            AttackCooldown = 40,
+            AttackCooldown = 26,   // was 40 (2s between bites) — far too slow, dragged out the kill
             BaseHuntSpeed = 0.08f,
 
             // Survival - long lived
