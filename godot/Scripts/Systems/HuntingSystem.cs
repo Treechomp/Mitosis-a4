@@ -145,9 +145,14 @@ public sealed class HuntingSystem : ISystem
                 speciesDef = SpeciesRegistry.Get("Wolf"); // fallback
             }
 
-            // Reduce cooldowns (compensated for LOD tick rate)
+            // Reduce cooldowns (compensated for LOD tick rate). Clamp at 0 — at any LOD below
+            // Full, tickMult > 1, so a bare subtraction overshoots 0 into the negatives (e.g.
+            // 2 - 3 = -1). Because the guard only decrements while > 0, it would then STICK at
+            // that negative value forever, and the attack gate (== 0) would never fire again —
+            // the predator paces its prey in range without ever landing a hit (the prey looks
+            // "invulnerable"). Math.Max keeps it from ever overshooting.
             if (predator.CurrentCooldown > 0)
-                predator.CurrentCooldown -= tickMult;
+                predator.CurrentCooldown = Math.Max(0, predator.CurrentCooldown - tickMult);
             if (predator.PhaseTimer > 0)
                 predator.PhaseTimer -= tickMult;
             if (predator.AvoidTicks > 0)
@@ -840,7 +845,10 @@ public sealed class HuntingSystem : ISystem
                 // Pounce attack multiplier: amplified damage during pounce burst
                 float attackMult = (isAmbush && predator.PounceTimer > 0) ? speciesDef.PounceAttackMult : 1f;
 
-                if (distSq < attackRangeSq && predator.CurrentCooldown == 0)
+                // <= 0 (not == 0): self-heals any cooldown that may already be sitting at a
+                // stuck negative value from a prior LOD overshoot, so the attack always fires
+                // the moment a predator is in range and off cooldown.
+                if (distSq < attackRangeSq && predator.CurrentCooldown <= 0)
                 {
                     if (em.HasComponents(predator.TargetEntity, ComponentFlags.Energy))
                     {
