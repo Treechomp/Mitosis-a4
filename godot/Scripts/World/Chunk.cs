@@ -14,9 +14,9 @@ public sealed class Chunk
 
     private readonly TileType[,] _tiles;
     private readonly float[,] _nutrition;
-    // True while any grazeable tile is below MaxNutrition. Lets TileRegenerationSystem skip the
-    // full per-tile scan for fully-regenerated chunks (the vast majority in a large, sparse world).
-    // Set on consumption / tile change; cleared by a regen pass that finds nothing left to top up.
+    // True while any grazeable tile is below its biome nutrition cap. Lets TileRegenerationSystem
+    // skip the full per-tile scan for fully-regenerated chunks (the vast majority in a large,
+    // sparse world). Set on consumption; cleared by a regen pass that finds nothing left to top up.
     private bool _hasDepleted = true;
     private readonly float[,] _elevation;
     private readonly float[,] _moisture;
@@ -45,8 +45,8 @@ public sealed class Chunk
     }
 
     /// <summary>
-    /// Initialize nutrition values after terrain generation.
-    /// Grazeable tiles start at full nutrition; others at 0.
+    /// Initialize nutrition values after terrain generation. Each grazeable tile starts full at
+    /// its biome's nutrition cap (lush grass = 1.0, arid/tundra much lower); others at 0.
     /// </summary>
     public void InitializeNutrition()
     {
@@ -54,15 +54,7 @@ public sealed class Chunk
         {
             for (int x = 0; x < Size; x++)
             {
-                var tile = _tiles[x, y];
-                if (!tile.IsGrazeable())
-                    _nutrition[x, y] = 0f;
-                else if (tile == TileType.Tundra)
-                    _nutrition[x, y] = 0.2f;  // Sparse arctic vegetation
-                else if (tile == TileType.Arid)
-                    _nutrition[x, y] = 0.15f; // Sparse desert scrub
-                else
-                    _nutrition[x, y] = MaxNutrition;
+                _nutrition[x, y] = _tiles[x, y].NutritionCap();
             }
         }
     }
@@ -79,17 +71,9 @@ public sealed class Chunk
         if (localX >= 0 && localX < Size && localY >= 0 && localY < Size)
         {
             _tiles[localX, localY] = type;
-            // Reset nutrition when tile type changes
-            if (!type.IsGrazeable())
-                _nutrition[localX, localY] = 0f;
-            else if (type == TileType.Tundra)
-                _nutrition[localX, localY] = 0.2f;
-            else if (type == TileType.Arid)
-                _nutrition[localX, localY] = 0.15f;
-            else
-                _nutrition[localX, localY] = MaxNutrition;
-            // A type change may leave a grazeable tile below max (Tundra/Arid) — re-arm regen.
-            if (_nutrition[localX, localY] < MaxNutrition) _hasDepleted = true;
+            // Reset nutrition to the new biome's cap when the tile type changes (full for the
+            // new biome, so not depleted relative to its own cap).
+            _nutrition[localX, localY] = type.NutritionCap();
         }
     }
 
@@ -196,10 +180,12 @@ public sealed class Chunk
         {
             for (int x = 0; x < Size; x++)
             {
-                if (_tiles[x, y].IsGrazeable() && _nutrition[x, y] < MaxNutrition)
+                // Regenerate only up to the tile's biome cap — arid/tundra soil tops out low.
+                float cap = _tiles[x, y].NutritionCap();
+                if (cap > 0f && _nutrition[x, y] < cap)
                 {
-                    _nutrition[x, y] = MathF.Min(MaxNutrition, _nutrition[x, y] + rate);
-                    if (_nutrition[x, y] < MaxNutrition) anyStillDepleted = true;
+                    _nutrition[x, y] = MathF.Min(cap, _nutrition[x, y] + rate);
+                    if (_nutrition[x, y] < cap) anyStillDepleted = true;
                 }
             }
         }

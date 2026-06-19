@@ -105,6 +105,25 @@ public static class TileTypeExtensions
     }
 
     /// <summary>
+    /// Maximum grazing nutrition this biome's soil holds and regenerates back to (0 = not
+    /// grazeable). This is what differentiates carrying capacity by biome: lush grassland/jungle
+    /// stays teeming, while arid/tundra soil tops out low and can only sustain sparse populations.
+    /// </summary>
+    public static float NutritionCap(this TileType tile)
+    {
+        return tile switch
+        {
+            TileType.Grass or TileType.Savanna or TileType.Jungle => 1.0f, // lush
+            TileType.Forest or TileType.Shrubland => 0.8f,
+            TileType.Steppe => 0.6f,                                       // cold grassland
+            TileType.Taiga => 0.5f,                                       // cold forest
+            TileType.Tundra => 0.25f,                                     // sparse arctic scrub
+            TileType.Arid => 0.2f,                                        // sparse desert scrub
+            _ => 0f                                                       // non-grazeable
+        };
+    }
+
+    /// <summary>
     /// Check if a tile is on the moisture spectrum and can be terraformed by faction species.
     /// Includes new biome tiles that participate in terraform chains.
     /// </summary>
