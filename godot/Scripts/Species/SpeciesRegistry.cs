@@ -1370,11 +1370,12 @@ public static class SpeciesRegistry
             // Ambush tactics — a venom ambusher only needs to land ONE bite (DOT finishes the prey),
             // so the pounce must actually connect. Was structurally broken: 2.5× from 1.5 tiles
             // couldn't close on Lizard (flees 0.13) → literally 0 kills in every run.
-            AmbushStealthGain = 0.01f,
+            AmbushDormant = true,      // sit-and-wait: lurk motionless (≈invisible, idle metabolism), pounce on proximity, envenomate, trail
+            AmbushStealthGain = 0.02f, // builds the lurk's stealth faster while still
             AmbushStealthDecay = 0.05f,
             AmbushSpeedThreshold = 0.5f,
             PounceRange = 2.5f,
-            PounceSpeedMult = 4.5f,   // was 2.5 — now the lunge outruns fleeing desert prey to land the venom bite
+            PounceSpeedMult = 4.5f,   // the lunge outruns fleeing desert prey to land the venom bite
             PounceAttackMult = 2.0f,
             PounceDuration = 10,
             PounceStealthThreshold = 0.6f,

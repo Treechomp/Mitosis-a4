@@ -45,10 +45,14 @@ public sealed class HungerSystem : ISystem
 
             ref var hunger = ref em.Hungers[entity];
 
-            // Decay hunger — hibernating Sectids run a low metabolism while dormant at their nest
+            // Decay hunger — hibernating Sectids run a low metabolism while dormant at their nest,
+            // and sit-and-wait ambushers (e.g. Scorpion) idle their metabolism while lurking, so
+            // they can wait out lean patches motionless.
             float decayRate = hunger.DecayRate * HungerDecayScale;
             if (em.HasComponents(entity, ComponentFlags.FoodCarrier) && em.FoodCarriers[entity].IsHibernating)
                 decayRate *= 0.1f;
+            else if (em.HasComponents(entity, ComponentFlags.Predator) && em.Predators[entity].IsDormant)
+                decayRate *= 0.2f;
             hunger.Current -= decayRate * tickMult;
 
             // Starvation damage

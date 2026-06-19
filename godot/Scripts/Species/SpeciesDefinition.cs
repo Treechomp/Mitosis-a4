@@ -103,6 +103,14 @@ public sealed class SpeciesDefinition
     /// <summary>Distance within which a pounce can be triggered.</summary>
     public float PounceRange { get; init; } = 3f;
 
+    /// <summary>
+    /// Sit-and-wait ambush: instead of stalking toward prey, the predator lurks motionless once
+    /// stealthed (max stealth → ~invisible to prey, low metabolism via Predator.IsDormant), then
+    /// pounces when prey wanders into PounceRange and envenomates it, trailing until the DOT kills.
+    /// (Also the template for dormant Sectids' nest ambush.)
+    /// </summary>
+    public bool AmbushDormant { get; init; } = false;
+
     /// <summary>Speed multiplier during pounce burst.</summary>
     public float PounceSpeedMult { get; init; } = 3f;
 

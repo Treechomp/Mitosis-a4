@@ -129,6 +129,10 @@ public sealed class HuntingSystem : ISystem
             ref var predator = ref em.Predators[entity];
             ref var hunger = ref em.Hungers[entity];
 
+            // Cleared each due tick; re-armed only while a dormant ambusher is lurking motionless
+            // (so it isn't flagged dormant while attacking, chasing, or target-less).
+            predator.IsDormant = false;
+
             // Get species definition for this predator (all hunting params are per-species)
             SpeciesDefinition speciesDef;
             if (em.HasComponents(entity, ComponentFlags.Species))
@@ -1362,10 +1366,22 @@ public sealed class HuntingSystem : ISystem
         }
         else if (predator.Stealth > 0.1f)
         {
-            // STALKING: approach slowly to maintain/build stealth
-            var dir = MathUtils.Normalize(dx, dy);
-            float stalkSpeed = speciesDef.BaseHuntSpeed * speciesDef.AmbushSpeedThreshold * 0.9f;
-            BlendVelocity(ref vel, dir.X * stalkSpeed, dir.Y * stalkSpeed, huntAgility * 0.5f);
+            if (speciesDef.AmbushDormant)
+            {
+                // LURK: sit motionless and let prey wander into pounce range. Approaching is too
+                // slow to close and would shed stealth; staying still maxes stealth (≈invisible to
+                // prey) and IsDormant drops metabolism so it can wait out a lean patch.
+                vel.Dx = 0f;
+                vel.Dy = 0f;
+                predator.IsDormant = true;
+            }
+            else
+            {
+                // STALKING: approach slowly to maintain/build stealth
+                var dir = MathUtils.Normalize(dx, dy);
+                float stalkSpeed = speciesDef.BaseHuntSpeed * speciesDef.AmbushSpeedThreshold * 0.9f;
+                BlendVelocity(ref vel, dir.X * stalkSpeed, dir.Y * stalkSpeed, huntAgility * 0.5f);
+            }
         }
         else
         {

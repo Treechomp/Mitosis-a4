@@ -55,6 +55,7 @@ public struct Predator
     public int PhaseTimer;       // Ticks remaining in current phase
     public float Stealth;        // 0-1: accumulated stealth level (ambush predators)
     public int PounceTimer;      // Ticks remaining in pounce burst (0 = not pouncing)
+    public bool IsDormant;       // Sit-and-wait ambusher motionless in its lurk (low metabolism, ~invisible)
 
     // === Target viability tracking ===
     // Used to abandon prey we can't actually bring down (too fast to hit, out-healing our
