@@ -684,13 +684,15 @@ public static class SpeciesRegistry
             BaseWanderSpeed = 0.04f,
             DirectionChangeChance = 0.005f,
 
-            // Combat — solo aquatic predator, direct chase
+            // Combat — apex aquatic predator: explosive pursuit + long-range sensing. Very high
+            // hunt speed (with the strong DeepWater swim modifier below it outruns fleeing fish
+            // and penguins), and a huge tracking/hunt radius — sharks detect prey from far off.
             HuntingTactic = HuntingTactic.Solo,
-            HuntRange = 14f,
+            HuntRange = 24f,
             AttackRange = 1.2f,
             AttackPower = 45f,
             AttackCooldown = 30,
-            BaseHuntSpeed = 0.14f,
+            BaseHuntSpeed = 0.22f,
 
             // Survival - long lived apex
             MaxHunger = 280f,
@@ -703,7 +705,7 @@ public static class SpeciesRegistry
             // Hunting behavior
             HuntThreshold = 0.75f,
             TrackingHungerThreshold = 0.5f,
-            TrackingRange = 100f,
+            TrackingRange = 160f,
 
             // Reproduction - slow
             ReproHungerThreshold = 200f,   // ~71% (predator viability; pairs with the water fix)
@@ -725,8 +727,8 @@ public static class SpeciesRegistry
             DiscomfortDecayRate = 1f,
             TerrainSpeedModifiers = new Dictionary<TileType, float>
             {
-                { TileType.DeepWater, 1.8f },
-                { TileType.ShallowWater, 1.3f },
+                { TileType.DeepWater, 2.2f },
+                { TileType.ShallowWater, 1.6f },
                 { TileType.River, 0.8f },
             },
             TerrainComfortModifiers = new Dictionary<TileType, float>
@@ -1711,8 +1713,11 @@ public static class SpeciesRegistry
                 { TileType.Ice, 1.0f },
                 { TileType.Tundra, 0.9f },
                 { TileType.Steppe, 0.85f },
-                { TileType.ShallowWater, 1.3f },
-                { TileType.DeepWater, 1.2f },
+                // Strong swimmer: fast in water (faster than a swimming Polar Bear, so it can
+                // sometimes escape bears/foxes by fleeing to sea) but the slow land base speed
+                // keeps it easy prey ashore. Still slower than a hunting Shark.
+                { TileType.ShallowWater, 2.6f },
+                { TileType.DeepWater, 2.8f },
             },
             TerrainComfortModifiers = new Dictionary<TileType, float>
             {

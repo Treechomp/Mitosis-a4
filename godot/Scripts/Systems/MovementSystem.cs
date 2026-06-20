@@ -81,6 +81,17 @@ public sealed class MovementSystem : ISystem
                     // able to move while it suffocates. Stops them roaming inland after prey/corpses.
                     speedMult *= 0.05f;
                 }
+                else if (currentTile.IsWater())
+                {
+                    // Per-species swimming affinity. Water tiles are intrinsically slow for
+                    // everyone (DeepWater 0.25, ShallowWater 0.4), so without this an "apex water
+                    // predator" Shark crawls. Applying each species' water TerrainSpeedModifier
+                    // here lets strong swimmers (Shark/Crocodile/Fish/Penguin) move fast in water
+                    // while poor swimmers (Polar Bear) stay slow. Scoped to water only on purpose:
+                    // the land TerrainSpeedModifiers stay inert so the tuned land predator/prey
+                    // catch balance is not disturbed.
+                    speedMult *= speciesDef.GetTerrainSpeedModifier(currentTile);
+                }
             }
 
             // Slope resistance: uphill movement is slower (non-flying only)
