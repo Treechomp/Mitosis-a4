@@ -617,6 +617,12 @@ public sealed class HuntingSystem : ISystem
                         if (preyDef.UnhuntableByPredators
                             && speciesDef.Diet == DietType.Carnivore)
                             continue;  // Faelings can't be hunted by carnivores
+
+                        // Specialist diet: a predator with an ExclusivePrey list ignores
+                        // everything not on it (e.g. Penguins only ever hunt Fish).
+                        if (speciesDef.ExclusivePrey != null
+                            && !speciesDef.ExclusivePrey.Contains(preyDef.Name))
+                            continue;
                     }
 
                     ref var preyPos = ref em.Positions[preyEntity];

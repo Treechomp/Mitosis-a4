@@ -294,6 +294,13 @@ public sealed class SpeciesDefinition
     public List<string>? PreferredPrey { get; init; }
     public float PreferredPreyBias { get; init; } = 0.5f;
 
+    /// <summary>
+    /// Hard prey restriction: if non-null, this predator can ONLY target these species
+    /// (by name), ignoring all other otherwise-valid prey. Used for specialists like the
+    /// Penguin, which feeds exclusively on Fish. Null = opportunist (any valid prey).
+    /// </summary>
+    public List<string>? ExclusivePrey { get; init; }
+
     // === GRAZING ===
     public bool CanGraze { get; init; } = false;
     public float GrazeNutrition { get; init; } = 0.5f;

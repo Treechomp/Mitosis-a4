@@ -611,10 +611,13 @@ public static class SpeciesRegistry
             MaxLifespan = 10000,
             MaturityAge = 600,
 
-            // Reproduction - still prolific but costlier per litter
+            // Reproduction - prolific r-strategist: the base of the cold/aquatic food web
+            // (Shark, Polar Bear, Penguin all feed on fish), so it must recover fast from heavy
+            // predation. Short cooldown; the existing local-density + global-pressure brakes in
+            // ReproductionSystem cap the standing population so this can't run away.
             ReproHungerThreshold = 100f,
             ReproEnergyThreshold = 32f,  // lowered to fit the smaller MaxEnergy (45)
-            ReproCooldown = 700,
+            ReproCooldown = 300,
             ReproHungerCost = 45f,
             ReproEnergyCost = 18f,       // scaled to the smaller MaxEnergy (45)
             OffspringCount = 2,
@@ -745,7 +748,7 @@ public static class SpeciesRegistry
             // Trophic - large aquatic apex
             BodyMass = 10.0f,
             SoloHuntMaxRatio = 1.5f,
-            PreferredPrey = new List<string> { "Fish", "Turtle" },
+            PreferredPrey = new List<string> { "Fish", "Penguin", "Turtle" },
             PreferredPreyBias = 0.4f,
 
             // Visuals - large dark blue triangle
@@ -1640,7 +1643,11 @@ public static class SpeciesRegistry
         {
             Name = "Penguin",
             MaxEnergy = 90f,            // HP scaled to body mass (previously the default 100)
-            Diet = DietType.Herbivore,
+            // Omnivore so it is BOTH a predator (hunts fish) and prey (Arctic Fox / Polar Bear /
+            // Shark eat it). SemiAquatic gives AvoidsOpenWater = false, so it can dive into open
+            // water to chase fish. FleeingSystem runs after HuntingSystem, so a hunting penguin
+            // still breaks off to flee when a predator closes in.
+            Diet = DietType.Omnivore,
             DefaultSocialType = SocialType.Herd,
             SemiAquatic = true,
             SpawnWeight = 0.7f,
@@ -1648,6 +1655,20 @@ public static class SpeciesRegistry
             // Movement - waddle on land, faster in water
             BaseWanderSpeed = 0.025f,
             DirectionChangeChance = 0.008f,
+
+            // Combat — agile underwater pursuit hunter; feeds exclusively on fish
+            HuntingTactic = HuntingTactic.Solo,
+            HuntRange = 9f,
+            AttackRange = 0.8f,
+            AttackPower = 22f,
+            AttackCooldown = 16,
+            BaseHuntSpeed = 0.1f,
+            HuntThreshold = 0.6f,
+            TrackingHungerThreshold = 0.5f,
+            TrackingRange = 32f,
+            ExclusivePrey = new List<string> { "Fish" },
+            PreferredPrey = new List<string> { "Fish" },
+            PreferredPreyBias = 0.4f,
 
             // Fleeing
             FleeRange = 6f,
@@ -1704,8 +1725,9 @@ public static class SpeciesRegistry
             AllowedSpawnTiles = new List<TileType> { TileType.Ice, TileType.Tundra, TileType.Steppe },
             PreferredBiomes = new List<BiomeType> { BiomeType.Arctic },
 
-            CanGraze = true,
-            GrazeNutrition = 0.3f,
+            // Fish-exclusive: penguins no longer graze land at all — they live or starve by the
+            // local fish supply, tightly coupling the colony to the aquatic food web.
+            CanGraze = false,
 
             SeparationRadius = 1.0f,   // Huddle close
             SeparationStrength = 0.01f,
