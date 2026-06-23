@@ -101,16 +101,38 @@ Scaled by `WrongElementGraceTicks` / `WrongElementDamageRate`.
 - Land half of `TerrainSpeedModifiers` — inert (water-only wiring).
 - `GetRuggedness` — terrain-generation visual only (fine, not behavioural).
 
-## Open design questions
-1. **One terrain profile, or many knobs?** Replace the scattered speed/avoid/comfort/spawn
-   knobs with a single per-species, per-tile resolved profile that every movement/AI system
-   reads?
-2. **Multiplier vs override.** Are per-species modifiers relative to the tile-intrinsic value
-   (current: multiply) or should strong affinity override the intrinsic base?
-3. **Unify avoidance + make it species-aware everywhere.** Fix FleeingSystem; collapse the
-   three pathing code paths into one shared "terrain passability/cost" function.
-4. **Land-speed wiring.** Finish enabling `TerrainSpeedModifiers` on land with a balance pass,
-   or keep water-only.
-5. **Comfort vs avoidance.** Merge the two "dislikes terrain" systems, or keep as soft
-   (discomfort) vs hard (route-around)?
-6. **`GetCoverBonus`** — wire into ambush/stealth/flee, or delete.
+## Open design questions — DECISIONS (2026-06-23)
+Full target design in `docs/terrain-profile-design.md`.
+
+1. **One terrain profile, or many knobs?** → **DECIDED: single per-species terrain profile.**
+   Collapse the scattered speed/comfort/cover knobs into one per-species, per-tile profile
+   every movement/AI system reads.
+2. **Multiplier vs override.** → **DECIDED: REPLACE, not multiply.** The tile keeps a base
+   speed (grip differs on sand/snow/grass) used when a species has no entry; a species' own
+   speed value for a tile *replaces* that base, so specialists can be fast where others crawl
+   (or especially slow where badly suited).
+3. **Unify avoidance + make it species-aware everywhere.** → **DECIDED: yes, fix the
+   species-unaware paths** (FleeingSystem flees fish onto land; Hunting/Carrion must not pull
+   Sectids into water). Review how avoidance interacts with hunger/fleeing.
+4. **Land-speed wiring.** → folded into #1/#2 (profile drives all tiles, replace semantics).
+5. **Comfort vs avoidance.** → **DECIDED in principle:** keep BOTH behaviours —
+   - *soft comfort*: a creature avoids the tile when wandering/grazing but WILL enter it under
+     fear or deep hunger (Rabbit crossing a river when chased or when grass is fallow);
+   - *hard avoidance*: never voluntarily entered even when fleeing/starving — only accidental
+     entry (knockback / pathing slip) → drowning/suffocation (Sectid↔water, Fish/Shark↔land).
+   **Proposed unification (pending confirmation):** express both as ONE comfort/affinity axis
+   with a "hard-avoid" threshold at the extreme, rather than two separate fields — so extreme
+   discomfort is structurally un-overridable by hunger/fear. See design doc.
+6. **`GetCoverBonus`** → **DECIDED: wire it, and make it per-species concealment.** Cover is
+   species×tile (Rabbit in forest, Scorpion in desert, Arctic Fox in snow), reducing the
+   species' detectability to predators — not just the tile-generic value. Lives in the profile.
+
+## Observed failures these decisions must fix (run 20260620_200253)
+- Specialist predators starve from near-zero kill counts: Shark 7, Scorpion 9, Arctic Fox 13,
+  Snake 18, Penguin 35 — vs Hawk 1063 / Jaguar 407 / Bear 302. Common threads are all
+  terrain-coupled: **reachability** (sharks/penguins can't get to fish across fragmented
+  water), **concealment** (dormant Scorpion only catches slow prey that wanders into range —
+  0 Lizard/Rabbit kills), and **species-unaware fleeing** (47 Fish suffocate ashore).
+- No terrain-aware *food/habitat seeking*: wander is random and hunting only reacts to
+  in-range prey, so a specialist in a marginal/disconnected biome starves regardless of stats
+  (penguins sat inland and starved; Arctic Fox collapsed with them).
