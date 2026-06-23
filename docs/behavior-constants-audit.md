@@ -37,6 +37,24 @@ override lets a tenacious bear differ from a flighty fox without touching shared
 `HungerDecayScale` (deliberately a single global dial). These describe the world/engine, not a
 species' character, so centralising them is correct.
 
+## Update (2026-06-23) — terrain redesign reinforced the pattern
+The terrain-handling redesign is a good application of this audit's principle. Terrain logic that
+was split between tile-intrinsic hardcoding and inconsistent per-system branches is now resolved
+through one helper, **`Species/TerrainProfile.cs`**, which reads per-species `SpeciesDefinition`
+data (`TerrainSpeedModifiers`, `TerrainComfortModifiers`, new `TerrainConcealment`, and the
+element flags) — so Movement/Wander/Fleeing/Hunting all express a species' terrain character from
+its definition rather than from magic numbers in shared systems.
+
+New per-species fields added this session (each defaults to the prior global behaviour):
+- **`ExclusivePrey`** (`HuntingSystem`) — hard prey-list filter; replaces "any IsPrey" for
+  specialists (Penguin → Fish). `null` = opportunist (unchanged).
+- **`TerrainConcealment`** (`TerrainProfile`) — per-tile camouflage; falls back to the tile's
+  generic `GetCoverBonus`, which this wiring made live (it was dead config).
+
+Not a constants issue but recorded for the "in case of trouble" trail: the long-standing
+prolonged-push bug was an **engine logic** fault (attack-cooldown overshoot at reduced LOD), fixed
+by clamping the decrement and using a `<= 0` gate — not a per-species value.
+
 ## Recommendation
 Migrate Antipattern-1 branches first (they're correctness/coupling smells), then the
 Antipattern-2 consts on demand as balance needs arise — each becomes a `SpeciesDefinition` field

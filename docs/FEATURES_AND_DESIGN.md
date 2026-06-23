@@ -271,7 +271,7 @@ There are **28 species**: 5 generalists, 20 biome-specific, and 3 factions.
 | Deer | Herbivore | 4.0 | 0.03 / – | – | Herd; main wolf prey |
 | Rabbit | Herbivore | 1.0 | 0.04 / – | – | Herd; frail (low HP), fast-breeding; panics |
 | Wolf | Carnivore | 3.5 | 0.06 / 0.12 | PackCoordinated | Prefers Deer/Rabbit |
-| Fox | Carnivore | 2.0 | 0.05 / 0.11 | Solo | Rabbit specialist |
+| Fox | Carnivore | 2.0 | 0.05 / 0.11 | Ambush | Rabbit specialist; stealth pounce + scavenges |
 | Crocodile | Carnivore | 8.0 | 0.02 / 0.08 | Ambush | Semi-aquatic; water stealth + pounce |
 | Fish | Herbivore | 0.5 | 0.05 / – | – | **Aquatic**; feeds from water |
 | Shark | Carnivore | 10.0 | 0.04 / 0.22 | Solo | **Aquatic** apex; very fast + long detection (HuntRange 24); Fish/Penguin/Turtle |
@@ -279,7 +279,7 @@ There are **28 species**: 5 generalists, 20 biome-specific, and 3 factions.
 | Turtle | Herbivore | 6.0 | 0.015 / – | – | Semi-aquatic; very slow; freezes |
 | Elk | Herbivore | 7.0 | 0.025 / – | – | Large grassland herd |
 | Boar | **Omnivore** | 4.5 | 0.035 / 0.09 | PackCoordinated | Grazes + hunts; defensive |
-| Bear | Carnivore | 12.0 | 0.02 / 0.09 | Solo | Hunts Deer/Elk/Boar |
+| Bear | Carnivore | 12.0 | 0.02 / 0.09 | Ambush | Burst charger; hunts Deer/Elk/Boar; fishes shallows |
 | Hawk | Carnivore | 1.5 | 0.06 / 0.15 | Solo | **Flying**; hunts small prey |
 | Lizard | Herbivore | 0.4 | 0.05 / – | – | Desert (Sand/Arid/Dirt) |
 | Scorpion | Carnivore | 0.8 | 0.02 / 0.07 | Ambush | **Venom**; desert |
@@ -299,7 +299,7 @@ There are **28 species**: 5 generalists, 20 biome-specific, and 3 factions.
 
 Trait flags: **Flying** = Hawk, Parrot · **Aquatic** = Fish, Shark · **Semi-aquatic** =
 Crocodile, Turtle, Penguin, Polar Bear, Tapir, Jaguar · **Omnivore** (predator+prey) = Boar,
-Penguin · **Venom** = Scorpion, Snake · **Ambush** = Crocodile, Scorpion, Snake, Jaguar ·
+Penguin · **Venom** = Scorpion, Snake · **Ambush** = Crocodile, Scorpion, Snake, Jaguar, Fox, Bear ·
 **PackCoordinated** = Wolf, Boar · **Swarm** = Sectid · **Factions** = Shroomer, Sectid, Faeling.
 
 `ExclusivePrey` (a hard prey-list filter) lets a specialist hunt only listed species — Penguin
@@ -446,10 +446,10 @@ The most complex system, dispatched by `HuntingTactic`:
 
 | Tactic | Species | Behavior |
 |--------|---------|----------|
-| Solo | Fox, Bear, Hawk, Shark, Polar Bear, Arctic Fox | Direct chase |
+| Solo | Hawk, Shark, Polar Bear, Arctic Fox, Penguin | Direct chase |
 | PackCoordinated | Wolf, Boar | Leader/Flanker/Disruptor roles, phased convergence |
 | Swarm | Sectid | Colony rush, no retreat, counts all nearby kin, targets anything |
-| Ambush | Crocodile, Scorpion, Snake, Jaguar | Build stealth → pounce burst |
+| Ambush | Crocodile, Scorpion, Snake, Jaguar, Fox, Bear | Build stealth → pounce burst |
 
 Hunting is **opportunistic**: urgency scales from starving (1.0) to well-fed, and a predator
 only stops hunting at ≥ 95% hunger. Target selection (spatial-hash query) scores by distance,

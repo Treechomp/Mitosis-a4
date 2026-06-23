@@ -1,8 +1,52 @@
 # Species Stat & Behavior Attribution Audit
 
 Working document for the attribution pass. Goal: stop the ecosystem collapsing into a few
-dominant strategies by giving species distinct, viable niches. Based on the **no-faction run**
-(`20260617_224800`, 28.2k ticks, Sectid/Shroomer/Faeling disabled).
+dominant strategies by giving species distinct, viable niches. Originally based on the
+**no-faction run** (`20260617_224800`); §1–§5 below are that historical spec. The current state
+is summarised first.
+
+## Current status (2026-06-23, run 20260623_215555, 35k ticks)
+
+Predator **kill effectiveness** (kills / hunt_start), most recent run:
+
+| Predator | Kills | Conv% | Status |
+|---|---|---|---|
+| Jaguar (Ambush) | 559 | 56% | thriving — efficient |
+| Bear (Ambush)   | 248 | 50% | healthy |
+| Fox (Ambush)    | 217 | 50% | healthy |
+| Hawk (Solo)     | 994 | 39% | thriving — **apex fish predator** (out-fishes Shark) |
+| Arctic Fox      | 129 | 33% | marginal (declining, prey-limited) |
+| Snake (Ambush)  | 32  | 33% | near-extinct (too few absolute kills) |
+| Shark (Solo)    | 103 | 21% | **recovered** (7→103 kills) but pop repro/habitat-limited |
+| Wolf (Pack)     | 536 | 18% | healthy via *volume* (fails 2793/2987 hunts) |
+| Polar Bear      | 109 | 14% | survives as a **land** predator (abandoned aquatic niche) |
+| Scorpion        | 0   | 0%  | **structurally broken — extinct** |
+| Penguin         | 0   | 0%  | **extinct** — can't reach fish (no food-seeking) |
+
+**Confirmed fixes since the historical spec:**
+- **Prolonged-push / "invulnerable prey" fixed** — root cause was the attack cooldown overshooting
+  0 into a stuck negative at reduced LOD (gate `== 0` never re-fired). Now clamped + gate `<= 0`.
+- **Terrain redesign** (`TerrainProfile`, see terrain docs): speed REPLACE, species-aware
+  avoidance, concealment. Net: **Shark recovered** (feeds now) and **ongoing fish land-stranding
+  stopped** (env deaths drop to ~0 after t10k; the early cluster is spawn placement).
+- **Tactics now:** Fox & Bear are **Ambush** (not Solo); Penguin is an **Omnivore fish-specialist
+  predator** (`ExclusivePrey` = Fish, no grazing) and prey to Arctic Fox/Polar Bear/Shark.
+
+**Still structurally broken (fix):**
+- **Scorpion** — dormant sit-and-wait ambush converts 0% against fast small prey; only jabs slow
+  big things that wander in. Needs a *mechanic* rework, not tuning (terrain-roadmap §5).
+- **Penguin reachability** — fish-exclusive but nothing steers it toward water; starves. The
+  terrain-aware **food-seeking drive** is the fix (terrain-roadmap §3).
+- **Crocodile** declining (few hunts) — water-edge ambush rarely meets prey; same reachability class.
+
+**World-dependent (leave, but needs habitat):** arctic/aquatic margins (Arctic Fox, Polar Bear's
+aquatic role) hinge on whether the seed produces a real cold coast — now inspectable via the
+world-snapshot tool. Spawn-niche placement + biome-distribution validation are tracked in
+`terrain-roadmap.md`.
+
+---
+
+### Historical spec (no-faction run 20260617_224800, 28.2k ticks)
 
 ## Balance philosophy — toward world-dependent, not fixed, outcomes
 
