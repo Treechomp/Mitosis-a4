@@ -1,8 +1,33 @@
 # Unified Species Terrain Profile — Design Spec
 
 Target design for consolidating terrain handling. Decisions captured from the
-2026-06-23 discussion; see `terrain-handling-audit.md` for the current (pre-redesign)
-state and the failure observations motivating it. **Status: design, not yet implemented.**
+2026-06-23 discussion; see `terrain-handling-audit.md` for the pre-redesign state and the
+failure observations motivating it.
+
+**Status: IMPLEMENTED (2026-06-23).** `TerrainProfile` (Scripts/Species/TerrainProfile.cs)
+is the single resolver; MovementSystem/WanderSystem/FleeingSystem/HuntingSystem consult it.
+
+## What was built vs. this spec
+- **Speed = REPLACE**, all tiles — done (MovementSystem via `TerrainProfile.Speed`). The
+  previously-inert land speed modifiers are now LIVE; swimmer water values were retuned to
+  absolute tile speeds.
+- **Concealment** — done, and wired BOTH detection directions (prey harder to target in
+  cover; concealed predators harder for prey to notice). `GetCoverBonus` is now the per-tile
+  floor (no longer dead). 12 species got camouflage entries.
+- **Species-aware avoidance** — done for Movement/Wander/Fleeing (fixes fish foraging/
+  wandering/fleeing onto land). HuntingSystem/CarrionSystem keep their existing water-path
+  rejection (`AvoidsOpenWater` + `GetWaterFractionOnPath`), which already works; not yet
+  folded into the resolver.
+- **Comfort vs hard-avoid — DIVERGENCE FROM THE "single-axis" musing.** Implemented as the
+  *separation* model (the user's first statement), not one collapsed axis:
+  * **Hard avoid** = element membership via `TerrainProfile.IsImpassable` (aquatic↔land,
+    insect↔water). Concise and exact — avoids enumerating every land tile per fish.
+  * **Soft comfort** = `TerrainComfortModifiers` + tile `GetDiscomfortRate` in
+    TerrainDiscomfortSystem (the hunger/fear-overridable "leave uncomfortable ground" urge).
+  Note: hard avoidance is enforced as a very strong *steering* aversion (1.0) + the 0.05
+  beach/flop speed penalty + drowning/suffocation, NOT a hard movement wall — so "only
+  accidental shoring/drowning" is achieved by strong avoidance, not an impassable barrier
+  (keeps entities from getting trapped).
 
 ## Goal
 Replace the scattered, inconsistently-applied terrain knobs (tile-intrinsic +
