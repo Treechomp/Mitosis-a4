@@ -8,7 +8,10 @@
 > **Last updated**: June 2026
 >
 > Companion docs: [architecture.md](architecture.md) (high-level design),
-> [godot-roadmap.md](godot-roadmap.md) (status & roadmap). Superseded docs are in
+> [godot-roadmap.md](godot-roadmap.md) (status & roadmap),
+> [terrain-handling-audit.md](terrain-handling-audit.md) /
+> [terrain-profile-design.md](terrain-profile-design.md) /
+> [terrain-roadmap.md](terrain-roadmap.md) (terrain subsystem). Superseded docs are in
 > [archive/](archive/).
 
 ---
@@ -271,7 +274,7 @@ There are **28 species**: 5 generalists, 20 biome-specific, and 3 factions.
 | Fox | Carnivore | 2.0 | 0.05 / 0.11 | Solo | Rabbit specialist |
 | Crocodile | Carnivore | 8.0 | 0.02 / 0.08 | Ambush | Semi-aquatic; water stealth + pounce |
 | Fish | Herbivore | 0.5 | 0.05 / – | – | **Aquatic**; feeds from water |
-| Shark | Carnivore | 10.0 | 0.04 / 0.14 | Solo | **Aquatic**; hunts Fish/Turtle |
+| Shark | Carnivore | 10.0 | 0.04 / 0.22 | Solo | **Aquatic** apex; very fast + long detection (HuntRange 24); Fish/Penguin/Turtle |
 | Frog | Herbivore | 0.3 | 0.03 / – | – | Wetland/Bog; panics |
 | Turtle | Herbivore | 6.0 | 0.015 / – | – | Semi-aquatic; very slow; freezes |
 | Elk | Herbivore | 7.0 | 0.025 / – | – | Large grassland herd |
@@ -282,7 +285,7 @@ There are **28 species**: 5 generalists, 20 biome-specific, and 3 factions.
 | Scorpion | Carnivore | 0.8 | 0.02 / 0.07 | Ambush | **Venom**; desert |
 | Camel | Herbivore | 8.0 | 0.025 / – | – | Desert; very low hunger decay |
 | Snake | Carnivore | 1.2 | 0.03 / 0.10 | Ambush | **Venom**; desert/scrub |
-| Penguin | Herbivore | 1.5 | 0.025 / – | – | Semi-aquatic; tight huddle herd |
+| Penguin | **Omnivore** | 1.5 | 0.025 / 0.10 | Solo | Semi-aquatic **fish-specialist predator** (`ExclusivePrey` = Fish, no grazing); huddle herd; itself prey to Arctic Fox / Polar Bear / Shark (dual predator+prey, like Boar). |
 | Polar Bear | Carnivore | 14.0 | 0.02 / 0.10 | Solo | Semi-aquatic; arctic apex |
 | Arctic Fox | Carnivore | 1.8 | 0.05 / 0.12 | Solo | Tundra/Steppe |
 | Musk Ox | Herbivore | 10.0 | 0.02 / – | – | Tundra herd; defensive |
@@ -294,9 +297,14 @@ There are **28 species**: 5 generalists, 20 biome-specific, and 3 factions.
 | **Sectid** | Terraformer | 0.5 | 0.06 / 0.13 | Swarm | Nest breeding; carries food; hibernates when prey-starved |
 | **Faeling** | Terraformer | 3.0 | 0.09 / – | – | Crystal-spawned; unhuntable; starvation-immune |
 
-Trait flags: **Flying** = Hawk, Parrot · **Aquatic** = Fish, Shark · **Venom** = Scorpion,
-Snake · **Ambush** = Crocodile, Scorpion, Snake, Jaguar · **PackCoordinated** = Wolf, Boar ·
-**Swarm** = Sectid · **Factions** = Shroomer, Sectid, Faeling.
+Trait flags: **Flying** = Hawk, Parrot · **Aquatic** = Fish, Shark · **Semi-aquatic** =
+Crocodile, Turtle, Penguin, Polar Bear, Tapir, Jaguar · **Omnivore** (predator+prey) = Boar,
+Penguin · **Venom** = Scorpion, Snake · **Ambush** = Crocodile, Scorpion, Snake, Jaguar ·
+**PackCoordinated** = Wolf, Boar · **Swarm** = Sectid · **Factions** = Shroomer, Sectid, Faeling.
+
+`ExclusivePrey` (a hard prey-list filter) lets a specialist hunt only listed species — Penguin
+feeds exclusively on Fish. Most predators are opportunists (no list); `PreferredPrey` is only a
+soft scoring bias.
 
 ### Mass-based hunting
 
@@ -311,7 +319,8 @@ swarm scales by colony size and can threaten large predators.
 
 ```
 Wolf → Deer, Rabbit      Fox → Rabbit       Crocodile → prey at water's edge
-Shark → Fish, Turtle     Bear → Deer/Elk/Boar    Hawk → Rabbit/Frog/Lizard
+Shark → Fish, Penguin, Turtle     Bear → Deer/Elk/Boar    Hawk → Rabbit/Frog/Lizard/Fish
+Cold web:  Fish → (Penguin) → Arctic Fox / Polar Bear / Shark   (Penguin both eats and is eaten)
 Faeling (ranged) → Sectid, Shroomer
 Shroomer (AoE)   → Sectid, Faeling
 Sectid (swarm)   → spores + any living creature
@@ -351,22 +360,48 @@ divide-by-zero into rate math (it once produced `NaN` hunger that spread through
 
 ### 6.2 Movement — `MovementSystem.cs` (gated)
 
-Per tick: clamps creature velocity to **0.25 tiles/tick** (player excluded); multiplies by the
-current tile's speed multiplier; applies **uphill slope resistance** `max(0.25, 1 − rise×8)`
-and a **hard cliff block** (non-flying creatures can't cross an elevation jump > **0.28**),
-sampling elevation via `WorldManager`; attempts diagonal then axis-aligned sliding; clamps to
-world bounds; updates `ChunkPosition`; then damps creature velocity by **0.85/frame**
-(micro-drift below 0.01 zeroed). Flying creatures bypass slope/cliff; the player bypasses
-clamp/damping. **Aquatic creatures beached on land** (e.g. Shark, Fish off water) move at 5%
-speed — they flounder in place and suffocate (§6.3) rather than chasing prey/corpses inland.
+Per tick: clamps creature velocity to **0.25 tiles/tick** (player excluded); resolves the tile
+speed via **`TerrainProfile.Speed`** (see §6.x Terrain Profile) — a species' own per-tile value
+**REPLACES** the tile's intrinsic grip (so a Shark is fast in deep water where a Deer would
+crawl), falling back to the tile base for unlisted tiles; applies **uphill slope resistance**
+`max(0.25, 1 − rise×8)` and a **hard cliff block** (non-flying creatures can't cross an elevation
+jump > **0.28**), sampling elevation via `WorldManager`; attempts diagonal then axis-aligned
+sliding; clamps to world bounds; updates `ChunkPosition`; then damps creature velocity by
+**0.85/frame** (micro-drift below 0.01 zeroed). Flying creatures bypass slope/cliff; the player
+bypasses clamp/damping. **Creatures off their element** (`TerrainProfile.IsImpassable` — aquatic
+on land, insect in water) move at 5% speed — they flounder in place and suffocate/drown (§6.3)
+rather than chasing prey/corpses across the wrong terrain.
+
+### 6.x Terrain Profile — `Species/TerrainProfile.cs` (resolver, not a system)
+
+The single resolver for how a species relates to a tile, consulted by Movement / Wander /
+Fleeing / Hunting so terrain behaviour is consistent (it replaced three divergent water-handling
+code paths). Three dimensions:
+
+- **`Speed`** — movement multiplier, **REPLACE** semantics: a species' own per-tile value
+  overrides the tile's intrinsic grip; unlisted tiles use the tile base. (Specialists fast in
+  their element, slow where unsuited.)
+- **`IsImpassable`** — the **hard** element barrier (aquatic ↔ land, insect ↔ water). Enforced as
+  very strong steering aversion + the 5% flop speed + drowning/suffocation — strong avoidance,
+  not a movement wall, so "only accidental shoring/drowning" emerges without trapping entities.
+- **`SteerAversion`** `[0..1]` — species-aware steering dislike (aquatic avoid land, semi-aquatic
+  fine in water, insects avoid water, land animals standard), used by all movement steering.
+- **`Concealment`** — per-tile camouflage (override else tile `GetCoverBonus`), reducing the
+  species' detectability in both hunting (harder to target) and fleeing (noticed from closer).
+
+**Soft** terrain preference (overridable by hunger/fear) stays in TerrainDiscomfortSystem's
+comfort/discomfort. See `docs/terrain-handling-audit.md` and `docs/terrain-profile-design.md`.
 
 ### 6.3 Terrain Discomfort — `TerrainSystems.cs` (gated)
 
 Accumulates discomfort on uncomfortable tiles, decays on comfortable ones. Flying creatures
 ignore it. Hungry herbivores on non-grazeable tiles get extra `GrazingPressure` (scaled by
-hunger and tile depletion). Also tracks **drowning/suffocation**: a creature in the wrong
-element (land creature in deep water, aquatic on land) takes energy damage after a grace
-period (`WrongElementGraceTicks` / `WrongElementDamageRate`).
+hunger and tile depletion). This is the **soft** terrain preference — overridable by hunger/fear
+(a pressed Rabbit will cross a river it normally avoids). Also tracks **drowning/suffocation**:
+a creature in the wrong element (depth-aware — land creatures wade shallow water but drown in
+deep, insects drown in any water, aquatics suffocate on land; aquatic/semi-aquatic never drown)
+takes energy damage after a grace period (`WrongElementGraceTicks` / `WrongElementDamageRate`).
+The **hard** element barrier is a separate concept (`TerrainProfile.IsImpassable`, §6.x).
 
 ### 6.4 Hunger — `SurvivalSystems.cs` (gated)
 
@@ -393,8 +428,9 @@ otherwise be `0/0 = NaN`); omnivores (Boar) graze and hunt; faction species feed
 
 Primary idle movement, with **angular interpolation** for smooth turning: turn rate
 `Clamp(0.4 / bodyMass, 0.06, 0.3)` (heavy = ponderous, light = nimble), speed held constant
-through turns. Random direction changes; terrain look-ahead (1.5 tiles) avoidance sampling 8
-directions; **roaming** (long-distance travel when hungry predators find no prey, when a
+through turns. Random direction changes; **species-aware** terrain look-ahead (1.5 tiles) avoidance sampling 8
+directions (via `TerrainProfile.SteerAversion`, so aquatics avoid *land* not water — fish no
+longer wander or forage toward shore); **roaming** (long-distance travel when hungry predators find no prey, when a
 hungry grazer has no food underfoot, or when herbivores are overcrowded) with hunger-scaled
 speed and arrival at 5 tiles; **directed foraging** — a hungry grazer (or FeedTile species)
 aims its roam at the best nearby food by sampling 8 directions out to its roam distance,
@@ -417,10 +453,19 @@ The most complex system, dispatched by `HuntingTactic`:
 
 Hunting is **opportunistic**: urgency scales from starving (1.0) to well-fed, and a predator
 only stops hunting at ≥ 95% hunger. Target selection (spatial-hash query) scores by distance,
-preferred-prey bias, a generic terrain penalty, and a **species-specific terrain-comfort
-penalty** (e.g. Sectids avoid prey in Wetland); cannibalism and unhuntable targets are
-excluded; land predators reject targets across water (both in target selection and the wide
-`TrackingRange` scent scan).
+preferred-prey bias, a generic terrain penalty, a **species-specific terrain-comfort penalty**
+(e.g. Sectids avoid prey in Wetland), and **prey concealment** (`TerrainProfile.Concealment` —
+camouflaged prey such as a Rabbit in forest or Arctic Fox in snow inflate their score, so a
+hunter only locks on when close, effectively shrinking detection range over matching terrain);
+cannibalism, unhuntable targets, and species outside a predator's `ExclusivePrey` list (Penguin
+→ Fish only) are excluded; land predators reject targets across water (both in target selection
+and the wide `TrackingRange` scent scan).
+
+**Attack landing**: a strike lands when in `AttackRange` and the attack cooldown has elapsed.
+The gate is `CurrentCooldown <= 0` and the per-tick decrement is clamped at 0 — at reduced LOD
+the decrement subtracts `tickMult` (> 1), which previously overshot 0 into a stuck negative so
+the `== 0` gate never re-fired and the predator paced its prey forever without hitting (prey
+appeared "invulnerable"). This was the root of the long-standing prolonged-push bug.
 
 **Performance**: the across-water test (`GetWaterFractionOnPath`, which samples tiles along the
 predator→prey line) is the dominant per-candidate cost and scales with prey *density*, not
@@ -479,8 +524,10 @@ predators relied solely on slow corpse-scavenging and starved before they could 
 
 Scans predators (with stealth levels), then for each prey computes a weighted flee-away
 direction. **Stealth-aware detection**: a predator's effective detection range drops to ~10% of
-normal at full stealth. Fear accumulates with proximity (vigilance window ~100 ticks of slower
-decay after a threat leaves) and the response triggers at fear ratio > 0.5:
+normal at full stealth, **stacked with terrain concealment** (`TerrainProfile.Concealment` — an
+Arctic Fox in snow or Scorpion in desert is noticed from closer, so camouflaged ambushers can
+close the gap). Fear accumulates with proximity (vigilance window ~100 ticks of slower decay
+after a threat leaves) and the response triggers at fear ratio > 0.5:
 
 | Response | Behavior |
 |----------|----------|
@@ -490,7 +537,9 @@ decay after a threat leaves) and the response triggers at fear ratio > 0.5:
 | Defensive | Stand ground in a herd (Boar, Musk Ox) |
 
 If terrain discomfort is high and fear isn't extreme, the creature prioritizes escaping bad
-terrain over the predator.
+terrain over the predator. Flee steering is **species-aware** (`TerrainProfile.SteerAversion`),
+so a fleeing fish treats *land* as the hazard and won't bolt ashore and strand — the fix that
+ended the chronic late-game fish suffocations.
 
 ### 6.9 Herding — `HerdingSystem.cs` (gated)
 
@@ -695,9 +744,18 @@ smoothly follows the player entity (a yellow sphere). WASD moves the player **ca
   when a species loses ≥ 40% of its population in one interval. (Death-cause ratios here — e.g.
   starvation vs predation — are the key signal for predator-balance tuning.)
 
+  For `kill` events the **`species` column is the victim** and **`detail` is
+  `killed_by:<Predator>:<entity_id>`** — to count kills *by* a predator, parse `detail`, not the
+  `species` column (which is what got eaten). Easy to misread when building a predator→prey matrix.
+
 All floats are written with `InvariantCulture` so a comma-decimal locale can't corrupt CSV
 columns. Set **`TrackSpecies`** (Inspector, §9) to one species' exact name to additionally log
 per-entity `TRACKED` snapshots and that species' inbound/outbound combat damage.
+
+At world generation, `WorldSnapshot` also writes a one-shot **`world_<ts>_seed…_…ch_ef…_df…_rf….png`**
+(biome map) plus a sidecar **`.txt`** (worldgen parameters + per-tile-type biome distribution +
+niche-coverage roll-ups/warnings) to `logs/` — for inspecting what a parameter set produces and
+validating that each specialist's niche has enough habitat.
 
 ---
 
@@ -787,10 +845,12 @@ godot/
     │   ├── Chunk.cs                                # tiles, elevation, nutrition, GetTileColor
     │   ├── WorldManager.cs                         # chunks, GetTile/GetElevation, DirtyChunks, SpatialHash
     │   ├── TerrainGenerator.cs                     # noise + warp + temperature + landmarks
+    │   ├── WorldSnapshot.cs                        # startup diagnostic: biome-map PNG + params/distribution report
     │   └── RiverMapper.cs                          # flow-based rivers/lakes (hex topology)
     ├── Species/
     │   ├── SpeciesDefinition.cs                    # 100+ property data class
     │   ├── SpeciesRegistry.cs                      # all 28 species
+    │   ├── TerrainProfile.cs                       # unified per-species/per-tile resolver (speed/avoid/conceal)
     │   └── SpeciesToggle.cs                        # per-species enable/disable for balance runs
     ├── Rendering/RenderingManager.cs               # 3D chunk meshes + entity MultiMesh3D
     ├── Utils/
