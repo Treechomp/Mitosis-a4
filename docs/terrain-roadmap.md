@@ -45,15 +45,16 @@ habitat. Goals:
   even exists for a given seed.
 - Fall back gracefully when a niche is too small (don't dump a species into hostile terrain).
 
-### 3. Terrain-aware food-seeking drive
-The biggest behavioural gap. Today wander is random and hunting only reacts to in-range prey, so
-a specialist in a marginal/disconnected biome starves regardless of stats (penguins, sharks,
-crocs, arctic foxes). Add a hunger-scaled drive that pulls a creature toward terrain where its
-food lives:
-- Herbivores → grazeable/FeedTile terrain (partly exists via GetFoodScore).
-- Predators → terrain/water where their prey concentrates (penguins/sharks → water; arctic fox →
-  prey-bearing tundra). The comfort field already encodes "where a species wants to be" — follow
-  its gradient when hungry.
+### 3. Terrain-aware food-seeking drive — DONE
+The biggest behavioural gap. Wander was random and hunting only reacted to in-range prey, so a
+specialist in a marginal/disconnected biome starved regardless of stats (penguins, sharks, crocs,
+arctic foxes). **Fixed:** new `SpeciesDefinition.HuntTerrain` (tiles where a predator's prey
+concentrate); a hungry predator with no prey in `HuntRange` now roams toward the nearest
+HuntTerrain tile via the same `TryFindFoodTarget`/`GetFoodScore` path herbivores use. Set for
+Penguin/Shark/Polar Bear/Crocodile (water), Scorpion/Snake (desert/scrub), Arctic Fox (tundra/ice).
+*Caveat:* doesn't rescue a Shark stranded in a fishless pond (can't cross land) — that needs the
+connected-seas worldgen item (#4 "still open"). The win is amphibious/land specialists reaching
+their food (inland penguins migrating to the coast).
 
 ### 4. Biome-distribution / worldgen validation (depends on 1)
 Use the snapshot histograms across seeds/params to decide which worldgen parameters to tweak or

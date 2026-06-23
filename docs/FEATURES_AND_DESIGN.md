@@ -435,7 +435,10 @@ hungry grazer has no food underfoot, or when herbivores are overcrowded) with hu
 speed and arrival at 5 tiles; **directed foraging** — a hungry grazer (or FeedTile species)
 aims its roam at the best nearby food by sampling 8 directions out to its roam distance,
 scoring tiles by remaining nutrition (grazers) or FeedTile presence, biased toward closer
-food and never steering into hostile terrain (mirrors predator prey-tracking); **hysteresis
+food and never steering into hostile terrain. **Predators get the same directed seek toward
+their `HuntTerrain`** (tiles where their prey concentrate — Penguin/Shark → water, Scorpion →
+desert) when hungry with no prey in range, instead of roaming blind (fixes specialists starving
+inland of their food); **hysteresis
 discomfort escape** (enter at discomfort ratio > 0.6, exit < 0.1; direction-change chance cut
 ~70% while escaping). Faelings instead seek damaged (non-Grass) terrain. Skips entities
 fleeing or actively hunting.
