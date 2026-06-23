@@ -657,6 +657,19 @@ public sealed class HuntingSystem : ISystem
                         }
                     }
 
+                    // Concealment: camouflaged prey are harder to detect (Rabbit in forest,
+                    // Scorpion in desert, Arctic Fox in snow). Inflate their score so a hunter
+                    // only locks on when close or lacking better options — effectively shrinking
+                    // detection range over terrain the prey blends into.
+                    if (_worldManager != null && em.HasComponents(preyEntity, ComponentFlags.Species))
+                    {
+                        var concealDef = SpeciesRegistry.GetById(em.Species[preyEntity].SpeciesId);
+                        float conceal = TerrainProfile.Concealment(
+                            concealDef, _worldManager.GetTile(preyPos.X, preyPos.Y));
+                        if (conceal > 0f)
+                            score *= 1f + conceal * 2.5f;
+                    }
+
                     // Preferred prey bias: familiar prey scores better (lower)
                     if (speciesDef.PreferredPrey != null && em.HasComponents(preyEntity, ComponentFlags.Species))
                     {

@@ -157,6 +157,11 @@ public static class SpeciesRegistry
                 { TileType.Forest, 0.75f },  // Slower in dense forest
                 { TileType.Grass, 1.1f },    // Slightly faster on open grass
             },
+            TerrainConcealment = new Dictionary<TileType, float>
+            {
+                { TileType.Forest, 0.4f },
+                { TileType.Taiga, 0.3f },
+            },
 
             // Grazing
             CanGraze = true,
@@ -238,6 +243,12 @@ public static class SpeciesRegistry
             {
                 { TileType.Forest, 1.2f },   // Fast in underbrush (small)
                 { TileType.Grass, 1.0f },
+            },
+            TerrainConcealment = new Dictionary<TileType, float>
+            {
+                { TileType.Forest, 0.5f },
+                { TileType.Shrubland, 0.35f },
+                { TileType.Grass, 0.1f },
             },
 
             // Grazing
@@ -444,6 +455,11 @@ public static class SpeciesRegistry
                 { TileType.Forest, 1.1f },   // Agile in forest
                 { TileType.Grass, 1.0f },
             },
+            TerrainConcealment = new Dictionary<TileType, float>
+            {
+                { TileType.Forest, 0.4f },
+                { TileType.Shrubland, 0.3f },
+            },
 
             // Trophic - small solitary predator
             // Fox (mass 2.0) vs Rabbit (mass 1.0): 1.0 <= 2.0*1.0=2.0 — yes
@@ -541,8 +557,8 @@ public static class SpeciesRegistry
             GrazingPressure = 0f,
             TerrainSpeedModifiers = new Dictionary<TileType, float>
             {
-                { TileType.ShallowWater, 1.5f },  // Fast in shallow water
-                { TileType.DeepWater, 1.8f },     // Very fast in deep water
+                { TileType.ShallowWater, 1.4f },  // Fast in shallow water
+                { TileType.DeepWater, 1.6f },     // Very fast in deep water
                 { TileType.Grass, 0.4f },         // Slow on land
                 { TileType.Sand, 0.5f },          // Slow on sand
                 { TileType.Forest, 0.3f },        // Very slow in forest
@@ -636,9 +652,9 @@ public static class SpeciesRegistry
             GrazingPressure = 0f,
             TerrainSpeedModifiers = new Dictionary<TileType, float>
             {
-                { TileType.ShallowWater, 1.3f },
-                { TileType.DeepWater, 1.5f },
-                { TileType.River, 1.2f },
+                { TileType.ShallowWater, 1.1f },
+                { TileType.DeepWater, 1.2f },
+                { TileType.River, 1.0f },
             },
             TerrainComfortModifiers = new Dictionary<TileType, float>
             {
@@ -727,9 +743,9 @@ public static class SpeciesRegistry
             DiscomfortDecayRate = 1f,
             TerrainSpeedModifiers = new Dictionary<TileType, float>
             {
-                { TileType.DeepWater, 2.2f },
-                { TileType.ShallowWater, 1.6f },
-                { TileType.River, 0.8f },
+                { TileType.DeepWater, 1.7f },
+                { TileType.ShallowWater, 1.3f },
+                { TileType.River, 0.6f },
             },
             TerrainComfortModifiers = new Dictionary<TileType, float>
             {
@@ -813,6 +829,11 @@ public static class SpeciesRegistry
                 { TileType.Bog, 1.1f },
                 { TileType.ShallowWater, 0.8f },
                 { TileType.Grass, 0.9f },
+            },
+            TerrainConcealment = new Dictionary<TileType, float>
+            {
+                { TileType.Wetland, 0.4f },
+                { TileType.Bog, 0.4f },
             },
             TerrainComfortModifiers = new Dictionary<TileType, float>
             {
@@ -1319,6 +1340,12 @@ public static class SpeciesRegistry
                 { TileType.Dirt, 1.1f },
                 { TileType.Grass, 0.8f },
             },
+            TerrainConcealment = new Dictionary<TileType, float>
+            {
+                { TileType.Sand, 0.5f },
+                { TileType.Arid, 0.45f },
+                { TileType.Dirt, 0.3f },
+            },
             TerrainComfortModifiers = new Dictionary<TileType, float>
             {
                 { TileType.Sand, -3f },
@@ -1422,6 +1449,12 @@ public static class SpeciesRegistry
                 { TileType.Dirt, 1.0f },
                 { TileType.Grass, 0.7f },
             },
+            TerrainConcealment = new Dictionary<TileType, float>
+            {
+                { TileType.Sand, 0.6f },
+                { TileType.Arid, 0.5f },
+                { TileType.Dirt, 0.3f },
+            },
             TerrainComfortModifiers = new Dictionary<TileType, float>
             {
                 { TileType.Sand, -3f },
@@ -1507,6 +1540,11 @@ public static class SpeciesRegistry
                 { TileType.Arid, 1.15f },
                 { TileType.Dirt, 1.0f },
                 { TileType.Grass, 0.85f },
+            },
+            TerrainConcealment = new Dictionary<TileType, float>
+            {
+                { TileType.Sand, 0.35f },
+                { TileType.Arid, 0.35f },
             },
             TerrainComfortModifiers = new Dictionary<TileType, float>
             {
@@ -1605,6 +1643,13 @@ public static class SpeciesRegistry
                 { TileType.Arid, 1.0f },
                 { TileType.Grass, 1.0f },
                 { TileType.Shrubland, 1.1f },
+            },
+            TerrainConcealment = new Dictionary<TileType, float>
+            {
+                { TileType.Sand, 0.4f },
+                { TileType.Shrubland, 0.4f },
+                { TileType.Arid, 0.35f },
+                { TileType.Grass, 0.2f },
             },
             TerrainComfortModifiers = new Dictionary<TileType, float>
             {
@@ -1713,11 +1758,12 @@ public static class SpeciesRegistry
                 { TileType.Ice, 1.0f },
                 { TileType.Tundra, 0.9f },
                 { TileType.Steppe, 0.85f },
-                // Strong swimmer: fast in water (faster than a swimming Polar Bear, so it can
-                // sometimes escape bears/foxes by fleeing to sea) but the slow land base speed
-                // keeps it easy prey ashore. Still slower than a hunting Shark.
-                { TileType.ShallowWater, 2.6f },
-                { TileType.DeepWater, 2.8f },
+                // Strong swimmer (REPLACE values = absolute tile speed): fast in water (faster
+                // than a swimming Polar Bear ~0.8, so it can sometimes escape bears/foxes by
+                // fleeing to sea, and fast enough to run fish down) but the slow land base keeps
+                // it easy prey ashore. Still slower than a hunting Shark.
+                { TileType.ShallowWater, 1.5f },
+                { TileType.DeepWater, 1.7f },
             },
             TerrainComfortModifiers = new Dictionary<TileType, float>
             {
@@ -1897,6 +1943,12 @@ public static class SpeciesRegistry
                 { TileType.Ice, 0.9f },
                 { TileType.Grass, 1.0f },
             },
+            TerrainConcealment = new Dictionary<TileType, float>
+            {
+                { TileType.Ice, 0.6f },
+                { TileType.Tundra, 0.5f },
+                { TileType.Steppe, 0.3f },
+            },
             TerrainComfortModifiers = new Dictionary<TileType, float>
             {
                 { TileType.Tundra, -2f },
@@ -1982,6 +2034,11 @@ public static class SpeciesRegistry
                 { TileType.Steppe, 1.1f },
                 { TileType.Ice, 0.7f },
                 { TileType.Grass, 0.9f },
+            },
+            TerrainConcealment = new Dictionary<TileType, float>
+            {
+                { TileType.Tundra, 0.3f },
+                { TileType.Ice, 0.2f },
             },
             TerrainComfortModifiers = new Dictionary<TileType, float>
             {
@@ -2072,6 +2129,11 @@ public static class SpeciesRegistry
                 { TileType.Forest, 1.2f },
                 { TileType.Grass, 0.8f },
                 { TileType.Savanna, 0.85f },
+            },
+            TerrainConcealment = new Dictionary<TileType, float>
+            {
+                { TileType.Jungle, 0.5f },
+                { TileType.Forest, 0.4f },
             },
             TerrainComfortModifiers = new Dictionary<TileType, float>
             {
@@ -2327,6 +2389,11 @@ public static class SpeciesRegistry
                 { TileType.Forest, 0.95f },
                 { TileType.Savanna, 0.9f },
                 { TileType.Grass, 0.85f },
+            },
+            TerrainConcealment = new Dictionary<TileType, float>
+            {
+                { TileType.Jungle, 0.45f },
+                { TileType.Forest, 0.35f },
             },
             TerrainComfortModifiers = new Dictionary<TileType, float>
             {

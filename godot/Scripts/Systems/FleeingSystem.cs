@@ -228,6 +228,17 @@ public sealed class FleeingSystem : ISystem
             if (stealth > 0f)
                 effectiveMaxDistSq = maxDistSq * (1f - stealth * 0.9f); // 0.1 at full stealth
 
+            // Terrain concealment of the predator also shrinks how far away prey notice it,
+            // letting camouflaged ambushers close the gap (Arctic Fox in snow, Scorpion in
+            // desert). Stacks with active stealth.
+            if (_worldManager != null && pSpecies != 0)
+            {
+                float conceal = TerrainProfile.Concealment(
+                    SpeciesRegistry.GetById(pSpecies), _worldManager.GetTile(ppos.X, ppos.Y));
+                if (conceal > 0f)
+                    effectiveMaxDistSq *= MathF.Max(0.1f, 1f - conceal);
+            }
+
             if (distSq < effectiveMaxDistSq && distSq > 0.001f)
             {
                 hasThreat = true;
