@@ -235,8 +235,10 @@ public sealed class TerrainGenerator
             return TileType.ShallowWater;
         }
 
-        // Slightly wider beach band (0.45→0.46) for more visible sand strips.
-        if (elevation < 0.46f)
+        // Beach band narrowed (0.46→0.43): on gentle elevation noise the old 0.40–0.46 band
+        // painted a thick Sand ring around every water body (~15% of the world, fragmenting
+        // biomes and faking a "desert"). The inner shore now falls through to its climate biome.
+        if (elevation < 0.43f)
             return TileType.Sand;
 
         // ── Mountains / high ground ─────────────────────────────────────────────────────
@@ -273,25 +275,29 @@ public sealed class TerrainGenerator
         }
 
         // ── Tropical (hot) ─────────────────────────────────────────────────────────────
-        if (temperature > 0.75f)
+        // Hot threshold widened 0.75→0.72 and the dry end now becomes REAL desert: hot + low
+        // moisture is Arid (the niche that was effectively absent — Arid only formed at the rare
+        // moisture<0.15 tail), with a thin Dirt semi-arid fringe. The old hot-dry Sand bucket is
+        // gone (deserts are Arid, not beach). Deserts are now primarily a hot-zone phenomenon.
+        if (temperature > 0.72f)
         {
-            if (moisture > 0.62f) return TileType.Jungle;
-            if (moisture > 0.40f) return TileType.Savanna;
-            if (moisture > 0.26f) return TileType.Dirt;
-            if (moisture > 0.15f) return TileType.Sand;
+            if (moisture > 0.60f) return TileType.Jungle;
+            if (moisture > 0.42f) return TileType.Savanna;
+            if (moisture > 0.30f) return TileType.Dirt;
             return TileType.Arid;
         }
 
         // ── Warm temperate ─────────────────────────────────────────────────────────────
-        // Jungle removed: temp 0.60–0.75 is too cool for true jungle; dense moisture
-        // here becomes Wetland (temperate rainforest / swamp) instead.
+        // Jungle removed: temp 0.60–0.72 is too cool for true jungle; dense moisture
+        // here becomes Wetland (temperate rainforest / swamp) instead. Arid stays rare here
+        // (only the very dry extreme) so deserts concentrate in the hot zone above.
         if (temperature > 0.60f)
         {
             if (moisture > 0.70f) return TileType.Wetland;
             if (moisture > 0.54f) return TileType.Forest;
             if (moisture > 0.36f) return temperature > 0.67f ? TileType.Savanna : TileType.Grass;
-            if (moisture > 0.24f) return TileType.Shrubland;
-            if (moisture > 0.13f) return TileType.Dirt;
+            if (moisture > 0.22f) return TileType.Shrubland;
+            if (moisture > 0.14f) return TileType.Dirt;
             return TileType.Arid;
         }
 

@@ -60,6 +60,20 @@ Use the snapshot histograms across seeds/params to decide which worldgen paramet
 redesign so every niche gets viable, *connected* habitat (enough water bodies, a real cold belt,
 deserts, etc.). Possible later: a live/quick worldgen preview to iterate parameters faster.
 
+**Done so far** (from snapshot `seed1720373941`, which showed Arid 0.0% and 15% beach-Sand):
+- **A — real deserts:** `DetermineTileType` hot zone (temp>0.72, widened from 0.75) now maps low
+  moisture (≤0.30) to **Arid** with a thin Dirt fringe; the old hot-dry Sand bucket removed.
+  Deserts were effectively absent (Arid only formed at moisture<0.15). *Re-snapshot to verify Arid
+  climbs from 0% to several %.*
+- **B — thinner beaches:** Sand elevation band narrowed 0.40–0.46 → 0.40–0.43; the inner shore now
+  falls through to its climate biome (recovers land, less fragmentation).
+- Snapshot niche roll-up fixed to separate Arid (true desert) from Sand (beach) and DeepWater
+  (shark sea) from total water, so a future "desert fine" reading can't be faked by beaches.
+
+**Still open:** connected seas for the Shark niche (water is "elevation<0.40" → many small ponds,
+DeepWater only 5.2% and scattered). Needs an ocean-basin/continent-mask redesign, not a threshold
+tweak — its own discussion.
+
 ### 5. Scorpion ambush rework (terrain-adjacent)
 Dormant sit-and-wait converts 0% against fast small prey. Not a tuning issue — the mechanic needs
 rethinking (e.g. a short active lunge phase, or concealment-assisted strike when prey strays
