@@ -230,6 +230,11 @@ public partial class GameManager : Node3D
         });
         GD.Print($"World generated: {_worldManager.LoadedChunkCount} chunks");
 
+        // Diagnostic: dump a biome-map PNG + parameter/distribution report so worldgen output can
+        // be inspected (and niche coverage validated) before blaming species balance.
+        WorldSnapshot.Capture(_worldManager, seed, ChunkSize, WorldSizeChunks,
+            ElevationFrequency, ElevationHeightScale, TerrainDetailFrequency, TerrainRoughnessFrequency);
+
         // Apply species enable/disable toggles before any spawning.
         var unknownSpecies = SpeciesToggle.Configure(DisabledSpecies, DisableFactionSpecies);
         foreach (var name in unknownSpecies)
