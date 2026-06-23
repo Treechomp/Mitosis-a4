@@ -115,14 +115,16 @@ public sealed class WanderSystem : ISystem
                     {
                         // Target already set toward damaged terrain
                     }
-                    // Hungry grazers: steer toward the best nearby food instead of wandering blind.
-                    // This gives herbivores (and FeedTile species) the directed food-seeking that
-                    // predators already have via prey tracking — the core fix for starving in place
-                    // on depleted/barren terrain while food exists elsewhere on the map.
+                    // Hungry foragers steer toward the best nearby food instead of wandering blind:
+                    // grazers/FeedTile species toward food tiles, and predators with a HuntTerrain
+                    // (Penguin, Shark, Crocodile, Scorpion…) toward their hunting grounds when no
+                    // prey is in range. The core fix for starving in place while food exists
+                    // elsewhere — e.g. an inland penguin migrating to the coast to fish.
                     else if (wanderSpeciesDef != null
                         && _worldManager != null
                         && hungerUrgency > 0.3f
-                        && (wanderSpeciesDef.CanGraze || wanderSpeciesDef.FeedTiles != null)
+                        && (wanderSpeciesDef.CanGraze || wanderSpeciesDef.FeedTiles != null
+                            || wanderSpeciesDef.HuntTerrain != null)
                         && TryFindFoodTarget(pos.X, pos.Y, roamDistance, wanderSpeciesDef, out targetX, out targetY))
                     {
                         // Target already set toward food
@@ -449,6 +451,11 @@ public sealed class WanderSystem : ISystem
         if (def.CanGraze && tile.IsGrazeable())
             return _worldManager.GetNutrition(x, y);
         if (def.FeedTiles != null && def.FeedTiles.Contains(tile))
+            return 1f;
+        // Predator hunting grounds: a hungry predator with no prey in range scores its
+        // HuntTerrain so it migrates toward where its prey lives (Penguin → water, Scorpion →
+        // desert) instead of wandering blind off into hostile terrain.
+        if (def.HuntTerrain != null && def.HuntTerrain.Contains(tile))
             return 1f;
         return 0f;
     }

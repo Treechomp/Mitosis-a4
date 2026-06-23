@@ -327,6 +327,15 @@ public sealed class SpeciesDefinition
     public List<TileType>? FeedTiles { get; init; }
     public float FeedNutrition { get; init; } = 0.4f;
 
+    /// <summary>
+    /// Terrain where this predator's prey concentrate — its hunting grounds. When a hungry
+    /// predator finds no prey in range it roams toward the nearest tile of this type instead of
+    /// wandering blind (the predator analogue of grazers seeking grazeable terrain). E.g. Penguin
+    /// → water (fish), Scorpion → sand/arid (desert prey). Null = no directed seek (generalists
+    /// whose prey is on common land don't need it). See WanderSystem food-seeking.
+    /// </summary>
+    public List<TileType>? HuntTerrain { get; init; }
+
     // === FACTION-SPECIFIC ===
     public float MaxCarryFood { get; init; } = 5f;
     public bool NestBreeder { get; init; } = false;

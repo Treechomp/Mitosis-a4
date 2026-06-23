@@ -517,6 +517,7 @@ public static class SpeciesRegistry
             HuntThreshold = 0.75f,
             TrackingHungerThreshold = 0.6f,
             TrackingRange = 22f,   // Nerf: was 40 — ambush at the water's edge, don't track the map
+            HuntTerrain = new List<TileType> { TileType.ShallowWater, TileType.River, TileType.Wetland, TileType.Reef },
 
             // Ambush tactics — lurk in water, build stealth, pounce with burst speed
             AmbushStealthGain = 0.008f,    // ~125 ticks (6s) to full stealth when still
@@ -722,6 +723,7 @@ public static class SpeciesRegistry
             HuntThreshold = 0.75f,
             TrackingHungerThreshold = 0.5f,
             TrackingRange = 160f,
+            HuntTerrain = new List<TileType> { TileType.DeepWater, TileType.ShallowWater, TileType.Reef },
 
             // Reproduction - slow
             ReproHungerThreshold = 200f,   // ~71% (predator viability; pairs with the water fix)
@@ -1427,6 +1429,7 @@ public static class SpeciesRegistry
             HuntThreshold = 0.75f,
             TrackingHungerThreshold = 0.5f,
             TrackingRange = 30f,
+            HuntTerrain = new List<TileType> { TileType.Sand, TileType.Arid, TileType.Dirt },
 
             // Reproduction
             ReproHungerThreshold = 140f,   // ~70% (predator viability)
@@ -1622,6 +1625,7 @@ public static class SpeciesRegistry
             HuntThreshold = 0.75f,
             TrackingHungerThreshold = 0.5f,
             TrackingRange = 40f,
+            HuntTerrain = new List<TileType> { TileType.Sand, TileType.Shrubland, TileType.Arid, TileType.Grass },
 
             // Reproduction
             ReproHungerThreshold = 155f,   // ~70% (predator viability)
@@ -1713,6 +1717,7 @@ public static class SpeciesRegistry
             HuntThreshold = 0.6f,
             TrackingHungerThreshold = 0.5f,
             TrackingRange = 32f,
+            HuntTerrain = new List<TileType> { TileType.ShallowWater, TileType.DeepWater, TileType.Reef, TileType.River },
             ExclusivePrey = new List<string> { "Fish" },
             PreferredPrey = new List<string> { "Fish" },
             PreferredPreyBias = 0.4f,
@@ -1828,6 +1833,7 @@ public static class SpeciesRegistry
             HuntThreshold = 0.75f,
             TrackingHungerThreshold = 0.5f,
             TrackingRange = 80f,
+            HuntTerrain = new List<TileType> { TileType.ShallowWater, TileType.DeepWater, TileType.Ice },
 
             // Reproduction - slow
             ReproHungerThreshold = 270f,   // ~71% (predator viability)
@@ -1917,6 +1923,7 @@ public static class SpeciesRegistry
             HuntThreshold = 0.75f,
             TrackingHungerThreshold = 0.5f,
             TrackingRange = 60f,
+            HuntTerrain = new List<TileType> { TileType.Tundra, TileType.Steppe, TileType.Ice },
 
             // Reproduction
             ReproHungerThreshold = 120f,   // ~70% (predator viability)
