@@ -75,22 +75,18 @@ public sealed class MovementSystem : ISystem
                     isFlying = true;
                     speedMult = 1f;
                 }
-                else if (speciesDef.IsAquatic && !currentTile.IsWater())
+                else
                 {
-                    // Beached: an aquatic creature (e.g. Shark, Fish) flounders on land, barely
-                    // able to move while it suffocates. Stops them roaming inland after prey/corpses.
-                    speedMult *= 0.05f;
-                }
-                else if (currentTile.IsWater())
-                {
-                    // Per-species swimming affinity. Water tiles are intrinsically slow for
-                    // everyone (DeepWater 0.25, ShallowWater 0.4), so without this an "apex water
-                    // predator" Shark crawls. Applying each species' water TerrainSpeedModifier
-                    // here lets strong swimmers (Shark/Crocodile/Fish/Penguin) move fast in water
-                    // while poor swimmers (Polar Bear) stay slow. Scoped to water only on purpose:
-                    // the land TerrainSpeedModifiers stay inert so the tuned land predator/prey
-                    // catch balance is not disturbed.
-                    speedMult *= speciesDef.GetTerrainSpeedModifier(currentTile);
+                    // REPLACE semantics: a species' own speed for this tile overrides the tile's
+                    // intrinsic grip (applies on every tile — sand/snow/grass grip is the fallback
+                    // for tiles the species doesn't list). See TerrainProfile.Speed.
+                    speedMult = TerrainProfile.Speed(speciesDef, currentTile);
+
+                    // Wrong element (e.g. an aquatic creature flopping on land, or an insect that
+                    // wandered into water): it can barely move while it suffocates/drowns. Keeps
+                    // beached fish from roaming inland after prey/corpses.
+                    if (TerrainProfile.IsImpassable(speciesDef, currentTile))
+                        speedMult *= 0.05f;
                 }
             }
 

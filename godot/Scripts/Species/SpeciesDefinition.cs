@@ -216,14 +216,27 @@ public sealed class SpeciesDefinition
     public float GrazingPressure { get; init; } = 0f;
 
     /// <summary>
-    /// Per-terrain speed modifiers. Values multiply the base terrain speed.
+    /// Per-terrain speed REPLACEMENT. When a tile is listed, this value REPLACES the tile's
+    /// intrinsic speed for this species (it does not multiply it) — see TerrainProfile.Speed.
+    /// Unlisted tiles fall back to the tile's own base grip. Lets specialists be fast where
+    /// others crawl, or especially slow where badly suited.
     /// </summary>
     public Dictionary<TileType, float>? TerrainSpeedModifiers { get; init; }
 
     /// <summary>
     /// Per-terrain comfort overrides. Negative = comfortable, Positive = uncomfortable.
+    /// Feeds TerrainDiscomfortSystem (the SOFT, hunger/fear-overridable preference that drives
+    /// creatures off uncomfortable ground). Hard element barriers are handled separately by
+    /// TerrainProfile.IsImpassable (IsAquatic / AvoidsWater), not here.
     /// </summary>
     public Dictionary<TileType, float>? TerrainComfortModifiers { get; init; }
+
+    /// <summary>
+    /// Per-terrain concealment (camouflage). Higher = harder for predators to detect this species
+    /// on that tile (Rabbit in forest, Scorpion in desert, Arctic Fox in snow). Unlisted tiles
+    /// fall back to the tile's generic cover (TileType.GetCoverBonus). See TerrainProfile.Concealment.
+    /// </summary>
+    public Dictionary<TileType, float>? TerrainConcealment { get; init; }
 
     /// <summary>
     /// Biomes where this species can spawn. Empty/null = spawn in any biome.

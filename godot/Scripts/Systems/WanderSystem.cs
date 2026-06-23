@@ -173,7 +173,7 @@ public sealed class WanderSystem : ISystem
                     var roamDir = new Vector2(dx / dist, dy / dist);
                     if (_worldManager != null)
                     {
-                        var avoidance = GetTerrainAvoidance(pos.X, pos.Y, roamDir, wanderSpeciesDef?.IsAquatic ?? false, wanderSpeciesDef?.SemiAquatic ?? false);
+                        var avoidance = GetTerrainAvoidance(pos.X, pos.Y, roamDir, wanderSpeciesDef);
                         if (avoidance.LengthSquared() > 0.01f)
                             roamDir = (roamDir + avoidance * 2f).Normalized();
                     }
@@ -205,7 +205,7 @@ public sealed class WanderSystem : ISystem
                 {
                     needsEscape = true;
                     // Find direction to escape (toward lowest avoidance terrain)
-                    var escapeDir = FindEscapeDirection(pos.X, pos.Y, wanderSpeciesDef?.IsAquatic ?? false, wanderSpeciesDef?.SemiAquatic ?? false);
+                    var escapeDir = FindEscapeDirection(pos.X, pos.Y, wanderSpeciesDef);
                     if (escapeDir.LengthSquared() > 0.01f)
                     {
                         // Blend escape direction strongly with current direction
@@ -219,7 +219,7 @@ public sealed class WanderSystem : ISystem
             // Terrain avoidance (proactive - avoid entering bad terrain)
             if (_worldManager != null && !needsEscape)
             {
-                var avoidance = GetTerrainAvoidance(pos.X, pos.Y, wander.CurrentDirection, wanderSpeciesDef?.IsAquatic ?? false, wanderSpeciesDef?.SemiAquatic ?? false);
+                var avoidance = GetTerrainAvoidance(pos.X, pos.Y, wander.CurrentDirection, wanderSpeciesDef);
                 if (avoidance.LengthSquared() > 0.01f)
                 {
                     wander.CurrentDirection = (wander.CurrentDirection + avoidance * 2f).Normalized();
@@ -240,9 +240,9 @@ public sealed class WanderSystem : ISystem
                     var aheadTile = _worldManager.GetTile(aheadX, aheadY);
 
                     // If new direction leads to bad terrain, try to pick a safer one
-                    if (aheadTile.GetAvoidanceWeight() > 0.3f)
+                    if (Aversion(wanderSpeciesDef, aheadTile) > 0.3f)
                     {
-                        float bestAvoidance = aheadTile.GetAvoidanceWeight();
+                        float bestAvoidance = Aversion(wanderSpeciesDef, aheadTile);
                         var bestDir = newDir;
 
                         for (int i = 0; i < 4; i++)
@@ -250,7 +250,7 @@ public sealed class WanderSystem : ISystem
                             var testDir = MathUtils.RandomDirection(_rng);
                             float testX = pos.X + testDir.X * _lookAheadDistance;
                             float testY = pos.Y + testDir.Y * _lookAheadDistance;
-                            float avoidWeight = _worldManager.GetTile(testX, testY).GetAvoidanceWeight();
+                            float avoidWeight = Aversion(wanderSpeciesDef, _worldManager.GetTile(testX, testY));
 
                             if (avoidWeight < bestAvoidance)
                             {
@@ -443,7 +443,9 @@ public sealed class WanderSystem : ISystem
     private float GetFoodScore(float x, float y, SpeciesDefinition def)
     {
         var tile = _worldManager!.GetTile(x, y);
-        if (tile.GetAvoidanceWeight() > 0.6f) return 0f;
+        // Species-aware: hostile terrain scores 0 so foraging never steers a creature off its
+        // element — but for an aquatic this means LAND, not water (fish forage IN water).
+        if (TerrainProfile.SteerAversion(def, tile) > 0.6f) return 0f;
         if (def.CanGraze && tile.IsGrazeable())
             return _worldManager.GetNutrition(x, y);
         if (def.FeedTiles != null && def.FeedTiles.Contains(tile))
@@ -454,7 +456,7 @@ public sealed class WanderSystem : ISystem
     /// <summary>
     /// Find the best direction to escape uncomfortable terrain.
     /// </summary>
-    private Vector2 FindEscapeDirection(float x, float y, bool isAquatic, bool semiAquatic)
+    private Vector2 FindEscapeDirection(float x, float y, SpeciesDefinition? sp)
     {
         if (_worldManager == null)
             return Vector2.Zero;
@@ -472,7 +474,7 @@ public sealed class WanderSystem : ISystem
             float testX = x + dx * _lookAheadDistance;
             float testY = y + dy * _lookAheadDistance;
             // Aquatic creatures escape toward water; everyone else toward calmer land.
-            float avoidance = Weight(_worldManager.GetTile(testX, testY), isAquatic, semiAquatic);
+            float avoidance = Aversion(sp, _worldManager.GetTile(testX, testY));
 
             if (avoidance < bestAvoidance)
             {
@@ -487,7 +489,7 @@ public sealed class WanderSystem : ISystem
     /// <summary>
     /// Calculate avoidance vector based on nearby terrain.
     /// </summary>
-    private Vector2 GetTerrainAvoidance(float x, float y, Vector2 currentDir, bool isAquatic, bool semiAquatic)
+    private Vector2 GetTerrainAvoidance(float x, float y, Vector2 currentDir, SpeciesDefinition? sp)
     {
         if (_worldManager == null)
             return Vector2.Zero;
@@ -500,7 +502,7 @@ public sealed class WanderSystem : ISystem
         float aheadY = y + currentDir.Y * _lookAheadDistance;
 
         var aheadTile = _worldManager.GetTile(aheadX, aheadY);
-        float aheadAvoidance = Weight(aheadTile, isAquatic, semiAquatic);
+        float aheadAvoidance = Aversion(sp, aheadTile);
 
         if (aheadAvoidance > 0.2f)
         {
@@ -518,8 +520,8 @@ public sealed class WanderSystem : ISystem
         float rightX = x - perpX * _lookAheadDistance;
         float rightY = y - perpY * _lookAheadDistance;
 
-        float leftAvoidance = Weight(_worldManager.GetTile(leftX, leftY), isAquatic, semiAquatic);
-        float rightAvoidance = Weight(_worldManager.GetTile(rightX, rightY), isAquatic, semiAquatic);
+        float leftAvoidance = Aversion(sp, _worldManager.GetTile(leftX, leftY));
+        float rightAvoidance = Aversion(sp, _worldManager.GetTile(rightX, rightY));
 
         // Steer toward better side
         if (leftAvoidance < rightAvoidance)
@@ -537,22 +539,12 @@ public sealed class WanderSystem : ISystem
     }
 
     /// <summary>
-    /// Per-species terrain avoidance weight.
-    /// - Aquatic creatures have inverted preferences — land is near-lethal (1.0) and water is
-    ///   home (0) — so they don't flop ashore.
-    /// - Semi-aquatic creatures (Penguin, Polar Bear, Crocodile) are at home in BOTH: water is
-    ///   not avoided at all (0), while land uses the standard weights. This lets penguins freely
-    ///   enter water to hunt fish (and be caught there by sharks) instead of shying away from it.
-    /// - Everyone else uses the standard tile weights (where water is the thing to avoid).
+    /// Species-aware steering aversion, via the shared TerrainProfile resolver (aquatic invert,
+    /// semi-aquatic water-OK, insects water-barred, land animals standard). Null species (e.g.
+    /// the player) falls back to the raw tile weight.
     /// </summary>
-    private static float Weight(TileType tile, bool isAquatic, bool semiAquatic)
-    {
-        if (isAquatic)
-            return tile.IsWater() ? 0f : 1.0f;
-        if (semiAquatic)
-            return tile.IsWater() ? 0f : tile.GetAvoidanceWeight();
-        return tile.GetAvoidanceWeight();
-    }
+    private static float Aversion(SpeciesDefinition? sp, TileType tile)
+        => sp != null ? TerrainProfile.SteerAversion(sp, tile) : tile.GetAvoidanceWeight();
 
     /// <summary>
     /// Find a roam target toward the most damaged (non-balanced) terrain.

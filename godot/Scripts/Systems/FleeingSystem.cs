@@ -178,7 +178,7 @@ public sealed class FleeingSystem : ISystem
 
                     case FearResponse.Flee:
                     default:
-                        ApplyFleeResponse(ref pos, ref vel, ref wander, ref prey, fleeDir, fearRatio, discomfortRatio, agility, staminaFactor);
+                        ApplyFleeResponse(ref pos, ref vel, ref wander, ref prey, fleeDir, fearRatio, discomfortRatio, agility, staminaFactor, speciesDef);
                         break;
                 }
             }
@@ -321,8 +321,14 @@ public sealed class FleeingSystem : ISystem
     /// </summary>
     private void ApplyFleeResponse(ref Position pos, ref Velocity vel, ref Wander wander,
                                     ref Prey prey, Vector2 fleeDir, float fearRatio, float discomfortRatio,
-                                    float agility, float staminaFactor)
+                                    float agility, float staminaFactor, SpeciesDefinition? speciesDef)
     {
+        // Species-aware terrain aversion: an aquatic fish must treat LAND as the thing to avoid
+        // (not water), so it won't flee ashore and strand. Falls back to raw tile weight if the
+        // species is unknown.
+        float Aversion(TileType t) => speciesDef != null
+            ? TerrainProfile.SteerAversion(speciesDef, t) : t.GetAvoidanceWeight();
+
         float fleeSpeed = wander.Speed * prey.FleeSpeedMultiplier * staminaFactor;
 
         // Speed boost when very afraid
@@ -337,27 +343,28 @@ public sealed class FleeingSystem : ISystem
             float fleeAheadX = pos.X + fleeDir.X * 2f;
             float fleeAheadY = pos.Y + fleeDir.Y * 2f;
             var aheadTile = _worldManager.GetTile(fleeAheadX, fleeAheadY);
+            float aheadAvoid = Aversion(aheadTile);
 
             // If fleeing leads to worse terrain, try to find a compromise direction
-            if (aheadTile.GetAvoidanceWeight() > 0.5f)
+            if (aheadAvoid > 0.5f)
             {
                 // Try perpendicular directions to see if either is better
                 float perpX = -fleeDir.Y;
                 float perpY = fleeDir.X;
 
-                float leftAvoid = _worldManager.GetTile(pos.X + perpX * 2f, pos.Y + perpY * 2f).GetAvoidanceWeight();
-                float rightAvoid = _worldManager.GetTile(pos.X - perpX * 2f, pos.Y - perpY * 2f).GetAvoidanceWeight();
+                float leftAvoid = Aversion(_worldManager.GetTile(pos.X + perpX * 2f, pos.Y + perpY * 2f));
+                float rightAvoid = Aversion(_worldManager.GetTile(pos.X - perpX * 2f, pos.Y - perpY * 2f));
 
                 // Blend flee direction with side-step based on discomfort (less adjustment when afraid)
                 float blendFactor = discomfortRatio * 0.5f * (1f - fearRatio);
-                if (leftAvoid < rightAvoid && leftAvoid < aheadTile.GetAvoidanceWeight())
+                if (leftAvoid < rightAvoid && leftAvoid < aheadAvoid)
                 {
                     fleeDir = new Vector2(
                         fleeDir.X * (1 - blendFactor) + perpX * blendFactor,
                         fleeDir.Y * (1 - blendFactor) + perpY * blendFactor
                     ).Normalized();
                 }
-                else if (rightAvoid < aheadTile.GetAvoidanceWeight())
+                else if (rightAvoid < aheadAvoid)
                 {
                     fleeDir = new Vector2(
                         fleeDir.X * (1 - blendFactor) - perpX * blendFactor,
