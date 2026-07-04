@@ -35,15 +35,15 @@ worldgen parameters AND a per-tile-type biome distribution histogram + niche-cov
 whether each niche has enough habitat — uploadable for discussion. (Param text is in the
 filename + sidecar for now; baked-on-image text is a possible v2.)
 
-### 2. Spawn-niche placement validation
+### 2. Spawn-niche placement validation — DONE (initial)
 Symptoms: front-loaded environment deaths (fish spawned off-element), and specialists with no
-habitat. Goals:
-- Spawn each species only on tiles that match its niche (CanSpawnOnTile already exists — verify
-  it's honoured for aquatics/cold specialists, and that a fish never spawns on land).
-- Penguins must spawn in cold *coastal* terrain (snow adjacent to water), not snow on a mountain
-  top with no fish for miles. Needs the biome-distribution data from (1) to know if such terrain
-  even exists for a given seed.
-- Fall back gracefully when a niche is too small (don't dump a species into hostile terrain).
+habitat. **Fixed:** `GetSpawnablePositionsForSpecies` now filters a non-aquatic predator's spawn
+tiles to those within ~9 tiles of its `HuntTerrain` (full-set fallback if a chunk has none) — so
+penguins spawn on the cold *coast* next to fish instead of inland (where food-seeking + herd
+cohesion couldn't rescue them). Also concentrates Crocodile/Polar Bear near water, Scorpion/Snake
+near desert, Arctic Fox near tundra. (Aquatics already spawn in water = on their food.)
+*Still open:* the early environment-death cluster (fish spawned in/near wrong element) — likely a
+separate placement detail; watch whether it shrinks now.
 
 ### 3. Terrain-aware food-seeking drive — DONE
 The biggest behavioural gap. Wander was random and hunting only reacted to in-range prey, so a
