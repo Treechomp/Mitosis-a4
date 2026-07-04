@@ -554,6 +554,25 @@ public sealed class WorldManager
         if (spawnable.Count == 0)
             return positions;
 
+        // Niche placement: a non-aquatic predator with HuntTerrain (Penguin/Crocodile/Polar Bear
+        // → water) should START near its hunting grounds, not stranded inland where it starves
+        // before food-seeking can help it migrate. Keep only spawn tiles within reach of a
+        // HuntTerrain tile; fall back to the full set if this chunk has none, so spawning never
+        // fails. (Aquatic species already spawn in water — i.e. on their food.)
+        if (species.HuntTerrain != null && !species.IsAquatic)
+        {
+            var near = new List<(int lx, int ly, BiomeType biome, TileType tile)>();
+            foreach (var s in spawnable)
+            {
+                float wx = chunk.ChunkX * chunk.Size + s.lx + 0.5f;
+                float wy = chunk.ChunkY * chunk.Size + s.ly + 0.5f;
+                if (HasTerrainNear(wx, wy, species.HuntTerrain, 9f))
+                    near.Add(s);
+            }
+            if (near.Count > 0)
+                spawnable = near;
+        }
+
         // Sample random positions
         int sampleCount = Math.Min(count, spawnable.Count);
         for (int i = 0; i < sampleCount; i++)
@@ -568,6 +587,24 @@ public sealed class WorldManager
         }
 
         return positions;
+    }
+
+    /// <summary>
+    /// True if any of the given tile types is within `maxRadius` tiles of (x, y). Sampled on
+    /// concentric rings (cheap, one-time at spawn) — used for niche-aware spawn placement.
+    /// </summary>
+    private bool HasTerrainNear(float x, float y, List<TileType> types, float maxRadius)
+    {
+        for (float r = 3f; r <= maxRadius; r += 3f)
+        {
+            for (int i = 0; i < 8; i++)
+            {
+                float a = i * MathF.PI / 4f;
+                if (types.Contains(GetTile(x + MathF.Cos(a) * r, y + MathF.Sin(a) * r)))
+                    return true;
+            }
+        }
+        return false;
     }
 
     /// <summary>
