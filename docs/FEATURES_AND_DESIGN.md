@@ -401,7 +401,13 @@ hunger and tile depletion). This is the **soft** terrain preference — overrida
 a creature in the wrong element (depth-aware — land creatures wade shallow water but drown in
 deep, insects drown in any water, aquatics suffocate on land; aquatic/semi-aquatic never drown)
 takes energy damage after a grace period (`WrongElementGraceTicks` / `WrongElementDamageRate`).
-The **hard** element barrier is a separate concept (`TerrainProfile.IsImpassable`, §6.x).
+Both the grace counter and the damage are **LOD-compensated (`× tickMult`)** so a beached shark
+suffocates at the same real-time rate at every LOD tier (without it, a coarse-tier aquatic roamed
+the land near-immortally); health barely resists it (floor 0.7× damage — you can't out-HP a lack
+of air). Predators also stay in their element while hunting via `HuntingSystem.SteerForHabitat`
+(sharks steer off land, land waders always steer off DEEP water even mid-pounce), so the drowning
+consequence only bites when a creature genuinely strays. The **hard** element barrier is a
+separate concept (`TerrainProfile.IsImpassable`, §6.x).
 
 ### 6.4 Hunger — `SurvivalSystems.cs` (gated)
 
