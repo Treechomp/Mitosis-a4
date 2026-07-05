@@ -303,9 +303,9 @@ public static class SpeciesRegistry
             HuntingTactic = HuntingTactic.PackCoordinated,
             HuntRange = 12f,
             AttackRange = 0.8f,
-            AttackPower = 30f,
+            AttackPower = 38f,
             AttackCooldown = 20,
-            BaseHuntSpeed = 0.12f,
+            BaseHuntSpeed = 0.14f,
 
             // Survival - predators need lower decay to survive between hunts
             MaxHunger = 210f,
@@ -314,7 +314,7 @@ public static class SpeciesRegistry
             MaturityAge = 1500,
 
             // Reproduction - lower thresholds since hunts are risky
-            ReproHungerThreshold = 165f,   // ~79%: was 195 (93%) — the one predator never cut in step 4, so it bred far less than peers and dwindled
+            ReproHungerThreshold = 148f,   // ~79%: was 195 (93%) — the one predator never cut in step 4, so it bred far less than peers and dwindled
             ReproEnergyThreshold = 75f,
             ReproCooldown = 1000,  // Longer cooldown
 
@@ -332,7 +332,7 @@ public static class SpeciesRegistry
 
             // Social - tight pack hunters
             GroupAffinity = 0.7f,
-            PreferredGroupSize = 3f,
+            PreferredGroupSize = 4f,
             CohesionStrength = 0.04f,
             AlignmentStrength = 0.03f,
             PackHunterChance = 0.7f,
@@ -505,7 +505,7 @@ public static class SpeciesRegistry
             AttackRange = 1.2f,
             AttackPower = 50f,
             AttackCooldown = 26,   // was 40 (2s between bites) — far too slow, dragged out the kill
-            BaseHuntSpeed = 0.08f,
+            BaseHuntSpeed = 0.10f,
 
             // Survival - long lived
             MaxHunger = 300f,
@@ -1144,7 +1144,7 @@ public static class SpeciesRegistry
             AttackRange = 1.5f,
             AttackPower = 60f,
             AttackCooldown = 35,
-            BaseHuntSpeed = 0.09f,
+            BaseHuntSpeed = 0.11f,
 
             // Ambush — rare but explosive burst (high PounceSpeedMult), longer charge range
             AmbushStealthGain = 0.01f,
@@ -1701,7 +1701,7 @@ public static class SpeciesRegistry
             Diet = DietType.Omnivore,
             DefaultSocialType = SocialType.Herd,
             SemiAquatic = true,
-            SpawnWeight = 0.7f,
+            SpawnWeight = 1.2f,
 
             // Movement - waddle on land, faster in water
             BaseWanderSpeed = 0.025f,
@@ -1713,7 +1713,7 @@ public static class SpeciesRegistry
             AttackRange = 0.8f,
             AttackPower = 22f,
             AttackCooldown = 16,
-            BaseHuntSpeed = 0.1f,
+            BaseHuntSpeed = 0.13f,
             HuntThreshold = 0.6f,
             TrackingHungerThreshold = 0.5f,
             TrackingRange = 32f,
@@ -1735,12 +1735,12 @@ public static class SpeciesRegistry
 
             // Survival
             MaxHunger = 200f,
-            HungerDecayRate = 0.05f,
+            HungerDecayRate = 0.04f,
             MaxLifespan = 20000,
-            MaturityAge = 1500,
+            MaturityAge = 1000,
 
             // Reproduction
-            ReproHungerThreshold = 175f,
+            ReproHungerThreshold = 125f,
             ReproEnergyThreshold = 70f,
             ReproCooldown = 600,
             ReproHungerCost = 40f,
@@ -1748,7 +1748,7 @@ public static class SpeciesRegistry
 
             // Social - tight huddle colonies
             GroupAffinity = 0.9f,
-            PreferredGroupSize = 10f,
+            PreferredGroupSize = 14f,
             CohesionStrength = 0.05f,   // Very tight huddling
             AlignmentStrength = 0.02f,
             SocialRadius = 8f,
@@ -1767,8 +1767,8 @@ public static class SpeciesRegistry
                 // than a swimming Polar Bear ~0.8, so it can sometimes escape bears/foxes by
                 // fleeing to sea, and fast enough to run fish down) but the slow land base keeps
                 // it easy prey ashore. Still slower than a hunting Shark.
-                { TileType.ShallowWater, 1.5f },
-                { TileType.DeepWater, 1.7f },
+                { TileType.ShallowWater, 1.6f },
+                { TileType.DeepWater, 1.9f },
             },
             TerrainComfortModifiers = new Dictionary<TileType, float>
             {

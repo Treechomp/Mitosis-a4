@@ -23,6 +23,23 @@ Predator **kill effectiveness** (kills / hunt_start), most recent run:
 | Scorpion        | 0   | 0%  | **structurally broken — extinct** |
 | Penguin         | 0   | 0%  | **extinct** — can't reach fish (no food-seeking) |
 
+**Tuning pass 2026-07-05 (after concealment tone-down + spawn placement):**
+- Concealment tone-down worked — generalists recovered (Hawk 33→221, Jaguar 24→113, Wolf →152,
+  Fox →258). World healthy; needs a longer run to confirm equilibrium.
+- **Penguin** still failed (35→4) but now *reaches and hunts* fish (spawn placement worked: 41
+  hunt_starts, 14 fish kills vs 1/0 before). Remaining problems were its own numbers: RepHT
+  175/200 = 87.5% blocked breeding (10 births), marginal fish-catch speed (23 `not_viable`), tiny
+  colonies. Fixed: RepHT 175→125, BaseHuntSpeed 0.10→0.13, water speed Deep 1.7→1.9 / Shallow
+  1.5→1.6, SpawnWeight 0.7→1.2, GroupSize 10→14, MaturityAge 1500→1000, HungerDecay 0.05→0.04.
+- **Wolf** boosted to better check deer/elk (was the weakest converter, 28%, 941 `not_viable`):
+  AttackPower 30→38, BaseHuntSpeed 0.12→0.14, PreferredGroupSize 3→4, RepHT 165→148.
+- **Bear/Crocodile** slight hunt-speed boost (0.09→0.11, 0.08→0.10) — both slow-breeding/local, no
+  menace risk.
+- **Caveat:** deer/elk boom because predation is their ONLY check (Deer 1271 births vs 341
+  predation, **0 age deaths, ~0 starvation** — abundant grazeable food). Wolves alone can't fully
+  offset 1271 births; the real "always booms" lever remains **herbivore density-dependence /
+  carrying capacity** (grazing depletion → starvation), not predator strength.
+
 **Confirmed fixes since the historical spec:**
 - **Prolonged-push / "invulnerable prey" fixed** — root cause was the attack cooldown overshooting
   0 into a stuck negative at reduced LOD (gate `== 0` never re-fired). Now clamped + gate `<= 0`.
