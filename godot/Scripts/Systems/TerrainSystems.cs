@@ -36,6 +36,12 @@ public sealed class TerrainDiscomfortSystem : ISystem
             if (!em.DueThisTick[entity])
                 continue;
 
+            // LOD tick multiplier: drowning/suffocation must accrue at the correct RATE regardless
+            // of LOD, or a beached aquatic at a coarse tier barely takes damage and roams the land
+            // near-immortally instead of suffocating.
+            int tickMult = em.HasComponents(entity, ComponentFlags.SimulationLOD)
+                ? em.SimulationLODs[entity].TickInterval : 1;
+
             ref var pos = ref em.Positions[entity];
             ref var discomfort = ref em.TerrainDiscomforts[entity];
 
@@ -116,14 +122,16 @@ public sealed class TerrainDiscomfortSystem : ISystem
 
                 if (isDrowning || isSuffocating)
                 {
-                    discomfort.WrongElementTicks++;
+                    discomfort.WrongElementTicks += tickMult;
 
                     if (discomfort.WrongElementTicks > speciesDef.WrongElementGraceTicks)
                     {
                         ref var energy = ref em.Energies[entity];
-                        // Healthier entities resist longer; damage accelerates as energy drops
-                        float energyFactor = 1f - (energy.Percent * 0.7f);
-                        energy.Current -= speciesDef.WrongElementDamageRate * energyFactor;
+                        // Health barely helps against drowning/suffocation — you can't out-HP a lack
+                        // of air (floor 0.7× damage even at full health, ramping to 1.0× as energy
+                        // drops). LOD-compensated so the rate is the same at every tier.
+                        float energyFactor = 1f - (energy.Percent * 0.3f);
+                        energy.Current -= speciesDef.WrongElementDamageRate * energyFactor * tickMult;
                         energy.RegenCooldown = 40; // Suppress regen while drowning/suffocating
 
                         if (energy.IsDead)

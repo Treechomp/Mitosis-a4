@@ -789,8 +789,7 @@ public sealed class HuntingSystem : ISystem
                     vel.Dx += (trackDir.X * trackSpeed - vel.Dx) * trackAgility;
                     vel.Dy += (trackDir.Y * trackSpeed - vel.Dy) * trackAgility;
 
-                    if (speciesDef.AvoidsOpenWater)
-                        SteerAroundWater(ref vel, pos.X, pos.Y, deepOnly: !speciesDef.AvoidsWater);
+                    SteerForHabitat(ref vel, pos.X, pos.Y, speciesDef);
 
                     continue;  // Skip normal hunt movement — we're just tracking
                 }
@@ -1053,11 +1052,10 @@ public sealed class HuntingSystem : ISystem
                         }
                     }
 
-                    // Land predators steer around water during pursuit
-                    // Ambush predators skip water avoidance when stalking or pouncing
-                    bool skipWaterAvoid = isAmbush && (predator.Stealth > 0.1f || predator.PounceTimer > 0);
-                    if (speciesDef.AvoidsOpenWater && !skipWaterAvoid)
-                        SteerAroundWater(ref vel, pos.X, pos.Y, deepOnly: !speciesDef.AvoidsWater);
+                    // Keep the predator in its element during pursuit: sharks off land, land
+                    // waders out of DEEP water (they may still lunge through shallows on a pounce,
+                    // but never dive into drowning depth chasing prey), insects out of all water.
+                    SteerForHabitat(ref vel, pos.X, pos.Y, speciesDef);
                     }
                 }
             }
@@ -1572,12 +1570,29 @@ public sealed class HuntingSystem : ISystem
     /// Steer velocity away from water tiles ahead. Checks 2 tiles in the movement
     /// direction; if water is found, tries ±45° and ±90° offsets and picks the clearest.
     /// </summary>
-    // Water a steering creature treats as an obstacle: deep water only for waders (land
-    // predators), any water for non-swimmers (insects passing deepOnly = false).
-    private static bool IsBlockingWater(TileType tile, bool deepOnly)
-        => deepOnly ? tile.IsDeepWater() : tile.IsWater();
+    // Terrain a steering creature treats as an obstacle. avoidLand = an aquatic creature (Shark/
+    // Fish) that must stay in water — anything NOT water blocks it. Otherwise: deep water only for
+    // waders (land predators), any water for non-swimmers (insects passing deepOnly = false).
+    private static bool IsBlockingTerrain(TileType tile, bool avoidLand, bool deepOnly)
+        => avoidLand ? !tile.IsWater() : (deepOnly ? tile.IsDeepWater() : tile.IsWater());
 
-    private void SteerAroundWater(ref Velocity vel, float posX, float posY, bool deepOnly)
+    /// <summary>
+    /// Steer a hunting predator off terrain it can't safely traverse, so pursuit doesn't beach a
+    /// shark or drown a wolf: aquatic → avoid land; insects (AvoidsWater) → avoid all water; land
+    /// waders (AvoidsOpenWater) → avoid DEEP water (they wade shallows, even mid-pounce, but never
+    /// dive into drowning depth). Semi-aquatic (Croc/Polar Bear) steer around nothing.
+    /// </summary>
+    private void SteerForHabitat(ref Velocity vel, float posX, float posY, SpeciesDefinition sp)
+    {
+        if (sp.IsAquatic)
+            SteerAroundWater(ref vel, posX, posY, deepOnly: false, avoidLand: true);
+        else if (sp.AvoidsWater)
+            SteerAroundWater(ref vel, posX, posY, deepOnly: false);
+        else if (sp.AvoidsOpenWater)
+            SteerAroundWater(ref vel, posX, posY, deepOnly: true);
+    }
+
+    private void SteerAroundWater(ref Velocity vel, float posX, float posY, bool deepOnly, bool avoidLand = false)
     {
         if (_worldManager == null || (vel.Dx == 0 && vel.Dy == 0)) return;
 
@@ -1589,7 +1604,7 @@ public sealed class HuntingSystem : ISystem
         bool waterAhead = false;
         for (float d = 1f; d <= 2f; d += 1f)
         {
-            if (IsBlockingWater(_worldManager.GetTile(posX + nx * d, posY + ny * d), deepOnly))
+            if (IsBlockingTerrain(_worldManager.GetTile(posX + nx * d, posY + ny * d), avoidLand, deepOnly))
             {
                 waterAhead = true;
                 break;
@@ -1616,7 +1631,7 @@ public sealed class HuntingSystem : ISystem
             int waterCount = 0;
             for (float d = 1f; d <= 2f; d += 1f)
             {
-                if (IsBlockingWater(_worldManager.GetTile(posX + rnx * d, posY + rny * d), deepOnly))
+                if (IsBlockingTerrain(_worldManager.GetTile(posX + rnx * d, posY + rny * d), avoidLand, deepOnly))
                     waterCount++;
             }
 
