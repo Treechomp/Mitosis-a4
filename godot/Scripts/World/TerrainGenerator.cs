@@ -36,6 +36,9 @@ public sealed class TerrainGenerator
     private RiverMapper? _riverMapper;
     private int _worldSizeTiles = 512; // Updated by PrecomputeRivers
 
+    // Drainage: how strongly slope sheds climate moisture (flats hold it). See GenerateChunk.
+    private const float DrainageFactor = 2.5f;
+
     public TerrainGenerator(int seed, TerrainSettings? settings = null)
     {
         _seed = seed;
@@ -223,6 +226,25 @@ public sealed class TerrainGenerator
                 float elevation = _riverMapper?.GetBaseElevation(worldX, worldY)
                                   ?? SampleBaseElevationWarped(warpedX, warpedY);
                 float moisture = (_moistureNoise.GetNoise2D(warpedX, warpedY) + 1f) * 0.5f;
+
+                if (_riverMapper != null)
+                {
+                    // Two-way hydrology→biome coupling, applied BEFORE classification so the
+                    // biomes themselves respond to the generated water features:
+                    // 1. Rivers/lakes wet their surroundings — wetland/bog margins in wet
+                    //    climates, green riparian corridors through dry ones, broad marsh
+                    //    fans at deltas.
+                    moisture += _riverMapper.GetMoistureBoost(worldX, worldY);
+                    // 2. Drainage — slopes shed water, flats hold it — so swamps settle into
+                    //    flat lowland basins instead of scattering wherever moisture noise
+                    //    peaks, and hillsides dry toward forest/scrub. Centred on a typical
+                    //    slope so the world's overall moisture budget stays unchanged.
+                    moisture += Math.Clamp(
+                        (0.025f - _riverMapper.GetSlope(worldX, worldY)) * DrainageFactor,
+                        -0.20f, 0.08f);
+                    moisture = Math.Clamp(moisture, 0f, 1f);
+                }
+
                 float temperature = GetTemperature(worldX, worldY, elevation);
 
                 TileType tile = DetermineTileType(elevation, moisture, temperature);
@@ -351,7 +373,14 @@ public sealed class TerrainGenerator
         // painted a thick Sand ring around every water body (~15% of the world, fragmenting
         // biomes and faking a "desert"). The inner shore now falls through to its climate biome.
         if (elevation < 0.43f)
+        {
+            // Tidal marsh: an extremely wet, non-frozen shore (a river-delta fan or a bog
+            // coast) grows reeds instead of bare beach, so deltas run wetland all the way
+            // to the waterline.
+            if (moisture > 0.78f && temperature > 0.28f)
+                return TileType.Wetland;
             return TileType.Sand;
+        }
 
         // ── Mountains / high ground ─────────────────────────────────────────────────────
         if (elevation > 0.80f)
@@ -445,11 +474,10 @@ public sealed class TerrainGenerator
                 // --- Oases: small grass/water patches in desert ---
                 if (currentTile == TileType.Arid || currentTile == TileType.Sand)
                 {
-                    // Sample moisture with the same domain warp used in classification,
-                    // so the oasis test matches the moisture that produced this tile.
-                    float oWarpX = _warpNoiseX.GetNoise2D(worldX, worldY) * WarpAmplitude;
-                    float oWarpY = _warpNoiseY.GetNoise2D(worldX, worldY) * WarpAmplitude;
-                    float moisture = (_moistureNoise.GetNoise2D(worldX + oWarpX, worldY + oWarpY) + 1f) * 0.5f;
+                    // Read the stored moisture (it already includes the hydrology boost and
+                    // drainage), so the oasis test matches the moisture that produced this
+                    // tile — and riverside desert naturally sprouts oases.
+                    float moisture = chunk.GetMoisture(localX, localY);
                     if (lmNoise > 0.7f && moisture > 0.35f)
                     {
                         chunk.SetTile(localX, localY, TileType.Grass);

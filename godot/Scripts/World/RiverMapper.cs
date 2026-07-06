@@ -24,6 +24,9 @@ public sealed class RiverMapper
     private bool[,] _isRiver = null!;
     private bool[,] _isLake = null!;
     private bool[,] _isWetlandBank = null!;
+    // Hydrology→climate coupling: moisture added to the climate field around rivers/lakes
+    // (riparian corridors, marshy delta fans). Read by TerrainGenerator before classification.
+    private float[,] _moistureBoost = null!;
 
     // Tuning parameters
     private const float SourceMinElevation = 0.68f;   // Minimum elevation for river sources
@@ -34,6 +37,13 @@ public sealed class RiverMapper
     private const int MaxRiverSources = 80;            // Max number of river source points
     private const float MaxLakeRise = 0.04f;             // Max water rise above depression bottom
     private const int MaxLakeArea = 80;                  // Max tiles a single lake can occupy
+
+    // Hydrology→climate coupling (see BuildMoistureBoost)
+    private const float RiparianBoost     = 0.10f;  // base wetting beside any river
+    private const float RiparianFlowBonus = 0.02f;  // extra per unit of flow (capped at 5)
+    private const float LakeBoost         = 0.15f;  // wetting beside lakes
+    private const float DeltaBoost        = 0.30f;  // river mouths fan out into marshy deltas
+    private const float BoostFalloff      = 0.022f; // decay per tile of distance from water
 
     // 6-direction offsets for staggered hex grid (row-parity variants)
     // Even row (y%2==0): upper/lower diagonal neighbors lean left  (dx = -1)
@@ -65,6 +75,7 @@ public sealed class RiverMapper
         TraceRivers(sources);
         MarkRiversAndLakes();
         MarkWetlandBanks();
+        BuildMoistureBoost();
     }
 
     public bool IsRiver(int x, int y)
@@ -110,6 +121,115 @@ public sealed class RiverMapper
         if (x < 0) x = 0; else if (x >= _worldSize) x = _worldSize - 1;
         if (y < 0) y = 0; else if (y >= _worldSize) y = _worldSize - 1;
         return _elevation[x, y];
+    }
+
+    /// <summary>
+    /// Local steepness of the base terrain at a tile: the largest elevation difference to a
+    /// cardinal neighbour. Used by TerrainGenerator's drainage rule (flat ground holds
+    /// moisture, slopes shed it).
+    /// </summary>
+    public float GetSlope(int x, int y)
+    {
+        float e = GetBaseElevation(x, y);
+        float s = Math.Abs(GetBaseElevation(x - 1, y) - e);
+        s = Math.Max(s, Math.Abs(GetBaseElevation(x + 1, y) - e));
+        s = Math.Max(s, Math.Abs(GetBaseElevation(x, y - 1) - e));
+        s = Math.Max(s, Math.Abs(GetBaseElevation(x, y + 1) - e));
+        return s;
+    }
+
+    /// <summary>Extra climate moisture contributed by nearby rivers/lakes/deltas (0 far away).</summary>
+    public float GetMoistureBoost(int x, int y)
+    {
+        if (x < 0 || x >= _worldSize || y < 0 || y >= _worldSize) return 0f;
+        return _moistureBoost[x, y];
+    }
+
+    /// <summary>
+    /// Build the hydrology→climate moisture field: every river/lake tile radiates moisture
+    /// into the surrounding land, scaled by how much water it carries — a soft riparian halo
+    /// along streams (~5 tiles), wider along high-flow rivers and lakes, and a broad fan
+    /// (~13 tiles) around delta mouths where a river meets the sea. TerrainGenerator adds
+    /// this to the climate moisture BEFORE classification, so the biomes themselves respond:
+    /// wetland/bog margins in wet climates, green riparian corridors through dry ones.
+    /// </summary>
+    private void BuildMoistureBoost()
+    {
+        int n = _worldSize;
+        _moistureBoost = new float[n, n];
+
+        // Seed source strengths.
+        for (int y = 0; y < n; y++)
+        {
+            for (int x = 0; x < n; x++)
+            {
+                float s = 0f;
+                if (_isLake[x, y])
+                {
+                    s = LakeBoost;
+                }
+                else if (_isRiver[x, y])
+                {
+                    s = RiparianBoost + RiparianFlowBonus * Math.Min(_flow[x, y], 5);
+                    // Delta: a river tile at shore elevation touching the ocean (or draining
+                    // off the world edge).
+                    if (_elevation[x, y] < 0.45f && TouchesOcean(x, y))
+                        s = DeltaBoost;
+                }
+                if (s > 0f)
+                    _moistureBoost[x, y] = s;
+            }
+        }
+
+        // Two-pass chamfer propagation of max(strength − distance × falloff): each source
+        // spreads a linear-decay halo without a per-source BFS (O(n²) total).
+        const float diag = 1.4f;
+        for (int y = 0; y < n; y++)
+        {
+            for (int x = 0; x < n; x++)
+            {
+                float v = _moistureBoost[x, y];
+                if (x > 0) v = Math.Max(v, _moistureBoost[x - 1, y] - BoostFalloff);
+                if (y > 0)
+                {
+                    v = Math.Max(v, _moistureBoost[x, y - 1] - BoostFalloff);
+                    if (x > 0)     v = Math.Max(v, _moistureBoost[x - 1, y - 1] - BoostFalloff * diag);
+                    if (x < n - 1) v = Math.Max(v, _moistureBoost[x + 1, y - 1] - BoostFalloff * diag);
+                }
+                _moistureBoost[x, y] = v;
+            }
+        }
+        for (int y = n - 1; y >= 0; y--)
+        {
+            for (int x = n - 1; x >= 0; x--)
+            {
+                float v = _moistureBoost[x, y];
+                if (x < n - 1) v = Math.Max(v, _moistureBoost[x + 1, y] - BoostFalloff);
+                if (y < n - 1)
+                {
+                    v = Math.Max(v, _moistureBoost[x, y + 1] - BoostFalloff);
+                    if (x < n - 1) v = Math.Max(v, _moistureBoost[x + 1, y + 1] - BoostFalloff * diag);
+                    if (x > 0)     v = Math.Max(v, _moistureBoost[x - 1, y + 1] - BoostFalloff * diag);
+                }
+                _moistureBoost[x, y] = v;
+            }
+        }
+    }
+
+    /// <summary>True if a hex neighbour is ocean (below the waterline) or off the world edge.</summary>
+    private bool TouchesOcean(int x, int y)
+    {
+        var (tdx, tdy) = y % 2 == 0 ? (EvenDX, EvenDY) : (OddDX, OddDY);
+        for (int d = 0; d < 6; d++)
+        {
+            int nx = x + tdx[d];
+            int ny = y + tdy[d];
+            if (nx < 0 || nx >= _worldSize || ny < 0 || ny >= _worldSize)
+                return true; // world edge = outflow
+            if (_elevation[nx, ny] < WaterLevel)
+                return true;
+        }
+        return false;
     }
 
     /// <summary>
