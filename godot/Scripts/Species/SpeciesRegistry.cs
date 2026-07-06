@@ -1715,7 +1715,7 @@ public static class SpeciesRegistry
             AttackPower = 22f,
             AttackCooldown = 16,
             BaseHuntSpeed = 0.13f,
-            HuntThreshold = 0.6f,
+            HuntThreshold = 0.75f,
             TrackingHungerThreshold = 0.5f,
             TrackingRange = 32f,
             ForageHungerThreshold = 0.8f,   // stay coupled to fish — disperse/forage early
@@ -1772,11 +1772,23 @@ public static class SpeciesRegistry
                 { TileType.ShallowWater, 1.6f },
                 { TileType.DeepWater, 1.9f },
             },
+            // Seabird: comfortable BOTH on the cold coast (huddle/breed) AND in the water it feeds
+            // in. Water is intrinsically high-discomfort (raw DeepWater 12/tick, ShallowWater 5),
+            // so WITHOUT strong negative modifiers the discomfort system aborted a penguin's hunt
+            // and drove it straight back ashore the instant it entered the water — the colony then
+            // starved offshore of its own food (0% ever hunting; slow starvation in place). Values
+            // net each home tile slightly comfortable (combined discomfort <= 0) so a penguin can
+            // stay in the water to catch fish; hunger drives it to sea, satiety + the land-only
+            // breeding cycle pulls it back to the colony.
             TerrainComfortModifiers = new Dictionary<TileType, float>
             {
-                { TileType.Ice, -3f },
-                { TileType.Tundra, -2f },
-                { TileType.ShallowWater, -1f },
+                { TileType.Ice, -6f },
+                { TileType.Tundra, -4f },
+                { TileType.Steppe, -2f },
+                { TileType.ShallowWater, -8f },
+                { TileType.DeepWater, -14f },
+                { TileType.Reef, -8f },
+                { TileType.River, -10f },
                 { TileType.Sand, 5f },
                 { TileType.Arid, 8f },
             },
