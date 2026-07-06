@@ -290,7 +290,8 @@ public sealed class TerrainGenerator
                 // base shape like detail — classification, temperature, and rivers are untouched;
                 // creatures feel the risers as strong slope resistance. Fades in above the shore
                 // so beaches and river mouths stay gentle.
-                if (_cliffStrength > 0f && elevation > 0.46f)
+                // (step-height guard: 0 must disable terracing, not divide by zero below)
+                if (_cliffStrength > 0f && _cliffStepHeight > 0.01f && elevation > 0.46f)
                 {
                     float cliffMask = SmoothStep(0.60f, 0.80f, (_cliffNoise.GetNoise2D(worldX, worldY) + 1f) * 0.5f);
                     if (cliffMask > 0f)
