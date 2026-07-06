@@ -18,12 +18,19 @@ public sealed class TerrainGenerator
     private readonly FastNoiseLite _landmarkNoise;
     private readonly FastNoiseLite _detailNoise;     // fine surface relief on top of base elevation
     private readonly FastNoiseLite _roughnessNoise;  // low-freq mask: where detail is strong vs flat
+    private readonly FastNoiseLite _ridgeNoise;      // ridged fractal: sharp mountain-range crests
+    private readonly FastNoiseLite _orogenyNoise;    // low-freq mask: where ranges form (belts)
+    private readonly FastNoiseLite _cliffNoise;      // low-freq mask: terraced mesa/bluff regions
 
     // Domain warping amplitude (in tiles) — larger value means more organic, winding boundaries.
     private readonly float WarpAmplitude;
     // Surface-detail tuning (see TerrainSettings).
     private readonly float _detailAmplitude;
     private readonly float _roughnessFloor;
+    // Ridge/cliff tuning (see TerrainSettings).
+    private readonly float _ridgeAmplitude;
+    private readonly float _cliffStrength;
+    private readonly float _cliffStepHeight;
 
     // Flow-based river system (pre-computed before chunk generation)
     private RiverMapper? _riverMapper;
@@ -36,6 +43,9 @@ public sealed class TerrainGenerator
         WarpAmplitude = settings.WarpAmplitude;
         _detailAmplitude = settings.DetailAmplitude;
         _roughnessFloor = settings.RoughnessFloor;
+        _ridgeAmplitude = settings.RidgeAmplitude;
+        _cliffStrength = settings.CliffStrength;
+        _cliffStepHeight = settings.CliffStepHeight;
 
         // Elevation noise — continent/landmass scale features
         _elevationNoise = new FastNoiseLite();
@@ -102,6 +112,75 @@ public sealed class TerrainGenerator
         _roughnessNoise.Frequency = settings.RoughnessFrequency;
         _roughnessNoise.FractalType = FastNoiseLite.FractalTypeEnum.Fbm;
         _roughnessNoise.FractalOctaves = 2;
+
+        // Ridge noise — ridged fractal whose crests (values near +1) form sharp, connected
+        // ridgelines. Part of the BASE elevation (see SampleBaseElevation), so classification,
+        // altitude cooling, and river tracing all respect the ranges.
+        _ridgeNoise = new FastNoiseLite();
+        _ridgeNoise.NoiseType = FastNoiseLite.NoiseTypeEnum.SimplexSmooth;
+        _ridgeNoise.Seed = seed + 15000;
+        _ridgeNoise.Frequency = settings.RidgeFrequency;
+        _ridgeNoise.FractalType = FastNoiseLite.FractalTypeEnum.Ridged;
+        _ridgeNoise.FractalOctaves = 3;
+
+        // Orogeny mask — very low-frequency belts deciding WHERE mountain ranges form, so
+        // ridges cluster into a few real ranges instead of stippling every upland.
+        _orogenyNoise = new FastNoiseLite();
+        _orogenyNoise.NoiseType = FastNoiseLite.NoiseTypeEnum.SimplexSmooth;
+        _orogenyNoise.Seed = seed + 16000;
+        _orogenyNoise.Frequency = settings.OrogenyFrequency;
+        _orogenyNoise.FractalType = FastNoiseLite.FractalTypeEnum.Fbm;
+        _orogenyNoise.FractalOctaves = 2;
+
+        // Cliff mask — low-frequency regions where the stored elevation is terraced into
+        // mesa/bluff steps (visual + movement relief only; never affects classification).
+        _cliffNoise = new FastNoiseLite();
+        _cliffNoise.NoiseType = FastNoiseLite.NoiseTypeEnum.SimplexSmooth;
+        _cliffNoise.Seed = seed + 17000;
+        _cliffNoise.Frequency = settings.CliffFrequency;
+        _cliffNoise.FractalType = FastNoiseLite.FractalTypeEnum.Fbm;
+        _cliffNoise.FractalOctaves = 2;
+    }
+
+    /// <summary>Clamped smoothstep of t over [edge0, edge1].</summary>
+    private static float SmoothStep(float edge0, float edge1, float t)
+    {
+        t = Math.Clamp((t - edge0) / (edge1 - edge0), 0f, 1f);
+        return t * t * (3f - 2f * t);
+    }
+
+    /// <summary>
+    /// The canonical base elevation at a world tile: domain-warped FBM plus ridged mountain
+    /// ranges. This is THE authority every consumer must share — chunk classification,
+    /// temperature/altitude cooling, and the RiverMapper's full-world flow map — so rivers,
+    /// biomes, and ranges always agree. Surface detail and cliff terracing are rendering/
+    /// movement relief added later and deliberately NOT part of this value.
+    /// </summary>
+    public float SampleBaseElevation(int worldX, int worldY)
+    {
+        float warpX = _warpNoiseX.GetNoise2D(worldX, worldY) * WarpAmplitude;
+        float warpY = _warpNoiseY.GetNoise2D(worldX, worldY) * WarpAmplitude;
+        return SampleBaseElevationWarped(worldX + warpX, worldY + warpY);
+    }
+
+    /// <summary>Base elevation from already-warped coordinates (chunk gen reuses its warp).</summary>
+    private float SampleBaseElevationWarped(float warpedX, float warpedY)
+    {
+        float elevation = (_elevationNoise.GetNoise2D(warpedX, warpedY) + 1f) * 0.5f;
+
+        if (_ridgeAmplitude > 0f)
+        {
+            // Ridged fractal: crests approach 1. Cubing sharpens so only the crest line lifts.
+            float ridge = (_ridgeNoise.GetNoise2D(warpedX, warpedY) + 1f) * 0.5f;
+            ridge = ridge * ridge * ridge;
+            // Ranges form only inside orogeny belts, and only grow out of existing uplands —
+            // never straight out of a sea or a plain, so coasts and lowlands stay believable.
+            float belt = SmoothStep(0.55f, 0.80f, (_orogenyNoise.GetNoise2D(warpedX, warpedY) + 1f) * 0.5f);
+            float upland = SmoothStep(0.50f, 0.64f, elevation);
+            elevation += _ridgeAmplitude * ridge * belt * upland;
+        }
+
+        return Math.Clamp(elevation, 0f, 1f);
     }
 
     /// <summary>
@@ -112,7 +191,7 @@ public sealed class TerrainGenerator
     public void PrecomputeRivers(int worldSizeTiles)
     {
         _worldSizeTiles = worldSizeTiles;
-        _riverMapper = new RiverMapper(_elevationNoise, _warpNoiseX, _warpNoiseY, WarpAmplitude);
+        _riverMapper = new RiverMapper(SampleBaseElevation);
         _riverMapper.Generate(worldSizeTiles, _seed);
     }
 
@@ -137,8 +216,12 @@ public sealed class TerrainGenerator
                 float warpedX = worldX + warpX;
                 float warpedY = worldY + warpY;
 
-                // Get noise values with warped coordinates (-1 to 1, normalize to 0-1)
-                float elevation = (_elevationNoise.GetNoise2D(warpedX, warpedY) + 1f) * 0.5f;
+                // Base elevation: read the RiverMapper's precomputed full-world map when
+                // available (identical values by construction — it was built with
+                // SampleBaseElevation — and guarantees rivers/biomes can never drift apart),
+                // else sample directly (worlds generated without a river pre-pass).
+                float elevation = _riverMapper?.GetBaseElevation(worldX, worldY)
+                                  ?? SampleBaseElevationWarped(warpedX, warpedY);
                 float moisture = (_moistureNoise.GetNoise2D(warpedX, warpedY) + 1f) * 0.5f;
                 float temperature = GetTemperature(worldX, worldY, elevation);
 
@@ -176,10 +259,31 @@ public sealed class TerrainGenerator
                 // used the base elevation, so biome boundaries are unaffected.
                 float roughness01 = (_roughnessNoise.GetNoise2D(worldX, worldY) + 1f) * 0.5f;
                 float roughnessFactor = _roughnessFloor + (1f - _roughnessFloor) * roughness01;
-                float landFade = Math.Clamp((elevation - 0.40f) / 0.08f, 0f, 1f);
-                landFade = landFade * landFade * (3f - 2f * landFade); // smoothstep over the shore
+                float landFade = SmoothStep(0.40f, 0.48f, elevation); // fade in over the shore
                 float detail = _detailNoise.GetNoise2D(worldX, worldY) * _detailAmplitude * roughnessFactor * landFade * tile.GetRuggedness();
-                float storedElevation = Math.Clamp(elevation + detail, 0f, 1f);
+                float storedElevation = elevation + detail;
+
+                // Terraced cliffs: in mesa/bluff regions (low-freq mask) the stored elevation is
+                // quantised into flat treads joined by short, steep risers. Applied on top of the
+                // base shape like detail — classification, temperature, and rivers are untouched;
+                // creatures feel the risers as strong slope resistance. Fades in above the shore
+                // so beaches and river mouths stay gentle.
+                if (_cliffStrength > 0f && elevation > 0.46f)
+                {
+                    float cliffMask = SmoothStep(0.60f, 0.80f, (_cliffNoise.GetNoise2D(worldX, worldY) + 1f) * 0.5f);
+                    if (cliffMask > 0f)
+                    {
+                        float band = elevation / _cliffStepHeight;
+                        int stepIdx = (int)band;
+                        // Flat tread for 75% of each band; the top 25% carries the whole riser.
+                        float riser = SmoothStep(0.75f, 1f, band - stepIdx);
+                        float terraced = (stepIdx + riser) * _cliffStepHeight;
+                        float w = cliffMask * _cliffStrength * SmoothStep(0.46f, 0.52f, elevation);
+                        // Blend toward the terrace and damp surface detail so treads read flat.
+                        storedElevation = elevation + (terraced - elevation) * w + detail * (1f - 0.6f * w);
+                    }
+                }
+                storedElevation = Math.Clamp(storedElevation, 0f, 1f);
 
                 chunk.SetElevation(localX, localY, storedElevation);
                 chunk.SetMoisture(localX, localY, moisture);

@@ -14,6 +14,29 @@ public sealed class TerrainSettings
     /// boundaries; lower = straighter, calmer shapes.</summary>
     public float WarpAmplitude = 12f;
 
+    // --- Ridged mountain ranges (part of the BASE elevation: classification, temperature,
+    //     rivers and movement all see them — ranges classify as Mountain/Ice and shed rivers) ---
+    /// <summary>Ridge noise frequency. Lower = longer, larger ridgelines.</summary>
+    public float RidgeFrequency = 0.010f;
+    /// <summary>Max elevation (0..1) a ridge crest adds on top of the base shape. Ridges only
+    /// rise from uplands inside orogeny belts, so this is the crest height of major ranges.
+    /// 0 disables ridges entirely (restores the pure-FBM landscape).</summary>
+    public float RidgeAmplitude = 0.18f;
+    /// <summary>Orogeny-belt mask frequency. Lower = fewer, larger mountain-range regions.</summary>
+    public float OrogenyFrequency = 0.0035f;
+
+    // --- Terraced cliffs (applied to the STORED/rendered elevation only, like surface detail:
+    //     biome classification and river tracing use the base shape, so cliffs are relief —
+    //     visible mesas/bluffs whose steep risers slow movement via slope resistance) ---
+    /// <summary>Cliff-region mask frequency. Lower = fewer, larger mesa/bluff regions.</summary>
+    public float CliffFrequency = 0.005f;
+    /// <summary>How strongly terracing is applied where the cliff mask is active (0 = off,
+    /// 1 = fully stepped). Also scales the riser height a step face can reach.</summary>
+    public float CliffStrength = 0.8f;
+    /// <summary>Elevation (0..1) per terrace step. Bigger steps = taller, rarer cliff faces.
+    /// Keep below the 0.18 spawn-slope / 0.28 movement-cliff thresholds.</summary>
+    public float CliffStepHeight = 0.12f;
+
     // --- Surface detail (added to the rendered/stored elevation only, NOT to classification,
     //     so biome boundaries stay on the base shape; gives relief + a little slope) ---
     /// <summary>Detail noise frequency (finer texture as it rises).</summary>

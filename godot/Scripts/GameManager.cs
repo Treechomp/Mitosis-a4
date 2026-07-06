@@ -33,6 +33,11 @@ public partial class GameManager : Node3D
     [Export] public float TerrainDetailAmplitude = 0.035f;    // surface relief height (keep < ~0.1)
     [Export] public float TerrainRoughnessFrequency = 0.006f; // size of rugged vs smooth regions
     [Export] public float TerrainRoughnessFloor = 0.15f;      // min detail in smoothest areas (0..1)
+    [Export] public float TerrainRidgeFrequency = 0.010f;     // ridgeline scale (lower = longer ranges)
+    [Export] public float TerrainRidgeAmplitude = 0.18f;      // ridge crest height (0 = no ranges)
+    [Export] public float TerrainCliffFrequency = 0.005f;     // size of terraced mesa/bluff regions
+    [Export] public float TerrainCliffStrength = 0.8f;        // terracing blend in cliff regions (0..1)
+    [Export] public float TerrainCliffStepHeight = 0.12f;     // elevation per terrace step
     [Export] public int TargetTPS = 20;
     [Export] public int MaxPopulation = 2000;  // DEBUG: cap at 2000 (2500+ causes FPS drop)
     [Export] public int InitialPopulation = 500;  // DEBUG: standardized debug population
@@ -119,7 +124,7 @@ public partial class GameManager : Node3D
         // structures/spores/Faelings). Centralised here so future death causes need no extra wiring.
         _entityManager.OnEntityDying = id => CarrionSystem.SpawnCorpse(_entityManager, id);
         int seed = WorldSeed != 0 ? WorldSeed : (int)(DateTime.UtcNow.Ticks & 0x7FFFFFFF);
-        _worldManager = new WorldManager(ChunkSize, WorldSizeChunks, seed, new TerrainSettings
+        var terrainSettings = new TerrainSettings
         {
             ElevationFrequency = ElevationFrequency,
             WarpAmplitude      = WarpAmplitude,
@@ -127,7 +132,13 @@ public partial class GameManager : Node3D
             DetailAmplitude    = TerrainDetailAmplitude,
             RoughnessFrequency = TerrainRoughnessFrequency,
             RoughnessFloor     = TerrainRoughnessFloor,
-        });
+            RidgeFrequency     = TerrainRidgeFrequency,
+            RidgeAmplitude     = TerrainRidgeAmplitude,
+            CliffFrequency     = TerrainCliffFrequency,
+            CliffStrength      = TerrainCliffStrength,
+            CliffStepHeight    = TerrainCliffStepHeight,
+        };
+        _worldManager = new WorldManager(ChunkSize, WorldSizeChunks, seed, terrainSettings);
         _simulationDt = 1.0 / TargetTPS;
 
         // Create extracted managers

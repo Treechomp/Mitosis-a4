@@ -12,10 +12,9 @@ namespace Mitosis.World;
 /// </summary>
 public sealed class RiverMapper
 {
-    private readonly FastNoiseLite _elevationNoise;
-    private readonly FastNoiseLite _warpNoiseX;
-    private readonly FastNoiseLite _warpNoiseY;
-    private readonly float _warpAmplitude;
+    // Base-elevation sampler shared with TerrainGenerator (SampleBaseElevation) so the flow
+    // map is computed on exactly the terrain the chunks will classify — including ridges.
+    private readonly Func<int, int, float> _sampleElevation;
 
     private int _worldSize;
     private float[,] _elevation = null!;
@@ -44,13 +43,9 @@ public sealed class RiverMapper
     private static readonly int[]  OddDX = { -1,  1,  0,  1,  0,  1 };
     private static readonly int[]  OddDY = {  0,  0, -1, -1,  1,  1 };
 
-    public RiverMapper(FastNoiseLite elevationNoise, FastNoiseLite warpNoiseX,
-                       FastNoiseLite warpNoiseY, float warpAmplitude)
+    public RiverMapper(Func<int, int, float> sampleElevation)
     {
-        _elevationNoise = elevationNoise;
-        _warpNoiseX = warpNoiseX;
-        _warpNoiseY = warpNoiseY;
-        _warpAmplitude = warpAmplitude;
+        _sampleElevation = sampleElevation;
     }
 
     /// <summary>
@@ -91,8 +86,8 @@ public sealed class RiverMapper
     }
 
     /// <summary>
-    /// Build the full-world elevation map using the same noise and domain warping
-    /// as TerrainGenerator, ensuring rivers align with the actual terrain.
+    /// Build the full-world elevation map with the shared base-elevation sampler, ensuring
+    /// rivers align with the exact terrain the chunks will be classified from.
     /// </summary>
     private void BuildElevationMap()
     {
@@ -100,13 +95,21 @@ public sealed class RiverMapper
         {
             for (int x = 0; x < _worldSize; x++)
             {
-                float warpX = _warpNoiseX.GetNoise2D(x, y) * _warpAmplitude;
-                float warpY = _warpNoiseY.GetNoise2D(x, y) * _warpAmplitude;
-                float warpedX = x + warpX;
-                float warpedY = y + warpY;
-                _elevation[x, y] = (_elevationNoise.GetNoise2D(warpedX, warpedY) + 1f) * 0.5f;
+                _elevation[x, y] = _sampleElevation(x, y);
             }
         }
+    }
+
+    /// <summary>
+    /// The cached base elevation (0–1) at a world tile, clamped to world bounds. Chunk
+    /// generation reads this instead of re-sampling noise, so terrain and hydrology can
+    /// never disagree.
+    /// </summary>
+    public float GetBaseElevation(int x, int y)
+    {
+        if (x < 0) x = 0; else if (x >= _worldSize) x = _worldSize - 1;
+        if (y < 0) y = 0; else if (y >= _worldSize) y = _worldSize - 1;
+        return _elevation[x, y];
     }
 
     /// <summary>
