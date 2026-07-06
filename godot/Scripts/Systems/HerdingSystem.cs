@@ -127,7 +127,13 @@ public sealed class HerdingSystem : ISystem
                         continue;
                 }
 
-                if (hungerRatio < 0.4f && social.Type != SocialType.Pack)
+                // A hungry HERD predator (Penguin) must be free to leave the huddle and forage the
+                // moment it wants to hunt — not only when near-starving. Gating on a hardcoded 0.4
+                // left penguins stuck in the 0.4–HuntThreshold band: they wanted to food-seek to
+                // the water but cohesion dragged them back to the colony (on land) before they
+                // could reach a fish, so the colony starved offshore of its food. Suspend cohesion
+                // at the species' own HuntThreshold instead.
+                if (hungerRatio < herdSpeciesDef.HuntThreshold && social.Type != SocialType.Pack)
                     continue;
             }
 
