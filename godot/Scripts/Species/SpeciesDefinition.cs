@@ -55,6 +55,31 @@ public sealed class SpeciesDefinition
     /// <summary>Hunger ratio below which predator tracks prey at long range.</summary>
     public float TrackingHungerThreshold { get; init; } = 0.5f;
 
+    // === BEHAVIOR ARBITRATION (per-species drive priorities) ===
+    // These lift previously-hardcoded thresholds that govern how competing drives (hunger vs
+    // social vs fear) are prioritized. Defaults match the old constants, so behavior is unchanged
+    // unless a species overrides. See docs/behavior-arbitration.md.
+
+    /// <summary>
+    /// Hunger ratio below which a creature will MIGRATE toward food (roam to grazeable/FeedTile/
+    /// HuntTerrain) and a hungry herd predator leaves the huddle to forage. Higher = forages
+    /// sooner (a specialist that must travel to its food, e.g. Penguin → coast); lower = waits
+    /// until hungrier. Was a hardcoded 0.7.
+    /// </summary>
+    public float ForageHungerThreshold { get; init; } = 0.7f;
+
+    /// <summary>
+    /// Fear ratio (0-1) at which a prey commits to its flee/panic/freeze response. Lower = more
+    /// skittish (bolts early — Rabbit); higher = holds its ground longer (Musk Ox). Was 0.5.
+    /// </summary>
+    public float FleeFearThreshold { get; init; } = 0.5f;
+
+    /// <summary>
+    /// Hunger ratio at/above which a predator stops hunting (sated). Lower = content with less
+    /// (lazy apex); higher = keeps hunting opportunistically. Was a hardcoded 0.95.
+    /// </summary>
+    public float SatedHunger { get; init; } = 0.95f;
+
     /// <summary>Maximum range for hunger-driven prey tracking.</summary>
     public float TrackingRange { get; init; } = 80f;
 

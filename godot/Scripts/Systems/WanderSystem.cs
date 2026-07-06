@@ -122,7 +122,7 @@ public sealed class WanderSystem : ISystem
                     // elsewhere — e.g. an inland penguin migrating to the coast to fish.
                     else if (wanderSpeciesDef != null
                         && _worldManager != null
-                        && hungerUrgency > 0.3f
+                        && hungerUrgency > (1f - wanderSpeciesDef.ForageHungerThreshold)
                         && (wanderSpeciesDef.CanGraze || wanderSpeciesDef.FeedTiles != null
                             || wanderSpeciesDef.HuntTerrain != null)
                         && TryFindFoodTarget(pos.X, pos.Y, roamDistance, wanderSpeciesDef, out targetX, out targetY))
@@ -295,8 +295,11 @@ public sealed class WanderSystem : ISystem
             ref var hunger = ref em.Hungers[entity];
             float hungerRatio = hunger.Current / hunger.Max;
 
-            // Only consider roaming when getting hungry (below 70%)
-            if (hungerRatio >= 0.7f) return false;
+            // Only consider migrating once hungry enough to forage (per-species; a specialist that
+            // must travel to its food forages sooner). Was a hardcoded 0.7.
+            float forageThreshold = em.HasComponents(entity, ComponentFlags.Species)
+                ? SpeciesRegistry.GetById(em.Species[entity].SpeciesId).ForageHungerThreshold : 0.7f;
+            if (hungerRatio >= forageThreshold) return false;
 
             // Check if any eligible prey exists within hunt range
             ref var predator = ref em.Predators[entity];
@@ -330,11 +333,11 @@ public sealed class WanderSystem : ISystem
             ref var hunger = ref em.Hungers[entity];
             float hungerRatio = hunger.Current / hunger.Max;
 
-            // Well-fed creatures stay put and graze locally.
-            if (hungerRatio >= 0.7f) return false;
-
             ref var mySpecies = ref em.Species[entity];
             var myDef = SpeciesRegistry.GetById(mySpecies.SpeciesId);
+
+            // Well-fed creatures stay put and graze locally (per-species forage threshold).
+            if (hungerRatio >= myDef.ForageHungerThreshold) return false;
 
             // Primary driver: if there's no food where we're standing, migrate to find some.
             // Without this, hungry grazers random-walk and starve on depleted/barren tiles

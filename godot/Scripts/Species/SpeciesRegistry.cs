@@ -207,6 +207,7 @@ public static class SpeciesRegistry
             // Fleeing - fast but catchable by foxes
             FleeRange = 8f,
             FleeSpeedMultiplier = 2.4f,  // Reduced from 2.8 - foxes hunt at 0.11, rabbits flee at 0.04*2.4=0.096
+            FleeFearThreshold = 0.35f,     // frail & jumpy — bolts early
 
             // Fear - very nervous, prone to panic
             FearThreshold = 30f,           // Startles easily
@@ -1717,6 +1718,7 @@ public static class SpeciesRegistry
             HuntThreshold = 0.6f,
             TrackingHungerThreshold = 0.5f,
             TrackingRange = 32f,
+            ForageHungerThreshold = 0.8f,   // stay coupled to fish — disperse/forage early
             HuntTerrain = new List<TileType> { TileType.ShallowWater, TileType.DeepWater, TileType.Reef, TileType.River },
             ExclusivePrey = new List<string> { "Fish" },
             PreferredPrey = new List<string> { "Fish" },
@@ -2000,6 +2002,7 @@ public static class SpeciesRegistry
             // Fleeing - barely flees, stands ground
             FleeRange = 4f,
             FleeSpeedMultiplier = 1.4f,
+            FleeFearThreshold = 0.7f,      // bold defensive herd — holds ground longer
 
             // Fear - defensive herd formation
             FearThreshold = 70f,

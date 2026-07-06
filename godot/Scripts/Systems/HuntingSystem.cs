@@ -326,10 +326,9 @@ public sealed class HuntingSystem : ISystem
 
             float hungerRatio = hunger.Current / hunger.Max;
 
-            // Only stop hunting when nearly full (95%+)
-            // Between HuntThreshold and 95%, predators hunt opportunistically
-            // This encourages predation when prey is abundant, keeping herbivores in check
-            const float fullThreshold = 0.95f;
+            // Only stop hunting when sated (per-species; default 95%). Between HuntThreshold and
+            // this, predators hunt opportunistically, keeping herbivores in check.
+            float fullThreshold = speciesDef.SatedHunger;
             // A full predator stops hunting — unless it was just attacked, in which case it still
             // needs to defend itself / rally the group below.
             if (hungerRatio >= fullThreshold && predator.LastAttackedTicks <= 0)

@@ -118,7 +118,7 @@ public sealed class HerdingSystem : ISystem
                 ref var hunger = ref em.Hungers[entity];
                 float hungerRatio = hunger.Current / hunger.Max;
 
-                if (predator.HasTarget && hungerRatio < 0.6f)
+                if (predator.HasTarget && hungerRatio < herdSpeciesDef.ForageHungerThreshold)
                 {
                     // Pack members keep cohesion while hunting — they need to stick together
                     if (social.Type == SocialType.Pack)
@@ -127,13 +127,13 @@ public sealed class HerdingSystem : ISystem
                         continue;
                 }
 
-                // A hungry HERD predator (Penguin) must be free to leave the huddle and forage the
-                // moment it wants to hunt — not only when near-starving. Gating on a hardcoded 0.4
-                // left penguins stuck in the 0.4–HuntThreshold band: they wanted to food-seek to
-                // the water but cohesion dragged them back to the colony (on land) before they
-                // could reach a fish, so the colony starved offshore of its food. Suspend cohesion
-                // at the species' own HuntThreshold instead.
-                if (hungerRatio < herdSpeciesDef.HuntThreshold && social.Type != SocialType.Pack)
+                // A hungry HERD predator (Penguin) must be free to leave the huddle and migrate to
+                // its food the moment it wants to forage — not only when near-starving. Gating on a
+                // hardcoded 0.4 left penguins stuck: they wanted to food-seek to the water but
+                // cohesion dragged them back to the colony (on land) before they could reach a fish,
+                // so the colony starved offshore of its food. Release cohesion at the SAME
+                // ForageHungerThreshold that triggers the food-seeking roam, so the two never fight.
+                if (hungerRatio < herdSpeciesDef.ForageHungerThreshold && social.Type != SocialType.Pack)
                     continue;
             }
 

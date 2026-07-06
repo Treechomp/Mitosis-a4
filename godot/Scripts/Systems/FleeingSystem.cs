@@ -130,8 +130,9 @@ public sealed class FleeingSystem : ISystem
             float staminaRecover = speciesDef?.FleeStaminaRecovery ?? 0.0025f;
             float tiredFloor = speciesDef?.FleeTiredSpeedFloor ?? 0.5f;
 
-            // Determine behavior based on fear level and response type
-            if (hasThreat || (hasFear && fearRatio > 0.5f))
+            // Determine behavior based on fear level and response type. The fear-ratio trigger is
+            // per-species (skittish prey bolt early, bold ones hold ground). Was a hardcoded 0.5.
+            if (hasThreat || (hasFear && fearRatio > (speciesDef?.FleeFearThreshold ?? 0.5f)))
             {
                 // Check discomfort level - extreme discomfort may override flee behavior
                 float discomfortRatio = 0f;
