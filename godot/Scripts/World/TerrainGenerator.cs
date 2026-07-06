@@ -144,8 +144,14 @@ public sealed class TerrainGenerator
 
                 TileType tile = DetermineTileType(elevation, moisture, temperature);
 
-                // Apply flow-based rivers, lakes, and wetland banks on land tiles
-                if (_riverMapper != null && tile.IsSpawnable())
+                // Apply flow-based rivers, lakes, and wetland banks. Water overrides apply to
+                // ANY dry land tile — including the Sand shore band and Ice (a river crossing an
+                // arctic sheet stays continuous instead of vanishing beneath it) — but never to
+                // tiles that are already water, or to Mountain/Lava. Previously this was gated on
+                // IsSpawnable(), which excluded Sand/Ice and (together with the RiverMapper's old
+                // 0.45 marking cutoff) severed every river from the sea at the beach.
+                if (_riverMapper != null && !tile.IsWater() &&
+                    tile != TileType.Reef && tile != TileType.Mountain && tile != TileType.Lava)
                 {
                     if (_riverMapper.IsLake(worldX, worldY))
                     {
@@ -155,8 +161,10 @@ public sealed class TerrainGenerator
                     {
                         tile = TileType.River;
                     }
-                    else if (_riverMapper.IsWetlandBank(worldX, worldY))
+                    else if (_riverMapper.IsWetlandBank(worldX, worldY) && tile.IsSpawnable())
                     {
+                        // Banks stay restricted to ordinary land — a Wetland bank punched into
+                        // an ice sheet would read as a thaw ring around every frozen river.
                         tile = TileType.Wetland;
                     }
                 }

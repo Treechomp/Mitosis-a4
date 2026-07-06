@@ -29,7 +29,6 @@ public sealed class RiverMapper
     // Tuning parameters
     private const float SourceMinElevation = 0.68f;   // Minimum elevation for river sources
     private const float WaterLevel = 0.40f;            // Elevation at which ocean begins
-    private const float LandLevel = 0.45f;             // Minimum elevation for land
     private const int MinRiverFlow = 1;                // Flow threshold to become a river
     private const int WideRiverFlow = 3;               // Flow threshold for wide (2-tile) rivers
     private const int MinSourceSpacing = 18;           // Minimum tiles between sources
@@ -365,7 +364,7 @@ public sealed class RiverMapper
         // (tiles below WaterLevel are already ocean)
         foreach (var (x, y) in filled)
         {
-            if (_elevation[x, y] >= LandLevel)
+            if (_elevation[x, y] >= WaterLevel)
             {
                 _isLake[x, y] = true;
                 _flow[x, y] = Math.Max(_flow[x, y], 1); // Ensure lake has at least 1 flow
@@ -382,8 +381,11 @@ public sealed class RiverMapper
         {
             for (int x = 0; x < _worldSize; x++)
             {
-                // Skip ocean tiles
-                if (_elevation[x, y] < LandLevel)
+                // Skip ocean tiles. The cutoff must be the actual waterline (0.40), NOT the old
+                // LandLevel (0.45): traces run all the way to the ocean, but marking used to stop
+                // 0.05 of elevation early — exactly the Sand/shore band — so every river visibly
+                // died at the beach instead of connecting to the sea.
+                if (_elevation[x, y] < WaterLevel)
                     continue;
 
                 // Skip mountain tiles (rivers don't flow on mountains)
@@ -410,7 +412,7 @@ public sealed class RiverMapper
                             int nx = x + wdx[d];
                             int ny = y + wdy[d];
                             if (nx >= 0 && nx < _worldSize && ny >= 0 && ny < _worldSize &&
-                                _elevation[nx, ny] >= LandLevel && _elevation[nx, ny] < 0.80f &&
+                                _elevation[nx, ny] >= WaterLevel && _elevation[nx, ny] < 0.80f &&
                                 !_isLake[nx, ny])
                             {
                                 _isRiver[nx, ny] = true;
@@ -434,8 +436,9 @@ public sealed class RiverMapper
                 if (_isRiver[x, y] || _isLake[x, y])
                     continue;
 
-                // Skip non-land tiles
-                if (_elevation[x, y] < LandLevel || _elevation[x, y] > 0.80f)
+                // Skip non-land tiles (banks extend down the shore band so river mouths get
+                // marshy edges instead of bare beach)
+                if (_elevation[x, y] < WaterLevel || _elevation[x, y] > 0.80f)
                     continue;
 
                 // Check if adjacent to river or lake
