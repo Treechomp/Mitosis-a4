@@ -4,6 +4,17 @@ Active workstream after the terrain-profile redesign. Tracks the terrain-coupled
 runs keep surfacing and the order we attack them. See `terrain-handling-audit.md` (current
 mechanisms) and `terrain-profile-design.md` (the resolver that shipped).
 
+## Final state (2026-07-06) — workstream wrapped
+Shipped and confirmed: unified TerrainProfile resolver (speed REPLACE, species-aware avoidance,
+concealment); world-snapshot diagnostic (biome map + niche coverage); worldgen A (real deserts)
++ B (thin beaches); terrain-aware food-seeking (HuntTerrain) + niche-aware spawn placement;
+LOD-compensated drowning/suffocation + habitat-aware pursuit; behavior-arbitration Option A
+(per-species drive thresholds). Penguins resolved (feed from water; stable & reproducing — see
+species-attribution-audit). **Still open (parked, not blocking):** #4 connected-seas (ocean-mask
+worldgen redesign for the Shark niche) and #5 Scorpion ambush rework; temperature distribution is
+cold-biased so deserts stay marginal. Full utility-AI arbitration (Option B) remains a future
+option documented in `behavior-arbitration.md`.
+
 ## Where the last run landed (run 20260623_215555, 35k ticks, 9-world)
 Kill effectiveness (kills / hunt_start):
 

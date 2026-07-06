@@ -285,7 +285,7 @@ There are **28 species**: 5 generalists, 20 biome-specific, and 3 factions.
 | Scorpion | Carnivore | 0.8 | 0.02 / 0.07 | Ambush | **Venom**; desert |
 | Camel | Herbivore | 8.0 | 0.025 / – | – | Desert; very low hunger decay |
 | Snake | Carnivore | 1.2 | 0.03 / 0.10 | Ambush | **Venom**; desert/scrub |
-| Penguin | **Omnivore** | 1.5 | 0.025 / 0.10 | Solo | Semi-aquatic **fish-specialist predator** (`ExclusivePrey` = Fish, no grazing); huddle herd; itself prey to Arctic Fox / Polar Bear / Shark (dual predator+prey, like Boar). |
+| Penguin | **Omnivore** | 1.5 | 0.025 / 0.10 | Solo | Semi-aquatic seabird: **feeds from water tiles** (`FeedTiles`, like a diving forager) and opportunistically hunts Fish (`ExclusivePrey` = Fish); strongly water-comfortable so it stays at sea to feed; huddle herd that breeds on the cold coast; itself prey to Arctic Fox / Polar Bear / Shark (dual predator+prey, like Boar). |
 | Polar Bear | Carnivore | 14.0 | 0.02 / 0.10 | Solo | Semi-aquatic; arctic apex |
 | Arctic Fox | Carnivore | 1.8 | 0.05 / 0.12 | Solo | Tundra/Steppe |
 | Musk Ox | Herbivore | 10.0 | 0.02 / – | – | Tundra herd; defensive |
@@ -302,9 +302,10 @@ Crocodile, Turtle, Penguin, Polar Bear, Tapir, Jaguar · **Omnivore** (predator+
 Penguin · **Venom** = Scorpion, Snake · **Ambush** = Crocodile, Scorpion, Snake, Jaguar, Fox, Bear ·
 **PackCoordinated** = Wolf, Boar · **Swarm** = Sectid · **Factions** = Shroomer, Sectid, Faeling.
 
-`ExclusivePrey` (a hard prey-list filter) lets a specialist hunt only listed species — Penguin
-feeds exclusively on Fish. Most predators are opportunists (no list); `PreferredPrey` is only a
-soft scoring bias.
+`ExclusivePrey` (a hard prey-list filter) lets a specialist hunt only listed species — when a
+Penguin *does* hunt, it targets only Fish (though its staple food is passive water-column
+foraging via `FeedTiles`, §5 roster). Most predators are opportunists (no list); `PreferredPrey`
+is only a soft scoring bias.
 
 ### Mass-based hunting
 

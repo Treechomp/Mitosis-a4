@@ -5,6 +5,27 @@ dominant strategies by giving species distinct, viable niches. Originally based 
 **no-faction run** (`20260617_224800`); §1–§5 below are that historical spec. The current state
 is summarised first.
 
+## Final state (2026-07-06, run 20260706_224009, 31k ticks)
+The ecosystem is stable and self-sustaining. Total 3.1k → 5.2k, most species STABLE or rising
+(Bear/Boar/Hawk/Wolf rising; Deer/Elk/Camel/Monkey/Parrot/Musk Ox/Tapir/Turtle/Rabbit/Polar
+Bear/Shark/Fox/Lizard/Frog/Penguin stable). Notable resolutions and remaining hard cases:
+
+- **Penguin — RESOLVED.** After a long chain (spawn placement → food-seeking → arbitration →
+  water-comfort), the decisive fix was to stop relying on active fish-hunting (which can't feed a
+  colony) and let penguins **feed from water tiles** (`FeedTiles`) like the diving seabirds they
+  are. Result: stable ~65 with **ongoing reproduction across the whole run** (was reproduce-once-
+  then-starve). Two supporting fixes mattered: (1) terrain-comfort so water isn't lethal-
+  discomfort that ejected them ashore mid-hunt; (2) `ForageHungerThreshold` aligned so herd
+  cohesion and the food-seeking roam stop fighting. See docs/behavior-arbitration.md.
+- **Cold/aquatic web works now** — Shark stable (was extinct), Polar Bear stable, Crocodile
+  present. Fish self-bounding.
+- **Known-hard extinctions (world/mechanic-limited, not stat bugs):**
+  - **Arctic Fox** — cold specialist; on a seed with a thin cold-prey base it starves out. Viable
+    on richer cold coasts; a candidate for a founding-population floor if desired.
+  - **Scorpion** — its dormant sit-and-wait ambush converts almost nothing against fast small prey
+    (a *mechanic* gap, tracked in terrain-roadmap §5), compounded by Arid biome being near-absent
+    on most seeds. Needs an ambush rework, not tuning.
+
 ## Current status (2026-06-23, run 20260623_215555, 35k ticks)
 
 Predator **kill effectiveness** (kills / hunt_start), most recent run:
