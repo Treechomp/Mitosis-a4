@@ -1795,9 +1795,15 @@ public static class SpeciesRegistry
             AllowedSpawnTiles = new List<TileType> { TileType.Ice, TileType.Tundra, TileType.Steppe },
             PreferredBiomes = new List<BiomeType> { BiomeType.Arctic },
 
-            // Fish-exclusive: penguins no longer graze land at all — they live or starve by the
-            // local fish supply, tightly coupling the colony to the aquatic food web.
+            // Penguins feed FROM the water, not by chasing individual fish across the sea. Active
+            // fish-hunting could never produce enough throughput to keep a colony fed (~1 fish per
+            // penguin per run vs. constant hunger decay), so they starved despite hunting. Like the
+            // seabirds they are, they forage the water column (krill/small fish) — a reliable food
+            // source as long as they're IN the water, which the comfort fix now lets them stay in.
+            // They remain Omnivore (can still opportunistically catch a Fish entity) and prey.
             CanGraze = false,
+            FeedTiles = new List<TileType> { TileType.ShallowWater, TileType.DeepWater, TileType.Reef, TileType.River },
+            FeedNutrition = 0.55f,
 
             SeparationRadius = 1.0f,   // Huddle close
             SeparationStrength = 0.01f,
