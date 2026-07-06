@@ -27,10 +27,9 @@ A self-contained ecosystem simulation runs end-to-end in 3D:
   keeps distant simulation cheap — this replaced the removed statistical-sim experiment.
 - **Tooling**: F3 per-system profiling + per-species overlay; `EcosystemLogger` CSV output.
 
-> **Config note:** the code currently ships **DEBUG** defaults (9×9 chunks, 500 initial,
-> 2000 cap) for lightweight, LOD-free species-balancing sessions. The intended default is
-> **~18×18 chunks, ~1500 initial, ~10000 cap**; final production values will be set once all
-> features are in and compute/render costs are known.
+> **Config note:** the code ships the **standard test configuration** (36×36 chunks,
+> 2000 initial, 12000 cap — what balance runs use). Final production values will be set
+> once all features are in and compute/render costs are known.
 
 ---
 
@@ -40,10 +39,13 @@ A self-contained ecosystem simulation runs end-to-end in 3D:
 `DueThisTick[]` LOD gate, zero-alloc entity iteration.
 
 **World generation** — chunked storage (32×32); elevation/moisture/temperature noise with
-domain warping; temperature = noise + latitude + altitude cooling; 20 tile types; 11 biomes;
-flow-based `RiverMapper` (hex-neighbor tracing, flow accumulation, depression lakes, wetland
-banks); landmark pass (oases, clearings, permafrost, caves); per-tile nutrition with
-depletion/regrowth; terraform shift chains.
+domain warping; ridged mountain ranges (orogeny-belt gated, part of the base elevation) and
+terraced cliff/mesa regions (rendered relief); temperature = noise + latitude + altitude
+cooling; 20 tile types; 11 biomes; flow-based `RiverMapper` (hex-neighbor tracing, flow
+accumulation, depression lakes, wetland banks, marked down to the waterline so rivers
+actually reach the sea); two-way hydrology→climate coupling (riparian moisture halos, marshy
+delta fans, slope drainage); landmark pass (oases, clearings, permafrost, caves); per-tile
+nutrition with depletion/regrowth; moisture-parameter terraforming.
 
 **3D rendering** — per-chunk triangulated `MeshInstance3D` with elevation + smooth normals;
 custom terrain shader (Lambert + slope-edge darkening + posterization); entity
@@ -75,8 +77,8 @@ debug overlay with LOD/category/per-species counts and per-system timings.
 
 - [ ] **Terrain mesh & entity positioning** — ongoing polish of the 3D terrain mesh and how
       entities sit on the surface (the current focus; see code, not yet final).
-- [ ] **Settle production config** — move off the DEBUG world/population values to the intended
-      defaults (~18×18 / 1500 / 10000) once performance at scale is measured.
+- [ ] **Settle production config** — validate the standard test defaults (36×36 / 2000 / 12000)
+      at scale and settle final production values once compute/render costs are known.
 - [ ] **Ecosystem balancing** — use the DEBUG config + `EcosystemLogger` CSVs to tune species
       so populations neither collapse nor monoculture (historically Shroomers tended to
       dominate; predators tended to collapse early).

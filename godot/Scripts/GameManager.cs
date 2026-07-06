@@ -22,7 +22,7 @@ public partial class GameManager : Node3D
 {
     // Configuration
     [Export] public int ChunkSize = 32;
-    [Export] public int WorldSizeChunks = 9;  // DEBUG: standardized debug world
+    [Export] public int WorldSizeChunks = 36;  // standard test world (1152×1152 tiles)
     [Export] public int WorldSeed = 0;
     [Export] public int TileSize = 16;
     [Export] public float ElevationHeightScale = 64f;  // World units of vertical lift per elevation unit
@@ -39,8 +39,8 @@ public partial class GameManager : Node3D
     [Export] public float TerrainCliffStrength = 0.8f;        // terracing blend in cliff regions (0..1)
     [Export] public float TerrainCliffStepHeight = 0.12f;     // elevation per terrace step
     [Export] public int TargetTPS = 20;
-    [Export] public int MaxPopulation = 2000;  // DEBUG: cap at 2000 (2500+ causes FPS drop)
-    [Export] public int InitialPopulation = 500;  // DEBUG: standardized debug population
+    [Export] public int MaxPopulation = 12000;   // standard test ceiling (36-chunk world)
+    [Export] public int InitialPopulation = 2000; // standard test seed population
     [Export] public float HerbivoreRatio = 0.85f;
     [Export] public float CreaturesPerChunk = 2f;
 
@@ -244,7 +244,7 @@ public partial class GameManager : Node3D
         // Diagnostic: dump a biome-map PNG + parameter/distribution report so worldgen output can
         // be inspected (and niche coverage validated) before blaming species balance.
         WorldSnapshot.Capture(_worldManager, seed, ChunkSize, WorldSizeChunks,
-            ElevationFrequency, ElevationHeightScale, TerrainDetailFrequency, TerrainRoughnessFrequency);
+            terrainSettings, ElevationHeightScale);
 
         // Apply species enable/disable toggles before any spawning.
         var unknownSpecies = SpeciesToggle.Configure(DisabledSpecies, DisableFactionSpecies);

@@ -160,6 +160,17 @@ To reduce the uniform "wrangled fabric" look, the generator layers roughness-mod
 | `TerrainDetailAmplitude` | 0.035 | surface-relief height added to elevation (keep < ~0.1 or slopes get steep) |
 | `TerrainRoughnessFrequency` | 0.006 | size of rugged vs smooth regions |
 | `TerrainRoughnessFloor` | 0.15 | minimum detail in the smoothest regions (0 = some areas fully flat) |
+| `TerrainRidgeFrequency` | 0.010 | ridgeline scale (lower = longer mountain ranges) |
+| `TerrainRidgeAmplitude` | 0.18 | ridge crest height added to the **base** elevation (0 = no ranges) |
+| `TerrainCliffFrequency` | 0.005 | size of terraced mesa/bluff regions |
+| `TerrainCliffStrength` | 0.8 | terracing blend in cliff regions (0 = off) |
+| `TerrainCliffStepHeight` | 0.12 | elevation per terrace step |
+
+**Ridges vs cliffs split:** ridges are part of the *base* elevation (classification,
+temperature cooling, and river tracing all see the ranges — `SampleBaseElevation` is the shared
+authority, and the RiverMapper's cached full-world map is what chunk gen reads back). Terraced
+cliffs are *stored/rendered* relief like surface detail — mesas and bluffs whose steep risers
+slow movement but never move a biome boundary or a river.
 
 Detail is added to the **stored/rendered** elevation only — classification uses the base
 elevation, so biome boundaries and water levels are unchanged — and it's faded out over water

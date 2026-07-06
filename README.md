@@ -7,8 +7,10 @@ Built with **Godot 4.6.3** and **C#**.
 ## Features
 
 - **Procedural 3D worlds** — chunk-based terrain with per-vertex elevation, simplex-noise
-  generation, domain warping, temperature/moisture biomes, flow-based rivers and lakes,
-  and landmark features (oases, clearings, caves). Rendered as lit 3D meshes.
+  generation, domain warping, temperature/moisture biomes, ridged mountain ranges, terraced
+  cliff regions, flow-based rivers and lakes that feed moisture back into the biomes around
+  them (riparian corridors, marshy deltas, drainage), and landmark features (oases,
+  clearings, caves). Rendered as lit 3D meshes.
 - **28 species** — 5 generalist herbivores/predators, 20 biome-specific species
   (aquatic, arctic, desert, tropical, temperate), and 3 terraforming factions.
 - **Custom SoA ECS** — Structure-of-Arrays Entity-Component-System for cache-efficient
@@ -40,10 +42,8 @@ Built with **Godot 4.6.3** and **C#**.
 
 Default world/population are configured via exported fields on `GameManager`:
 
-- **Intended default:** ~`18×18` chunks (576×576 tiles), `1500` initial population,
-  `10000` population cap.
-- **Currently in code:** smaller **DEBUG** values (`9×9` chunks, `500` initial, `2000` cap)
-  for lightweight species-balancing sessions that don't need LOD. Final production values
+- **Standard test configuration (in code):** `36×36` chunks (1152×1152 tiles), `2000` initial
+  population, `12000` population cap — the setup balance runs use. Final production values
   will be set once all features are in and compute/render costs are known.
 
 Set `WorldSeed` to a non-zero value for a reproducible world (0 = random each run).

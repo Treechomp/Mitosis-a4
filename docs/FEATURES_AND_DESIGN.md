@@ -108,19 +108,55 @@ by `World/RiverMapper.cs`. All noise is Godot `FastNoiseLite`, `SimplexSmooth`, 
 | Landmark | 0.04 | 2 | +9000 | Feature placement (oases, clearings, caves) |
 | Detail | 0.045 | 3 | +11000 | Surface relief added to the **rendered** elevation (not classification) |
 | Roughness | 0.006 | 2 | +13000 | Low-freq mask: which regions are rugged vs smooth |
+| Ridge | 0.010 | 3 (ridged) | +15000 | Sharp ridgeline crests added to the **base** elevation |
+| Orogeny | 0.0035 | 2 | +16000 | Low-freq belt mask: where mountain ranges form |
+| Cliff | 0.005 | 2 | +17000 | Low-freq mask: terraced mesa/bluff regions (rendered elevation) |
 
 - **Domain warping**: elevation/moisture/temperature are sampled at coordinates offset by the
   warp noise (**amplitude 12 tiles** by default; lower = calmer boundaries), reducing blobby
   artifacts. Frequencies/amplitudes here are defaults — the key ones are tunable via GameManager
   exports (see Configuration Reference).
+- **Base elevation** = warped FBM **+ ridged mountain ranges**: a ridged fractal's crests
+  (cubed, so only the crest line lifts), gated by the low-frequency Orogeny belt mask and an
+  upland mask (`smoothstep` over elevation 0.50–0.64), add up to `RidgeAmplitude` (0.18). Ranges
+  therefore rise as a few connected chains out of existing highlands — they classify as
+  Mountain/Ice, cool with altitude, and shed rivers. `TerrainGenerator.SampleBaseElevation` is
+  the **single authority** for this value: the RiverMapper builds its full-world flow map with
+  it and chunk generation reads that cached map back, so terrain and hydrology cannot drift.
 - **Surface detail**: the Detail noise — scaled by the Roughness mask and a per-biome
   `TileType.GetRuggedness()` factor (mountains rugged, plains smooth, water flat), and faded out
   over water — is added to the **stored/rendered** elevation only; classification uses the base
   elevation, so biome boundaries and water levels are unaffected.
+- **Terraced cliffs**: where the Cliff mask is strong (and above the shore band), the stored
+  elevation is quantised into flat treads joined by short steep risers (`CliffStepHeight` 0.12
+  per step, top 25% of each band carries the riser), with surface detail damped so treads read
+  flat. Like detail this never touches classification or rivers; creatures feel the risers as
+  strong slope resistance (mesas, bluffs, stepped valley sides).
 - **Elevation range**: noise normalized to **0.0–1.0**.
-- **Temperature model**: `temp = 0.6·noise + 0.4·latitudeGradient` (latitude runs
+- **Temperature model**: `temp = 0.48·noise + 0.52·latitudeGradient` (latitude runs
   `worldY / worldSizeTiles`, top cold → bottom warm); high altitude cools via
   `temp −= max(0, elevation − 0.65) · 1.5`, then clamped 0–1.
+
+### Hydrology → climate coupling (two-way biomes)
+
+Classification is no longer a one-way function of independent noise fields — the generated
+water features and relief feed back into the moisture that biomes are classified from
+(all applied before `DetermineTileType`, and **stored**, so the palette, terraform nudges,
+and renderer checks all see the same values):
+
+- **Riparian halo**: every river/lake tile radiates moisture into surrounding land
+  (chamfer-propagated, linear falloff ~0.022/tile): base 0.10 per river tile
+  (+0.02 per unit of flow, capped), 0.15 around lakes — a ~5-tile corridor along streams,
+  wider along big rivers. Wet climates grow wetland/bog margins along rivers; dry climates
+  get green riparian corridors, and the oasis landmark reads this hydrology-aware moisture
+  (riverside deserts sprout oases).
+- **Delta fans**: a river tile at shore elevation touching the sea seeds a 0.30 boost
+  (~13-tile fan), and the tidal-marsh classification rule (below) turns the fan into
+  Wetland down to the waterline.
+- **Drainage**: slopes shed climate moisture while flats hold it
+  (`moisture += clamp((0.025 − slope)·2.5, −0.20, +0.08)`, centred on a typical slope so the
+  world's moisture budget is unchanged) — swamps/bogs settle into flat lowland basins,
+  hillsides dry toward forest/scrub.
 
 ### Tile classification (elevation → moisture → temperature)
 
@@ -128,8 +164,8 @@ by `World/RiverMapper.cs`. All noise is Godot `FastNoiseLite`, `SimplexSmooth`, 
 |-----------|--------|
 | < 0.30 | DeepWater |
 | 0.30–0.40 | ShallowWater (**Reef** if temp > 0.62 and elev > 0.33) |
-| 0.40–0.46 | Sand (beach) |
-| 0.46–0.80 | biome bands by temperature (below) |
+| 0.40–0.43 | Sand (beach) — **Wetland** (tidal marsh) if moisture > 0.78 and temp > 0.28 |
+| 0.43–0.80 | biome bands by temperature (below) |
 | > 0.80 | Mountain (**Ice** if temp < 0.22; **Lava** if temp > 0.55 and moisture < 0.32) |
 
 Mid-elevation biome bands:
@@ -145,17 +181,26 @@ Mid-elevation biome bands:
 
 ### Rivers & lakes (RiverMapper, global pre-pass)
 
-Runs once before chunk generation, on a full-world elevation map (same noise + warp):
+Runs once before chunk generation, on a full-world base-elevation map built with the shared
+`SampleBaseElevation` (so rivers see the ridged ranges and align exactly with the chunks):
 
 1. **Sources**: high-elevation tiles (elev **0.68–0.80**), highest first, spaced ≥ **18**
-   tiles apart, ~65% randomly accepted, capped at **80** sources.
+   tiles apart, ~65% randomly accepted, capped at **worldSizeTiles/4** sources (clamped
+   40–320, so river density stays constant across world sizes).
 2. **Tracing**: steepest descent across the **6 offset-row hex neighbors** (separate
    even/odd-row neighbor sets), accumulating a flow count per tile, until reaching ocean
    (elev < 0.40).
 3. **Depressions**: a stuck trace flood-fills a lake (water rise ≤ **0.04**, ≤ **80** tiles),
    then overflows to continue downstream.
 4. **Marking**: flow ≥ **1** → River; flow ≥ **3** → widened to hex neighbors. Land tiles
-   adjacent to river/lake become **Wetland** banks. (Water level 0.40, land level 0.45.)
+   adjacent to river/lake become **Wetland** banks. Marking runs all the way down to the
+   **waterline (0.40)** — it previously stopped at 0.45, which severed every river from the
+   sea across the Sand shore band (the long-standing "rivers end before the ocean" bug).
+5. **Chunk overrides**: river/lake markers override any dry land tile — including Sand shores
+   and Ice (an arctic river stays continuous across a sheet) — but never Mountain/Lava or
+   existing water; Wetland banks apply to ordinary spawnable land only.
+6. **Moisture feedback**: the mapper also emits the riparian/delta moisture-boost field and
+   slope queries used by the hydrology→climate coupling (§ above).
 
 ### Landmark post-processing (per chunk)
 
@@ -200,7 +245,7 @@ driving migration. Stored per-tile in `Chunk`.
 | Parameter | Value |
 |-----------|-------|
 | Chunk size | 32×32 tiles |
-| World size | **18×18 chunks (576×576) intended default**; ships as **9×9 (DEBUG)** |
+| World size | **36×36 chunks (1152×1152)** — the standard test/default config |
 | Tile size | 16 (world units per tile) |
 | Elevation height scale | 64 (world units of lift per elevation unit, 3D) |
 | World seed | 0 = random each run; non-zero = reproducible |
@@ -762,44 +807,50 @@ All floats are written with `InvariantCulture` so a comma-decimal locale can't c
 columns. Set **`TrackSpecies`** (Inspector, §9) to one species' exact name to additionally log
 per-entity `TRACKED` snapshots and that species' inbound/outbound combat damage.
 
-At world generation, `WorldSnapshot` also writes a one-shot **`world_<ts>_seed…_…ch_ef…_df…_rf….png`**
-(biome map) plus a sidecar **`.txt`** (worldgen parameters + per-tile-type biome distribution +
-niche-coverage roll-ups/warnings) to `logs/` — for inspecting what a parameter set produces and
-validating that each specialist's niche has enough habitat.
+At world generation, `WorldSnapshot` also writes a one-shot **`world_<ts>_seed…_…ch_ef…_df…_rf…_ra….png`**
+(biome map) plus a sidecar **`.txt`** (the full worldgen parameter set + per-tile-type biome
+distribution + a river-connectivity line (river tiles / outlet tiles touching the sea, with a
+warning if rivers are severed) + niche-coverage roll-ups/warnings) to `logs/` — for inspecting
+what a parameter set produces and validating that each specialist's niche has enough habitat.
 
 ---
 
 ## 9. Configuration Reference
 
-`GameManager` exported fields. Defaults in code are tuned **DEBUG** values for lightweight
-species-balancing sessions; the intended production defaults are listed alongside (final values
-TBD once all features are in and compute/render costs are known):
+`GameManager` exported fields. Defaults in code are the **standard test configuration**
+(36-chunk world, 2000 initial, 12000 cap — the setup balance runs use); final production
+values TBD once all features are in and compute/render costs are known:
 
-| Field | Code (DEBUG) | Intended default | Description |
-|-------|--------------|------------------|-------------|
-| ChunkSize | 32 | 32 | Tiles per chunk side |
-| WorldSizeChunks | 9 | ~18 | World is N×N chunks |
-| WorldSeed | 0 | 0 | 0 = random; non-zero = reproducible |
-| TileSize | 16 | 16 | World units per tile |
-| ElevationHeightScale | 64 | 64 | World units of lift per elevation unit (3D) |
-| ElevationFrequency | 0.012 | 0.012 | Base elevation frequency (lower = larger landmasses) |
-| WarpAmplitude | 12 | 12 | Domain-warp swirl in tiles (lower = calmer boundaries) |
-| TerrainDetailFrequency | 0.045 | 0.045 | Surface-relief noise frequency |
-| TerrainDetailAmplitude | 0.035 | 0.035 | Surface-relief height added to elevation (0 disables) |
-| TerrainRoughnessFrequency | 0.006 | 0.006 | Size of rugged vs smooth regions |
-| TerrainRoughnessFloor | 0.15 | 0.15 | Min detail in smoothest regions (0–1) |
-| TargetTPS | 20 | 20 | Simulation ticks/second |
-| MaxPopulation | 2000 | ~10000 | Hard entity cap |
-| InitialPopulation | 500 | ~1500 | Starting creatures (incl. faction budgets) |
-| HerbivoreRatio | 0.85 | 0.85 | Herbivore share of non-faction creatures |
-| CreaturesPerChunk | 2.0 | 2.0 | Spawn-density hint |
-| FaelingShare | 0.04 | 0.04 | Faeling (crystal) budget as share of initial pop |
-| SectidShare | 0.10 | 0.06 | Sectid (nest) budget as share of initial pop |
-| PlayerSpeed / Sprint | 1.0 / 3.0 | – | Player move speed and sprint multiplier |
-| ZoomMin / Max / Speed | 0.1 / 5.0 / 0.15 | – | Orthographic zoom range and step |
-| TrackSpecies | "" | "" | Exact species name to deep-log (per-entity `TRACKED` snapshots + combat); empty = off |
-| DisabledSpecies | "" | "" | Species names to exclude this run (comma/newline separated); empty = all enabled |
-| DisableFactionSpecies | false | false | Disable all factions (Shroomer/Sectid/Faeling) for a "no-faction" run |
+| Field | Default | Description |
+|-------|---------|-------------|
+| ChunkSize | 32 | Tiles per chunk side |
+| WorldSizeChunks | 36 | World is N×N chunks (36 = 1152×1152 tiles) |
+| WorldSeed | 0 | 0 = random; non-zero = reproducible |
+| TileSize | 16 | World units per tile |
+| ElevationHeightScale | 64 | World units of lift per elevation unit (3D) |
+| ElevationFrequency | 0.012 | Base elevation frequency (lower = larger landmasses) |
+| WarpAmplitude | 12 | Domain-warp swirl in tiles (lower = calmer boundaries) |
+| TerrainDetailFrequency | 0.045 | Surface-relief noise frequency |
+| TerrainDetailAmplitude | 0.035 | Surface-relief height added to elevation (0 disables) |
+| TerrainRoughnessFrequency | 0.006 | Size of rugged vs smooth regions |
+| TerrainRoughnessFloor | 0.15 | Min detail in smoothest regions (0–1) |
+| TerrainRidgeFrequency | 0.010 | Ridgeline scale (lower = longer ranges) |
+| TerrainRidgeAmplitude | 0.18 | Ridge crest height added to base elevation (0 = no ranges) |
+| TerrainCliffFrequency | 0.005 | Size of terraced mesa/bluff regions |
+| TerrainCliffStrength | 0.8 | Terracing blend in cliff regions (0 = off, 1 = fully stepped) |
+| TerrainCliffStepHeight | 0.12 | Elevation per terrace step |
+| TargetTPS | 20 | Simulation ticks/second |
+| MaxPopulation | 12000 | Hard entity cap |
+| InitialPopulation | 2000 | Starting creatures (incl. faction budgets) |
+| HerbivoreRatio | 0.85 | Herbivore share of non-faction creatures |
+| CreaturesPerChunk | 2.0 | Spawn-density hint |
+| FaelingShare | 0.04 | Faeling (crystal) budget as share of initial pop |
+| SectidShare | 0.10 | Sectid (nest) budget as share of initial pop |
+| PlayerSpeed / Sprint | 1.0 / 3.0 | Player move speed and sprint multiplier |
+| ZoomMin / Max / Speed | 0.1 / 5.0 / 0.15 | Orthographic zoom range and step |
+| TrackSpecies | "" | Exact species name to deep-log (per-entity `TRACKED` snapshots + combat); empty = off |
+| DisabledSpecies | "" | Species names to exclude this run (comma/newline separated); empty = all enabled |
+| DisableFactionSpecies | false | Disable all factions (Shroomer/Sectid/Faeling) for a "no-faction" run |
 
 **Species toggles** (`SpeciesToggle`, configured from the two fields above before spawning): a
 disabled species never spawns — `WorldSpawner` filters it from the spawn lists, Faeling crystal
@@ -854,9 +905,9 @@ godot/
     │   ├── TileType.cs                             # 20 tile types + extension methods
     │   ├── Chunk.cs                                # tiles, elevation, nutrition, GetTileColor
     │   ├── WorldManager.cs                         # chunks, GetTile/GetElevation, DirtyChunks, SpatialHash
-    │   ├── TerrainGenerator.cs                     # noise + warp + temperature + landmarks
+    │   ├── TerrainGenerator.cs                     # noise + warp + ridges/cliffs + temperature + landmarks
     │   ├── WorldSnapshot.cs                        # startup diagnostic: biome-map PNG + params/distribution report
-    │   └── RiverMapper.cs                          # flow-based rivers/lakes (hex topology)
+    │   └── RiverMapper.cs                          # flow-based rivers/lakes + hydrology→moisture feedback
     ├── Species/
     │   ├── SpeciesDefinition.cs                    # 100+ property data class
     │   ├── SpeciesRegistry.cs                      # all 28 species

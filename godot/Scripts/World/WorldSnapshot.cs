@@ -21,7 +21,7 @@ public static class WorldSnapshot
 
     public static void Capture(
         WorldManager wm, int seed, int chunkSize, int worldSizeChunks,
-        float elevFreq, float elevHeightScale, float detailFreq, float roughFreq,
+        TerrainSettings settings, float elevHeightScale,
         string logDir = "res://logs")
     {
         int n = wm.WorldSizeTiles;
@@ -30,6 +30,7 @@ public static class WorldSnapshot
 
         var img = Image.CreateEmpty(n * px, n * px, false, Image.Format.Rgb8);
         var hist = new Dictionary<TileType, int>();
+        int riverOutlets = 0; // river tiles touching the sea — 0 means rivers are severed
 
         for (int ty = 0; ty < n; ty++)
         {
@@ -38,6 +39,11 @@ public static class WorldSnapshot
                 TileType tile = wm.GetTile(tx, ty);
                 hist.TryGetValue(tile, out int c);
                 hist[tile] = c + 1;
+
+                if (tile == TileType.River &&
+                    (IsSea(wm.GetTile(tx - 1, ty)) || IsSea(wm.GetTile(tx + 1, ty)) ||
+                     IsSea(wm.GetTile(tx, ty - 1)) || IsSea(wm.GetTile(tx, ty + 1))))
+                    riverOutlets++;
 
                 Color col = Chunk.GetTileColor(tile);
                 for (int dy = 0; dy < px; dy++)
@@ -50,7 +56,9 @@ public static class WorldSnapshot
         Directory.CreateDirectory(dir);
         string ts = DateTime.Now.ToString("yyyyMMdd_HHmmss");
         string baseName =
-            $"world_{ts}_seed{seed}_{worldSizeChunks}ch_ef{elevFreq:0.####}_df{detailFreq:0.####}_rf{roughFreq:0.####}";
+            $"world_{ts}_seed{seed}_{worldSizeChunks}ch_ef{settings.ElevationFrequency:0.####}" +
+            $"_df{settings.DetailFrequency:0.####}_rf{settings.RoughnessFrequency:0.####}" +
+            $"_ra{settings.RidgeAmplitude:0.####}";
 
         string pngPath = Path.Combine(dir, baseName + ".png");
         Error err = img.SavePng(pngPath);
@@ -59,7 +67,7 @@ public static class WorldSnapshot
 
         File.WriteAllText(Path.Combine(dir, baseName + ".txt"),
             BuildReport(ts, seed, chunkSize, worldSizeChunks, n,
-                        elevFreq, elevHeightScale, detailFreq, roughFreq, hist));
+                        settings, elevHeightScale, hist, riverOutlets));
 
         GD.Print("=========================================");
         GD.Print($"  WORLD SNAPSHOT: {pngPath}");
@@ -67,10 +75,14 @@ public static class WorldSnapshot
         GD.Print("=========================================");
     }
 
+    /// <summary>Sea water for the river-outlet metric (not River itself, not land).</summary>
+    private static bool IsSea(TileType t)
+        => t == TileType.DeepWater || t == TileType.ShallowWater || t == TileType.Reef;
+
     private static string BuildReport(
         string ts, int seed, int chunkSize, int worldSizeChunks, int n,
-        float elevFreq, float elevHeightScale, float detailFreq, float roughFreq,
-        Dictionary<TileType, int> hist)
+        TerrainSettings s, float elevHeightScale,
+        Dictionary<TileType, int> hist, int riverOutlets)
     {
         int total = n * n;
         float Pct(int count) => 100f * count / total;
@@ -87,10 +99,13 @@ public static class WorldSnapshot
         sb.AppendLine($"timestamp:               {ts}");
         sb.AppendLine($"seed:                    {seed}");
         sb.AppendLine($"size:                    {worldSizeChunks} chunks x {chunkSize} = {n}x{n} tiles ({total} total)");
-        sb.AppendLine($"elevation_frequency:     {elevFreq}   (lower = larger landmasses)");
+        sb.AppendLine($"elevation_frequency:     {s.ElevationFrequency}   (lower = larger landmasses)");
         sb.AppendLine($"elevation_height_scale:  {elevHeightScale}");
-        sb.AppendLine($"detail_frequency:        {detailFreq}");
-        sb.AppendLine($"roughness_frequency:     {roughFreq}");
+        sb.AppendLine($"warp_amplitude:          {s.WarpAmplitude}");
+        sb.AppendLine($"detail_frequency:        {s.DetailFrequency}   amplitude: {s.DetailAmplitude}");
+        sb.AppendLine($"roughness_frequency:     {s.RoughnessFrequency}   floor: {s.RoughnessFloor}");
+        sb.AppendLine($"ridge_frequency:         {s.RidgeFrequency}   amplitude: {s.RidgeAmplitude}   orogeny_freq: {s.OrogenyFrequency}");
+        sb.AppendLine($"cliff_frequency:         {s.CliffFrequency}   strength: {s.CliffStrength}   step: {s.CliffStepHeight}");
         sb.AppendLine($"moisture_frequency:      0.008 (fixed in TerrainGenerator)");
         sb.AppendLine($"temperature_frequency:   0.005 (fixed in TerrainGenerator)");
         sb.AppendLine();
@@ -114,6 +129,13 @@ public static class WorldSnapshot
         int grazeable  = Count(TileType.Grass, TileType.Savanna, TileType.Shrubland, TileType.Steppe,
                               TileType.Forest, TileType.Jungle, TileType.Taiga, TileType.Tundra);
         int wetland    = Count(TileType.Wetland, TileType.Bog);
+
+        int riverTiles = Count(TileType.River);
+        sb.AppendLine("# River connectivity");
+        sb.AppendLine($"  river tiles: {riverTiles}   outlet tiles touching the sea: {riverOutlets}");
+        if (riverTiles > 0 && riverOutlets == 0)
+            sb.AppendLine("  WARNING: no river reaches the sea — rivers are severed from open water.");
+        sb.AppendLine();
 
         sb.AppendLine("# Niche coverage (gates which specialists have a home)");
         AppendNiche(sb, "open water  (Shark — needs connected deep water)", Pct(openWater));

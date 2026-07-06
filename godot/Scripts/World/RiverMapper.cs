@@ -34,7 +34,6 @@ public sealed class RiverMapper
     private const int MinRiverFlow = 1;                // Flow threshold to become a river
     private const int WideRiverFlow = 3;               // Flow threshold for wide (2-tile) rivers
     private const int MinSourceSpacing = 18;           // Minimum tiles between sources
-    private const int MaxRiverSources = 80;            // Max number of river source points
     private const float MaxLakeRise = 0.04f;             // Max water rise above depression bottom
     private const int MaxLakeArea = 80;                  // Max tiles a single lake can occupy
 
@@ -255,13 +254,17 @@ public sealed class RiverMapper
         // Sort by elevation (highest first) — prioritize highest peaks
         candidates.Sort((a, b) => b.elev.CompareTo(a.elev));
 
+        // Source budget scales with world size so river density stays roughly constant —
+        // the old fixed cap (80) was tuned for ~288-tile debug worlds and left larger maps dry.
+        int maxSources = Math.Clamp(_worldSize / 4, 40, 320);
+
         // Select sources with minimum spacing
         var sources = new List<(int x, int y)>();
         var usedGrid = new HashSet<(int, int)>(); // Grid cells for spacing check
 
         foreach (var (cx, cy, _) in candidates)
         {
-            if (sources.Count >= MaxRiverSources)
+            if (sources.Count >= maxSources)
                 break;
 
             // Check spacing: grid cell = position / MinSourceSpacing

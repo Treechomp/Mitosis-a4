@@ -4,7 +4,33 @@ Active workstream after the terrain-profile redesign. Tracks the terrain-coupled
 runs keep surfacing and the order we attack them. See `terrain-handling-audit.md` (current
 mechanisms) and `terrain-profile-design.md` (the resolver that shipped).
 
-## Final state (2026-07-06) — workstream wrapped
+## Reopened (2026-07-06) — worldgen variety & two-way biome pass
+Focus shifted from species-coupling to the generator itself (game-prep). Landed:
+
+- **River connectivity FIXED.** Rivers were traced to the ocean but only *marked* above the old
+  LandLevel (0.45) — the Sand shore band (0.40–0.45) accumulated flow yet was never marked, so
+  every river visibly died at the beach. Marking now runs to the waterline (0.40), and chunk
+  overrides apply to any dry land tile (incl. Sand/Ice — arctic rivers stay continuous) instead
+  of only `IsSpawnable()`. The world snapshot now reports river tiles / sea-outlet tiles and
+  warns if rivers are severed.
+- **Two-way biome generation.** Classification still runs on elevation/temperature/moisture, but
+  hydrology and relief now feed back into the moisture *before* classification: riparian halos
+  around rivers/lakes (wetland margins in wet climates, green corridors + oases through dry
+  ones), ~13-tile marshy delta fans where rivers meet the sea (plus a tidal-marsh rule in the
+  beach band), and slope drainage so swamps/bogs settle into flat basins while hillsides dry.
+- **Ridged mountain ranges** (base elevation: classify/cool/shed rivers; orogeny-belt gated so
+  they form a few connected chains) and **terraced cliff regions** (stored elevation only:
+  mesas/bluffs with steep risers movement actually feels). `SampleBaseElevation` is now the
+  single elevation authority shared by chunks and the RiverMapper (which caches the full-world
+  map that chunk gen reads back).
+- **Standard test config is now the code default**: 36×36 chunks / 2000 initial / 12000 cap
+  (was the stale 9×9 debug setup); river source budget scales with world size.
+
+Verification: build-checked only (no Godot here) — needs an in-editor world-snapshot pass across
+a few seeds to confirm river outlets > 0 everywhere, delta wetlands read well, and ridge/cliff
+amplitudes look right (all tunable via the new GameManager exports).
+
+## Final state (2026-07-06) — species workstream wrapped
 Shipped and confirmed: unified TerrainProfile resolver (speed REPLACE, species-aware avoidance,
 concealment); world-snapshot diagnostic (biome map + niche coverage); worldgen A (real deserts)
 + B (thin beaches); terrain-aware food-seeking (HuntTerrain) + niche-aware spawn placement;

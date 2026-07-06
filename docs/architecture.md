@@ -56,8 +56,10 @@ simulation; rendering is a pure visualization layer that reads simulation state 
 │                    WORLD LAYER                                 │
 │  WorldManager — chunk storage, tile/elevation queries         │
 │  TerrainGenerator — FastNoiseLite elevation/moisture/         │
-│                     temperature + domain warp + landmarks     │
-│  RiverMapper — flow-based rivers/lakes (hex-neighbor topology) │
+│                     temperature + domain warp + ridged ranges │
+│                     + terraced cliffs + landmarks             │
+│  RiverMapper — flow-based rivers/lakes (hex-neighbor          │
+│                topology) + riparian/delta moisture feedback   │
 │  20 TileType values · per-vertex elevation · per-tile nutrition│
 └──────────────────────────┬───────────────────────────────────┘
                            ▼
@@ -167,8 +169,8 @@ godot/
     │   ├── TileType.cs         # 20 tile types + extension methods (NO IsWalkable — see below)
     │   ├── Chunk.cs            # tiles, per-vertex elevation, per-tile nutrition, GetTileColor
     │   ├── WorldManager.cs     # chunk storage, GetTile/GetElevation, DirtyChunks, SpatialHash
-    │   ├── TerrainGenerator.cs # noise + domain warp + temperature + landmarks
-    │   └── RiverMapper.cs      # flow-based rivers/lakes (hex-neighbor topology)
+    │   ├── TerrainGenerator.cs # noise + warp + ridges/cliffs + temperature + landmarks
+    │   └── RiverMapper.cs      # flow-based rivers/lakes + hydrology→moisture feedback
     ├── Species/
     │   ├── SpeciesDefinition.cs # data-driven species config
     │   └── SpeciesRegistry.cs   # all 28 species
