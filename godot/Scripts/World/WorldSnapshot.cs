@@ -209,7 +209,7 @@ public static class WorldSnapshot
         sb.AppendLine(Inv($"roughness_frequency:     {s.RoughnessFrequency}   floor: {s.RoughnessFloor}"));
         sb.AppendLine(Inv($"ridge_frequency:         {s.RidgeFrequency}   amplitude: {s.RidgeAmplitude}   orogeny_freq: {s.OrogenyFrequency}"));
         sb.AppendLine(Inv($"cliff_frequency:         {s.CliffFrequency}   strength: {s.CliffStrength}   step: {s.CliffStepHeight}"));
-        sb.AppendLine($"moisture_frequency:      0.008 (fixed in TerrainGenerator)");
+        sb.AppendLine(Inv($"moisture_frequency:      {s.MoistureFrequency}   contrast: {s.MoistureContrast}"));
         sb.AppendLine($"temperature_frequency:   0.005 (fixed in TerrainGenerator)");
         sb.AppendLine();
 

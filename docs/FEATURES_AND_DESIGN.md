@@ -102,7 +102,7 @@ by `World/RiverMapper.cs`. All noise is Godot `FastNoiseLite`, `SimplexSmooth`, 
 | Layer | Freq | Octaves | Seed offset | Purpose |
 |-------|------|---------|-------------|---------|
 | Elevation | 0.012 | 4 | +0 | Base topography (height map) |
-| Moisture | 0.008 | 4 | +1000 | Wet/dry regions |
+| Moisture | 0.003 | 4 | +1000 | Wet/dry regions (kept in scale with elevation/temperature so coherent desert/rainforest/bog REGIONS can form; a contrast stretch ~1.25 around 0.5 reaches the Arid/Bog extremes that raw FBM starves) |
 | Temperature | 0.005 | 2 | +5000 | Large-scale climate gradient |
 | Warp X / Warp Y | 0.008 | 2 | +7000 / +8000 | Domain warping (organic boundaries) |
 | Landmark | 0.04 | 2 | +9000 | Feature placement (oases, clearings, caves) |
@@ -854,6 +854,8 @@ values TBD once all features are in and compute/render costs are known:
 | TerrainDetailAmplitude | 0.035 | Surface-relief height added to elevation (0 disables) |
 | TerrainRoughnessFrequency | 0.006 | Size of rugged vs smooth regions |
 | TerrainRoughnessFloor | 0.15 | Min detail in smoothest regions (0–1) |
+| TerrainMoistureFrequency | 0.003 | Humid/arid region scale (keep in scale with elevation) |
+| TerrainMoistureContrast | 1.25 | Moisture stretch toward wet/dry extremes (1 = raw noise) |
 | TerrainRidgeFrequency | 0.010 | Ridgeline scale (lower = longer ranges) |
 | TerrainRidgeAmplitude | 0.18 | Ridge crest height added to base elevation (0 = no ranges) |
 | TerrainCliffFrequency | 0.005 | Size of terraced mesa/bluff regions |

@@ -31,6 +31,8 @@ public sealed class TerrainGenerator
     private readonly float _ridgeAmplitude;
     private readonly float _cliffStrength;
     private readonly float _cliffStepHeight;
+    // Moisture contrast stretch (see TerrainSettings.MoistureContrast).
+    private readonly float _moistureContrast;
 
     // Flow-based river system (pre-computed before chunk generation)
     private RiverMapper? _riverMapper;
@@ -51,6 +53,7 @@ public sealed class TerrainGenerator
         _ridgeAmplitude = settings.RidgeAmplitude;
         _cliffStrength = settings.CliffStrength;
         _cliffStepHeight = settings.CliffStepHeight;
+        _moistureContrast = settings.MoistureContrast;
 
         // Elevation noise — continent/landmass scale features
         _elevationNoise = new FastNoiseLite();
@@ -60,13 +63,14 @@ public sealed class TerrainGenerator
         _elevationNoise.FractalType = FastNoiseLite.FractalTypeEnum.Fbm;
         _elevationNoise.FractalOctaves = 4;
 
-        // Moisture noise — continent scale so deserts/wetlands form large regions
+        // Moisture noise — must be in scale with the elevation/temperature fields (see
+        // TerrainSettings.MoistureFrequency); octaves add local texture inside large regions.
         _moistureNoise = new FastNoiseLite();
         _moistureNoise.NoiseType = FastNoiseLite.NoiseTypeEnum.SimplexSmooth;
         _moistureNoise.Seed = seed + 1000;
-        _moistureNoise.Frequency = 0.008f;
+        _moistureNoise.Frequency = settings.MoistureFrequency;
         _moistureNoise.FractalType = FastNoiseLite.FractalTypeEnum.Fbm;
-        _moistureNoise.FractalOctaves = 4;   // extra octave → patchier moisture → more biome variety
+        _moistureNoise.FractalOctaves = 4;
 
         // Temperature noise — very large-scale regions with latitude-like gradient
         _temperatureNoise = new FastNoiseLite();
@@ -228,6 +232,10 @@ public sealed class TerrainGenerator
                 float elevation = _riverMapper?.GetBaseElevation(worldX, worldY)
                                   ?? SampleBaseElevationWarped(warpedX, warpedY);
                 float moisture = (_moistureNoise.GetNoise2D(warpedX, warpedY) + 1f) * 0.5f;
+                // Contrast-stretch the CLIMATE moisture around the midpoint so the wet/dry
+                // extremes (Arid, Bog) actually occur — raw FBM clusters near 0.5. Applied
+                // before the hydrology feedback so riparian/delta boosts aren't exaggerated.
+                moisture = Math.Clamp(0.5f + (moisture - 0.5f) * _moistureContrast, 0f, 1f);
 
                 if (_riverMapper != null)
                 {

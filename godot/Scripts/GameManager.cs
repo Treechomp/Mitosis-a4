@@ -33,6 +33,8 @@ public partial class GameManager : Node3D
     [Export] public float TerrainDetailAmplitude = 0.035f;    // surface relief height (keep < ~0.1)
     [Export] public float TerrainRoughnessFrequency = 0.006f; // size of rugged vs smooth regions
     [Export] public float TerrainRoughnessFloor = 0.15f;      // min detail in smoothest areas (0..1)
+    [Export] public float TerrainMoistureFrequency = 0.003f;  // humid/arid region scale (keep in scale with elevation)
+    [Export] public float TerrainMoistureContrast = 1.25f;    // stretch toward wet/dry extremes (1 = raw noise)
     [Export] public float TerrainRidgeFrequency = 0.010f;     // ridgeline scale (lower = longer ranges)
     [Export] public float TerrainRidgeAmplitude = 0.18f;      // ridge crest height (0 = no ranges)
     [Export] public float TerrainCliffFrequency = 0.005f;     // size of terraced mesa/bluff regions
@@ -132,6 +134,8 @@ public partial class GameManager : Node3D
             DetailAmplitude    = TerrainDetailAmplitude,
             RoughnessFrequency = TerrainRoughnessFrequency,
             RoughnessFloor     = TerrainRoughnessFloor,
+            MoistureFrequency  = TerrainMoistureFrequency,
+            MoistureContrast   = TerrainMoistureContrast,
             RidgeFrequency     = TerrainRidgeFrequency,
             RidgeAmplitude     = TerrainRidgeAmplitude,
             CliffFrequency     = TerrainCliffFrequency,

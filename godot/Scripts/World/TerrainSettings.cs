@@ -10,6 +10,15 @@ public sealed class TerrainSettings
     // --- Base shape (used for biome classification) ---
     /// <summary>Base elevation frequency. Lower = larger landmasses/features.</summary>
     public float ElevationFrequency = 0.012f;
+    /// <summary>Moisture-field frequency. Must stay in scale with the elevation/temperature
+    /// fields: too high and every climate zone contains the full wet↔dry spectrum in small
+    /// patches, so no coherent desert/rainforest/bog REGION can ever form — biomes come out
+    /// as fine-grained speckle. Lower = large humid belts and arid basins.</summary>
+    public float MoistureFrequency = 0.003f;
+    /// <summary>Contrast stretch applied to the raw moisture noise around 0.5. FBM output
+    /// concentrates near the middle, starving the classification extremes (Arid needs &lt; ~0.3,
+    /// Bog &gt; 0.76). 1 = raw noise; ~1.25 reaches real deserts and real bogs.</summary>
+    public float MoistureContrast = 1.25f;
     /// <summary>Domain-warp amplitude in tiles. Higher = more swirled/stretched ("fabric")
     /// boundaries; lower = straighter, calmer shapes.</summary>
     public float WarpAmplitude = 12f;

@@ -48,6 +48,15 @@ Verification: build-checked only (no Godot here) — needs an in-editor pass: re
 seed to confirm Arid recovers and wetlands thin to genuine margins; eyeball beaches, meanders,
 and cliff faces; check the new maps render correctly.
 
+Second snapshot review (seed 1131496905): shore pass, meanders, drainage rebalance all confirmed
+working (Sand 6.9→1.6%, wetlands thinned, rivers wiggle and outlet). Remaining structural finding
+from the `_moist` map: **moisture was the finest classification field** (freq 0.008 ≈ 125-tile
+patches vs 250-tile elevation and a world-spanning temperature gradient), so every climate zone
+contained the full wet↔dry spectrum in speckle — no coherent desert/rainforest/bog region could
+exist (Arid 0.4% scattered specks). Fixed: `MoistureFrequency` exported (default 0.003, in scale
+with the other fields) + `MoistureContrast` (1.25) stretching raw FBM toward the Arid/Bog
+extremes it otherwise starves. Re-snapshot to confirm desert/jungle become regions.
+
 ## Final state (2026-07-06) — species workstream wrapped
 Shipped and confirmed: unified TerrainProfile resolver (speed REPLACE, species-aware avoidance,
 concealment); world-snapshot diagnostic (biome map + niche coverage); worldgen A (real deserts)
