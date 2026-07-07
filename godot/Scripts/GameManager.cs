@@ -36,8 +36,8 @@ public partial class GameManager : Node3D
     [Export] public float TerrainRidgeFrequency = 0.010f;     // ridgeline scale (lower = longer ranges)
     [Export] public float TerrainRidgeAmplitude = 0.18f;      // ridge crest height (0 = no ranges)
     [Export] public float TerrainCliffFrequency = 0.005f;     // size of terraced mesa/bluff regions
-    [Export] public float TerrainCliffStrength = 0.8f;        // terracing blend in cliff regions (0..1)
-    [Export] public float TerrainCliffStepHeight = 0.12f;     // elevation per terrace step
+    [Export] public float TerrainCliffStrength = 1.0f;        // terracing blend in cliff regions (0..1)
+    [Export] public float TerrainCliffStepHeight = 0.08f;     // elevation per terrace step
     [Export] public int TargetTPS = 20;
     [Export] public int MaxPopulation = 12000;   // standard test ceiling (36-chunk world)
     [Export] public int InitialPopulation = 2000; // standard test seed population
@@ -241,9 +241,10 @@ public partial class GameManager : Node3D
         });
         GD.Print($"World generated: {_worldManager.LoadedChunkCount} chunks");
 
-        // Diagnostic: dump a biome-map PNG + parameter/distribution report so worldgen output can
-        // be inspected (and niche coverage validated) before blaming species balance.
-        WorldSnapshot.Capture(_worldManager, seed, ChunkSize, WorldSizeChunks,
+        // Diagnostic: dump biome/elevation/moisture/temperature map PNGs + parameter/distribution
+        // report so worldgen output can be inspected (and niche coverage validated) before
+        // blaming species balance. The returned base name pairs the post-spawn map below.
+        string snapshotName = WorldSnapshot.Capture(_worldManager, seed, ChunkSize, WorldSizeChunks,
             terrainSettings, ElevationHeightScale);
 
         // Apply species enable/disable toggles before any spawning.
@@ -276,6 +277,10 @@ public partial class GameManager : Node3D
         int playerEntity = _entityFactory.SpawnPlayer(centerX, centerY, _worldManager);
         _playerController.SetPlayerEntity(playerEntity, TileSize, _camera);
         _lodSystem?.SetPlayerEntity(_playerController.PlayerEntity);
+
+        // Diagnostic: dump the initial-population map (species-coloured dots over a dimmed
+        // biome map) for validating spawn distribution against the niche placement rules.
+        WorldSnapshot.CaptureSpawns(_worldManager, _entityManager, snapshotName);
 
         // Seed render-interpolation previous positions so nothing streaks on the first frame.
         _entityManager.SnapshotPositions();
