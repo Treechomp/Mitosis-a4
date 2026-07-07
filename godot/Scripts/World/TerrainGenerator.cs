@@ -237,10 +237,11 @@ public sealed class TerrainGenerator
                     moisture += _riverMapper.GetMoistureBoost(worldX, worldY);
                     // 2. Drainage — slopes shed water, flats hold it — so swamps settle into
                     //    flat lowland basins instead of scattering wherever moisture noise
-                    //    peaks, and hillsides dry toward forest/scrub. Centred on a typical
-                    //    slope so the world's overall moisture budget stays unchanged.
+                    //    peaks, and hillsides dry toward forest/scrub. Pivoted on the world's
+                    //    MEASURED mean land slope (not a constant): a flat low-frequency world
+                    //    must not read as "basins everywhere" and drown its deserts.
                     moisture += Math.Clamp(
-                        (0.025f - _riverMapper.GetSlope(worldX, worldY)) * DrainageFactor,
+                        (_riverMapper.MeanLandSlope - _riverMapper.GetSlope(worldX, worldY)) * DrainageFactor,
                         -0.20f, 0.08f);
                     moisture = Math.Clamp(moisture, 0f, 1f);
                 }

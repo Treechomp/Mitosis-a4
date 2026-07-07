@@ -70,6 +70,7 @@ public sealed class RiverMapper
         _isWetlandBank = new bool[worldSize, worldSize];
 
         BuildElevationMap();
+        ComputeMeanLandSlope();
         var sources = SelectSources(seed);
         TraceRivers(sources);
         MarkRiversAndLakes();
@@ -135,6 +136,33 @@ public sealed class RiverMapper
         s = Math.Max(s, Math.Abs(GetBaseElevation(x, y - 1) - e));
         s = Math.Max(s, Math.Abs(GetBaseElevation(x, y + 1) - e));
         return s;
+    }
+
+    /// <summary>
+    /// Mean slope of the generated land, measured per world. The drainage rule pivots on this
+    /// (flatter-than-typical ground collects moisture, steeper sheds it) so the world's overall
+    /// moisture budget is balanced at ANY elevation frequency. A hardcoded pivot made entire
+    /// low-frequency (flat) worlds read as "basins everywhere" — uniformly wetter, deserts
+    /// wiped out (seed 1956076603 @ ef 0.004: Arid 0.1%).
+    /// </summary>
+    public float MeanLandSlope { get; private set; } = 0.025f;
+
+    private void ComputeMeanLandSlope()
+    {
+        // Strided sampling — this only needs to be representative, not exact.
+        double sum = 0;
+        int count = 0;
+        for (int y = 0; y < _worldSize; y += 4)
+        {
+            for (int x = 0; x < _worldSize; x += 4)
+            {
+                if (_elevation[x, y] < WaterLevel) continue;
+                sum += GetSlope(x, y);
+                count++;
+            }
+        }
+        if (count > 0)
+            MeanLandSlope = (float)(sum / count);
     }
 
     /// <summary>Extra climate moisture contributed by nearby rivers/lakes/deltas (0 far away).</summary>

@@ -19,6 +19,10 @@ public static class WorldSnapshot
     /// <summary>Niche-coverage thresholds (% of total tiles) below which we warn.</summary>
     private const float MinNichePct = 2.0f;
 
+    /// <summary>Invariant-culture interpolation — filenames and reports must not pick up a
+    /// comma-decimal locale (same convention as the EcosystemLogger CSVs).</summary>
+    private static string Inv(FormattableString f) => FormattableString.Invariant(f);
+
     public static void Capture(
         WorldManager wm, int seed, int chunkSize, int worldSizeChunks,
         TerrainSettings settings, float elevHeightScale,
@@ -56,9 +60,9 @@ public static class WorldSnapshot
         Directory.CreateDirectory(dir);
         string ts = DateTime.Now.ToString("yyyyMMdd_HHmmss");
         string baseName =
-            $"world_{ts}_seed{seed}_{worldSizeChunks}ch_ef{settings.ElevationFrequency:0.####}" +
-            $"_df{settings.DetailFrequency:0.####}_rf{settings.RoughnessFrequency:0.####}" +
-            $"_ra{settings.RidgeAmplitude:0.####}";
+            Inv($"world_{ts}_seed{seed}_{worldSizeChunks}ch_ef{settings.ElevationFrequency:0.####}") +
+            Inv($"_df{settings.DetailFrequency:0.####}_rf{settings.RoughnessFrequency:0.####}") +
+            Inv($"_ra{settings.RidgeAmplitude:0.####}");
 
         string pngPath = Path.Combine(dir, baseName + ".png");
         Error err = img.SavePng(pngPath);
@@ -99,13 +103,13 @@ public static class WorldSnapshot
         sb.AppendLine($"timestamp:               {ts}");
         sb.AppendLine($"seed:                    {seed}");
         sb.AppendLine($"size:                    {worldSizeChunks} chunks x {chunkSize} = {n}x{n} tiles ({total} total)");
-        sb.AppendLine($"elevation_frequency:     {s.ElevationFrequency}   (lower = larger landmasses)");
-        sb.AppendLine($"elevation_height_scale:  {elevHeightScale}");
-        sb.AppendLine($"warp_amplitude:          {s.WarpAmplitude}");
-        sb.AppendLine($"detail_frequency:        {s.DetailFrequency}   amplitude: {s.DetailAmplitude}");
-        sb.AppendLine($"roughness_frequency:     {s.RoughnessFrequency}   floor: {s.RoughnessFloor}");
-        sb.AppendLine($"ridge_frequency:         {s.RidgeFrequency}   amplitude: {s.RidgeAmplitude}   orogeny_freq: {s.OrogenyFrequency}");
-        sb.AppendLine($"cliff_frequency:         {s.CliffFrequency}   strength: {s.CliffStrength}   step: {s.CliffStepHeight}");
+        sb.AppendLine(Inv($"elevation_frequency:     {s.ElevationFrequency}   (lower = larger landmasses)"));
+        sb.AppendLine(Inv($"elevation_height_scale:  {elevHeightScale}"));
+        sb.AppendLine(Inv($"warp_amplitude:          {s.WarpAmplitude}"));
+        sb.AppendLine(Inv($"detail_frequency:        {s.DetailFrequency}   amplitude: {s.DetailAmplitude}"));
+        sb.AppendLine(Inv($"roughness_frequency:     {s.RoughnessFrequency}   floor: {s.RoughnessFloor}"));
+        sb.AppendLine(Inv($"ridge_frequency:         {s.RidgeFrequency}   amplitude: {s.RidgeAmplitude}   orogeny_freq: {s.OrogenyFrequency}"));
+        sb.AppendLine(Inv($"cliff_frequency:         {s.CliffFrequency}   strength: {s.CliffStrength}   step: {s.CliffStepHeight}"));
         sb.AppendLine($"moisture_frequency:      0.008 (fixed in TerrainGenerator)");
         sb.AppendLine($"temperature_frequency:   0.005 (fixed in TerrainGenerator)");
         sb.AppendLine();
@@ -114,7 +118,7 @@ public static class WorldSnapshot
         var rows = new List<KeyValuePair<TileType, int>>(hist);
         rows.Sort((a, b) => b.Value.CompareTo(a.Value));
         foreach (var kv in rows)
-            sb.AppendLine($"  {kv.Key,-13} {kv.Value,8} {Pct(kv.Value),6:0.0}%");
+            sb.AppendLine(Inv($"  {kv.Key,-13} {kv.Value,8} {Pct(kv.Value),6:0.0}%"));
         sb.AppendLine();
 
         // Niche roll-ups — the coverage that actually gates each specialist's habitat.
@@ -146,24 +150,24 @@ public static class WorldSnapshot
         AppendNiche(sb, "wetland     (Frog/Crocodile)", Pct(wetland));
         AppendNiche(sb, "grazeable   (herbivore base)", Pct(grazeable));
         sb.AppendLine();
-        sb.AppendLine($"# Flags ( < {MinNichePct:0.0}% coverage = specialist likely can't sustain a population )");
+        sb.AppendLine(Inv($"# Flags ( < {MinNichePct:0.0}% coverage = specialist likely can't sustain a population )"));
         FlagNiche(sb, "cold belt",          Pct(cold));
         FlagNiche(sb, "true desert (Arid)", Pct(trueDesert));
         FlagNiche(sb, "open water (deep)",  Pct(openWater));
         FlagNiche(sb, "wetland",            Pct(wetland));
         if (beachSand > trueDesert * 3 && Pct(trueDesert) < MinNichePct)
-            sb.AppendLine($"  NOTE: {Pct(beachSand):0.0}% Sand is almost all shoreline beach — desert " +
+            sb.AppendLine(Inv($"  NOTE: {Pct(beachSand):0.0}% Sand is almost all shoreline beach — desert ") +
                           "specialists need Arid, which is effectively absent.");
 
         return sb.ToString();
     }
 
     private static void AppendNiche(StringBuilder sb, string label, float pct)
-        => sb.AppendLine($"  {label,-46} {pct,6:0.0}%");
+        => sb.AppendLine(Inv($"  {label,-46} {pct,6:0.0}%"));
 
     private static void FlagNiche(StringBuilder sb, string label, float pct)
     {
         if (pct < MinNichePct)
-            sb.AppendLine($"  WARNING: {label} only {pct:0.0}% — too small to support its specialists.");
+            sb.AppendLine(Inv($"  WARNING: {label} only {pct:0.0}% — too small to support its specialists."));
     }
 }
