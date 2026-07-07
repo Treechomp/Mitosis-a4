@@ -17,8 +17,13 @@ public sealed class RiverMapper
     private readonly Func<int, int, float> _sampleElevation;
 
     private int _worldSize;
+    private int _seed;
     private float[,] _elevation = null!;
     private int[,] _flow = null!;
+    // Chamfer distance (tiles) from land to the nearest ocean tile, capped at OceanDistCap.
+    // Drives the biome-aware shore pass in TerrainGenerator (beaches by distance, not by
+    // elevation band — so flat worlds no longer grow huge beach rings).
+    private float[,] _oceanDist = null!;
 
     // Pre-computed tile markers
     private bool[,] _isRiver = null!;
@@ -44,6 +49,8 @@ public sealed class RiverMapper
     private const float DeltaBoost        = 0.30f;  // river mouths fan out into marshy deltas
     private const float BoostFalloff      = 0.022f; // decay per tile of distance from water
 
+    private const float OceanDistCap = 8f;          // max tracked distance-to-ocean (tiles)
+
     // 6-direction offsets for staggered hex grid (row-parity variants)
     // Even row (y%2==0): upper/lower diagonal neighbors lean left  (dx = -1)
     // Odd  row (y%2==1): upper/lower diagonal neighbors lean right (dx = +1)
@@ -63,6 +70,7 @@ public sealed class RiverMapper
     public void Generate(int worldSize, int seed)
     {
         _worldSize = worldSize;
+        _seed = seed;
         _elevation = new float[worldSize, worldSize];
         _flow = new int[worldSize, worldSize];
         _isRiver = new bool[worldSize, worldSize];
@@ -71,6 +79,7 @@ public sealed class RiverMapper
 
         BuildElevationMap();
         ComputeMeanLandSlope();
+        BuildOceanDistance();
         var sources = SelectSources(seed);
         TraceRivers(sources);
         MarkRiversAndLakes();
@@ -165,6 +174,60 @@ public sealed class RiverMapper
             MeanLandSlope = (float)(sum / count);
     }
 
+    /// <summary>
+    /// Distance in tiles (chamfer approximation, capped at 8) from a tile to the nearest
+    /// ocean water. 0 on ocean itself. Drives the biome-aware shore pass.
+    /// </summary>
+    public float GetOceanDistance(int x, int y)
+    {
+        if (x < 0 || x >= _worldSize || y < 0 || y >= _worldSize) return OceanDistCap;
+        return _oceanDist[x, y];
+    }
+
+    private void BuildOceanDistance()
+    {
+        int n = _worldSize;
+        _oceanDist = new float[n, n];
+        for (int y = 0; y < n; y++)
+            for (int x = 0; x < n; x++)
+                _oceanDist[x, y] = _elevation[x, y] < WaterLevel ? 0f : OceanDistCap;
+
+        // Two-pass chamfer min-distance (mirror of the moisture-boost propagation).
+        const float diag = 1.4f;
+        for (int y = 0; y < n; y++)
+        {
+            for (int x = 0; x < n; x++)
+            {
+                float v = _oceanDist[x, y];
+                if (v == 0f) continue;
+                if (x > 0) v = Math.Min(v, _oceanDist[x - 1, y] + 1f);
+                if (y > 0)
+                {
+                    v = Math.Min(v, _oceanDist[x, y - 1] + 1f);
+                    if (x > 0)     v = Math.Min(v, _oceanDist[x - 1, y - 1] + diag);
+                    if (x < n - 1) v = Math.Min(v, _oceanDist[x + 1, y - 1] + diag);
+                }
+                _oceanDist[x, y] = v;
+            }
+        }
+        for (int y = n - 1; y >= 0; y--)
+        {
+            for (int x = n - 1; x >= 0; x--)
+            {
+                float v = _oceanDist[x, y];
+                if (v == 0f) continue;
+                if (x < n - 1) v = Math.Min(v, _oceanDist[x + 1, y] + 1f);
+                if (y < n - 1)
+                {
+                    v = Math.Min(v, _oceanDist[x, y + 1] + 1f);
+                    if (x < n - 1) v = Math.Min(v, _oceanDist[x + 1, y + 1] + diag);
+                    if (x > 0)     v = Math.Min(v, _oceanDist[x - 1, y + 1] + diag);
+                }
+                _oceanDist[x, y] = v;
+            }
+        }
+    }
+
     /// <summary>Extra climate moisture contributed by nearby rivers/lakes/deltas (0 far away).</summary>
     public float GetMoistureBoost(int x, int y)
     {
@@ -240,6 +303,19 @@ public sealed class RiverMapper
                 }
                 _moistureBoost[x, y] = v;
             }
+        }
+    }
+
+    /// <summary>Deterministic per-tile hash in [0,1) — reproducible river meander jitter.</summary>
+    private float Hash01(int x, int y)
+    {
+        unchecked
+        {
+            uint h = (uint)(x * 374761393 + y * 668265263) ^ ((uint)_seed * 2246822519u);
+            h ^= h >> 13;
+            h *= 1274126177u;
+            h ^= h >> 16;
+            return (h & 0xFFFFFF) / 16777216f;
         }
     }
 
@@ -349,9 +425,16 @@ public sealed class RiverMapper
             _flow[cx, cy]++;
             visited.Add((cx, cy));
 
-            // Find steepest descent among 6 hex neighbors
+            // Find the descent direction among the 6 hex neighbors. Candidates are limited to
+            // TRUE descents (depression detection must stay exact — a false trigger flood-fills
+            // a fake lake downhill), but the CHOICE among them is jittered by a deterministic
+            // per-tile dither scaled to the world's mean slope: on near-flat terrain pure
+            // steepest descent degenerates into the hex layout's row-parity bias (long straight
+            // runs with staircase kinks); the dither breaks those near-ties into natural
+            // meanders while leaving genuinely steep descents effectively unchanged.
             int bestNx = -1, bestNy = -1;
-            float bestElev = currentElev;
+            float bestScore = float.MaxValue;
+            bool outflow = false;
 
             var (rdx, rdy) = cy % 2 == 0 ? (EvenDX, EvenDY) : (OddDX, OddDY);
             for (int d = 0; d < 6; d++)
@@ -361,10 +444,11 @@ public sealed class RiverMapper
 
                 if (nx < 0 || nx >= _worldSize || ny < 0 || ny >= _worldSize)
                 {
-                    // Edge of world = outflow (treat as ocean)
-                    bestNx = nx;
-                    bestNy = ny;
-                    bestElev = -1f;
+                    // Edge of world = outflow (treat as ocean). Previously this stored the
+                    // out-of-bounds coordinate in bestNx, which a west/north edge (-1) made
+                    // indistinguishable from "no candidate" — ending those rivers in a fake
+                    // depression instead of flowing off the map.
+                    outflow = true;
                     break;
                 }
 
@@ -372,16 +456,23 @@ public sealed class RiverMapper
                     continue;
 
                 float nElev = _elevation[nx, ny];
-                if (nElev < bestElev)
+                if (nElev >= currentElev)
+                    continue; // only true descents are candidates
+
+                float score = nElev + (Hash01(nx, ny) - 0.5f) * MeanLandSlope;
+                if (score < bestScore)
                 {
-                    bestElev = nElev;
+                    bestScore = score;
                     bestNx = nx;
                     bestNy = ny;
                 }
             }
 
+            if (outflow)
+                break; // river leaves the world
+
             // Could not find a lower neighbor — we're in a depression
-            if (bestNx < 0 || bestElev >= currentElev)
+            if (bestNx < 0)
             {
                 // Try to fill the depression: find the lowest rim point
                 var lakeResult = FillDepression(cx, cy, visited);

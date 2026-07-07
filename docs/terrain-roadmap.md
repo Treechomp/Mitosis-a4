@@ -26,9 +26,27 @@ Focus shifted from species-coupling to the generator itself (game-prep). Landed:
 - **Standard test config is now the code default**: 36×36 chunks / 2000 initial / 12000 cap
   (was the stale 9×9 debug setup); river source budget scales with world size.
 
-Verification: build-checked only (no Godot here) — needs an in-editor world-snapshot pass across
-a few seeds to confirm river outlets > 0 everywhere, delta wetlands read well, and ridge/cliff
-amplitudes look right (all tunable via the new GameManager exports).
+Follow-ups from the first 36ch snapshot review (seed 1956076603, ef 0.004):
+- **Drainage pivot bug fixed** — a hardcoded "typical slope" made flat low-frequency worlds
+  uniformly wetter (Arid 0.1%, Wetland 10.3%); the pivot is now the world's *measured* mean
+  land slope, so the moisture budget balances at any elevation frequency.
+- **Shores decoupled from elevation** — beaches are now a distance-to-ocean post-pass (≤ 2
+  tiles), typed by climate: Sand normally, Wetland when very wet (deltas/mangroves), nothing on
+  frozen coasts, biome-kept rocky shoreline on steep coasts. Flat worlds no longer grow huge
+  beach rings; the old 0.40–0.43 Sand band is gone from classification.
+- **River meander** — descent choice among true-downhill neighbours is dithered by a
+  deterministic per-tile hash scaled to mean slope, killing the staircase/horizontal artifact on
+  flat terrain (also fixed: rivers reaching the west/north world edge ended in a fake depression
+  instead of flowing off the map).
+- **Cliffs sharpened** — riser concentrated into the top 15% of each terrace band, stronger
+  detail damping on treads, defaults step 0.08 / strength 1.0 (ridges confirmed expressing in
+  3D; cliffs were too soft to read).
+- **Snapshot set extended** — `_elev`/`_moist`/`_temp` parameter maps + a post-spawn
+  `_spawns` map (species-coloured dots) alongside the biome map and report.
+
+Verification: build-checked only (no Godot here) — needs an in-editor pass: re-snapshot the same
+seed to confirm Arid recovers and wetlands thin to genuine margins; eyeball beaches, meanders,
+and cliff faces; check the new maps render correctly.
 
 ## Final state (2026-07-06) — species workstream wrapped
 Shipped and confirmed: unified TerrainProfile resolver (speed REPLACE, species-aware avoidance,

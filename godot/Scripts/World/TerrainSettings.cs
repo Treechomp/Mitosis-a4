@@ -32,10 +32,11 @@ public sealed class TerrainSettings
     public float CliffFrequency = 0.005f;
     /// <summary>How strongly terracing is applied where the cliff mask is active (0 = off,
     /// 1 = fully stepped). Also scales the riser height a step face can reach.</summary>
-    public float CliffStrength = 0.8f;
-    /// <summary>Elevation (0..1) per terrace step. Bigger steps = taller, rarer cliff faces.
-    /// Keep below the 0.18 spawn-slope / 0.28 movement-cliff thresholds.</summary>
-    public float CliffStepHeight = 0.12f;
+    public float CliffStrength = 1.0f;
+    /// <summary>Elevation (0..1) per terrace step. Bigger steps = taller but rarer cliff faces
+    /// (at low elevation frequencies a large step yields only a couple of terrace lines per
+    /// landmass). Keep below the 0.18 spawn-slope / 0.28 movement-cliff thresholds.</summary>
+    public float CliffStepHeight = 0.08f;
 
     // --- Surface detail (added to the rendered/stored elevation only, NOT to classification,
     //     so biome boundaries stay on the base shape; gives relief + a little slope) ---

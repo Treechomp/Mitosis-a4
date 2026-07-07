@@ -164,9 +164,16 @@ and renderer checks all see the same values):
 |-----------|--------|
 | < 0.30 | DeepWater |
 | 0.30–0.40 | ShallowWater (**Reef** if temp > 0.62 and elev > 0.33) |
-| 0.40–0.43 | Sand (beach) — **Wetland** (tidal marsh) if moisture > 0.78 and temp > 0.28 |
-| 0.43–0.80 | biome bands by temperature (below) |
+| 0.40–0.80 | biome bands by temperature (below) |
 | > 0.80 | Mountain (**Ice** if temp < 0.22; **Lava** if temp > 0.55 and moisture < 0.32) |
+
+There is **no elevation beach band** — shores are a post-pass in `GenerateChunk`. Land tiles
+within **2 tiles** (chamfer distance, `RiverMapper.GetOceanDistance`) of sea water become
+shore, **typed by climate**: `Wetland` (marshy shore/mangrove — also how river-delta fans
+reach the waterline) when moisture > 0.68, else `Sand`. Frozen coasts (temp < 0.25) get no
+beach (ice/tundra runs to the water), and steep coasts (elev ≥ 0.55 at the sea) keep their
+biome as rocky cliff shoreline. Distance-based width means beaches stay narrow on flat
+worlds (the old 0.40–0.43 band grew huge Sand rings at low elevation frequencies).
 
 Mid-elevation biome bands:
 
@@ -189,7 +196,11 @@ Runs once before chunk generation, on a full-world base-elevation map built with
    40–320, so river density stays constant across world sizes).
 2. **Tracing**: steepest descent across the **6 offset-row hex neighbors** (separate
    even/odd-row neighbor sets), accumulating a flow count per tile, until reaching ocean
-   (elev < 0.40).
+   (elev < 0.40) or the world edge (outflow). Candidates are limited to true descents, but
+   the choice among them is jittered by a deterministic per-tile dither scaled to the
+   world's mean slope — on near-flat terrain pure steepest descent degenerates into the hex
+   layout's row-parity bias (straight runs with staircase kinks); the dither turns those
+   near-ties into natural meanders.
 3. **Depressions**: a stuck trace flood-fills a lake (water rise ≤ **0.04**, ≤ **80** tiles),
    then overflows to continue downstream.
 4. **Marking**: flow ≥ **1** → River; flow ≥ **3** → widened to hex neighbors. Land tiles
@@ -807,11 +818,20 @@ All floats are written with `InvariantCulture` so a comma-decimal locale can't c
 columns. Set **`TrackSpecies`** (Inspector, §9) to one species' exact name to additionally log
 per-entity `TRACKED` snapshots and that species' inbound/outbound combat damage.
 
-At world generation, `WorldSnapshot` also writes a one-shot **`world_<ts>_seed…_…ch_ef…_df…_rf…_ra….png`**
-(biome map) plus a sidecar **`.txt`** (the full worldgen parameter set + per-tile-type biome
-distribution + a river-connectivity line (river tiles / outlet tiles touching the sea, with a
-warning if rivers are severed) + niche-coverage roll-ups/warnings) to `logs/` — for inspecting
-what a parameter set produces and validating that each specialist's niche has enough habitat.
+At world generation, `WorldSnapshot` writes a one-shot diagnostic set to `logs/`, all sharing
+the base name **`world_<ts>_seed…_…ch_ef…_df…_rf…_ra…`**:
+
+- **`.png`** — biome map;
+- **`_elev.png`** — stored elevation (sea tinted by depth, land dark→white; ridges, cliffs
+  and surface detail are visible since this is the rendered heightfield);
+- **`_moist.png`** / **`_temp.png`** — the other two classification parameters (dry tan → wet
+  teal; cold blue → hot red), for judging climate bands independently of the biome result;
+- **`_spawns.png`** — written after initial spawning: every renderable entity (creatures,
+  nests, crystals, player) as a dot in its species colour over a dimmed biome map, for
+  validating spawn distribution against the niche-placement rules;
+- **`.txt`** — the full worldgen parameter set + per-tile-type biome distribution + a
+  river-connectivity line (river tiles / outlet tiles touching the sea, with a warning if
+  rivers are severed) + niche-coverage roll-ups/warnings.
 
 ---
 
@@ -837,8 +857,8 @@ values TBD once all features are in and compute/render costs are known:
 | TerrainRidgeFrequency | 0.010 | Ridgeline scale (lower = longer ranges) |
 | TerrainRidgeAmplitude | 0.18 | Ridge crest height added to base elevation (0 = no ranges) |
 | TerrainCliffFrequency | 0.005 | Size of terraced mesa/bluff regions |
-| TerrainCliffStrength | 0.8 | Terracing blend in cliff regions (0 = off, 1 = fully stepped) |
-| TerrainCliffStepHeight | 0.12 | Elevation per terrace step |
+| TerrainCliffStrength | 1.0 | Terracing blend in cliff regions (0 = off, 1 = fully stepped) |
+| TerrainCliffStepHeight | 0.08 | Elevation per terrace step |
 | TargetTPS | 20 | Simulation ticks/second |
 | MaxPopulation | 12000 | Hard entity cap |
 | InitialPopulation | 2000 | Starting creatures (incl. faction budgets) |

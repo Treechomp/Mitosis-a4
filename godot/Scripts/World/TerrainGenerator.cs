@@ -38,6 +38,8 @@ public sealed class TerrainGenerator
 
     // Drainage: how strongly slope sheds climate moisture (flats hold it). See GenerateChunk.
     private const float DrainageFactor = 2.5f;
+    // Shore pass: beach width in tiles from the waterline (chamfer distance). See GenerateChunk.
+    private const float BeachWidth = 2f;
 
     public TerrainGenerator(int seed, TerrainSettings? settings = null)
     {
@@ -273,6 +275,19 @@ public sealed class TerrainGenerator
                         // an ice sheet would read as a thaw ring around every frozen river.
                         tile = TileType.Wetland;
                     }
+                    else if (elevation < 0.55f && temperature >= 0.25f &&
+                             _riverMapper.GetOceanDistance(worldX, worldY) <= BeachWidth)
+                    {
+                        // Biome-aware shore pass (replaces the old 0.40–0.43 elevation beach
+                        // band): a NARROW band measured in tiles from actual sea water, typed
+                        // by local climate — marshy shores where the climate (or a river
+                        // delta) is very wet, sand everywhere else. Frozen coasts get no
+                        // beach (ice/tundra runs to the waterline), and steep coasts
+                        // (elevation ≥ 0.55 right at the sea) keep their biome as rocky
+                        // cliff shoreline. Distance-based width means flat worlds no longer
+                        // grow huge beach rings.
+                        tile = moisture > 0.68f ? TileType.Wetland : TileType.Sand;
+                    }
                 }
 
                 chunk.SetTile(localX, localY, tile);
@@ -299,12 +314,14 @@ public sealed class TerrainGenerator
                     {
                         float band = elevation / _cliffStepHeight;
                         int stepIdx = (int)band;
-                        // Flat tread for 75% of each band; the top 25% carries the whole riser.
-                        float riser = SmoothStep(0.75f, 1f, band - stepIdx);
+                        // Flat tread for 85% of each band; the top 15% carries the whole riser —
+                        // the face concentrates into ~1 tile at typical slopes, so it reads as an
+                        // actual cliff in 3D instead of a soft ramp.
+                        float riser = SmoothStep(0.85f, 1f, band - stepIdx);
                         float terraced = (stepIdx + riser) * _cliffStepHeight;
                         float w = cliffMask * _cliffStrength * SmoothStep(0.46f, 0.52f, elevation);
                         // Blend toward the terrace and damp surface detail so treads read flat.
-                        storedElevation = elevation + (terraced - elevation) * w + detail * (1f - 0.6f * w);
+                        storedElevation = elevation + (terraced - elevation) * w + detail * (1f - 0.8f * w);
                     }
                 }
                 storedElevation = Math.Clamp(storedElevation, 0f, 1f);
@@ -371,18 +388,9 @@ public sealed class TerrainGenerator
             return TileType.ShallowWater;
         }
 
-        // Beach band narrowed (0.46→0.43): on gentle elevation noise the old 0.40–0.46 band
-        // painted a thick Sand ring around every water body (~15% of the world, fragmenting
-        // biomes and faking a "desert"). The inner shore now falls through to its climate biome.
-        if (elevation < 0.43f)
-        {
-            // Tidal marsh: an extremely wet, non-frozen shore (a river-delta fan or a bog
-            // coast) grows reeds instead of bare beach, so deltas run wetland all the way
-            // to the waterline.
-            if (moisture > 0.78f && temperature > 0.28f)
-                return TileType.Wetland;
-            return TileType.Sand;
-        }
+        // NOTE: there is no elevation "beach band" any more. Shores/beaches are a POST-pass in
+        // GenerateChunk (distance-to-ocean, typed by climate) so they stay narrow on flat
+        // worlds and match their biome. Land classification runs straight from the waterline.
 
         // ── Mountains / high ground ─────────────────────────────────────────────────────
         if (elevation > 0.80f)
