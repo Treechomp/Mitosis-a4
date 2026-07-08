@@ -833,6 +833,19 @@ the base name **`world_<ts>_seed…_…ch_ef…_df…_rf…_ra…`**:
   river-connectivity line (river tiles / outlet tiles touching the sea, with a warning if
   rivers are severed) + niche-coverage roll-ups/warnings.
 
+### Worldgen preview tool
+
+For parameter exploration without relaunching the game: open **`Scenes/WorldgenPreview.tscn`**
+and run it (**F6**). Sliders for every terrain export (seed, world size, elevation/warp,
+moisture freq+contrast, ridges, cliffs, detail/roughness) regenerate the map live
+(debounced, climate-only — no rivers), and a **Full detail** button runs the exact pipeline
+including `PrecomputeRivers` (rivers, lakes, deltas, shores, hydrology moisture feedback) for
+the current seed. Views: biome / elevation / moisture / temperature; the stats panel shows
+the live biome distribution + niche coverage (same code as the snapshot report) and the
+current parameter set for transcribing into the GameManager inspector. It calls
+`TerrainGenerator.SampleTile` — the same per-tile function `GenerateChunk` loops over — so
+the preview can never drift from what the game generates.
+
 ---
 
 ## 9. Configuration Reference

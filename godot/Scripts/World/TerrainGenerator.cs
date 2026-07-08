@@ -206,6 +206,7 @@ public sealed class TerrainGenerator
 
     /// <summary>
     /// Generate terrain for a chunk with domain warping and temperature-based biomes.
+    /// A thin loop over <see cref="SampleTile"/> — the per-tile pipeline lives there.
     /// </summary>
     public void GenerateChunk(Chunk chunk)
     {
@@ -216,132 +217,158 @@ public sealed class TerrainGenerator
         {
             for (int localX = 0; localX < chunk.Size; localX++)
             {
-                int worldX = worldOffsetX + localX;
-                int worldY = worldOffsetY + localY;
-
-                // Apply domain warping for organic biome boundaries
-                float warpX = _warpNoiseX.GetNoise2D(worldX, worldY) * WarpAmplitude;
-                float warpY = _warpNoiseY.GetNoise2D(worldX, worldY) * WarpAmplitude;
-                float warpedX = worldX + warpX;
-                float warpedY = worldY + warpY;
-
-                // Base elevation: read the RiverMapper's precomputed full-world map when
-                // available (identical values by construction — it was built with
-                // SampleBaseElevation — and guarantees rivers/biomes can never drift apart),
-                // else sample directly (worlds generated without a river pre-pass).
-                float elevation = _riverMapper?.GetBaseElevation(worldX, worldY)
-                                  ?? SampleBaseElevationWarped(warpedX, warpedY);
-                float moisture = (_moistureNoise.GetNoise2D(warpedX, warpedY) + 1f) * 0.5f;
-                // Contrast-stretch the CLIMATE moisture around the midpoint so the wet/dry
-                // extremes (Arid, Bog) actually occur — raw FBM clusters near 0.5. Applied
-                // before the hydrology feedback so riparian/delta boosts aren't exaggerated.
-                moisture = Math.Clamp(0.5f + (moisture - 0.5f) * _moistureContrast, 0f, 1f);
-
-                if (_riverMapper != null)
-                {
-                    // Two-way hydrology→biome coupling, applied BEFORE classification so the
-                    // biomes themselves respond to the generated water features:
-                    // 1. Rivers/lakes wet their surroundings — wetland/bog margins in wet
-                    //    climates, green riparian corridors through dry ones, broad marsh
-                    //    fans at deltas.
-                    moisture += _riverMapper.GetMoistureBoost(worldX, worldY);
-                    // 2. Drainage — slopes shed water, flats hold it — so swamps settle into
-                    //    flat lowland basins instead of scattering wherever moisture noise
-                    //    peaks, and hillsides dry toward forest/scrub. Pivoted on the world's
-                    //    MEASURED mean land slope (not a constant): a flat low-frequency world
-                    //    must not read as "basins everywhere" and drown its deserts.
-                    moisture += Math.Clamp(
-                        (_riverMapper.MeanLandSlope - _riverMapper.GetSlope(worldX, worldY)) * DrainageFactor,
-                        -0.20f, 0.08f);
-                    moisture = Math.Clamp(moisture, 0f, 1f);
-                }
-
-                float temperature = GetTemperature(worldX, worldY, elevation);
-
-                TileType tile = DetermineTileType(elevation, moisture, temperature);
-
-                // Apply flow-based rivers, lakes, and wetland banks. Water overrides apply to
-                // ANY dry land tile — including the Sand shore band and Ice (a river crossing an
-                // arctic sheet stays continuous instead of vanishing beneath it) — but never to
-                // tiles that are already water, or to Mountain/Lava. Previously this was gated on
-                // IsSpawnable(), which excluded Sand/Ice and (together with the RiverMapper's old
-                // 0.45 marking cutoff) severed every river from the sea at the beach.
-                if (_riverMapper != null && !tile.IsWater() &&
-                    tile != TileType.Reef && tile != TileType.Mountain && tile != TileType.Lava)
-                {
-                    if (_riverMapper.IsLake(worldX, worldY))
-                    {
-                        tile = TileType.ShallowWater;
-                    }
-                    else if (_riverMapper.IsRiver(worldX, worldY))
-                    {
-                        tile = TileType.River;
-                    }
-                    else if (_riverMapper.IsWetlandBank(worldX, worldY) && tile.IsSpawnable())
-                    {
-                        // Banks stay restricted to ordinary land — a Wetland bank punched into
-                        // an ice sheet would read as a thaw ring around every frozen river.
-                        tile = TileType.Wetland;
-                    }
-                    else if (elevation < 0.55f && temperature >= 0.25f &&
-                             _riverMapper.GetOceanDistance(worldX, worldY) <= BeachWidth)
-                    {
-                        // Biome-aware shore pass (replaces the old 0.40–0.43 elevation beach
-                        // band): a NARROW band measured in tiles from actual sea water, typed
-                        // by local climate — marshy shores where the climate (or a river
-                        // delta) is very wet, sand everywhere else. Frozen coasts get no
-                        // beach (ice/tundra runs to the waterline), and steep coasts
-                        // (elevation ≥ 0.55 right at the sea) keep their biome as rocky
-                        // cliff shoreline. Distance-based width means flat worlds no longer
-                        // grow huge beach rings.
-                        tile = moisture > 0.68f ? TileType.Wetland : TileType.Sand;
-                    }
-                }
+                SampleTile(worldOffsetX + localX, worldOffsetY + localY,
+                    out TileType tile, out float storedElevation,
+                    out float moisture, out float temperature);
 
                 chunk.SetTile(localX, localY, tile);
-
-                // Surface relief: add roughness-modulated detail to the stored/rendered
-                // elevation, faded out over water so the sea stays flat. Classification above
-                // used the base elevation, so biome boundaries are unaffected.
-                float roughness01 = (_roughnessNoise.GetNoise2D(worldX, worldY) + 1f) * 0.5f;
-                float roughnessFactor = _roughnessFloor + (1f - _roughnessFloor) * roughness01;
-                float landFade = SmoothStep(0.40f, 0.48f, elevation); // fade in over the shore
-                float detail = _detailNoise.GetNoise2D(worldX, worldY) * _detailAmplitude * roughnessFactor * landFade * tile.GetRuggedness();
-                float storedElevation = elevation + detail;
-
-                // Terraced cliffs: in mesa/bluff regions (low-freq mask) the stored elevation is
-                // quantised into flat treads joined by short, steep risers. Applied on top of the
-                // base shape like detail — classification, temperature, and rivers are untouched;
-                // creatures feel the risers as strong slope resistance. Fades in above the shore
-                // so beaches and river mouths stay gentle.
-                // (step-height guard: 0 must disable terracing, not divide by zero below)
-                if (_cliffStrength > 0f && _cliffStepHeight > 0.01f && elevation > 0.46f)
-                {
-                    float cliffMask = SmoothStep(0.60f, 0.80f, (_cliffNoise.GetNoise2D(worldX, worldY) + 1f) * 0.5f);
-                    if (cliffMask > 0f)
-                    {
-                        float band = elevation / _cliffStepHeight;
-                        int stepIdx = (int)band;
-                        // Flat tread for 85% of each band; the top 15% carries the whole riser —
-                        // the face concentrates into ~1 tile at typical slopes, so it reads as an
-                        // actual cliff in 3D instead of a soft ramp.
-                        float riser = SmoothStep(0.85f, 1f, band - stepIdx);
-                        float terraced = (stepIdx + riser) * _cliffStepHeight;
-                        float w = cliffMask * _cliffStrength * SmoothStep(0.46f, 0.52f, elevation);
-                        // Blend toward the terrace and damp surface detail so treads read flat.
-                        storedElevation = elevation + (terraced - elevation) * w + detail * (1f - 0.8f * w);
-                    }
-                }
-                storedElevation = Math.Clamp(storedElevation, 0f, 1f);
-
                 chunk.SetElevation(localX, localY, storedElevation);
                 chunk.SetMoisture(localX, localY, moisture);
                 chunk.SetTemperature(localX, localY, temperature);
             }
         }
+    }
 
-        // Post-processing pass: landmarks
-        ApplyLandmarks(chunk, worldOffsetX, worldOffsetY);
+    /// <summary>
+    /// World size for the latitude temperature gradient. <see cref="PrecomputeRivers"/> sets
+    /// this too; call directly when generating WITHOUT a river pre-pass (the worldgen preview
+    /// tool's live mode) so latitude still spans the intended world.
+    /// </summary>
+    public void SetWorldSizeTiles(int tiles) => _worldSizeTiles = tiles;
+
+    /// <summary>
+    /// The complete per-tile worldgen pipeline: climate sampling (+ hydrology feedback),
+    /// classification, hydrology/shore overrides, landmark features, and stored-elevation
+    /// relief (surface detail + cliff terracing). GenerateChunk loops over this, and the
+    /// worldgen preview tool calls it directly — ONE source of truth for what a tile is.
+    /// Without a river pre-pass (<see cref="PrecomputeRivers"/>) the hydrology-dependent
+    /// steps (rivers/lakes/banks/shores, moisture boost, drainage) are skipped.
+    /// </summary>
+    public void SampleTile(int worldX, int worldY,
+        out TileType tileOut, out float storedElevationOut,
+        out float moistureOut, out float temperatureOut)
+    {
+        // Apply domain warping for organic biome boundaries
+        float warpX = _warpNoiseX.GetNoise2D(worldX, worldY) * WarpAmplitude;
+        float warpY = _warpNoiseY.GetNoise2D(worldX, worldY) * WarpAmplitude;
+        float warpedX = worldX + warpX;
+        float warpedY = worldY + warpY;
+
+        // Base elevation: read the RiverMapper's precomputed full-world map when
+        // available (identical values by construction — it was built with
+        // SampleBaseElevation — and guarantees rivers/biomes can never drift apart),
+        // else sample directly (worlds generated without a river pre-pass).
+        float elevation = _riverMapper?.GetBaseElevation(worldX, worldY)
+                          ?? SampleBaseElevationWarped(warpedX, warpedY);
+        float moisture = (_moistureNoise.GetNoise2D(warpedX, warpedY) + 1f) * 0.5f;
+        // Contrast-stretch the CLIMATE moisture around the midpoint so the wet/dry
+        // extremes (Arid, Bog) actually occur — raw FBM clusters near 0.5. Applied
+        // before the hydrology feedback so riparian/delta boosts aren't exaggerated.
+        moisture = Math.Clamp(0.5f + (moisture - 0.5f) * _moistureContrast, 0f, 1f);
+
+        if (_riverMapper != null)
+        {
+            // Two-way hydrology→biome coupling, applied BEFORE classification so the
+            // biomes themselves respond to the generated water features:
+            // 1. Rivers/lakes wet their surroundings — wetland/bog margins in wet
+            //    climates, green riparian corridors through dry ones, broad marsh
+            //    fans at deltas.
+            moisture += _riverMapper.GetMoistureBoost(worldX, worldY);
+            // 2. Drainage — slopes shed water, flats hold it — so swamps settle into
+            //    flat lowland basins instead of scattering wherever moisture noise
+            //    peaks, and hillsides dry toward forest/scrub. Pivoted on the world's
+            //    MEASURED mean land slope (not a constant): a flat low-frequency world
+            //    must not read as "basins everywhere" and drown its deserts.
+            moisture += Math.Clamp(
+                (_riverMapper.MeanLandSlope - _riverMapper.GetSlope(worldX, worldY)) * DrainageFactor,
+                -0.20f, 0.08f);
+            moisture = Math.Clamp(moisture, 0f, 1f);
+        }
+
+        float temperature = GetTemperature(worldX, worldY, elevation);
+
+        TileType tile = DetermineTileType(elevation, moisture, temperature);
+
+        // Apply flow-based rivers, lakes, and wetland banks. Water overrides apply to
+        // ANY dry land tile — including the Sand shore band and Ice (a river crossing an
+        // arctic sheet stays continuous instead of vanishing beneath it) — but never to
+        // tiles that are already water, or to Mountain/Lava. Previously this was gated on
+        // IsSpawnable(), which excluded Sand/Ice and (together with the RiverMapper's old
+        // 0.45 marking cutoff) severed every river from the sea at the beach.
+        if (_riverMapper != null && !tile.IsWater() &&
+            tile != TileType.Reef && tile != TileType.Mountain && tile != TileType.Lava)
+        {
+            if (_riverMapper.IsLake(worldX, worldY))
+            {
+                tile = TileType.ShallowWater;
+            }
+            else if (_riverMapper.IsRiver(worldX, worldY))
+            {
+                tile = TileType.River;
+            }
+            else if (_riverMapper.IsWetlandBank(worldX, worldY) && tile.IsSpawnable())
+            {
+                // Banks stay restricted to ordinary land — a Wetland bank punched into
+                // an ice sheet would read as a thaw ring around every frozen river.
+                tile = TileType.Wetland;
+            }
+            else if (elevation < 0.55f && temperature >= 0.25f &&
+                     _riverMapper.GetOceanDistance(worldX, worldY) <= BeachWidth)
+            {
+                // Biome-aware shore pass (replaces the old 0.40–0.43 elevation beach
+                // band): a NARROW band measured in tiles from actual sea water, typed
+                // by local climate — marshy shores where the climate (or a river
+                // delta) is very wet, sand everywhere else. Frozen coasts get no
+                // beach (ice/tundra runs to the waterline), and steep coasts
+                // (elevation ≥ 0.55 right at the sea) keep their biome as rocky
+                // cliff shoreline. Distance-based width means flat worlds no longer
+                // grow huge beach rings.
+                tile = moisture > 0.68f ? TileType.Wetland : TileType.Sand;
+            }
+        }
+
+        // Surface relief: add roughness-modulated detail to the stored/rendered
+        // elevation, faded out over water so the sea stays flat. Classification above
+        // used the base elevation, so biome boundaries are unaffected.
+        float roughness01 = (_roughnessNoise.GetNoise2D(worldX, worldY) + 1f) * 0.5f;
+        float roughnessFactor = _roughnessFloor + (1f - _roughnessFloor) * roughness01;
+        float landFade = SmoothStep(0.40f, 0.48f, elevation); // fade in over the shore
+        float detail = _detailNoise.GetNoise2D(worldX, worldY) * _detailAmplitude * roughnessFactor * landFade * tile.GetRuggedness();
+        float storedElevation = elevation + detail;
+
+        // Terraced cliffs: in mesa/bluff regions (low-freq mask) the stored elevation is
+        // quantised into flat treads joined by short, steep risers. Applied on top of the
+        // base shape like detail — classification, temperature, and rivers are untouched;
+        // creatures feel the risers as strong slope resistance. Fades in above the shore
+        // so beaches and river mouths stay gentle.
+        // (step-height guard: 0 must disable terracing, not divide by zero below)
+        if (_cliffStrength > 0f && _cliffStepHeight > 0.01f && elevation > 0.46f)
+        {
+            float cliffMask = SmoothStep(0.60f, 0.80f, (_cliffNoise.GetNoise2D(worldX, worldY) + 1f) * 0.5f);
+            if (cliffMask > 0f)
+            {
+                float band = elevation / _cliffStepHeight;
+                int stepIdx = (int)band;
+                // Flat tread for 85% of each band; the top 15% carries the whole riser —
+                // the face concentrates into ~1 tile at typical slopes, so it reads as an
+                // actual cliff in 3D instead of a soft ramp.
+                float riser = SmoothStep(0.85f, 1f, band - stepIdx);
+                float terraced = (stepIdx + riser) * _cliffStepHeight;
+                float w = cliffMask * _cliffStrength * SmoothStep(0.46f, 0.52f, elevation);
+                // Blend toward the terrace and damp surface detail so treads read flat.
+                storedElevation = elevation + (terraced - elevation) * w + detail * (1f - 0.8f * w);
+            }
+        }
+        storedElevation = Math.Clamp(storedElevation, 0f, 1f);
+
+        // Landmark features (previously a separate ApplyLandmarks chunk pass — every rule is
+        // per-tile with no neighbour reads, so it folds into the pipeline).
+        tile = ApplyLandmark(tile, worldX, worldY, storedElevation, moisture);
+
+        tileOut = tile;
+        storedElevationOut = storedElevation;
+        moistureOut = moisture;
+        temperatureOut = temperature;
     }
 
     /// <summary>
@@ -473,99 +500,39 @@ public sealed class TerrainGenerator
     }
 
     /// <summary>
-    /// Post-processing pass to add terrain landmarks: oases, clearings, and caves.
-    /// Lakes are now handled by the RiverMapper flow system, so the landmark pass
-    /// focuses on non-hydrological features only.
+    /// Per-tile landmark features: oases, clearings, permafrost, dry patches, and surface
+    /// caves. The stored moisture already includes the hydrology boost and drainage, so
+    /// riverside desert naturally sprouts oases; the cave rule uses the stored (relief)
+    /// elevation so caves sit on genuine low mountains.
     /// </summary>
-    private void ApplyLandmarks(Chunk chunk, int worldOffsetX, int worldOffsetY)
+    private TileType ApplyLandmark(TileType tile, int worldX, int worldY,
+        float storedElevation, float moisture)
     {
-        for (int localY = 0; localY < chunk.Size; localY++)
+        float lmNoise = _landmarkNoise.GetNoise2D(worldX, worldY);
+        switch (tile)
         {
-            for (int localX = 0; localX < chunk.Size; localX++)
-            {
-                int worldX = worldOffsetX + localX;
-                int worldY = worldOffsetY + localY;
-
-                var currentTile = chunk.GetTile(localX, localY);
-                float lmNoise = _landmarkNoise.GetNoise2D(worldX, worldY);
-
-                // --- Oases: small grass/water patches in desert ---
-                if (currentTile == TileType.Arid || currentTile == TileType.Sand)
-                {
-                    // Read the stored moisture (it already includes the hydrology boost and
-                    // drainage), so the oasis test matches the moisture that produced this
-                    // tile — and riverside desert naturally sprouts oases.
-                    float moisture = chunk.GetMoisture(localX, localY);
-                    if (lmNoise > 0.7f && moisture > 0.35f)
-                    {
-                        chunk.SetTile(localX, localY, TileType.Grass);
-                        continue;
-                    }
-                }
-
-                // --- Forest Clearings: grass gaps inside dense forest ---
-                if (currentTile == TileType.Forest)
-                {
-                    if (lmNoise < -0.65f)
-                    {
-                        chunk.SetTile(localX, localY, TileType.Grass);
-                        continue;
-                    }
-                }
-
-                // --- Taiga Clearings: cold meadows (steppe patches) inside taiga ---
-                if (currentTile == TileType.Taiga)
-                {
-                    if (lmNoise < -0.68f)
-                    {
-                        chunk.SetTile(localX, localY, TileType.Steppe);
-                        continue;
-                    }
-                }
-
-                // --- Jungle Clearings: savanna patches inside jungle ---
-                if (currentTile == TileType.Jungle)
-                {
-                    if (lmNoise < -0.70f)
-                    {
-                        chunk.SetTile(localX, localY, TileType.Savanna);
-                        continue;
-                    }
-                }
-
-                // --- Permafrost spots: ice patches within tundra ---
-                if (currentTile == TileType.Tundra)
-                {
-                    if (lmNoise > 0.72f)
-                    {
-                        chunk.SetTile(localX, localY, TileType.Ice);
-                        continue;
-                    }
-                }
-
-                // --- Shrubland dry patches: steppe outcrops in shrubland ---
-                if (currentTile == TileType.Shrubland)
-                {
-                    if (lmNoise > 0.74f)
-                    {
-                        chunk.SetTile(localX, localY, TileType.Steppe);
-                        continue;
-                    }
-                }
-
-                // --- Surface Caves: walkable grass centers in mountain edges ---
-                if (currentTile == TileType.Mountain)
-                {
-                    // Use the actual stored (domain-warped) elevation for this tile rather
-                    // than re-sampling unwarped noise, so caves sit on genuine low mountains.
-                    float elevation = chunk.GetElevation(localX, localY);
-                    if (lmNoise > 0.75f && elevation < 0.85f)
-                    {
-                        chunk.SetTile(localX, localY, TileType.Grass);
-                        continue;
-                    }
-                }
-            }
+            case TileType.Arid or TileType.Sand:                  // oasis in desert
+                if (lmNoise > 0.7f && moisture > 0.35f) return TileType.Grass;
+                break;
+            case TileType.Forest:                                 // forest clearing
+                if (lmNoise < -0.65f) return TileType.Grass;
+                break;
+            case TileType.Taiga:                                  // cold meadow
+                if (lmNoise < -0.68f) return TileType.Steppe;
+                break;
+            case TileType.Jungle:                                 // jungle clearing
+                if (lmNoise < -0.70f) return TileType.Savanna;
+                break;
+            case TileType.Tundra:                                 // permafrost spot
+                if (lmNoise > 0.72f) return TileType.Ice;
+                break;
+            case TileType.Shrubland:                              // dry patch
+                if (lmNoise > 0.74f) return TileType.Steppe;
+                break;
+            case TileType.Mountain:                               // surface cave mouth
+                if (lmNoise > 0.75f && storedElevation < 0.85f) return TileType.Grass;
+                break;
         }
+        return tile;
     }
 }

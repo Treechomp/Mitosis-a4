@@ -43,6 +43,12 @@ Follow-ups from the first 36ch snapshot review (seed 1956076603, ef 0.004):
   3D; cliffs were too soft to read).
 - **Snapshot set extended** — `_elev`/`_moist`/`_temp` parameter maps + a post-spawn
   `_spawns` map (species-coloured dots) alongside the biome map and report.
+- **Live worldgen preview tool** (`Scenes/WorldgenPreview.tscn`, run with F6) — sliders for
+  every terrain parameter with instant climate-only regeneration + a full-detail mode running
+  the exact pipeline (rivers/deltas/shores). Built on the `TerrainGenerator.SampleTile`
+  refactor (chunk gen and the landmark pass folded into one per-tile function), so the
+  preview and the game share one source of truth. Ends the change-number→relaunch loop that
+  made moisture-frequency tuning (0.002 vs 0.003 = Arid 1.3% vs 2.6% on the same seed) blind.
 
 Verification: build-checked only (no Godot here) — needs an in-editor pass: re-snapshot the same
 seed to confirm Arid recovers and wetlands thin to genuine margins; eyeball beaches, meanders,

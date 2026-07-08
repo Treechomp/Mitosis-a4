@@ -152,7 +152,7 @@ public static class WorldSnapshot
     }
 
     /// <summary>Stored elevation: sea by depth (blue), land dark→white with altitude.</summary>
-    private static Color ElevColor(float e)
+    public static Color ElevColor(float e)
     {
         if (e < 0.40f)
         {
@@ -165,11 +165,11 @@ public static class WorldSnapshot
     }
 
     /// <summary>Moisture: dry tan → wet deep teal.</summary>
-    private static Color MoistColor(float m)
+    public static Color MoistColor(float m)
         => new Color(0.78f, 0.66f, 0.40f).Lerp(new Color(0.05f, 0.35f, 0.55f), Math.Clamp(m, 0f, 1f));
 
     /// <summary>Temperature: cold blue → pale mid → hot red.</summary>
-    private static Color TempColor(float t)
+    public static Color TempColor(float t)
     {
         t = Math.Clamp(t, 0f, 1f);
         var cold = new Color(0.25f, 0.45f, 0.85f);
@@ -188,15 +188,6 @@ public static class WorldSnapshot
         Dictionary<TileType, int> hist, int riverOutlets)
     {
         int total = n * n;
-        float Pct(int count) => 100f * count / total;
-        int Count(params TileType[] types)
-        {
-            int s = 0;
-            foreach (var t in types)
-                if (hist.TryGetValue(t, out int c)) s += c;
-            return s;
-        }
-
         var sb = new StringBuilder();
         sb.AppendLine("# Mitosis world snapshot");
         sb.AppendLine($"timestamp:               {ts}");
@@ -212,7 +203,29 @@ public static class WorldSnapshot
         sb.AppendLine(Inv($"moisture_frequency:      {s.MoistureFrequency}   contrast: {s.MoistureContrast}"));
         sb.AppendLine($"temperature_frequency:   0.005 (fixed in TerrainGenerator)");
         sb.AppendLine();
+        sb.Append(BuildDistributionSummary(hist, total, riverOutlets));
+        return sb.ToString();
+    }
 
+    /// <summary>
+    /// Biome distribution + river connectivity + niche coverage/flags from a tile histogram.
+    /// Shared by the startup snapshot report and the worldgen preview tool (which feeds it a
+    /// strided histogram, so percentages are approximate there). Pass riverOutlets &lt; 0 to
+    /// skip the river-connectivity section (previews without a river pre-pass).
+    /// </summary>
+    public static string BuildDistributionSummary(
+        Dictionary<TileType, int> hist, int total, int riverOutlets = -1)
+    {
+        float Pct(int count) => 100f * count / total;
+        int Count(params TileType[] types)
+        {
+            int s = 0;
+            foreach (var t in types)
+                if (hist.TryGetValue(t, out int c)) s += c;
+            return s;
+        }
+
+        var sb = new StringBuilder();
         sb.AppendLine("# Biome distribution (tile type : count : percent), most common first");
         var rows = new List<KeyValuePair<TileType, int>>(hist);
         rows.Sort((a, b) => b.Value.CompareTo(a.Value));
@@ -233,12 +246,15 @@ public static class WorldSnapshot
                               TileType.Forest, TileType.Jungle, TileType.Taiga, TileType.Tundra);
         int wetland    = Count(TileType.Wetland, TileType.Bog);
 
-        int riverTiles = Count(TileType.River);
-        sb.AppendLine("# River connectivity");
-        sb.AppendLine($"  river tiles: {riverTiles}   outlet tiles touching the sea: {riverOutlets}");
-        if (riverTiles > 0 && riverOutlets == 0)
-            sb.AppendLine("  WARNING: no river reaches the sea — rivers are severed from open water.");
-        sb.AppendLine();
+        if (riverOutlets >= 0)
+        {
+            int riverTiles = Count(TileType.River);
+            sb.AppendLine("# River connectivity");
+            sb.AppendLine($"  river tiles: {riverTiles}   outlet tiles touching the sea: {riverOutlets}");
+            if (riverTiles > 0 && riverOutlets == 0)
+                sb.AppendLine("  WARNING: no river reaches the sea — rivers are severed from open water.");
+            sb.AppendLine();
+        }
 
         sb.AppendLine("# Niche coverage (gates which specialists have a home)");
         AppendNiche(sb, "open water  (Shark — needs connected deep water)", Pct(openWater));
