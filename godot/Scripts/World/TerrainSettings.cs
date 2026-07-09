@@ -7,18 +7,23 @@ namespace Mitosis.World;
 /// </summary>
 public sealed class TerrainSettings
 {
+    // Defaults below are the tuned set settled via the worldgen preview tool + multi-seed
+    // snapshot review (2026-07-09): varied but balanced niche coverage across seeds and
+    // world sizes (validated on 36ch and 49ch).
+
     // --- Base shape (used for biome classification) ---
     /// <summary>Base elevation frequency. Lower = larger landmasses/features.</summary>
-    public float ElevationFrequency = 0.012f;
+    public float ElevationFrequency = 0.003f;
     /// <summary>Moisture-field frequency. Must stay in scale with the elevation/temperature
     /// fields: too high and every climate zone contains the full wet↔dry spectrum in small
     /// patches, so no coherent desert/rainforest/bog REGION can ever form — biomes come out
     /// as fine-grained speckle. Lower = large humid belts and arid basins.</summary>
-    public float MoistureFrequency = 0.003f;
+    public float MoistureFrequency = 0.002f;
     /// <summary>Contrast stretch applied to the raw moisture noise around 0.5. FBM output
     /// concentrates near the middle, starving the classification extremes (Arid needs &lt; ~0.3,
-    /// Bog &gt; 0.76). 1 = raw noise; ~1.25 reaches real deserts and real bogs.</summary>
-    public float MoistureContrast = 1.25f;
+    /// Bog &gt; 0.76). 1 = raw noise. Note the raw field is normalised with a slight dry bias
+    /// (×0.45 — see TerrainGenerator.SampleTile), which contrast amplifies dry-ward.</summary>
+    public float MoistureContrast = 1.81f;
     /// <summary>Domain-warp amplitude in tiles. Higher = more swirled/stretched ("fabric")
     /// boundaries; lower = straighter, calmer shapes.</summary>
     public float WarpAmplitude = 12f;
@@ -30,28 +35,28 @@ public sealed class TerrainSettings
     /// <summary>Max elevation (0..1) a ridge crest adds on top of the base shape. Ridges only
     /// rise from uplands inside orogeny belts, so this is the crest height of major ranges.
     /// 0 disables ridges entirely (restores the pure-FBM landscape).</summary>
-    public float RidgeAmplitude = 0.18f;
+    public float RidgeAmplitude = 0.2f;
     /// <summary>Orogeny-belt mask frequency. Lower = fewer, larger mountain-range regions.</summary>
-    public float OrogenyFrequency = 0.0035f;
+    public float OrogenyFrequency = 0.003f;
 
     // --- Hydrology ---
     /// <summary>Scales the river-source budget (sources ≈ worldSizeTiles/4 × this, spacing
     /// unchanged). 1 reproduces the original dense network; the default thins it so rivers
     /// read as features rather than covering every landmass.</summary>
-    public float RiverDensity = 0.4f;
+    public float RiverDensity = 0.2f;
 
     // --- Terraced cliffs (applied to the STORED/rendered elevation only, like surface detail:
     //     biome classification and river tracing use the base shape, so cliffs are relief —
     //     visible mesas/bluffs whose steep risers slow movement via slope resistance) ---
     /// <summary>Cliff-region mask frequency. Lower = fewer, larger mesa/bluff regions.</summary>
-    public float CliffFrequency = 0.005f;
+    public float CliffFrequency = 0.0044f;
     /// <summary>How strongly terracing is applied where the cliff mask is active (0 = off,
     /// 1 = fully stepped). Also scales the riser height a step face can reach.</summary>
     public float CliffStrength = 1.0f;
     /// <summary>Elevation (0..1) per terrace step. Bigger steps = taller but rarer cliff faces
     /// (at low elevation frequencies a large step yields only a couple of terrace lines per
     /// landmass). Keep below the 0.18 spawn-slope / 0.28 movement-cliff thresholds.</summary>
-    public float CliffStepHeight = 0.08f;
+    public float CliffStepHeight = 0.16f;
 
     // --- Surface detail (added to the rendered/stored elevation only, NOT to classification,
     //     so biome boundaries stay on the base shape; gives relief + a little slope) ---

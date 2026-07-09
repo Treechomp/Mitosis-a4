@@ -101,16 +101,16 @@ by `World/RiverMapper.cs`. All noise is Godot `FastNoiseLite`, `SimplexSmooth`, 
 
 | Layer | Freq | Octaves | Seed offset | Purpose |
 |-------|------|---------|-------------|---------|
-| Elevation | 0.012 | 4 | +0 | Base topography (height map) |
-| Moisture | 0.003 | 4 | +1000 | Wet/dry regions (kept in scale with elevation/temperature so coherent desert/rainforest/bog REGIONS can form; a contrast stretch ~1.25 around 0.5 reaches the Arid/Bog extremes that raw FBM starves) |
+| Elevation | 0.003 | 4 | +0 | Base topography (height map) |
+| Moisture | 0.002 | 4 | +1000 | Wet/dry regions (kept in scale with elevation/temperature so coherent desert/rainforest/bog REGIONS can form; normalised with a slight dry bias (×0.45) and contrast-stretched (~1.81) so the Arid/Bog extremes raw FBM starves actually occur, tilted dry-ward) |
 | Temperature | 0.005 | 2 | +5000 | Large-scale climate gradient |
 | Warp X / Warp Y | 0.008 | 2 | +7000 / +8000 | Domain warping (organic boundaries) |
 | Landmark | 0.04 | 2 | +9000 | Feature placement (oases, clearings, caves) |
 | Detail | 0.045 | 3 | +11000 | Surface relief added to the **rendered** elevation (not classification) |
 | Roughness | 0.006 | 2 | +13000 | Low-freq mask: which regions are rugged vs smooth |
 | Ridge | 0.010 | 3 (ridged) | +15000 | Sharp ridgeline crests added to the **base** elevation |
-| Orogeny | 0.0035 | 2 | +16000 | Low-freq belt mask: where mountain ranges form |
-| Cliff | 0.005 | 2 | +17000 | Low-freq mask: terraced mesa/bluff regions (rendered elevation) |
+| Orogeny | 0.003 | 2 | +16000 | Low-freq belt mask: where mountain ranges form |
+| Cliff | 0.0044 | 2 | +17000 | Low-freq mask: terraced mesa/bluff regions (rendered elevation) |
 
 - **Domain warping**: elevation/moisture/temperature are sampled at coordinates offset by the
   warp noise (**amplitude 12 tiles** by default; lower = calmer boundaries), reducing blobby
@@ -118,7 +118,7 @@ by `World/RiverMapper.cs`. All noise is Godot `FastNoiseLite`, `SimplexSmooth`, 
   exports (see Configuration Reference).
 - **Base elevation** = warped FBM **+ ridged mountain ranges**: a ridged fractal's crests
   (cubed, so only the crest line lifts), gated by the low-frequency Orogeny belt mask and an
-  upland mask (`smoothstep` over elevation 0.50–0.64), add up to `RidgeAmplitude` (0.18). Ranges
+  upland mask (`smoothstep` over elevation 0.50–0.64), add up to `RidgeAmplitude` (0.2). Ranges
   therefore rise as a few connected chains out of existing highlands — they classify as
   Mountain/Ice, cool with altitude, and shed rivers. `TerrainGenerator.SampleBaseElevation` is
   the **single authority** for this value: the RiverMapper builds its full-world flow map with
@@ -128,8 +128,8 @@ by `World/RiverMapper.cs`. All noise is Godot `FastNoiseLite`, `SimplexSmooth`, 
   over water — is added to the **stored/rendered** elevation only; classification uses the base
   elevation, so biome boundaries and water levels are unaffected.
 - **Terraced cliffs**: where the Cliff mask is strong (and above the shore band), the stored
-  elevation is quantised into flat treads joined by short steep risers (`CliffStepHeight` 0.12
-  per step, top 25% of each band carries the riser), with surface detail damped so treads read
+  elevation is quantised into flat treads joined by short steep risers (`CliffStepHeight` 0.16
+  per step, top 15% of each band carries the riser), with surface detail damped so treads read
   flat. Like detail this never touches classification or rivers; creatures feel the risers as
   strong slope resistance (mesas, bluffs, stepped valley sides).
 - **Elevation range**: noise normalized to **0.0–1.0**.
@@ -862,21 +862,21 @@ values TBD once all features are in and compute/render costs are known:
 | WorldSeed | 0 | 0 = random; non-zero = reproducible |
 | TileSize | 16 | World units per tile |
 | ElevationHeightScale | 64 | World units of lift per elevation unit (3D) |
-| ElevationFrequency | 0.012 | Base elevation frequency (lower = larger landmasses) |
+| ElevationFrequency | 0.003 | Base elevation frequency (lower = larger landmasses) |
 | WarpAmplitude | 12 | Domain-warp swirl in tiles (lower = calmer boundaries) |
 | TerrainDetailFrequency | 0.045 | Surface-relief noise frequency |
 | TerrainDetailAmplitude | 0.035 | Surface-relief height added to elevation (0 disables) |
 | TerrainRoughnessFrequency | 0.006 | Size of rugged vs smooth regions |
 | TerrainRoughnessFloor | 0.15 | Min detail in smoothest regions (0–1) |
-| TerrainMoistureFrequency | 0.003 | Humid/arid region scale (keep in scale with elevation) |
-| TerrainMoistureContrast | 1.25 | Moisture stretch toward wet/dry extremes (1 = raw noise) |
+| TerrainMoistureFrequency | 0.002 | Humid/arid region scale (keep in scale with elevation) |
+| TerrainMoistureContrast | 1.81 | Moisture stretch toward wet/dry extremes (1 = raw noise) |
 | TerrainRidgeFrequency | 0.010 | Ridgeline scale (lower = longer ranges) |
-| TerrainRidgeAmplitude | 0.18 | Ridge crest height added to base elevation (0 = no ranges) |
-| TerrainOrogenyFrequency | 0.0035 | Mountain-belt mask scale (lower = fewer, larger ranges) |
-| TerrainCliffFrequency | 0.005 | Size of terraced mesa/bluff regions |
+| TerrainRidgeAmplitude | 0.2 | Ridge crest height added to base elevation (0 = no ranges) |
+| TerrainOrogenyFrequency | 0.003 | Mountain-belt mask scale (lower = fewer, larger ranges) |
+| TerrainCliffFrequency | 0.0044 | Size of terraced mesa/bluff regions |
 | TerrainCliffStrength | 1.0 | Terracing blend in cliff regions (0 = off, 1 = fully stepped) |
-| TerrainCliffStepHeight | 0.08 | Elevation per terrace step |
-| TerrainRiverDensity | 0.4 | River-source budget scale (1 = the original dense network) |
+| TerrainCliffStepHeight | 0.16 | Elevation per terrace step |
+| TerrainRiverDensity | 0.2 | River-source budget scale (1 = the original dense network) |
 | TargetTPS | 20 | Simulation ticks/second |
 | MaxPopulation | 12000 | Hard entity cap |
 | InitialPopulation | 2000 | Starting creatures (incl. faction budgets) |

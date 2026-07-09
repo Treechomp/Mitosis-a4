@@ -4,6 +4,21 @@ Active workstream after the terrain-profile redesign. Tracks the terrain-coupled
 runs keep surfacing and the order we attack them. See `terrain-handling-audit.md` (current
 mechanisms) and `terrain-profile-design.md` (the resolver that shipped).
 
+## Settled (2026-07-09) — tuned defaults locked in, pass complete
+The worldgen variety pass below is wrapped. Final tuning was done hands-on in the preview tool
+across multiple seeds and world sizes (36ch/49ch), and the winning set is now the code default
+everywhere (TerrainSettings, GameManager exports, preview): **ef 0.003 · warp 12 · mf 0.002 ·
+mc 1.81 · ridge 0.01/0.2 · orogeny 0.003 · cliff 0.0044/1.0/0.16 · detail 0.045/0.035 ·
+roughness 0.006/0.15 · river_density 0.2**, plus a deliberate **dry-biased moisture
+normalisation (×0.45 instead of the neutral ×0.5)** in `SampleTile` — shifts the whole field
+slightly dry before the contrast stretch amplifies it, buying Arid without re-carving band
+thresholds. Reference run: seed 1267418953 @ 49ch — zero niche flags (desert 4.4%, cold 16.7%,
+wetland 6.7%, open water 6.0%, grazeable 52.8%).
+
+**Still open (parked):** connected-seas/ocean-mask redesign (water is still noise blobs;
+DeepWater ~6% fragmented — the Shark-niche structural item); temperature frequency remains
+hardcoded (0.005). Next workstream: terraformer-faction balancing.
+
 ## Reopened (2026-07-06) — worldgen variety & two-way biome pass
 Focus shifted from species-coupling to the generator itself (game-prep). Landed:
 

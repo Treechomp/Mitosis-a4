@@ -263,9 +263,13 @@ public sealed class TerrainGenerator
         // else sample directly (worlds generated without a river pre-pass).
         float elevation = _riverMapper?.GetBaseElevation(worldX, worldY)
                           ?? SampleBaseElevationWarped(warpedX, warpedY);
-        float moisture = (_moistureNoise.GetNoise2D(warpedX, warpedY) + 1f) * 0.5f;
+        // Normalised with a deliberate DRY bias (×0.45, not the neutral ×0.5): the whole
+        // moisture field sits slightly below the contrast midpoint, so the stretch below
+        // amplifies the shift dry-ward — more Arid, less Wetland — without re-carving the
+        // classification bands. Tuned by eye against multi-seed snapshots (2026-07-09).
+        float moisture = (_moistureNoise.GetNoise2D(warpedX, warpedY) + 1f) * 0.45f;
         // Contrast-stretch the CLIMATE moisture around the midpoint so the wet/dry
-        // extremes (Arid, Bog) actually occur — raw FBM clusters near 0.5. Applied
+        // extremes (Arid, Bog) actually occur — raw FBM clusters near the middle. Applied
         // before the hydrology feedback so riparian/delta boosts aren't exaggerated.
         moisture = Math.Clamp(0.5f + (moisture - 0.5f) * _moistureContrast, 0f, 1f);
 

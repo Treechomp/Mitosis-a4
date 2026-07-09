@@ -31,12 +31,8 @@ public partial class WorldgenPreviewer : Control
 
     private int _seed = 730415729;
     private int _worldChunks = 36;
-    private readonly TerrainSettings _settings = new()
-    {
-        // Match the current GameManager test defaults rather than TerrainSettings' own
-        // (production) defaults, so the tool opens on what runs actually use.
-        ElevationFrequency = 0.004f,
-    };
+    // TerrainSettings defaults ARE the tuned live-run set, so the tool opens on them.
+    private readonly TerrainSettings _settings = new();
 
     private TextureRect _mapRect = null!;
     private RichTextLabel _stats = null!;
