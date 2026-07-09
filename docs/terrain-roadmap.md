@@ -43,6 +43,11 @@ Follow-ups from the first 36ch snapshot review (seed 1956076603, ef 0.004):
   3D; cliffs were too soft to read).
 - **Snapshot set extended** — `_elev`/`_moist`/`_temp` parameter maps + a post-spawn
   `_spawns` map (species-coloured dots) alongside the biome map and report.
+- **Preview-driven fixes:** `TerrainOrogenyFrequency` exported (was settings-only, missing from
+  the inspector); all frequency exports carry explicit 0.0001-step Range hints (Godot's default
+  0.001 step silently rounded 0.0025 → 0.003 on save — masking the best-looking moisture value);
+  `TerrainRiverDensity` export (default 0.4, 1 = old density) — the meandering/lake-chain look
+  was right but the network was far too dense.
 - **Live worldgen preview tool** (`Scenes/WorldgenPreview.tscn`, run with F6) — sliders for
   every terrain parameter with instant climate-only regeneration + a full-detail mode running
   the exact pipeline (rivers/deltas/shores). Built on the `TerrainGenerator.SampleTile`

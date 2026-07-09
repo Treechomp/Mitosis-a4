@@ -192,8 +192,9 @@ Runs once before chunk generation, on a full-world base-elevation map built with
 `SampleBaseElevation` (so rivers see the ridged ranges and align exactly with the chunks):
 
 1. **Sources**: high-elevation tiles (elev **0.68–0.80**), highest first, spaced ≥ **18**
-   tiles apart, ~65% randomly accepted, capped at **worldSizeTiles/4** sources (clamped
-   40–320, so river density stays constant across world sizes).
+   tiles apart, ~65% randomly accepted, capped at **worldSizeTiles/4 × `RiverDensity`**
+   sources (clamped 4–480) — the per-area budget stays constant across world sizes, and
+   `TerrainRiverDensity` scales taste (default 0.4; 1 = the original dense network).
 2. **Tracing**: steepest descent across the **6 offset-row hex neighbors** (separate
    even/odd-row neighbor sets), accumulating a flow count per tile, until reaching ocean
    (elev < 0.40) or the world edge (outflow). Candidates are limited to true descents, but
@@ -871,9 +872,11 @@ values TBD once all features are in and compute/render costs are known:
 | TerrainMoistureContrast | 1.25 | Moisture stretch toward wet/dry extremes (1 = raw noise) |
 | TerrainRidgeFrequency | 0.010 | Ridgeline scale (lower = longer ranges) |
 | TerrainRidgeAmplitude | 0.18 | Ridge crest height added to base elevation (0 = no ranges) |
+| TerrainOrogenyFrequency | 0.0035 | Mountain-belt mask scale (lower = fewer, larger ranges) |
 | TerrainCliffFrequency | 0.005 | Size of terraced mesa/bluff regions |
 | TerrainCliffStrength | 1.0 | Terracing blend in cliff regions (0 = off, 1 = fully stepped) |
 | TerrainCliffStepHeight | 0.08 | Elevation per terrace step |
+| TerrainRiverDensity | 0.4 | River-source budget scale (1 = the original dense network) |
 | TargetTPS | 20 | Simulation ticks/second |
 | MaxPopulation | 12000 | Hard entity cap |
 | InitialPopulation | 2000 | Starting creatures (incl. faction budgets) |

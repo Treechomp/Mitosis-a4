@@ -139,14 +139,15 @@ public partial class WorldgenPreviewer : Control
     private string ParamHeader(bool live)
     {
         var s = _settings;
+        // 0.##### formatting keeps float artifacts (0.19999999) out of the transcribable line.
         return FormattableString.Invariant(
             $"seed {_seed} · {_worldChunks} chunks ({_worldChunks * 32} tiles) · {(live ? "LIVE (no hydrology)" : "FULL")}\n") +
             FormattableString.Invariant(
-            $"ef {s.ElevationFrequency} · warp {s.WarpAmplitude} · mf {s.MoistureFrequency} · mc {s.MoistureContrast}\n") +
+            $"ef {s.ElevationFrequency:0.#####} · warp {s.WarpAmplitude:0.##} · mf {s.MoistureFrequency:0.#####} · mc {s.MoistureContrast:0.###}\n") +
             FormattableString.Invariant(
-            $"ridge f {s.RidgeFrequency} a {s.RidgeAmplitude} of {s.OrogenyFrequency} · cliff f {s.CliffFrequency} s {s.CliffStrength} h {s.CliffStepHeight}\n") +
+            $"ridge f {s.RidgeFrequency:0.#####} a {s.RidgeAmplitude:0.###} of {s.OrogenyFrequency:0.#####} · cliff f {s.CliffFrequency:0.#####} s {s.CliffStrength:0.##} h {s.CliffStepHeight:0.###}\n") +
             FormattableString.Invariant(
-            $"detail f {s.DetailFrequency} a {s.DetailAmplitude} · rough f {s.RoughnessFrequency} floor {s.RoughnessFloor}\n");
+            $"detail f {s.DetailFrequency:0.#####} a {s.DetailAmplitude:0.###} · rough f {s.RoughnessFrequency:0.#####} floor {s.RoughnessFloor:0.##} · rivers {s.RiverDensity:0.##}\n");
     }
 
     private static TerrainSettings Clone(TerrainSettings s) => new()
@@ -166,6 +167,7 @@ public partial class WorldgenPreviewer : Control
         CliffFrequency     = s.CliffFrequency,
         CliffStrength      = s.CliffStrength,
         CliffStepHeight    = s.CliffStepHeight,
+        RiverDensity       = s.RiverDensity,
     };
 
     // ── UI construction ────────────────────────────────────────────────────────────────
@@ -225,6 +227,9 @@ public partial class WorldgenPreviewer : Control
         AddSlider(panel, "Detail amplitude", 0f, 0.1f, 0.005f, _settings.DetailAmplitude, v => _settings.DetailAmplitude = v);
         AddSlider(panel, "Roughness freq", 0.001f, 0.02f, 0.0005f, _settings.RoughnessFrequency, v => _settings.RoughnessFrequency = v);
         AddSlider(panel, "Roughness floor", 0f, 1f, 0.05f, _settings.RoughnessFloor, v => _settings.RoughnessFloor = v);
+
+        panel.AddChild(new HSeparator());
+        AddSlider(panel, "River density (Full mode)", 0f, 2f, 0.05f, _settings.RiverDensity, v => _settings.RiverDensity = v);
 
         panel.AddChild(new HSeparator());
         _viewSelect = new OptionButton();

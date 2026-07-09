@@ -34,6 +34,12 @@ public sealed class TerrainSettings
     /// <summary>Orogeny-belt mask frequency. Lower = fewer, larger mountain-range regions.</summary>
     public float OrogenyFrequency = 0.0035f;
 
+    // --- Hydrology ---
+    /// <summary>Scales the river-source budget (sources ≈ worldSizeTiles/4 × this, spacing
+    /// unchanged). 1 reproduces the original dense network; the default thins it so rivers
+    /// read as features rather than covering every landmass.</summary>
+    public float RiverDensity = 0.4f;
+
     // --- Terraced cliffs (applied to the STORED/rendered elevation only, like surface detail:
     //     biome classification and river tracing use the base shape, so cliffs are relief —
     //     visible mesas/bluffs whose steep risers slow movement via slope resistance) ---

@@ -33,6 +33,8 @@ public sealed class TerrainGenerator
     private readonly float _cliffStepHeight;
     // Moisture contrast stretch (see TerrainSettings.MoistureContrast).
     private readonly float _moistureContrast;
+    // River-source budget scale (see TerrainSettings.RiverDensity).
+    private readonly float _riverDensity;
 
     // Flow-based river system (pre-computed before chunk generation)
     private RiverMapper? _riverMapper;
@@ -54,6 +56,7 @@ public sealed class TerrainGenerator
         _cliffStrength = settings.CliffStrength;
         _cliffStepHeight = settings.CliffStepHeight;
         _moistureContrast = settings.MoistureContrast;
+        _riverDensity = settings.RiverDensity;
 
         // Elevation noise — continent/landmass scale features
         _elevationNoise = new FastNoiseLite();
@@ -200,7 +203,7 @@ public sealed class TerrainGenerator
     public void PrecomputeRivers(int worldSizeTiles)
     {
         _worldSizeTiles = worldSizeTiles;
-        _riverMapper = new RiverMapper(SampleBaseElevation);
+        _riverMapper = new RiverMapper(SampleBaseElevation, _riverDensity);
         _riverMapper.Generate(worldSizeTiles, _seed);
     }
 

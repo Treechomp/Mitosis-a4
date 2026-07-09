@@ -59,9 +59,12 @@ public sealed class RiverMapper
     private static readonly int[]  OddDX = { -1,  1,  0,  1,  0,  1 };
     private static readonly int[]  OddDY = {  0,  0, -1, -1,  1,  1 };
 
-    public RiverMapper(Func<int, int, float> sampleElevation)
+    private readonly float _riverDensity;
+
+    public RiverMapper(Func<int, int, float> sampleElevation, float riverDensity = 1f)
     {
         _sampleElevation = sampleElevation;
+        _riverDensity = riverDensity;
     }
 
     /// <summary>
@@ -360,7 +363,8 @@ public sealed class RiverMapper
 
         // Source budget scales with world size so river density stays roughly constant —
         // the old fixed cap (80) was tuned for ~288-tile debug worlds and left larger maps dry.
-        int maxSources = Math.Clamp(_worldSize / 4, 40, 320);
+        // RiverDensity (TerrainSettings) then scales taste: 1 = the original dense network.
+        int maxSources = Math.Clamp((int)(_worldSize / 4f * _riverDensity), 4, 480);
 
         // Select sources with minimum spacing
         var sources = new List<(int x, int y)>();

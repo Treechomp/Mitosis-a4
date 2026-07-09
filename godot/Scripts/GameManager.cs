@@ -27,19 +27,38 @@ public partial class GameManager : Node3D
     [Export] public int TileSize = 16;
     [Export] public float ElevationHeightScale = 64f;  // World units of vertical lift per elevation unit
     // Terrain noise tuning (see World/TerrainSettings.cs) — editable in the inspector.
-    [Export] public float ElevationFrequency = 0.012f;        // lower = larger landmasses
-    [Export] public float WarpAmplitude = 12f;                // higher = more swirled boundaries
-    [Export] public float TerrainDetailFrequency = 0.045f;    // surface relief frequency
-    [Export] public float TerrainDetailAmplitude = 0.035f;    // surface relief height (keep < ~0.1)
-    [Export] public float TerrainRoughnessFrequency = 0.006f; // size of rugged vs smooth regions
-    [Export] public float TerrainRoughnessFloor = 0.15f;      // min detail in smoothest areas (0..1)
-    [Export] public float TerrainMoistureFrequency = 0.003f;  // humid/arid region scale (keep in scale with elevation)
-    [Export] public float TerrainMoistureContrast = 1.25f;    // stretch toward wet/dry extremes (1 = raw noise)
-    [Export] public float TerrainRidgeFrequency = 0.010f;     // ridgeline scale (lower = longer ranges)
-    [Export] public float TerrainRidgeAmplitude = 0.18f;      // ridge crest height (0 = no ranges)
-    [Export] public float TerrainCliffFrequency = 0.005f;     // size of terraced mesa/bluff regions
-    [Export] public float TerrainCliffStrength = 1.0f;        // terracing blend in cliff regions (0..1)
-    [Export] public float TerrainCliffStepHeight = 0.08f;     // elevation per terrace step
+    // Frequencies carry explicit Range hints with a 0.0001 step: Godot's default float step
+    // is 0.001, which silently rounded fine-grained values (0.0025 → 0.003) on save.
+    [Export(PropertyHint.Range, "0.0001,0.05,0.0001")]
+    public float ElevationFrequency = 0.012f;                 // lower = larger landmasses
+    [Export(PropertyHint.Range, "0,60,0.5")]
+    public float WarpAmplitude = 12f;                         // higher = more swirled boundaries
+    [Export(PropertyHint.Range, "0.001,0.2,0.0001")]
+    public float TerrainDetailFrequency = 0.045f;             // surface relief frequency
+    [Export(PropertyHint.Range, "0,0.15,0.001")]
+    public float TerrainDetailAmplitude = 0.035f;             // surface relief height (keep < ~0.1)
+    [Export(PropertyHint.Range, "0.0001,0.05,0.0001")]
+    public float TerrainRoughnessFrequency = 0.006f;          // size of rugged vs smooth regions
+    [Export(PropertyHint.Range, "0,1,0.01")]
+    public float TerrainRoughnessFloor = 0.15f;               // min detail in smoothest areas (0..1)
+    [Export(PropertyHint.Range, "0.0001,0.02,0.0001")]
+    public float TerrainMoistureFrequency = 0.003f;           // humid/arid region scale (keep in scale with elevation)
+    [Export(PropertyHint.Range, "0.5,3,0.01")]
+    public float TerrainMoistureContrast = 1.25f;             // stretch toward wet/dry extremes (1 = raw noise)
+    [Export(PropertyHint.Range, "0.0001,0.05,0.0001")]
+    public float TerrainRidgeFrequency = 0.010f;              // ridgeline scale (lower = longer ranges)
+    [Export(PropertyHint.Range, "0,0.5,0.005")]
+    public float TerrainRidgeAmplitude = 0.18f;               // ridge crest height (0 = no ranges)
+    [Export(PropertyHint.Range, "0.0001,0.02,0.0001")]
+    public float TerrainOrogenyFrequency = 0.0035f;           // mountain-belt scale (lower = fewer, larger ranges)
+    [Export(PropertyHint.Range, "0.0001,0.05,0.0001")]
+    public float TerrainCliffFrequency = 0.005f;              // size of terraced mesa/bluff regions
+    [Export(PropertyHint.Range, "0,1,0.01")]
+    public float TerrainCliffStrength = 1.0f;                 // terracing blend in cliff regions (0..1)
+    [Export(PropertyHint.Range, "0.01,0.3,0.005")]
+    public float TerrainCliffStepHeight = 0.08f;              // elevation per terrace step
+    [Export(PropertyHint.Range, "0,2,0.05")]
+    public float TerrainRiverDensity = 0.4f;                  // river-source budget scale (1 = the old dense look)
     [Export] public int TargetTPS = 20;
     [Export] public int MaxPopulation = 12000;   // standard test ceiling (36-chunk world)
     [Export] public int InitialPopulation = 2000; // standard test seed population
@@ -138,9 +157,11 @@ public partial class GameManager : Node3D
             MoistureContrast   = TerrainMoistureContrast,
             RidgeFrequency     = TerrainRidgeFrequency,
             RidgeAmplitude     = TerrainRidgeAmplitude,
+            OrogenyFrequency   = TerrainOrogenyFrequency,
             CliffFrequency     = TerrainCliffFrequency,
             CliffStrength      = TerrainCliffStrength,
             CliffStepHeight    = TerrainCliffStepHeight,
+            RiverDensity       = TerrainRiverDensity,
         };
         _worldManager = new WorldManager(ChunkSize, WorldSizeChunks, seed, terrainSettings);
         _simulationDt = 1.0 / TargetTPS;
