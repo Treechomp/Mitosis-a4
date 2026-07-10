@@ -87,13 +87,41 @@ Faelings become self-correcting keepers of order rather than just another combat
 
 This is the largest single piece and benefits most from #1–#3 being observable first.
 
-## Parked (high priority, separate workstreams)
-- **Predator/hunting deep-dive.** 543 kills / 17.5k ticks, 89% hunt-failure; most predators are
-  frozen (alive on low `HungerDecayScale` but not breeding) rather than cycling. **Worsening:** by
-  run `20260710_045611` (t24 100) Hawk, Arctic Fox, Fox, Snake, Scorpion were extinct and
-  Wolf/Bear down to 1 — and the `ExclusivePrey` fix ruled out Penguin predation as the cause, so
-  this is squarely the systemic hunting + predator-reproduction issue. High priority once factions
-  settle; it may be dragging the whole ecosystem.
+## No-faction baseline (run 20260710_211700, factions disabled, 36 000 ticks) — REFRAMES the above
+
+A `DisableFactionSpecies` run is the control. It changes the diagnosis:
+
+- **The world self-limits at ~4 000 total** and holds there flat from t8 000 to t36 000 — nowhere
+  near the 12 000 cap, or even the 6 000 (50%) mark where the global population-pressure ramp
+  begins. **Food (grazing capacity), not the cap, is the binding constraint.** Herbivores die of
+  age + predation (Fish 832 age/364 predation, Rabbit 448/386, Deer 370/164) — a functioning food
+  web. Consequence: the 12 000 cap and its pressure ramp are nearly inert in a healthy world, so
+  the global-pressure *factor* I added to Shroomer spread (#3) barely engages until Shroomers alone
+  are already a monoculture — **the biological crowding/drought levers must carry #3, not the gate.**
+- **Without factions the predator guild is HEALTHY:** at t36 000 Hawk 69, Wolf 56, Bear 54,
+  Jaguar 48, Polar Bear 50, Shark 16, Crocodile 26, Fox 16 — all stable. In the faction run these
+  same species collapsed to 0–1. **So the severe predator collapse is largely faction-driven (the
+  Shroomer monoculture), NOT an independent hunting-mechanic failure** — I over-attributed it
+  earlier. Fixing Shroomers (#3) should relieve most of it; re-measure before any predator work.
+- **Genuinely world/mechanic-limited extinctions persist even with no factions:** Arctic Fox
+  (54 starvations — cold-prey-limited), Scorpion (30 — broken sit-and-wait ambush, terrain-roadmap
+  §5), Snake (19 — same class). These match the species-attribution-audit "known-hard" list and are
+  the *real* residual predator work, much smaller than it looked.
+- **Design implication — how factions should disrupt.** The no-faction world is *placid*:
+  populations flatline into a static equilibrium after t8 000. Factions exist to disrupt that, but
+  the disruption must be **local, cyclic, and bounded**, not additive: today Shroomers pile
+  population *on top* of the ~4 000 baseline (faction run hit 7 792) and only ever grow, so the
+  "disruption" is a one-way ramp to monoculture whose main damage is invisibly stealing the shared
+  reproduction/space budget. Target: a healthy faction presence is **hundreds, not thousands** — a
+  bloom degrades a region, provokes a response (fungivores/Sectids/Faelings), collapses, the region
+  recovers, repeat. #3's crowding/drought should aim for a Shroomer equilibrium in the low hundreds;
+  #4's Faelings should accelerate the *collapse* half of that cycle.
+
+## Parked (re-evaluate after #3)
+- **Predator/hunting deep-dive.** Reframed by the baseline above: mostly a symptom of the Shroomer
+  monoculture, not a standalone failure. After #3 lands and Shroomers are bounded, re-run and check
+  whether Hawk/Wolf/Bear/Fox recover on their own. Residual true problems are the known world-limited
+  specialists (Arctic Fox, Scorpion, Snake) — a smaller, species-specific job.
 - **Herbivore food ceiling / density-dependent reproduction.** Near-zero starvation, ~100% energy
   — herbivores plateau only because the shared cap fills. The long-standing "always booms to the
   cap" lever; belongs at the reproduction layer, not in the factions.
