@@ -272,6 +272,27 @@ public sealed class GrazingSystem : ISystem
                 species.Type == SpeciesType.Faeling)
             {
                 var speciesDef = SpeciesRegistry.GetById(species.SpeciesId);
+
+                // Fertility feeding (Shroomers): growth fuel comes from tile nutrition, consumed
+                // faster than herbivores and gained in proportion to what's left — so a bloom only
+                // grows where there's fertility to strip, and depletes the land as it does. This
+                // runs FIRST; the FeedTiles value below is only a subsistence floor.
+                if (speciesDef.FertilityConsumeRate > 0f && tile.IsGrazeable())
+                {
+                    float nutrition = _worldManager.GetNutrition(pos.X, pos.Y);
+                    if (nutrition > 0.05f)
+                    {
+                        float requested = speciesDef.FertilityConsumeRate * tickMult;
+                        float consumed = _worldManager.ConsumeNutrition(pos.X, pos.Y, requested);
+                        float richness = requested > 0f ? consumed / requested : 0f;
+                        hunger.Current = MathF.Min(hunger.Max,
+                            hunger.Current + speciesDef.FertilityFeedNutrition * richness * tickMult);
+                    }
+                }
+
+                // Subsistence floor: FeedTiles (e.g. Shroomers on their own barren swamp) keep a
+                // creature alive but — kept low for fertility feeders — can't fuel spore spread on
+                // stripped ground, so fertility is what actually drives a bloom.
                 if (speciesDef.FeedTiles != null && speciesDef.FeedTiles.Contains(tile))
                 {
                     hunger.Current = MathF.Min(hunger.Max, hunger.Current + speciesDef.FeedNutrition * tickMult);

@@ -693,6 +693,17 @@ hard cap, and offspring of a species disabled via the species toggle (§9) are r
 
 ### 7.1 Shroomer / Spore — `SporeSystem.cs`
 
+**Feeding — Shroomers rely on and impact land fertility, more than herbivores.** A Shroomer's
+*growth* fuel is tile nutrition (`FertilityConsumeRate` 0.06/tick on grazeable tiles — 3× a
+grazer — gaining `FertilityFeedNutrition × richness`), so a bloom only grows where there's
+fertility to strip and depletes the land as it does; combined with its **wetter** terraform,
+it converts fertile grass/forest into barren (nutrition-0) swamp and must advance into fresh
+ground — a pasture-destroying, self-limiting front (the same carrying-capacity mechanism that
+caps herbivores). Wet-tile `FeedNutrition` is now only a **subsistence floor** (0.06 ≈ hunger
+decay): a Shroomer survives on its own swamp but stays too hungry to keep spreading there.
+(Previously 0.5 = "can't starve on wet tiles", which removed all fertility reliance and let
+Shroomers grow immortally on self-made swamp — the root of the monoculture.)
+
 Mature, well-fed Shroomers on wet tiles occasionally spread spores (cost: a fraction of max
 hunger; spread probability is LOD-compensated as `1 − (1−p)^tickInterval`). Spores accrue
 moisture on wet tiles and wither on dry ones; at the transform threshold they become a new

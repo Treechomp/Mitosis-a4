@@ -2572,10 +2572,20 @@ public static class SpeciesRegistry
             },
             AllowedSpawnTiles = new List<TileType> { TileType.Wetland, TileType.Forest },
 
-            // Grazing - feeds from wet/forest tiles (near water = can't starve)
+            // Feeding — Shroomers RELY ON and IMPACT land fertility, more than herbivores. Their
+            // growth fuel is tile nutrition (FertilityConsumeRate/FertilityFeedNutrition below):
+            // a bloom strips fertile ground (3× a grazer's depletion) and terraforms it to barren
+            // swamp, so it must advance into fresh fertile land — an ecological, self-limiting,
+            // pasture-destroying front. The wet-tile FeedNutrition is now only a subsistence FLOOR
+            // (cut 0.5→0.06, ~= HungerDecayRate): a Shroomer survives on its own swamp but stays
+            // too hungry to keep spreading there, so fertility — not free wet-tile food — drives
+            // the bloom. (Previously 0.5 = "can't starve on wet tiles", which removed all fertility
+            // reliance and let them grow immortally on self-made swamp.)
             CanGraze = false,
             FeedTiles = new List<TileType> { TileType.Wetland, TileType.Forest },
-            FeedNutrition = 0.5f,  // Increased — effectively can't starve on wet tiles
+            FeedNutrition = 0.06f,          // subsistence floor only (was 0.5)
+            FertilityConsumeRate = 0.06f,   // strips grazeable fertility 3× faster than a herbivore
+            FertilityFeedNutrition = 0.8f,  // fertile ground fuels fast bloom growth
 
             // Terraform - increases moisture
             TerraformDir = TerraformDirection.Wetter,

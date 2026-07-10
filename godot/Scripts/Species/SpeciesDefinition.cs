@@ -395,6 +395,20 @@ public sealed class SpeciesDefinition
     public List<TileType>? FeedTiles { get; init; }
     public float FeedNutrition { get; init; } = 0.4f;
 
+    // === FERTILITY FEEDING (Shroomers: rely on AND impact land fertility, more than herbivores) ===
+    // A faction feeder with FertilityConsumeRate > 0 draws its *growth* fuel from tile nutrition
+    // (grazeable tiles), consuming it faster than herbivores and gaining food scaled by what's
+    // there. So a bloom only grows where there's fertility to strip; on land it has already
+    // depleted (and terraformed to barren swamp) it falls back to the FeedTiles subsistence floor
+    // and can't spread — an advancing front that exhausts pasture behind it and self-limits by
+    // the land's carrying capacity, the same mechanism that caps herbivores.
+    /// <summary>Tile nutrition consumed per tick on a grazeable tile (0 = not a fertility feeder).
+    /// Set above the herbivore rate (0.02) so blooms deplete the land faster than grazers.</summary>
+    public float FertilityConsumeRate { get; init; } = 0f;
+    /// <summary>Hunger restored per tick at full tile fertility (scaled down as nutrition depletes).
+    /// High = fertile ground fuels fast bloom growth; near-zero on stripped/swamped ground.</summary>
+    public float FertilityFeedNutrition { get; init; } = 0.6f;
+
     /// <summary>
     /// Terrain where this predator's prey concentrate — its hunting grounds. When a hungry
     /// predator finds no prey in range it roams toward the nearest tile of this type instead of

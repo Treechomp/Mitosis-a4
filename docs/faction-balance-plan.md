@@ -100,6 +100,25 @@ Faelings become self-correcting keepers of order rather than just another combat
 
 This is the largest single piece and benefits most from #1–#3 being observable first.
 
+### #3b — Shroomers rely on & impact land fertility 🔲 NEW (test pending)
+User design directive (the intended faction identities): if unchecked, **Shroomers** should
+dominate by turning the map to swamp/bog/wetland, and **Sectids** by turning it to desert then
+going map-wide dormant from prey exhaustion — the key difference being *Sectids have a limited
+resource pool (must hunt) while Shroomers create their own (wet substrate)*. So Shroomers should
+also **rely on and impact land fertility, more than herbivores** — grounding their self-limit in
+ecology rather than only the arbitrary crowding of #3.
+
+Root cause found in the registry: Shroomer `FeedNutrition = 0.5` on Wetland/Forest, commented
+"can't starve on wet tiles" — free food on the swamp they create, zero fertility reliance.
+Implemented (defaults off, only Shroomer opts in): `FertilityConsumeRate` 0.06 (3× a grazer's
+depletion) + `FertilityFeedNutrition` 0.8 drive growth from tile nutrition; wet-tile `FeedNutrition`
+cut 0.5→0.06 (subsistence floor ≈ hunger decay). Effect: a bloom strips fertile ground, terraforms
+it to barren swamp, and must advance into fresh land — an ecological self-limiting front that also
+destroys herbivore pasture (their disruption). Crowding/drought (#3, relaxed) kept as secondary.
+**Watch next run:** whether Shroomers now form advancing blooms bounded by fertility (want cyclic,
+hundreds), whether Sectids get enough Shroomer/spore food to persist, and whether herbivores near
+blooms feel the pasture loss. NOTE — Sectid non-Shroomer-reliance is a separate open item.
+
 ## No-faction baseline (run 20260710_211700, factions disabled, 36 000 ticks) — REFRAMES the above
 
 A `DisableFactionSpecies` run is the control. It changes the diagnosis:
