@@ -2521,13 +2521,20 @@ public static class SpeciesRegistry
             // Self-limiting (SporeSystem): a dense mat competes with itself for substrate and
             // cannot spread into ground it already saturates; a bloom whose tile is dried out
             // (Sectid/Faeling terraforming) starves. These are the biological ceilings that let
-            // the factions push a bloom back instead of it growing immortally. Tuning first pass —
-            // watch a run and adjust: too-high Crowding/Drought damage collapses them to extinction.
+            // the factions push a bloom back instead of it growing immortally.
+            //
+            // Retune 2 (run 20260710_221127): the first pass (Limit 8 / Damage 0.15) worked TOO
+            // well — crowding triggered at any 8-in-radius cluster, so blooms could never form;
+            // Shroomers held a flat ~90 scattered thin (no disruption) and the collapse of the
+            // spore food base starved the Sectids to extinction. Relaxed so blooms CAN build to a
+            // real local density and cycle (grow → feed Sectids → pushed back), while drought (the
+            // faction weapon, kept strong-ish) + fungivores + Sectid predation still cap the total.
+            // If Shroomers boom again, tighten Limit/Saturation; if Sectids still starve, relax more.
             CrowdingRadius = 6f,
-            CrowdingLimit = 8,
-            CrowdingSaturation = 18,
-            CrowdingDamage = 0.15f,
-            DroughtDamage = 0.5f,
+            CrowdingLimit = 20,      // blooms may reach ~20 same-radius neighbours before self-thinning
+            CrowdingSaturation = 40, // spread only fully stops in a very dense core
+            CrowdingDamage = 0.08f,  // gentler thinning (was 0.15 — pinned them too flat)
+            DroughtDamage = 0.35f,   // faction drying still collapses a bloom, slightly gentler
 
             // Roaming - sedentary
             RoamDistance = 20f,

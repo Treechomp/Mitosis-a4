@@ -70,6 +70,19 @@ population and still climbing** at t24 100. Root cause: grown Shroomers had *no*
 collapsing to extinction, lower `CrowdingDamage`/`DroughtDamage`; if still booming, raise them or
 lower `CrowdingSaturation`.
 
+**Retune 2 (after run `20260710_221127`, same seed as the boom run).** The first pass worked TOO
+well: Shroomers held a flat ~90 for the whole run (322 crowding + 112 drought + 186 fungivore
+deaths, maturation 88%→43%) and the predator collapse was relieved (Wolf/Hawk/Bear/Fox/Jaguar all
+alive, vs 0–1 in the boom run — confirming the baseline reframe). BUT the Sectids starved to
+extinction (87→0, 96 starvations): `CrowdingLimit 8` triggered at any 8-in-radius cluster, so
+**blooms could never form** — Shroomers existed only as scattered individuals, spore creation
+collapsed 6 414→1 177, and the Sectids (who need the spore/immature-Shroomer food base to hold
+swarm-kill-mass) lost their food and death-spiralled. Relaxed to let blooms build and cycle:
+`CrowdingLimit 8→20`, `CrowdingSaturation 18→40`, `CrowdingDamage 0.15→0.08`, `DroughtDamage
+0.5→0.35`. Goal: Shroomers cycle in the hundreds with visible blooms that feed Sectids, drought +
+fungivores + Sectid predation still capping the total. **Watch next run:** Shroomer equilibrium
+(want hundreds, cyclic — not ~90 flat, not thousands) and whether Sectids survive.
+
 ### #4 — Faeling "keeper" redesign 🔲 PLANNED (design: option ①, "anti-dominance balancer")
 Faelings become self-correcting keepers of order rather than just another combatant:
 - **Focus fire the locally-dominant faction.** Today they attack Sectids/Shroomers indiscriminately
