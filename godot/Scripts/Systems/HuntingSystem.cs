@@ -473,6 +473,18 @@ public sealed class HuntingSystem : ISystem
                 else if (groupId >= 0 && !predator.HasTarget)
                     threat = FindProactiveThreat(entity, groupId, pos.X, pos.Y, speciesDef, em);
 
+                // A diet specialist (ExclusivePrey) defends by FLEEING, not by hunting its
+                // attacker down. This rally/counter-attack path deliberately bypasses the usual
+                // mass/hunger gates — and it was bypassing the ExclusivePrey filter too, so a
+                // Fish-only Penguin lethally pursued whatever bit it (7 Arctic Fox + 4 Hawk kills
+                // in one run — its own predators — driving Arctic Fox to extinction). Clearing an
+                // off-diet threat here drops the specialist through to FleeingSystem instead.
+                if (threat >= 0 && speciesDef.ExclusivePrey != null
+                    && em.HasComponents(threat, ComponentFlags.Species)
+                    && !speciesDef.ExclusivePrey.Contains(
+                           SpeciesRegistry.GetById(em.Species[threat].SpeciesId).Name))
+                    threat = -1;
+
                 if (threat >= 0 && em.IsAlive(threat) && threat != predator.AvoidTarget)
                 {
                     ref var threatPos = ref em.Positions[threat];
