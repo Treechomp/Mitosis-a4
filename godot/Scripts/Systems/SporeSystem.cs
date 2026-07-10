@@ -34,6 +34,7 @@ public sealed class SporeSystem : ISystem
     private readonly List<(float x, float y, int speciesId)> _pendingTransforms = new(8);
     private readonly List<int> _toKill = new(16);
     private readonly List<int> _nearbyBuffer = new(32);
+    private readonly List<int> _crowdBuffer = new(32);
     private readonly int _maxPopulation;
 
     public SporeSystem(WorldManager worldManager, SpatialHash spatialHash, int maxPopulation)
@@ -110,30 +111,88 @@ public sealed class SporeSystem : ISystem
             if (!em.DueThisTick[entity])
                 continue;
 
+            ref var species = ref em.Species[entity];
+            if (species.Type != SpeciesType.Shroomer) continue;
+
             // LOD tick multiplier: roll spread chance multiple times to compensate
             int tickMult = em.HasComponents(entity, ComponentFlags.SimulationLOD)
                 ? em.SimulationLODs[entity].TickInterval : 1;
 
-            ref var species = ref em.Species[entity];
-            if (species.Type != SpeciesType.Shroomer) continue;
+            var shroomDef = SpeciesRegistry.GetById(species.SpeciesId);
+            ref var pos = ref em.Positions[entity];
+            var tile = _worldManager.GetTile(pos.X, pos.Y);
+            float tileMoisture = GetTileMoisture(tile);
+            bool droughted = tileMoisture < shroomDef.SporeMoistureThreshold;
 
+            // === SELF-LIMITING: crowding competition + drought ===
+            // Count same-species neighbours once (reused for attrition AND spread suppression).
+            int neighbours = 0;
+            if (shroomDef.CrowdingRadius > 0f)
+            {
+                _crowdBuffer.Clear();
+                _spatialHash.QueryRadius(pos.X, pos.Y, shroomDef.CrowdingRadius, _crowdBuffer);
+                foreach (int other in _crowdBuffer)
+                {
+                    if (other == entity || !em.IsAlive(other)) continue;
+                    if (em.HasComponents(other, ComponentFlags.Species | ComponentFlags.Growth)
+                        && em.Species[other].Type == SpeciesType.Shroomer)
+                        neighbours++;
+                }
+            }
+
+            // Attrition: a dense fungal mat competes with itself for substrate, and it cannot
+            // hold ground that has dried out (faction terraforming toward dry biomes collapses a
+            // bloom instead of merely stalling it). Both LOD-compensated so a distant bloom dies
+            // at the same real-time rate.
+            if (em.HasComponents(entity, ComponentFlags.Energy))
+            {
+                float attrition = 0f;
+                if (shroomDef.CrowdingDamage > 0f && neighbours > shroomDef.CrowdingLimit)
+                    attrition += shroomDef.CrowdingDamage * (neighbours - shroomDef.CrowdingLimit);
+                if (shroomDef.DroughtDamage > 0f && droughted)
+                    attrition += shroomDef.DroughtDamage;
+                if (attrition > 0f)
+                {
+                    ref var energy = ref em.Energies[entity];
+                    energy.Current -= attrition * tickMult;
+                    if (energy.IsDead)
+                    {
+                        _toKill.Add(entity);
+                        EcosystemLogger.Instance?.LogEnvironmentDeath(
+                            species.SpeciesId, entity, pos.X, pos.Y, droughted ? "drought" : "crowding");
+                        continue;
+                    }
+                }
+            }
+
+            // === SPREAD (mature, fed, wet ground, open space, global headroom) ===
             ref var age = ref em.Ages[entity];
             if (!age.IsMature) continue;
 
             ref var hunger = ref em.Hungers[entity];
             if (hunger.Percent < 0.5f) continue; // Need decent food to spread
+            if (droughted) continue;             // no spreading on dry ground
 
-            // Get species definition for spore parameters
-            var shroomDef = SpeciesRegistry.GetById(species.SpeciesId);
+            // Local saturation: a Shroomer ringed by kin has no open ground to colonise, so its
+            // spread chance falls to zero as neighbours climb from CrowdingLimit → Saturation.
+            float localFactor = 1f;
+            if (shroomDef.CrowdingRadius > 0f && neighbours > shroomDef.CrowdingLimit)
+            {
+                int span = Math.Max(1, shroomDef.CrowdingSaturation - shroomDef.CrowdingLimit);
+                localFactor = Math.Clamp(1f - (neighbours - shroomDef.CrowdingLimit) / (float)span, 0f, 1f);
+            }
+            // Global population pressure — a safety ceiling mirroring ReproductionSystem's ramp,
+            // so Shroomers can never convert the whole shared cap even if the biological levers
+            // above are mistuned. 1.0 until 50% of cap, linear to 0 at 100%.
+            float popRatio = (float)em.EntityCount / _maxPopulation;
+            float globalFactor = popRatio > 0.5f ? MathF.Max(0f, 2f * (1f - popRatio)) : 1f;
 
-            // Check moisture of current tile
-            ref var pos = ref em.Positions[entity];
-            var tile = _worldManager.GetTile(pos.X, pos.Y);
-            if (GetTileMoisture(tile) < shroomDef.SporeMoistureThreshold) continue;
+            float effChance = shroomDef.SporeSpreadChance * localFactor * globalFactor;
+            if (effChance <= 0f) continue;
 
             // Random chance to spread — compensate for skipped ticks:
             // probability of at least one success in tickMult trials = 1 - (1-p)^tickMult
-            double noSpreadProb = Math.Pow(1.0 - shroomDef.SporeSpreadChance, tickMult);
+            double noSpreadProb = Math.Pow(1.0 - effChance, tickMult);
             if (_rng.NextDouble() >= 1.0 - noSpreadProb) continue;
 
             // Spread spores

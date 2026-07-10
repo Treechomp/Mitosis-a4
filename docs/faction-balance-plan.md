@@ -50,23 +50,25 @@ elder. See FEATURES §6.7.
 > rally path (Fish-only Penguins were hunting their own predators). Fixed so the specialist
 > filter — the backbone of the fungivore design — is trustworthy.
 
-### #3 — Shroomer mortality + terrain dependence 🔲 PLANNED
-With #1/#2 providing attrition, tighten the Shroomer engine so a bloom that loses its wet
-substrate actually collapses:
-- **Global-pressure gate on spore spread** — the clean consistency fix: make `SporeSystem` spread
-  obey the same population-pressure ramp as `ReproductionSystem` (or a faction-share cap), so
-  Shroomers can't convert the entire shared cap. *Apply only if #1/#2 don't bring them to heel on
-  their own — re-measure first.*
-- **Substrate dependence** — spore maturation should require the tile to *stay* wet; a spore on a
-  tile dried below `SporeMoistureThreshold` (by Sectid nest-drying or Faeling neutralizing) should
-  wither faster, so drying a territory genuinely kills the bloom rather than just slowing it. The
-  wither path already exists (`SporeSystem` dry-tile branch) — the lever is tuning wither vs. gain
-  and making sure faction terraforming actually crosses the threshold around blooms.
-- **Real elder mortality** — consider a slow senescence or a crowding penalty on mature Shroomers
-  so a fully-grown field doesn't sit immortal (0 age deaths over 17.5k ticks is the tell).
+### #3 — Shroomer mortality + terrain dependence ✅ DONE
+Run `20260710_045611` confirmed #1/#2 alone were insufficient: fungivores held Shroomers at
+~90–125 for the first ~3 000 ticks (the cull genuinely works while sparse — 338 immature Shroomers
+eaten, maturation 88%→76%), but once blooms got dense they escaped exponentially to **61% of the
+population and still climbing** at t24 100. Root cause: grown Shroomers had *no* mortality
+(`MaxLifespan` 50 000 > run length → 0 age deaths). Implemented, all data-driven on
+`SpeciesDefinition` (default off; only Shroomer opts in), in `SporeSystem`'s mature-Shroomer loop:
+- **Crowding attrition** (`CrowdingRadius` 6, `CrowdingLimit` 8, `CrowdingDamage` 0.15) — a dense
+  mat competes with itself; energy drains per neighbour over the limit, so blooms self-thin.
+- **Drought death** (`DroughtDamage` 0.5) — a mature Shroomer on a tile below `SporeMoistureThreshold`
+  starves and can't spread → **faction drying collapses a bloom** (the biological weapon the
+  user wanted, over arbitral gating). Logs `environment_death:drought`/`crowding`.
+- **Spread suppression** — local saturation (`CrowdingLimit → CrowdingSaturation` 18) zeroes spread
+  where there's no open ground, plus a global population-pressure factor (mirrors ReproductionSystem)
+  as a safety ceiling so Shroomers can never convert the whole cap.
 
-*Sequencing:* run a fresh sim after #1/#2 and read the log **before** building #3 — the numbers
-will show how much of this is still needed once spores are being eaten.
+*Tuning caveat:* damage values are a first pass (can't run here). If a test run shows Shroomers
+collapsing to extinction, lower `CrowdingDamage`/`DroughtDamage`; if still booming, raise them or
+lower `CrowdingSaturation`.
 
 ### #4 — Faeling "keeper" redesign 🔲 PLANNED (design: option ①, "anti-dominance balancer")
 Faelings become self-correcting keepers of order rather than just another combatant:
@@ -87,8 +89,11 @@ This is the largest single piece and benefits most from #1–#3 being observable
 
 ## Parked (high priority, separate workstreams)
 - **Predator/hunting deep-dive.** 543 kills / 17.5k ticks, 89% hunt-failure; most predators are
-  frozen (alive on low `HungerDecayScale` but not breeding) rather than cycling. Arctic Fox went
-  extinct, Fox nearly. Systemic hunting + predator-reproduction issue.
+  frozen (alive on low `HungerDecayScale` but not breeding) rather than cycling. **Worsening:** by
+  run `20260710_045611` (t24 100) Hawk, Arctic Fox, Fox, Snake, Scorpion were extinct and
+  Wolf/Bear down to 1 — and the `ExclusivePrey` fix ruled out Penguin predation as the cause, so
+  this is squarely the systemic hunting + predator-reproduction issue. High priority once factions
+  settle; it may be dragging the whole ecosystem.
 - **Herbivore food ceiling / density-dependent reproduction.** Near-zero starvation, ~100% energy
   — herbivores plateau only because the shared cap fills. The long-standing "always booms to the
   cap" lever; belongs at the reproduction layer, not in the factions.

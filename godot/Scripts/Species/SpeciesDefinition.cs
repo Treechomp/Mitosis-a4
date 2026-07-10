@@ -367,6 +367,25 @@ public sealed class SpeciesDefinition
     /// <summary>Hunger restored per spore/sprout eaten.</summary>
     public float FungivoreFeedAmount { get; init; } = 8f;
 
+    // === SHROOMER SELF-LIMITING (competition + drought) ===
+    // Biological ceilings that let a bloom be pushed back rather than growing immortally: a dense
+    // fungal mat competes with itself for substrate, and it cannot hold ground that has dried out
+    // (so Sectid/Faeling terraforming toward dry biomes actively collapses a bloom). All default
+    // to off, so only Shroomers opt in.
+    /// <summary>Radius (tiles) over which same-species neighbours are counted for crowding.
+    /// 0 = crowding disabled.</summary>
+    public float CrowdingRadius { get; init; } = 0f;
+    /// <summary>Neighbour count above which crowding attrition + spread-suppression kick in.</summary>
+    public int CrowdingLimit { get; init; } = 8;
+    /// <summary>Neighbour count at which local spread chance is fully suppressed (no open ground
+    /// left to colonise). Spread scales linearly from CrowdingLimit → this.</summary>
+    public int CrowdingSaturation { get; init; } = 16;
+    /// <summary>Energy lost per tick per neighbour above CrowdingLimit (substrate competition).</summary>
+    public float CrowdingDamage { get; init; } = 0f;
+    /// <summary>Energy lost per tick while mature on a tile drier than SporeMoistureThreshold —
+    /// the fungal mat starves on dry ground. Lets faction drying kill a bloom, not just stall it.</summary>
+    public float DroughtDamage { get; init; } = 0f;
+
     // === TERRAFORM (faction species) ===
     public TerraformDirection TerraformDir { get; init; } = TerraformDirection.Balanced;
     public float TerraformRadius { get; init; } = 2f;

@@ -2518,6 +2518,17 @@ public static class SpeciesRegistry
             SporeMoistureGainRate = 0.5f,
             SporeEnergy = 40f,
 
+            // Self-limiting (SporeSystem): a dense mat competes with itself for substrate and
+            // cannot spread into ground it already saturates; a bloom whose tile is dried out
+            // (Sectid/Faeling terraforming) starves. These are the biological ceilings that let
+            // the factions push a bloom back instead of it growing immortally. Tuning first pass —
+            // watch a run and adjust: too-high Crowding/Drought damage collapses them to extinction.
+            CrowdingRadius = 6f,
+            CrowdingLimit = 8,
+            CrowdingSaturation = 18,
+            CrowdingDamage = 0.15f,
+            DroughtDamage = 0.5f,
+
             // Roaming - sedentary
             RoamDistance = 20f,
             RoamCooldown = 800,

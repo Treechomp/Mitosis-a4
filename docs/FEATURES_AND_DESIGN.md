@@ -702,6 +702,23 @@ Shroomer. Shroomers **grow** continuously (to 4× scale), scaling via an S-curve
   Sectids/Faelings.
 - **Thorn defense** — melee attackers take growth-scaled counter-damage.
 
+**Self-limiting (so a bloom can be pushed back, not just grow immortally — `MaxLifespan` is
+50 000 ticks, longer than a run, so age never checked them).** Each due Shroomer counts its
+same-species neighbours once and that drives three effects:
+- **Crowding attrition** — above `CrowdingLimit` neighbours within `CrowdingRadius`, energy
+  drains `CrowdingDamage × (neighbours − limit)` per tick (LOD-compensated), so a dense mat
+  self-thins into advancing fronts rather than a solid immortal field.
+- **Drought death** — a mature Shroomer on a tile drier than its `SporeMoistureThreshold`
+  drains `DroughtDamage`/tick and cannot spread, so **faction terraforming toward dry biomes
+  (Sectid drying, Faeling neutralizing) actively collapses a bloom** — the biological weapon
+  that makes the territory war real. Both attrition deaths log as `environment_death`
+  (`drought`/`crowding`).
+- **Spread suppression** — local saturation scales spread to zero as neighbours climb
+  `CrowdingLimit → CrowdingSaturation` (no open ground to colonise), and a **global
+  population-pressure factor** (mirrors ReproductionSystem's 50→100% ramp) caps spread as the
+  shared population fills — a safety ceiling so Shroomers can't convert the whole cap even if
+  the biological knobs are mistuned.
+
 ### 7.2 Sectid / Nest — `NestSystem.cs`
 
 Sectids carry food from kills to the nearest nest (`FoodCarrier`, faster `CarryingSpeed`,
