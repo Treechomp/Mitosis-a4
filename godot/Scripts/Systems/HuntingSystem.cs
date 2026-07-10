@@ -693,6 +693,20 @@ public sealed class HuntingSystem : ISystem
                             score *= speciesDef.PreferredPreyBias;
                     }
 
+                    // Spore/bloom preference: an anti-bloom hunter (Sectid) strongly prefers
+                    // Shroomer spores and immature Shroomers, eating a bloom out before it
+                    // fortifies instead of chasing the nearest random prey. Any Shroomer that
+                    // reached scoring already passed the mass gate (grown ones are rejected
+                    // earlier), so this can't lure a swarm onto an elder.
+                    if (speciesDef.SporeHuntBias > 0f)
+                    {
+                        bool isSpore = em.HasComponents(preyEntity, ComponentFlags.Spore);
+                        bool isShroomer = em.HasComponents(preyEntity, ComponentFlags.Species)
+                            && em.Species[preyEntity].Type == SpeciesType.Shroomer;
+                        if (isSpore || isShroomer)
+                            score *= 1f - speciesDef.SporeHuntBias;
+                    }
+
                     if (score < bestScore)
                     {
                         // Defer the across-water test until a candidate would actually win — only

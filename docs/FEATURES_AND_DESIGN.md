@@ -488,6 +488,16 @@ remained (the consumed/requested ratio is guarded against a zero tick interval, 
 otherwise be `0/0 = NaN`); omnivores (Boar) graze and hunt; faction species feed on their
 `FeedTiles`. Capped at max hunger.
 
+**Fungivory (Shroomer-bloom control).** A species flagged `IsFungivore` (Boar — the primary,
+widest reach; plus Rabbit, Lizard, Monkey) also consumes the nearest Shroomer **spore or
+immature Shroomer** (`Growth.CurrentScale ≤ FungivoreMaxScale`, default 2.0, below the AoE/thorn
+danger band) within `FungivoreFeedRadius` each feed tick, restoring `FungivoreFeedAmount` hunger
+(spores are half a mouthful). This is grazing-adjacent, **not** hunting — no attack, no thorn
+damage, no rally machinery — so it's a clean natural check on Shroomer blooms (the eater culls
+sprouts while feeding itself). Consumption is a discrete meal, so it is *not* LOD-scaled; eaten
+immature Shroomers are logged as kills (bloom control shows up in the events CSV), spores aren't
+(too numerous). Grown Shroomers are immune — surviving to maturity is what earns their thorns/AoE.
+
 ### 6.6 Wander — `WanderSystem.cs` (gated)
 
 Primary idle movement, with **angular interpolation** for smooth turning: turn rate
@@ -526,7 +536,17 @@ camouflaged prey such as a Rabbit in forest or Arctic Fox in snow inflate their 
 hunter only locks on when close, effectively shrinking detection range over matching terrain);
 cannibalism, unhuntable targets, and species outside a predator's `ExclusivePrey` list (Penguin
 → Fish only) are excluded; land predators reject targets across water (both in target selection
-and the wide `TrackingRange` scent scan).
+and the wide `TrackingRange` scent scan). A hunter with `SporeHuntBias > 0` (Sectids, the
+anti-bloom faction) multiplies the score of Shroomer spores/immature Shroomers by `1 − bias`, so
+a swarm eats a bloom out before it fortifies rather than chasing the nearest random prey — grown
+Shroomers still fail the mass gate, so the bias can't lure a swarm onto an elder.
+
+> **`ExclusivePrey` covers the rally path too.** The specialist filter is applied in proactive
+> target selection *and* the defensive counter-attack/rally path — the latter deliberately drops
+> the usual mass/hunger gates for self-defense, and once dropped `ExclusivePrey` with it, so a
+> Fish-only Penguin used to hunt down whatever bit it (killing its own predators). A specialist
+> now flees off-diet threats instead. Species with no exclusive list (all packs/swarms) are
+> unaffected, so a Sectid colony still mobs an attacker.
 
 **Attack landing**: a strike lands when in `AttackRange` and the attack cooldown has elapsed.
 The gate is `CurrentCooldown <= 0` and the per-tick decrement is clamped at 0 — at reduced LOD

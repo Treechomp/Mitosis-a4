@@ -197,10 +197,17 @@ public sealed class AgingSystem : ISystem
 public sealed class GrazingSystem : ISystem
 {
     private readonly World.WorldManager _worldManager;
+    private readonly Mitosis.Utils.SpatialHash? _spatialHash;
+    // Fungivore consumption: entities eaten this tick (destroyed after the main loop), and a
+    // claim set so two fungivores don't both feed on the same spore before it's removed.
+    private readonly List<int> _eaten = new(32);
+    private readonly HashSet<int> _claimed = new();
+    private readonly List<int> _fungivoreBuffer = new(16);
 
-    public GrazingSystem(World.WorldManager worldManager)
+    public GrazingSystem(World.WorldManager worldManager, Mitosis.Utils.SpatialHash? spatialHash = null)
     {
         _worldManager = worldManager;
+        _spatialHash = spatialHash;
     }
 
     public void Process(EntityManager em)
@@ -208,6 +215,8 @@ public sealed class GrazingSystem : ISystem
         const ComponentFlags required = ComponentFlags.Position | ComponentFlags.Species | ComponentFlags.Hunger;
         // Amount of nutrition consumed from a tile per grazing tick
         const float nutritionConsumeRate = 0.02f;
+        _eaten.Clear();
+        _claimed.Clear();
 
         foreach (int entity in em.Query(required))
         {
@@ -249,6 +258,11 @@ public sealed class GrazingSystem : ISystem
                 {
                     hunger.Current = MathF.Min(hunger.Max, hunger.Current + herbDef.FeedNutrition * tickMult);
                 }
+
+                // Fungivory: eat nearby Shroomer spores / immature Shroomers (bloom control).
+                // Independent of grazing, so a fungivore culls sprouts even off a grazeable tile.
+                if (herbDef.IsFungivore && _spatialHash != null && hunger.Percent < 0.98f)
+                    FungivoreFeed(em, entity, herbDef, ref hunger);
                 continue;
             }
 
@@ -263,6 +277,70 @@ public sealed class GrazingSystem : ISystem
                     hunger.Current = MathF.Min(hunger.Max, hunger.Current + speciesDef.FeedNutrition * tickMult);
                 }
             }
+        }
+
+        // Remove everything eaten this tick (deferred so we never destroy mid-query). The death
+        // hook drops a corpse for immature Shroomers (scraps for scavengers); spores self-filter.
+        if (_eaten.Count > 0)
+            em.DestroyEntities(_eaten);
+    }
+
+    /// <summary>
+    /// Consume the nearest unclaimed Shroomer spore or immature Shroomer within reach, restoring
+    /// hunger. Spores are always edible; Shroomers only up to the species' FungivoreMaxScale
+    /// (below the AoE/thorn danger band). Eating is grazing-adjacent — no attack, no thorns.
+    /// </summary>
+    private void FungivoreFeed(EntityManager em, int entity, SpeciesDefinition def,
+        ref Hunger hunger)
+    {
+        ref var pos = ref em.Positions[entity];
+        _fungivoreBuffer.Clear();
+        _spatialHash!.QueryRadius(pos.X, pos.Y, def.FungivoreFeedRadius, _fungivoreBuffer);
+
+        int best = -1;
+        float bestDistSq = float.MaxValue;
+        bool bestIsShroomer = false;
+        foreach (int other in _fungivoreBuffer)
+        {
+            if (other == entity || _claimed.Contains(other) || !em.IsAlive(other)) continue;
+
+            bool isSpore = em.HasComponents(other, ComponentFlags.Spore);
+            bool isEdibleShroomer = false;
+            if (!isSpore && em.HasComponents(other, ComponentFlags.Species | ComponentFlags.Growth))
+            {
+                if (em.Species[other].Type == SpeciesType.Shroomer &&
+                    em.Growths[other].CurrentScale <= def.FungivoreMaxScale)
+                    isEdibleShroomer = true;
+            }
+            if (!isSpore && !isEdibleShroomer) continue;
+
+            ref var otherPos = ref em.Positions[other];
+            float d = MathUtils.DistanceSquared(pos.X, pos.Y, otherPos.X, otherPos.Y);
+            if (d < bestDistSq)
+            {
+                bestDistSq = d;
+                best = other;
+                bestIsShroomer = isEdibleShroomer;
+            }
+        }
+
+        if (best < 0) return;
+        _claimed.Add(best);
+        _eaten.Add(best);
+        // Discrete meal (one item), so — unlike continuous grazing — it is NOT scaled by the
+        // LOD tick multiplier. Spores are a smaller mouthful than a sprouted Shroomer.
+        float food = def.FungivoreFeedAmount * (bestIsShroomer ? 1f : 0.5f);
+        hunger.Current = MathF.Min(hunger.Max, hunger.Current + food);
+
+        // Log immature-Shroomer consumption as a kill so bloom control is measurable in the
+        // events CSV; spores are far too numerous to log individually.
+        if (bestIsShroomer && em.HasComponents(entity, ComponentFlags.Species))
+        {
+            ref var eaterSp = ref em.Species[entity];
+            ref var victimSp = ref em.Species[best];
+            ref var victimPos = ref em.Positions[best];
+            EcosystemLogger.Instance?.LogKill(
+                eaterSp.SpeciesId, victimSp.SpeciesId, entity, best, victimPos.X, victimPos.Y);
         }
     }
 }

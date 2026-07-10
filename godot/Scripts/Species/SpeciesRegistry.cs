@@ -255,6 +255,7 @@ public static class SpeciesRegistry
             // Grazing
             CanGraze = true,
             GrazeNutrition = 0.3f,
+            IsFungivore = true,  // nibbles Shroomer spores/sprouts
 
             // Roaming - smaller territory, more frequent moves
             RoamDistance = 40f,
@@ -1108,6 +1109,10 @@ public static class SpeciesRegistry
             // Grazing - omnivore: grazes at reduced efficiency, also hunts small prey
             CanGraze = true,
             GrazeNutrition = 0.3f,  // Lower than pure herbivores
+            // Rooting omnivore — the primary Shroomer-bloom control (widest reach, biggest bite).
+            IsFungivore = true,
+            FungivoreFeedRadius = 3.5f,
+            FungivoreFeedAmount = 12f,
 
             SeparationRadius = 2f,
             SeparationStrength = 0.025f,
@@ -1362,6 +1367,7 @@ public static class SpeciesRegistry
 
             CanGraze = true,
             GrazeNutrition = 0.25f,  // Can eat sparse desert scrub
+            IsFungivore = true,      // nibbles spores/sprouts
 
             SeparationRadius = 1.5f,
             SeparationStrength = 0.02f,
@@ -2175,6 +2181,7 @@ public static class SpeciesRegistry
 
             CanGraze = true,
             GrazeNutrition = 0.4f,
+            IsFungivore = true,  // forages fungus in the canopy floor
 
             SeparationRadius = 1.5f,
             SeparationStrength = 0.02f,
@@ -2723,6 +2730,9 @@ public static class SpeciesRegistry
             // No PreferredPrey: Sectids are pure opportunists, targeting nearest viable prey
             HuntingTactic = HuntingTactic.Swarm,  // Colony-wide rush, no retreat, count all same-species
             SwarmHunter = true,            // Colony-wide bravery, can target predators
+            // Anti-bloom faction: strongly prefer Shroomer spores/immature Shroomers as targets,
+            // eating a bloom out before it fortifies (grown Shroomers still fail the mass gate).
+            SporeHuntBias = 0.85f,
             BodyMass = 0.5f,
             SoloHuntMaxRatio = 2.5f,       // Solo: prey up to mass 1.25 (rabbits)
             PackHuntMassExponent = 0.8f,    // Stronger pack scaling (colony bravery)

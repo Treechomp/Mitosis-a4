@@ -339,9 +339,33 @@ public sealed class SpeciesDefinition
     /// </summary>
     public List<string>? ExclusivePrey { get; init; }
 
+    /// <summary>
+    /// Hunt-scoring preference [0..1] for Shroomer spores and immature Shroomers: their score is
+    /// multiplied by (1 − this), so a hunter with a positive value eats a bloom out before it
+    /// fortifies rather than chasing the nearest random prey. 0 = no preference (default). Grown
+    /// Shroomers are still rejected by the mass gate, so this can't make a swarm suicide on an
+    /// elder. Set on Sectids, the designated anti-bloom faction.
+    /// </summary>
+    public float SporeHuntBias { get; init; } = 0f;
+
     // === GRAZING ===
     public bool CanGraze { get; init; } = false;
     public float GrazeNutrition { get; init; } = 0.5f;
+
+    // === FUNGIVORY (spore / immature-Shroomer eating) ===
+    /// <summary>
+    /// If true, this species consumes nearby Shroomer spores and immature Shroomers directly — a
+    /// grazing-adjacent behaviour (NOT hunting, so it inherits none of the rally/mass machinery
+    /// and takes no thorn damage), giving herbivores a natural check on Shroomer blooms.
+    /// </summary>
+    public bool IsFungivore { get; init; } = false;
+    /// <summary>Max Shroomer <c>Growth.CurrentScale</c> a fungivore will eat (spores are always
+    /// edible). Kept below the ~2.5 growth-spurt band so nibblers meet only weak AoE/thorns.</summary>
+    public float FungivoreMaxScale { get; init; } = 2.0f;
+    /// <summary>Reach in tiles within which a fungivore consumes spores/sprouts each feed tick.</summary>
+    public float FungivoreFeedRadius { get; init; } = 2.5f;
+    /// <summary>Hunger restored per spore/sprout eaten.</summary>
+    public float FungivoreFeedAmount { get; init; } = 8f;
 
     // === TERRAFORM (faction species) ===
     public TerraformDirection TerraformDir { get; init; } = TerraformDirection.Balanced;
