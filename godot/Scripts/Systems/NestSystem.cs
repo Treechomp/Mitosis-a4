@@ -154,12 +154,15 @@ public sealed class NestSystem : ISystem
         }
     }
 
-    // Moisture nudge per hatch tile, matching TerraformSystem's MoistureStep.
-    private const float NestTerraformStep = 0.05f;
+    // Moisture nudge per hatch tile. Raised 0.05→0.08 and the burst widened (6→14 nudges over
+    // the doubled TerraformRadius): the old footprint dried a ~7-tile speck per colony lifetime,
+    // leaving untouched green between nests instead of the spreading desertification Sectid
+    // dominance is supposed to look like.
+    private const float NestTerraformStep = 0.08f;
 
     private void TerraformAroundNest(float x, float y, SpeciesDefinition sectidDef)
     {
-        const int nudges = 6;
+        const int nudges = 14;
         float radius = sectidDef.TerraformRadius;
         for (int i = 0; i < nudges; i++)
         {

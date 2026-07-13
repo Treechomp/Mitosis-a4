@@ -34,6 +34,36 @@ same world as the strict-crowding run, so directly comparable) showed the remain
   used to have) with all three of its predators collapsed/tiny. Same structural pattern; candidate
   for the fertility-style treatment or predation pressure once predators function.
 
+### Pre-branch control-run findings + adjustments (2026-07-13, second run on seed 1269274668)
+A control run on the same build+seed confirmed spawn RNG alone reshuffles outcomes. Fixes and
+tuning applied before branching:
+
+- **Spore inflation in the population CSVs (answer to "do nests/crystals count?"):** nests and
+  crystals carry no `Species` component and never counted; **spores DO** (they're tagged
+  `Species(Shroomer)` for type checks) — every Shroomer population figure in prior CSVs was
+  inflated by live spores, while the F3 overlay excluded them (hence CSV-vs-eye mismatches).
+  Fixed: the logger now skips spores/nests/crystals in species counts and appends dedicated
+  `spores,nests,crystals` columns; `total` = creatures only. *Interpretation caveat: earlier
+  "Shroomer" trajectories in this doc (e.g. 107→317) include spores.*
+- **Faeling budget is mostly notional (flagged, not changed):** `FaelingShare 0.04` → budget 80 →
+  `80/10 = 8 crystals`, and each crystal sustains exactly ONE Faeling (1:1 in code, despite the
+  "small group" comment) — so the faction is 8 creatures, not 80. Redesign (crystals hosting
+  multiple Faelings, or budget-true crystal counts) belongs to the focused branch.
+- **Shroomer AoE 25 → 14** (user call): 25 out-ranged every counter on the map. 14 keeps elders
+  lethal up close but lets Faeling bolts (range 12) actually trade. Keeper siege standoff
+  26 → 16 to match; elder-safety now only skips near-elders (scale ≳3.2).
+- **Terraform rates were structurally invisible** (user observation confirmed in code):
+  `TerraformStrength` is a *probability per cooldown roll* for ONE random tile, not an amount —
+  Faeling 0.03 ≈ one nudge/267 ticks. Raised: Faeling strength 0.03→0.25, radius 3→4; Sectid
+  nest burst 6×0.05@r1.5 → 14×0.08@r3 (the old footprint dried ~7-tile specks, leaving green
+  between nests). Goal: terraforming becomes a real Shroomer counter so the crowding damage can
+  eventually be relaxed from "artificial check" to backstop.
+- **Arctic Fox buff** (dies out ~every run even beside the Penguin boom): the mechanical hole was
+  that penguins raft on SHALLOW SEA to feed, and fox food-seek (`HuntTerrain`) only pointed at
+  tundra/ice — it starved inland of its staple prey. `HuntTerrain` += ShallowWater (land hunters
+  wade shallow safely), HuntRange 8→12 (spot rafts from shore), HungerDecayRate 0.04→0.03,
+  SpawnWeight 0.8→1.1.
+
 ### Handoff → focused-testing branch (recommendations)
 1. **Determinism first:** seed the per-system `Random` instances from `WorldSeed` (one line each)
    so identical setups reproduce — without this, A/B tuning of knife-edge systems (predators,

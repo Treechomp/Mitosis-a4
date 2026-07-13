@@ -569,9 +569,9 @@ public sealed class WanderSystem : ISystem
     private static float Aversion(SpeciesDefinition? sp, TileType tile)
         => sp != null ? TerrainProfile.SteerAversion(sp, tile) : tile.GetAvoidanceWeight();
 
-    // Siege standoff in tiles: just outside a full-grown Shroomer's max AoE reach (25), so a
+    // Siege standoff in tiles: just outside a full-grown Shroomer's max AoE reach (14), so a
     // keeper besieging a bloom bombards/terraforms from the rim instead of dying inside it.
-    private const float KeeperSiegeStandoff = 26f;
+    private const float KeeperSiegeStandoff = 16f;
 
     /// <summary>
     /// Roam target for a keeper with an active dominance reading: a point on the standoff

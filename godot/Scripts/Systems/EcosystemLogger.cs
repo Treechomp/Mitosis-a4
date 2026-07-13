@@ -213,10 +213,19 @@ public sealed class EcosystemLogger : ISystem
         var hungerSums  = new Dictionary<int, float>();
         var energySums  = new Dictionary<int, float>();
         int trackedId   = TrackedSpeciesId;
+        int spores = 0, nests = 0, crystals = 0;
 
         const ComponentFlags required = ComponentFlags.Species;
         foreach (int entity in em.Query(required))
         {
+            // Structures and spores are tallied separately, NOT as creatures of their faction —
+            // spores carry Species(Shroomer) for type checks, which silently inflated every
+            // "Shroomer" population figure in these CSVs (the F3 overlay already excluded them,
+            // so the two disagreed). Dedicated columns keep the information without the lie.
+            if (em.HasComponents(entity, ComponentFlags.Spore))   { spores++;   continue; }
+            if (em.HasComponents(entity, ComponentFlags.Nest))    { nests++;    continue; }
+            if (em.HasComponents(entity, ComponentFlags.Crystal)) { crystals++; continue; }
+
             ref var sp = ref em.Species[entity];
             int sid = sp.SpeciesId;
             _speciesCounts.TryGetValue(sid, out int cnt);
@@ -252,12 +261,13 @@ public sealed class EcosystemLogger : ISystem
             _speciesNames.Sort();
             var header = "tick,total";
             foreach (var n in _speciesNames) header += $",{n}";
+            header += ",spores,nests,crystals"; // structures/spores tracked apart from creatures
             _popLog.WriteLine(header);
             _latestPopLog.WriteLine(header);
             _headerWritten = true;
         }
 
-        // Population CSV row.
+        // Population CSV row. `total` is living creatures only (matches the F3 overlay).
         int total = 0;
         foreach (var c in _speciesCounts.Values) total += c;
         var popLine = $"{_tick},{total}";
@@ -266,6 +276,7 @@ public sealed class EcosystemLogger : ISystem
             _speciesCounts.TryGetValue(SpeciesRegistry.GetId(n), out int count);
             popLine += $",{count}";
         }
+        popLine += $",{spores},{nests},{crystals}";
         _popLog.WriteLine(popLine);
         _latestPopLog.WriteLine(popLine);
 

@@ -1924,7 +1924,7 @@ public static class SpeciesRegistry
             DefaultSocialType = SocialType.Solitary,
             WrongElementGraceTicks = 50,    // Small, freezing water
             WrongElementDamageRate = 2.2f,
-            SpawnWeight = 0.8f,
+            SpawnWeight = 1.1f,            // was 0.8 — bigger founding population (died out ~every run)
 
             // Movement - quick
             BaseWanderSpeed = 0.05f,
@@ -1932,7 +1932,7 @@ public static class SpeciesRegistry
 
             // Combat — solo arctic hunter
             HuntingTactic = HuntingTactic.Solo,
-            HuntRange = 8f,
+            HuntRange = 12f,               // was 8 — spot penguin rafts from the shore
             AttackRange = 0.6f,
             AttackPower = 18f,
             AttackCooldown = 15,
@@ -1940,7 +1940,7 @@ public static class SpeciesRegistry
 
             // Survival
             MaxHunger = 170f,
-            HungerDecayRate = 0.04f,
+            HungerDecayRate = 0.03f,       // was 0.04 — leaner survival between arctic kills
             MaxLifespan = 18000,
             MaturityAge = 1000,
             EnergyRegenRate = 0.15f,
@@ -1949,7 +1949,12 @@ public static class SpeciesRegistry
             HuntThreshold = 0.75f,
             TrackingHungerThreshold = 0.5f,
             TrackingRange = 60f,
-            HuntTerrain = new List<TileType> { TileType.Tundra, TileType.Steppe, TileType.Ice },
+            // ShallowWater added: its staple prey (Penguin) rafts on the shallow sea to feed —
+            // the food-seek only steered foxes to tundra/ice, so they starved inland of a
+            // penguin boom (45→347 in run 20260713_035932 while Arctic Fox went extinct).
+            // Land hunters wade shallow water safely, so shoreline penguins are fair game.
+            HuntTerrain = new List<TileType> { TileType.Tundra, TileType.Steppe, TileType.Ice,
+                                               TileType.ShallowWater },
 
             // Reproduction
             ReproHungerThreshold = 120f,   // ~70% (predator viability)
@@ -2596,13 +2601,15 @@ public static class SpeciesRegistry
             // AoE attack — S-curve growth scaling (smoothstep):
             //   Radius/damage = max_value * (minFactor + (1-minFactor) * smoothstep(t))
             //   where t = (scale - 1.0) / (4.0 - 1.0), smoothstep = t²(3-2t)
-            // Scale 1.0 (birth):  factor=0.08  → radius 2,   damage 2.4   (nearly harmless)
-            // Scale 1.5:          factor=0.09  → radius 2.3,  damage 2.7  (still weak)
-            // Scale 2.5 (mid):    factor=0.50  → radius 12.5, damage 15   (growth spurt)
-            // Scale 3.5:          factor=0.91  → radius 22.8, damage 27.3 (powerful)
-            // Scale 4.0 (elder):  factor=1.00  → radius 25,   damage 30   (max, tapers)
+            // Scale 1.0 (birth):  factor=0.08  → radius 1.1, damage 2.4   (nearly harmless)
+            // Scale 1.5:          factor=0.09  → radius 1.3, damage 2.7   (still weak)
+            // Scale 2.5 (mid):    factor=0.50  → radius 7,   damage 15    (growth spurt)
+            // Scale 3.5:          factor=0.91  → radius 12.7, damage 27.3 (powerful)
+            // Scale 4.0 (elder):  factor=1.00  → radius 14,  damage 30    (max, tapers)
             HasAoEAttack = true,
-            AoEAttackRadius = 25f,       // Max radius at full growth
+            AoEAttackRadius = 14f,       // Max radius at full growth (was 25 — out-ranged every
+                                         // counter on the map; 14 keeps elders dangerous up close
+                                         // while letting Faeling bolts (range 12) trade into them)
             AoEAttackDamage = 30f,       // Max damage at full growth
             AoEAttackCooldown = 60,      // Base cooldown (used for combat pulses)
             AoEPassiveCooldown = 350,    // Slow passive pulses (every 17.5s at 20 TPS)
@@ -2749,8 +2756,11 @@ public static class SpeciesRegistry
             CanGraze = false,
 
             // Terraform - decreases moisture
+            // Applied by the NEST on each hatch (NestSystem.TerraformAroundNest), not by roaming
+            // Sectids. Radius widened 1.5→3: at 1.5 a colony's lifetime of hatches dried a ~7-tile
+            // speck, leaving green corridors between nests instead of spreading desert (observed).
             TerraformDir = TerraformDirection.Drier,
-            TerraformRadius = 1.5f,
+            TerraformRadius = 3f,
             TerraformStrength = 0.04f,
             TerraformCooldown = 6,
 
@@ -2865,10 +2875,14 @@ public static class SpeciesRegistry
             FeedTiles = new List<TileType> { TileType.Grass },
             FeedNutrition = 0.45f,
 
-            // Terraform - restores balance (gains power per tile restored)
+            // Terraform - restores balance (gains power per tile restored).
+            // Strength is a PROBABILITY per cooldown roll, not an amount: at the old 0.03 a
+            // keeper nudged one random tile every ~267 ticks — structurally invisible (observed:
+            // restoration never left a mark). 0.25 ≈ one tile every ~32 ticks: a keeper parked on
+            // a siege line visibly dries/restores its patch within a few minutes.
             TerraformDir = TerraformDirection.Balanced,
-            TerraformRadius = 3.0f,       // Slightly larger than before
-            TerraformStrength = 0.03f,     // Stronger restoration
+            TerraformRadius = 4.0f,
+            TerraformStrength = 0.25f,
             TerraformCooldown = 8,
 
             // Keeper of order — senses which rival faction is locally over-dominant (a Shroomer

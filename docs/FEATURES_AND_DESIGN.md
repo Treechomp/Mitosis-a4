@@ -788,10 +788,10 @@ and structures don't count). While a dominance reading is active:
   Sectid swarms automatically if they surge).
 - **Elder-safety** — a keeper never bolt-duels a Shroomer whose growth-scaled AoE reach rivals
   its 12-tile attack range (30 damage/pulse vs 150 HP is how pre-keeper Faelings bled out).
-  Bolts are for the young, still-spreading front and for Sectids; grown Shroomers are left to
-  the siege.
+  With max AoE now 14, only near-elders (scale ≳3.2) are skipped; everything younger is
+  boltable. Grown Shroomers are left to the siege.
 - **Siege patrol** — instead of wandering to any damaged terrain, the keeper roams to a
-  **standoff ring** (26 tiles — just outside a full-grown Shroomer's 25-tile AoE) around the
+  **standoff ring** (16 tiles — just outside a full-grown Shroomer's 14-tile AoE) around the
   dominant faction's sensed hotspot, and holds station there. Its balanced terraform then
   dries/restores the substrate the winner depends on — with §7.1's drought mechanic, drying a
   bloom's tiles *kills* the elders bolts can't touch, and restoring Sectid-dried land removes
@@ -806,8 +806,13 @@ damaged (non-Grass) terrain and restoring it, as before.
 | Faction | Direction | Effect | Radius | Strength | Cooldown | Applied by |
 |---------|-----------|--------|--------|----------|----------|------------|
 | Shroomer | Wetter | toward Wetland/Bog | 2.0 | 0.03 | 8 | the roaming creature (`TerraformSystem`) |
-| Sectid | Drier | toward Arid | 1.5 | 0.04 | 6 | the **nest, on each hatch** (§7.2) |
-| Faeling | Balanced | extremes toward Grass | 3.0 | 0.03 | 8 | the roaming creature (`TerraformSystem`) |
+| Sectid | Drier | toward Arid | 3.0 | 14×0.08/hatch | — | the **nest, on each hatch** (§7.2) |
+| Faeling | Balanced | extremes toward Grass | 4.0 | 0.25 | 8 | the roaming creature (`TerraformSystem`) |
+
+Note: `TerraformStrength` is a **probability per cooldown roll** (one random tile in radius gets
+a 0.05 moisture nudge on success), not an amount — at the old Faeling 0.03 that was one tile per
+~267 ticks, invisibly slow, which is why faction terraforming barely marked the map (raised
+2026-07-13; the Sectid nest burst was likewise widened 6×0.05@r1.5 → 14×0.08@r3).
 
 A tile change marks its chunk dirty so the renderer rebuilds that mesh. Three-way conflict:
 Shroomers wet the world (helping themselves, hurting Sectids), Sectids dry it, Faelings
@@ -877,8 +882,11 @@ smoothly follows the player entity (a yellow sphere). WASD moves the player **ca
   (detail carries the reason: `not_viable`, `prey_escaped`, `discomfort`, `target_died`),
   `starvation`, `age_death`, `environment_death`, `spore_created`, `spore_matured`, and — when a
   species is tracked (below) — `damage_dealt` / `damage_taken` (melee/thorn/aoe/ranged source).
-- `population_YYYYMMDD_HHmmss.csv` (+ `latest_population.csv`): per-species counts every 100
-  ticks (~5 s at 20 TPS).
+- `population_YYYYMMDD_HHmmss.csv` (+ `latest_population.csv`): per-species **creature** counts
+  every 100 ticks (~5 s at 20 TPS), plus three trailing columns `spores,nests,crystals` for
+  structures/spores. Spores carry `Species(Shroomer)` internally and used to be counted as
+  Shroomers here (silently inflating every Shroomer figure while the F3 overlay excluded them);
+  they are now tallied apart, and `total` is living creatures only — matching the overlay.
 - `species_stats_YYYYMMDD_HHmmss.csv` (+ `latest_species_stats.csv`): per-species per-interval
   breakdown — population, births, deaths split by cause (`starve`/`age`/`predation`/
   `environment`), `kills_made`, and average hunger/energy %. A `MASS_PERISH` alert is emitted
