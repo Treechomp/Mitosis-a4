@@ -392,6 +392,15 @@ public sealed class SpeciesDefinition
     public float TerraformStrength { get; init; } = 0.02f;
     public int TerraformCooldown { get; init; } = 10;
 
+    // === KEEPER (Faelings — anti-dominance balancers) ===
+    /// <summary>Radius (tiles) a keeper scans to judge which rival faction is locally
+    /// over-dominant (Shroomer bloom vs Sectid swarm). 0 = keeper sensing off.</summary>
+    public float KeeperSenseRadius { get; init; } = 0f;
+    /// <summary>Minimum members the leading faction needs locally (and ≥1.5× the rival)
+    /// before a keeper commits to suppressing it — below this, the area counts as balanced
+    /// and the keeper falls back to terrain restoration.</summary>
+    public int KeeperMinPresence { get; init; } = 5;
+
     public List<TileType>? FeedTiles { get; init; }
     public float FeedNutrition { get; init; } = 0.4f;
 

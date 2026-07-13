@@ -107,8 +107,21 @@ public sealed class WanderSystem : ISystem
                 {
                     float targetX, targetY;
 
-                    // Faelings: seek damaged terrain (non-balanced tiles) to restore
+                    // Keepers (Faelings with an active dominance reading): besiege the locally
+                    // dominant faction — roam to a standoff ring around its sensed hotspot,
+                    // from which their balanced terraform dries/restores the substrate the
+                    // winner depends on. Containment, not a suicide charge into elder AoE.
                     if (wanderSpeciesDef != null
+                        && wanderSpeciesDef.TerraformDir == TerraformDirection.Balanced
+                        && em.HasComponents(entity, ComponentFlags.FaelingPower)
+                        && em.FaelingPowers[entity].KeeperFaction != 0
+                        && TrySiegeTarget(ref em.FaelingPowers[entity], pos.X, pos.Y,
+                               out targetX, out targetY))
+                    {
+                        // Target already set toward the siege line
+                    }
+                    // Faelings: seek damaged terrain (non-balanced tiles) to restore
+                    else if (wanderSpeciesDef != null
                         && wanderSpeciesDef.TerraformDir == TerraformDirection.Balanced
                         && _worldManager != null
                         && TryFindDamagedTerrainTarget(pos.X, pos.Y, roamDistance, out targetX, out targetY))
@@ -555,6 +568,43 @@ public sealed class WanderSystem : ISystem
     /// </summary>
     private static float Aversion(SpeciesDefinition? sp, TileType tile)
         => sp != null ? TerrainProfile.SteerAversion(sp, tile) : tile.GetAvoidanceWeight();
+
+    // Siege standoff in tiles: just outside a full-grown Shroomer's max AoE reach (25), so a
+    // keeper besieging a bloom bombards/terraforms from the rim instead of dying inside it.
+    private const float KeeperSiegeStandoff = 26f;
+
+    /// <summary>
+    /// Roam target for a keeper with an active dominance reading: a point on the standoff
+    /// ring around the sensed hotspot, on the keeper's side. Works from both directions —
+    /// approaching keepers stop at the ring, a keeper caught inside it retreats out to it.
+    /// Returns false when already on station (fall through to local restoration patrol,
+    /// which the damaged substrate around a bloom naturally attracts).
+    /// </summary>
+    private static bool TrySiegeTarget(ref FaelingPower power, float x, float y,
+        out float targetX, out float targetY)
+    {
+        targetX = x;
+        targetY = y;
+        float dx = x - power.KeeperHotspotX;
+        float dy = y - power.KeeperHotspotY;
+        float dist = MathF.Sqrt(dx * dx + dy * dy);
+
+        // On station: within a band around the ring — hold and restore locally.
+        if (dist > KeeperSiegeStandoff - 6f && dist < KeeperSiegeStandoff + 14f)
+            return false;
+
+        if (dist < 0.001f)
+        {
+            // Standing exactly on the hotspot: pick an arbitrary retreat direction.
+            dx = 1f;
+            dy = 0f;
+            dist = 1f;
+        }
+
+        targetX = power.KeeperHotspotX + dx / dist * KeeperSiegeStandoff;
+        targetY = power.KeeperHotspotY + dy / dist * KeeperSiegeStandoff;
+        return true;
+    }
 
     /// <summary>
     /// Find a roam target toward the most damaged (non-balanced) terrain.

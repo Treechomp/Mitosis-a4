@@ -158,6 +158,14 @@ public struct FaelingPower
     public int KillCount;         // Terraformers killed (for stats)
     public int TilesRestored;     // Tiles restored (for stats)
 
+    // Keeper sense (CrystalSystem.SenseDominance): which rival faction is locally
+    // over-dominant and where its concentration sits. Drives the keeper's attack
+    // preference and the siege patrol (WanderSystem).
+    public int KeeperFaction;       // (int)SpeciesType of the dominant faction; 0 = balanced/none
+    public float KeeperHotspotX;    // Centroid of the dominant faction's local members
+    public float KeeperHotspotY;
+    public int KeeperSenseCooldown; // Ticks until the next dominance scan
+
     public FaelingPower(int linkedCrystal, float powerPerKill = 5f, float powerPerTile = 0.2f)
     {
         Power = 0f;
@@ -166,6 +174,10 @@ public struct FaelingPower
         LinkedCrystal = linkedCrystal;
         KillCount = 0;
         TilesRestored = 0;
+        KeeperFaction = 0;
+        KeeperHotspotX = 0f;
+        KeeperHotspotY = 0f;
+        KeeperSenseCooldown = 0;
     }
 }
 

@@ -83,7 +83,19 @@ swarm-kill-mass) lost their food and death-spiralled. Relaxed to let blooms buil
 fungivores + Sectid predation still capping the total. **Watch next run:** Shroomer equilibrium
 (want hundreds, cyclic — not ~90 flat, not thousands) and whether Sectids survive.
 
-### #4 — Faeling "keeper" redesign 🔲 PLANNED (design: option ①, "anti-dominance balancer")
+### #4 — Faeling "keeper" redesign ✅ DONE (option ①, "anti-dominance balancer")
+Implemented (see FEATURES §7.3 for the mechanics): periodic dominance sense
+(`KeeperSenseRadius` 40, `KeeperMinPresence` 5, 1.5× margin, spores/structures excluded) →
+ranged-attack preference for the locally winning faction; **elder-safety filter** (never
+bolt-duel a Shroomer whose growth-scaled AoE reach rivals the 12-tile bolt range — the
+pre-keeper suicide that bled Faelings 8→5); **siege patrol** to a 26-tile standoff ring around
+the dominant hotspot where balanced terraform dries/restores the winner's substrate (drought
+from #3 kills the elders bolts can't). Falls back to the old damaged-terrain restoration when
+surroundings are balanced. **Watch next run:** Faeling kill counts/power growth, whether
+sieges measurably shorten bloom lifetimes (environment_death:drought near hotspots), and
+whether 8 keepers are enough to matter (if not, `FaelingShare` is the dial).
+
+Original design sketch (for reference):
 Faelings become self-correcting keepers of order rather than just another combatant:
 - **Focus fire the locally-dominant faction.** Today they attack Sectids/Shroomers indiscriminately
   at range. Instead, sample the local faction mix (spatial-hash query around the Faeling / its

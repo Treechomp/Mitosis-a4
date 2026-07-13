@@ -776,8 +776,30 @@ Crystals are indestructible structures (energy 999999), each linked to one Faeli
 Faeling dies, a crystal waits `CrystalSpawnDelay` then spawns a replacement carrying inherited
 power. Faelings gain **power** from kills (+5) and balanced terraforming, boosting growth and
 ranged damage (`BaseDamage + power×0.5`); 50% of power passes to the crystal on death (lineage
-compounds). Faelings patrol toward damaged (non-Grass) terrain, are immune to starvation,
-terrain discomfort, and predation, and attack Sectids/Shroomers at range (LOD-gated).
+compounds). They are immune to starvation, terrain discomfort, and predation, and attack
+Sectids/Shroomers at range (LOD-gated).
+
+**Keeper of order (anti-dominance balancer).** Every `150` ticks a Faeling scans
+`KeeperSenseRadius` (40) and judges which rival faction is **locally over-dominant**: the
+leader needs ≥ `KeeperMinPresence` (5) members nearby and ≥ 1.5× the rival's count (spores
+and structures don't count). While a dominance reading is active:
+- **Attack preference** — ranged bolts prefer the dominant faction's members over the other's
+  (suppress whoever is winning; today that's usually the Shroomer bloom, but it flips to
+  Sectid swarms automatically if they surge).
+- **Elder-safety** — a keeper never bolt-duels a Shroomer whose growth-scaled AoE reach rivals
+  its 12-tile attack range (30 damage/pulse vs 150 HP is how pre-keeper Faelings bled out).
+  Bolts are for the young, still-spreading front and for Sectids; grown Shroomers are left to
+  the siege.
+- **Siege patrol** — instead of wandering to any damaged terrain, the keeper roams to a
+  **standoff ring** (26 tiles — just outside a full-grown Shroomer's 25-tile AoE) around the
+  dominant faction's sensed hotspot, and holds station there. Its balanced terraform then
+  dries/restores the substrate the winner depends on — with §7.1's drought mechanic, drying a
+  bloom's tiles *kills* the elders bolts can't touch, and restoring Sectid-dried land removes
+  the desert their nests spread from. Containment and collapse, not a suicide charge; power
+  gained per restored tile compounds the keeper lineage.
+
+With no dominance reading (balanced surroundings), keepers fall back to patrolling toward
+damaged (non-Grass) terrain and restoring it, as before.
 
 ### 7.4 Terraform summary — `TerrainSystems.cs` (TerraformSystem)
 

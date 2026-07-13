@@ -29,7 +29,11 @@ public sealed class CrystalSystem : ISystem
 
     private readonly List<(float x, float y, int crystalEntity, float inheritedPower)> _pendingFaelings = new(4);
     private readonly List<int> _nearbyBuffer = new(32);
+    private readonly List<int> _senseBuffer = new(64);
     private readonly int _maxPopulation;
+
+    // Ticks between keeper dominance scans (the scan is a wide spatial query; ~8 keepers → cheap).
+    private const int KeeperSenseInterval = 150;
 
     public CrystalSystem(WorldManager worldManager, SpatialHash spatialHash, int maxPopulation)
     {
@@ -109,6 +113,23 @@ public sealed class CrystalSystem : ISystem
                 ref var ranged = ref em.RangedAttacks[entity];
                 ranged.BaseDamage = faeDef.RangedAttackDamage + power.Power * 0.5f;
             }
+
+            // Keeper sense: periodically judge which rival faction is locally over-dominant
+            // (option ① "keeper of order" — suppress whoever is winning). Feeds the ranged
+            // attack preference below and the siege patrol in WanderSystem.
+            if (em.HasComponents(entity, ComponentFlags.Species))
+            {
+                var faeDef = SpeciesRegistry.GetById(em.Species[entity].SpeciesId);
+                if (faeDef.KeeperSenseRadius > 0f)
+                {
+                    power.KeeperSenseCooldown--;
+                    if (power.KeeperSenseCooldown <= 0)
+                    {
+                        power.KeeperSenseCooldown = KeeperSenseInterval;
+                        SenseDominance(em, entity, ref power, faeDef);
+                    }
+                }
+            }
         }
 
         // === RANGED ATTACK PROCESSING ===
@@ -127,6 +148,62 @@ public sealed class CrystalSystem : ISystem
                 crystal.InheritedPower = 0f;
                 EcosystemLogger.Instance?.LogReproduction(faelingSpeciesId, crystalEntity, x, y, 1);
             }
+        }
+    }
+
+    /// <summary>
+    /// Scan the keeper's surroundings and decide which rival faction is locally over-dominant:
+    /// the leading faction must have at least <c>KeeperMinPresence</c> members nearby AND at
+    /// least 1.5× the rival's count. Stores the winner and the centroid of its local members
+    /// (the "hotspot" the siege patrol moves toward); anything less counts as balanced and the
+    /// keeper falls back to plain terrain restoration. Spores and structures (nests/crystals)
+    /// don't count — dominance is about active creatures.
+    /// </summary>
+    private void SenseDominance(EntityManager em, int entity, ref FaelingPower power,
+        SpeciesDefinition faeDef)
+    {
+        ref var pos = ref em.Positions[entity];
+        _senseBuffer.Clear();
+        _spatialHash.QueryRadius(pos.X, pos.Y, faeDef.KeeperSenseRadius, _senseBuffer);
+
+        int shroomers = 0, sectids = 0;
+        float shroomX = 0f, shroomY = 0f, sectX = 0f, sectY = 0f;
+        foreach (int other in _senseBuffer)
+        {
+            if (other == entity || !em.IsAlive(other)) continue;
+            if (!em.HasComponents(other, ComponentFlags.Species)) continue;
+            if (em.HasComponents(other, ComponentFlags.Spore) ||
+                em.HasComponents(other, ComponentFlags.Nest) ||
+                em.HasComponents(other, ComponentFlags.Crystal)) continue;
+
+            ref var otherSpecies = ref em.Species[other];
+            ref var otherPos = ref em.Positions[other];
+            if (otherSpecies.Type == SpeciesType.Shroomer)
+            {
+                shroomers++;
+                shroomX += otherPos.X;
+                shroomY += otherPos.Y;
+            }
+            else if (otherSpecies.Type == SpeciesType.Sectid)
+            {
+                sectids++;
+                sectX += otherPos.X;
+                sectY += otherPos.Y;
+            }
+        }
+
+        int lead = Math.Max(shroomers, sectids);
+        int trail = Math.Min(shroomers, sectids);
+        if (lead >= faeDef.KeeperMinPresence && lead * 2 >= trail * 3) // ≥1.5× margin
+        {
+            bool shroomerDominant = shroomers >= sectids;
+            power.KeeperFaction = (int)(shroomerDominant ? SpeciesType.Shroomer : SpeciesType.Sectid);
+            power.KeeperHotspotX = shroomerDominant ? shroomX / shroomers : sectX / sectids;
+            power.KeeperHotspotY = shroomerDominant ? shroomY / shroomers : sectY / sectids;
+        }
+        else
+        {
+            power.KeeperFaction = 0;
         }
     }
 
@@ -156,11 +233,16 @@ public sealed class CrystalSystem : ISystem
                 continue;
             }
 
-            // Find terraformer target (Sectids and Shroomers — NOT other Faelings)
+            // Find terraformer target (Sectids and Shroomers — NOT other Faelings).
+            // Keeper preference: if a rival faction is locally over-dominant (SenseDominance),
+            // its members are preferred over the other faction's — the keeper suppresses
+            // whoever is winning.
             _spatialHash.QueryRadius(pos.X, pos.Y, ranged.Range, _nearbyBuffer);
+            int keeperFaction = em.FaelingPowers[entity].KeeperFaction;
 
-            int bestTarget = -1;
+            int bestTarget = -1, bestPreferred = -1;
             float bestDistSq = ranged.Range * ranged.Range;
+            float bestPrefDistSq = bestDistSq;
 
             foreach (int other in _nearbyBuffer)
             {
@@ -175,6 +257,22 @@ public sealed class CrystalSystem : ISystem
                 // Don't target spores (they have low priority)
                 if (em.HasComponents(other, ComponentFlags.Spore)) continue;
 
+                // Elder-safety: never bolt-duel a Shroomer whose growth-scaled AoE reach rivals
+                // our attack range — 30 damage per combat pulse against 150 HP is a fight the
+                // keeper loses (this is how the pre-keeper Faelings bled out, 8→5, in the bloom
+                // run). Grown Shroomers are left to the siege: the keeper's balanced terraform
+                // dries their substrate and #3's drought does the killing. Bolts are for the
+                // young, still-spreading front and for Sectids.
+                if (otherSpecies.Type == SpeciesType.Shroomer &&
+                    em.HasComponents(other, ComponentFlags.Growth))
+                {
+                    var shroomDef = SpeciesRegistry.GetById(otherSpecies.SpeciesId);
+                    float aoeReach = shroomDef.AoEAttackRadius *
+                        shroomDef.GetGrowthScalingFactor(em.Growths[other].CurrentScale);
+                    if (aoeReach + 2f >= ranged.Range)
+                        continue;
+                }
+
                 ref var otherPos = ref em.Positions[other];
                 float distSq = MathUtils.DistanceSquared(pos.X, pos.Y, otherPos.X, otherPos.Y);
                 if (distSq < bestDistSq)
@@ -182,7 +280,15 @@ public sealed class CrystalSystem : ISystem
                     bestDistSq = distSq;
                     bestTarget = other;
                 }
+                if ((int)otherSpecies.Type == keeperFaction && distSq < bestPrefDistSq)
+                {
+                    bestPrefDistSq = distSq;
+                    bestPreferred = other;
+                }
             }
+
+            if (bestPreferred >= 0)
+                bestTarget = bestPreferred;
 
             if (bestTarget >= 0)
             {

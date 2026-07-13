@@ -2871,6 +2871,12 @@ public static class SpeciesRegistry
             TerraformStrength = 0.03f,     // Stronger restoration
             TerraformCooldown = 8,
 
+            // Keeper of order — senses which rival faction is locally over-dominant (a Shroomer
+            // bloom or a Sectid swarm), prefers it as a ranged target, and lays siege to its
+            // hotspot from a standoff ring, drying/restoring the substrate the winner needs.
+            KeeperSenseRadius = 40f,
+            KeeperMinPresence = 5,
+
             // Trophic - medium plant creature, NOT huntable by predators
             BodyMass = 3.0f,
 
