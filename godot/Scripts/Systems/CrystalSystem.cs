@@ -35,6 +35,14 @@ public sealed class CrystalSystem : ISystem
     // Ticks between keeper dominance scans (the scan is a wide spatial query; ~8 keepers → cheap).
     private const int KeeperSenseInterval = 150;
 
+    // Global faction census, refreshed once per keeper-sense interval and shared by all keepers.
+    // Guards the dominance sense against its local-density blind spot: Sectid colonies are ALWAYS
+    // locally dense (8+ per nest), so a purely local read had keepers besieging nests of a faction
+    // that was globally collapsing (77→4) while Shroomers tripled elsewhere unopposed.
+    private int _globalShroomers;
+    private int _globalSectids;
+    private int _censusCooldown;
+
     public CrystalSystem(WorldManager worldManager, SpatialHash spatialHash, int maxPopulation)
     {
         _worldManager = worldManager;
@@ -45,6 +53,24 @@ public sealed class CrystalSystem : ISystem
     public void Process(EntityManager em)
     {
         _pendingFaelings.Clear();
+
+        // Refresh the global faction census on the sense cadence (one O(entities) pass).
+        _censusCooldown--;
+        if (_censusCooldown <= 0)
+        {
+            _censusCooldown = KeeperSenseInterval;
+            _globalShroomers = 0;
+            _globalSectids = 0;
+            foreach (int e in em.Query(ComponentFlags.Species))
+            {
+                if (em.HasComponents(e, ComponentFlags.Spore) ||
+                    em.HasComponents(e, ComponentFlags.Nest) ||
+                    em.HasComponents(e, ComponentFlags.Crystal)) continue;
+                var t = em.Species[e].Type;
+                if (t == SpeciesType.Shroomer) _globalShroomers++;
+                else if (t == SpeciesType.Sectid) _globalSectids++;
+            }
+        }
 
         // === CRYSTAL PROCESSING ===
         const ComponentFlags crystalRequired = ComponentFlags.Position | ComponentFlags.Crystal;
@@ -197,6 +223,18 @@ public sealed class CrystalSystem : ISystem
         if (lead >= faeDef.KeeperMinPresence && lead * 2 >= trail * 3) // ≥1.5× margin
         {
             bool shroomerDominant = shroomers >= sectids;
+
+            // Global-context guard: don't commit to suppressing a faction that is already
+            // globally well behind its rival (≤ 2/3 of the rival's count) — a keeper's job is
+            // checking the WINNER, and every colony/bloom looks locally dominant up close.
+            int leadGlobal = shroomerDominant ? _globalShroomers : _globalSectids;
+            int trailGlobal = shroomerDominant ? _globalSectids : _globalShroomers;
+            if (leadGlobal * 3 < trailGlobal * 2)
+            {
+                power.KeeperFaction = 0;
+                return;
+            }
+
             power.KeeperFaction = (int)(shroomerDominant ? SpeciesType.Shroomer : SpeciesType.Sectid);
             power.KeeperHotspotX = shroomerDominant ? shroomX / shroomers : sectX / sectids;
             power.KeeperHotspotY = shroomerDominant ? shroomY / shroomers : sectY / sectids;

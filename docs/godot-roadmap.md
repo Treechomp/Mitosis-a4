@@ -77,6 +77,15 @@ debug overlay with LOD/category/per-species counts and per-system timings.
 
 ## Active / near-term work
 
+- [ ] **Focused system testing (next branch).** Full-world balance runs have hit their limit for
+      the knife-edge systems: on the same world seed, outcomes swing wildly because per-system
+      sim RNG is unseeded, and rare interactions (keeper-vs-bloom sieges) never occur often
+      enough to measure. Next: seed the sim RNGs from `WorldSeed` for reproducibility, then build
+      small scripted scenarios per system (bloom-vs-keepers, Sectid colony vs fixed prey density,
+      single-predator hunt economics) with pass/fail metrics from the existing CSV logging. See
+      `faction-balance-plan.md` (handoff section) for specifics; the faction workstream is paused
+      on that branch's results. The predator-guild starvation economy is the first candidate.
+
 - [ ] **Terrain mesh & entity positioning** — ongoing polish of the 3D terrain mesh and how
       entities sit on the surface (the current focus; see code, not yet final).
 - [ ] **Settle production config** — validate the standard test defaults (36×36 / 2000 / 12000)

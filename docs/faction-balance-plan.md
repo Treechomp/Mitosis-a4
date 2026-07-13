@@ -4,6 +4,47 @@ Workstream to turn the three terraformer factions into a genuine three-way war i
 Shroomer monoculture. Opened after the first full run on the new terrain (run
 `20260710_031029`, 36ch, seed 124154536).
 
+## STATUS (2026-07-13): #1–#4 implemented; workstream PAUSED pending the focused-testing branch
+
+All four parts landed (fungivores, Sectid retargeting, Shroomer self-limits + fertility reliance,
+Faeling keeper). The keeper's first full-world flight (run `20260713_035932`, seed 1269274668 —
+same world as the strict-crowding run, so directly comparable) showed the remaining problems are
+**not tunable from full-world runs**:
+
+- **Keeper first flight:** the sense→prefer→siege machinery works, but fired only 6 kills (all
+  Sectids, all before t12k) and then went silent while Shroomers tripled (107→317). Two causes:
+  (1) *local-density blind spot* — Sectid colonies are always locally dense (8+/nest), so keepers
+  read "Sectid dominance" beside nests of a faction that was globally collapsing (77→4) and piled
+  onto the loser; **fixed** with a global-census guard (won't suppress a faction globally ≤2/3 of
+  its rival). (2) *Coverage* — 8 keepers × 40-tile sense on a 1152² map: most blooms never meet a
+  keeper. Siege efficacy is untested at this density (drought deaths flat, 51 vs ~54 pre-keeper);
+  needs a staged bloom-vs-keeper scenario, not another full-world roll.
+- **Sectids re-collapsed (77→4), and not because of Faelings:** 69 starvation vs 10 predation.
+  Their colony economy only ignites when the herbivore base surges (the 504-peak run rode a
+  1,160-Deer boom; this run's Deer stopped at ~507). Limited-resource-pool behaviour is working
+  as designed — but their viability floor is hostage to prey density and needs its own scenario.
+- **Predator collapse = starvation economics on a knife edge (the secondary question answered):**
+  every collapsed predator starved (Wolf 63 starve/28 births, Hawk 25/8, Fox 46/24, Arctic Fox
+  36/17; 834 starvations vs 469 kills guild-wide), with hunt VOLUME the bottleneck (1,723 attempts
+  in 23k ticks; conversion 27% is fine). Decisive detail: on the SAME world, Hawk went 19→62 in
+  one run and 22→0 in the next — sim RNG is unseeded (`new Random()` per system), so predator fate
+  is dominated by early stochastic luck. This both explains "why predators diminished" and shows
+  the tuning method has hit its limit.
+- **Watch item:** Penguin 45→347 — free water-tile feeding (the "can't starve" model Shroomers
+  used to have) with all three of its predators collapsed/tiny. Same structural pattern; candidate
+  for the fertility-style treatment or predation pressure once predators function.
+
+### Handoff → focused-testing branch (recommendations)
+1. **Determinism first:** seed the per-system `Random` instances from `WorldSeed` (one line each)
+   so identical setups reproduce — without this, A/B tuning of knife-edge systems (predators,
+   keepers) is reading noise.
+2. **Scenario harness:** small worlds + `DisabledSpecies` give most of it already; add tiny
+   scripted setups — (a) one Shroomer bloom + N keepers (siege efficacy, drought kill-rate),
+   (b) Sectid colony + fixed prey density sweep (find the colony-viability floor), (c) single
+   predator species + prey at controlled density (hunt-volume economics, breeding threshold sweep).
+3. **Metrics:** the events/species-stats CSVs already carry what's needed; per-scenario asserts
+   ("bloom collapses within N ticks", "colony survives at density X") turn runs into pass/fail.
+
 ## The problem (from run 20260710_031029)
 
 Shroomers ran to **9,107 of ~11,700 total (78%)** and were still climbing when the run ended;
