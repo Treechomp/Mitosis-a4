@@ -1,9 +1,11 @@
 # Mitosis — Architecture Overview
 
+> **Project**: an early-development creature-sandbox **video game** (the world-ecology is a game
+> mechanic, not a research model — see [CLAUDE.md](../CLAUDE.md)).
 > **Engine**: Godot 4.6.3 with C# · **Rendering**: 3D (`Node3D` scene, orthographic `Camera3D`)
 > **Architecture**: Custom Structure-of-Arrays (SoA) ECS, simulation-first
 >
-> For the full feature/systems/species reference, see **[FEATURES_AND_DESIGN.md](FEATURES_AND_DESIGN.md)**.
+> For the full feature/systems/creature reference, see **[FEATURES_AND_DESIGN.md](FEATURES_AND_DESIGN.md)**.
 > For development status and the roadmap, see **[godot-roadmap.md](godot-roadmap.md)**.
 > Historical/superseded documents live in **[archive/](archive/)**.
 

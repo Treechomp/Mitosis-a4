@@ -1,8 +1,10 @@
 # Mitosis — Development Roadmap & Status
 
-> Engine: **Godot 4.6.3 + C#** · Renderer: **3D** · Last updated: **June 2026**
+> An early-development creature-sandbox **video game** (the world-ecology is a game mechanic —
+> see [CLAUDE.md](../CLAUDE.md)).
+> Engine: **Godot 4.6.3 + C#** · Renderer: **3D** · Last updated: **July 2026**
 >
-> For the full feature/system/species reference see
+> For the full feature/system/creature reference see
 > **[FEATURES_AND_DESIGN.md](FEATURES_AND_DESIGN.md)**; for architecture see
 > **[architecture.md](architecture.md)**. Superseded plans are in **[archive/](archive/)**.
 
@@ -10,7 +12,7 @@
 
 ## Current state (v0.7 — 3D world)
 
-A self-contained ecosystem simulation runs end-to-end in 3D:
+The game's world and background simulation run end-to-end in 3D:
 
 - **Engine/renderer**: Godot 4.6.3, C#, `Node3D` scene with an orthographic isometric
   `Camera3D`, `DirectionalLight3D`, triangulated 3D terrain meshes, and entity

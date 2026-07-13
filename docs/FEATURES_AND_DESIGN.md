@@ -1,11 +1,14 @@
 # Mitosis — Features, Systems & Design Reference
 
-> **Purpose**: Comprehensive reference for the currently implemented features, systems,
+> **Project**: an early-development creature-sandbox **video game** — the world-ecology is a game
+> mechanic (a background system that keeps the world alive), not a scientific model. See
+> [CLAUDE.md](../CLAUDE.md).
+> **Purpose**: Comprehensive reference for the currently implemented game features, systems,
 > mechanics, and design decisions. Read this before diving into source code.
 >
 > **Engine**: Godot 4.6.3 with C# · **Rendering**: 3D (`Node3D`, orthographic `Camera3D`)
 > **Architecture**: Custom SoA ECS, fixed 20 TPS simulation
-> **Last updated**: June 2026
+> **Last updated**: July 2026
 >
 > Companion docs: [architecture.md](architecture.md) (high-level design),
 > [godot-roadmap.md](godot-roadmap.md) (status & roadmap),
@@ -33,15 +36,16 @@
 
 ## 1. Project Overview
 
-Mitosis is a **top-down 3D ecosystem simulation**: procedurally generated worlds with
-elevation, biomes, and rivers, populated by autonomous creatures. Herbivores graze and form
-herds, predators hunt with solo/pack/swarm/ambush tactics, and three faction species
-terraform the world in competing directions. The simulation runs at a fixed tick rate,
-decoupled from rendering.
+Mitosis is a **top-down creature-sandbox video game** (early development): procedurally generated
+game worlds with elevation, biomes, and rivers, populated by AI creatures. Grazers form herds,
+hunters use solo/pack/swarm/ambush tactics, and three rival factions reshape the world in
+competing directions — an emergent, watchable drama the player roams and (eventually) shapes. The
+world runs as a fixed-tick background **simulation** — here a game mechanic for a living world, not
+a scientific model — decoupled from rendering.
 
 ### Design principles
 
-- **Simulation-first**: all logic lives in ECS systems; rendering only visualizes state.
+- **Simulation-first**: all game logic lives in ECS systems; rendering only visualizes state.
 - **Data-driven species**: behavior is configured through `SpeciesDefinition`; systems
   contain no per-species hardcoding.
 - **Cache-efficient SoA**: components are flat arrays indexed by entity ID.
@@ -721,14 +725,14 @@ same-species neighbours once and that drives three effects:
   self-thins into advancing fronts rather than a solid immortal field.
 - **Drought death** — a mature Shroomer on a tile drier than its `SporeMoistureThreshold`
   drains `DroughtDamage`/tick and cannot spread, so **faction terraforming toward dry biomes
-  (Sectid drying, Faeling neutralizing) actively collapses a bloom** — the biological weapon
-  that makes the territory war real. Both attrition deaths log as `environment_death`
+  (Sectid drying, Faeling neutralizing) actively collapses a bloom** — the in-world weapon
+  that makes the faction territory war real. Both attrition deaths log as `environment_death`
   (`drought`/`crowding`).
 - **Spread suppression** — local saturation scales spread to zero as neighbours climb
   `CrowdingLimit → CrowdingSaturation` (no open ground to colonise), and a **global
   population-pressure factor** (mirrors ReproductionSystem's 50→100% ramp) caps spread as the
   shared population fills — a safety ceiling so Shroomers can't convert the whole cap even if
-  the biological knobs are mistuned.
+  the in-world crowding/drought knobs are mistuned.
 
 ### 7.2 Sectid / Nest — `NestSystem.cs`
 

@@ -60,8 +60,8 @@ population and still climbing** at t24 100. Root cause: grown Shroomers had *no*
 - **Crowding attrition** (`CrowdingRadius` 6, `CrowdingLimit` 8, `CrowdingDamage` 0.15) — a dense
   mat competes with itself; energy drains per neighbour over the limit, so blooms self-thin.
 - **Drought death** (`DroughtDamage` 0.5) — a mature Shroomer on a tile below `SporeMoistureThreshold`
-  starves and can't spread → **faction drying collapses a bloom** (the biological weapon the
-  user wanted, over arbitral gating). Logs `environment_death:drought`/`crowding`.
+  starves and can't spread → **faction drying collapses a bloom** (the in-world weapon wanted
+  here, over arbitral gating). Logs `environment_death:drought`/`crowding`.
 - **Spread suppression** — local saturation (`CrowdingLimit → CrowdingSaturation` 18) zeroes spread
   where there's no open ground, plus a global population-pressure factor (mirrors ReproductionSystem)
   as a safety ceiling so Shroomers can never convert the whole cap.
@@ -129,7 +129,7 @@ A `DisableFactionSpecies` run is the control. It changes the diagnosis:
   age + predation (Fish 832 age/364 predation, Rabbit 448/386, Deer 370/164) — a functioning food
   web. Consequence: the 12 000 cap and its pressure ramp are nearly inert in a healthy world, so
   the global-pressure *factor* I added to Shroomer spread (#3) barely engages until Shroomers alone
-  are already a monoculture — **the biological crowding/drought levers must carry #3, not the gate.**
+  are already a monoculture — **the in-world crowding/drought levers must carry #3, not the gate.**
 - **Without factions the predator guild is HEALTHY:** at t36 000 Hawk 69, Wolf 56, Bear 54,
   Jaguar 48, Polar Bear 50, Shark 16, Crocodile 26, Fox 16 — all stable. In the faction run these
   same species collapsed to 0–1. **So the severe predator collapse is largely faction-driven (the

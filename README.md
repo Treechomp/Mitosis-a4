@@ -1,26 +1,34 @@
 # Mitosis
 
-A top-down **3D** ecosystem simulation: procedurally generated worlds with elevation,
-biomes, and rivers, populated by thousands of autonomous creatures with emergent behavior.
-Built with **Godot 4.6.3** and **C#**.
+**A top-down creature-sandbox video game — early in development.** Roam a living,
+procedurally generated game world where AI creatures and three rival factions play out an
+emergent, watchable drama you can nudge and reshape. Built in **Godot 4.6.3** / **C#**. The
+creature simulation is the game's engine; the player-facing game layer (progression,
+observation tools, directed creature evolution) is the upcoming work — see the
+[roadmap](docs/godot-roadmap.md).
 
-## Features
+> **Genre**: creature sandbox / god-game. Think a living toybox world, not a lab — the
+> "simulation" is a game mechanic (a lightweight background ecology that keeps the world
+> feeling alive), not a scientific model.
 
-- **Procedural 3D worlds** — chunk-based terrain with per-vertex elevation, simplex-noise
+## Game features
+
+- **Procedural game worlds (3D)** — chunk-based terrain with per-vertex elevation, simplex-noise
   generation, domain warping, temperature/moisture biomes, ridged mountain ranges, terraced
   cliff regions, flow-based rivers and lakes that feed moisture back into the biomes around
   them (riparian corridors, marshy deltas, drainage), and landmark features (oases,
-  clearings, caves). Rendered as lit 3D meshes.
-- **28 species** — 5 generalist herbivores/predators, 20 biome-specific species
-  (aquatic, arctic, desert, tropical, temperate), and 3 terraforming factions.
-- **Custom SoA ECS** — Structure-of-Arrays Entity-Component-System for cache-efficient
-  simulation of thousands of entities (16,384 capacity).
-- **Distance-based LOD** — five tiers gate per-entity work each tick so distant parts of
-  the world stay cheap without a separate statistical model.
-- **Faction terraforming** — Shroomers (wetter), Sectids (drier), and Faelings (balanced)
-  reshape terrain along a moisture axis, creating a three-way ecological conflict.
-- **Rich predation** — solo, coordinated pack (leader/flanker/disruptor), swarm, and
-  stealth/ambush-pounce hunting tactics; mass-based hunt ratios; venom; fear responses.
+  clearings, caves). Rendered as lit 3D meshes with a live in-editor world previewer.
+- **28 creatures** — 5 generalist grazers/hunters, 20 biome-themed creatures
+  (aquatic, arctic, desert, tropical, temperate), and 3 world-shaping factions.
+- **Built to scale** — a custom Structure-of-Arrays Entity-Component-System runs thousands of
+  creatures cheaply (16,384 capacity), with five-tier distance LOD so the far reaches of the
+  map stay cheap while the action near the player runs at full detail.
+- **Three-way faction war** — Shroomers (spread swamp), Sectids (spread desert), and Faelings
+  (restore balance) reshape the land against each other, a background conflict the player can
+  tip.
+- **Emergent creature AI** — solo, coordinated pack (leader/flanker/disruptor), swarm, and
+  stealth/ambush hunting; herds and fleeing; venom and fear — simple per-creature rules that
+  produce watchable, unscripted behavior.
 
 ## Quick Start
 
@@ -69,21 +77,21 @@ docs/                            # current documentation (+ docs/archive for sup
 logs/                            # EcosystemLogger CSV output (runtime)
 ```
 
-## Tech Stack
+## Tech stack
 
 - **Godot 4.6.3** — game engine, C# / .NET scripting, 3D renderer (Forward+)
-- **Custom SoA ECS** — replaces the scene tree for entity simulation
+- **Custom SoA ECS** — replaces the scene tree for cheap creature updates at scale
 - **FastNoiseLite** — terrain noise (built into Godot)
-- **MeshInstance3D / MultiMeshInstance3D** — instanced GPU rendering for terrain and entities
+- **MeshInstance3D / MultiMeshInstance3D** — instanced GPU rendering for terrain and creatures
 
 ## Documentation
 
 - **[docs/FEATURES_AND_DESIGN.md](docs/FEATURES_AND_DESIGN.md)** — comprehensive reference
-  for all systems, species, terrain, and mechanics.
+  for all game systems, creatures, terrain, and mechanics.
 - **[docs/architecture.md](docs/architecture.md)** — architecture overview and design decisions.
 - **[docs/godot-roadmap.md](docs/godot-roadmap.md)** — development status and roadmap.
 - **[docs/archive/](docs/archive/)** — superseded/historical documents (Python era, the
-  2D→3D migration plan, the removed statistical-sim experiment, prior audits).
+  2D→3D migration plan, a removed distant-area experiment, prior audits).
 
 ## License
 
