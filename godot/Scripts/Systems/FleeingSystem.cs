@@ -50,6 +50,8 @@ public sealed class FleeingSystem : ISystem
             ref var wander = ref em.Wanders[entity];
 
             float fleeRangeSq = prey.FleeRange * prey.FleeRange;
+            // For decision logging: detect flee start/stop transitions this tick.
+            bool wasFleeing = prey.IsFleeing;
 
             // Get this prey's species ID to filter out same-species "threats"
             int mySpeciesId = em.HasComponents(entity, ComponentFlags.Species)
@@ -108,6 +110,10 @@ public sealed class FleeingSystem : ISystem
                     // Extreme fear overrides hunting — abandon hunt to flee (unless mobbing)
                     if (hasFear && fearRatio > 0.8f && !committedToMob)
                     {
+                        if (EcosystemLogger.DecisionLoggingFor(mySpeciesId))
+                            EcosystemLogger.Instance!.LogDecision(mySpeciesId, entity, pos.X, pos.Y,
+                                "fleeing", "abandon_hunt_fear",
+                                FormattableString.Invariant($"fear={fearRatio:F2};target={predator.TargetEntity}"));
                         predator.TargetEntity = -1;
                         predator.Phase = PackPhase.Idle;
                         predator.Role = PackRole.None;
@@ -144,6 +150,10 @@ public sealed class FleeingSystem : ISystem
                     // Only override flee if discomfort is extreme AND we're not panicking
                     if (discomfort.ExceedsThreshold && fearRatio < 0.9f)
                     {
+                        if (wasFleeing && EcosystemLogger.DecisionLoggingFor(mySpeciesId))
+                            EcosystemLogger.Instance!.LogDecision(mySpeciesId, entity, pos.X, pos.Y,
+                                "fleeing", "flee_end",
+                                FormattableString.Invariant($"reason=discomfort_override;discomfort={discomfortRatio:F2};fear={fearRatio:F2}"));
                         prey.IsFleeing = false;
                         prey.Stamina = MathF.Min(1f, prey.Stamina + staminaRecover * tickMult);
                         continue;  // Let wander system handle escape
@@ -182,9 +192,21 @@ public sealed class FleeingSystem : ISystem
                         ApplyFleeResponse(ref pos, ref vel, ref wander, ref prey, fleeDir, fearRatio, discomfortRatio, agility, staminaFactor, speciesDef);
                         break;
                 }
+
+                // Log AFTER the response is applied: Defensive resets IsFleeing to false every
+                // tick (stand ground), so logging on the pre-switch assignment would emit a
+                // "start" line per tick for defensive species instead of one per episode.
+                if (prey.IsFleeing && !wasFleeing && EcosystemLogger.DecisionLoggingFor(mySpeciesId))
+                    EcosystemLogger.Instance!.LogDecision(mySpeciesId, entity, pos.X, pos.Y,
+                        "fleeing", "flee_start", FormattableString.Invariant(
+                            $"response={fearResponse};fear={fearRatio:F2};threat_dist={(hasThreat ? MathF.Sqrt(closestDistSq) : -1f):F1};stamina={prey.Stamina:F2}"));
             }
             else
             {
+                if (wasFleeing && EcosystemLogger.DecisionLoggingFor(mySpeciesId))
+                    EcosystemLogger.Instance!.LogDecision(mySpeciesId, entity, pos.X, pos.Y,
+                        "fleeing", "flee_end", FormattableString.Invariant(
+                            $"reason=safe;fear={fearRatio:F2};stamina={prey.Stamina:F2}"));
                 prey.IsFleeing = false;
                 prey.Stamina = MathF.Min(1f, prey.Stamina + staminaRecover * tickMult);
             }

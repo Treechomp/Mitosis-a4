@@ -3,8 +3,10 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using Godot;
+using Mitosis.Components;
 using Mitosis.ECS;
 using Mitosis.SpeciesData;
+using Mitosis.World;
 using static Mitosis.ECS.EntityManager;
 
 namespace Mitosis.Systems;
@@ -19,6 +21,15 @@ namespace Mitosis.Systems;
 ///   population_YYYYMMDD_HHmmss.csv / latest_population.csv — per-species headcount every snapshot
 ///   species_stats_YYYYMMDD_HHmmss.csv / latest_species_stats.csv — per-interval breakdown
 ///     (births, deaths by cause, kills made, avg hunger%, avg energy%)
+///
+/// Test-scene extensions (all opt-in via the static toggles below, zero-cost when off):
+///   decisions_*.csv / latest_decisions.csv — behavioral decision transitions (hunt/flee/roam/
+///     escape) with the parameters that shaped them; filterable to a species subset.
+///   terrain_*.csv / latest_terrain.csv     — per-interval tile-type histogram, mean moisture,
+///     and terraform activity (every moisture nudge is counted centrally in
+///     <see cref="WorldManager.Terraform"/>; tile-class shifts also land in the events CSV).
+///   nutrition_*.csv / latest_nutrition.csv — per-interval grazing economy: world nutrition
+///     total vs capacity plus consumed / regenerated / corpse-enriched flows.
 ///
 /// Set <see cref="TrackedSpeciesId"/> at runtime to enable verbose per-entity logging for one
 /// species in the events file (prefixed with "TRACKED:"). Useful for diagnosing sudden die-offs.
@@ -38,12 +49,51 @@ public sealed class EcosystemLogger : ISystem
     /// </summary>
     public static int TrackedSpeciesId { get; set; } = -1;
 
+    // ── Test-scene logging configuration ─────────────────────────────────────
+    // All of these must be set BEFORE the logger is constructed (the extra CSV files are only
+    // opened when their feature is enabled). TestSceneManager sets them from the scenario.
+
+    /// <summary>Population/stats snapshot cadence in ticks (default 100 = 5 s at 20 TPS).</summary>
+    public static int SnapshotInterval { get; set; } = 100;
+
+    /// <summary>Master switch for the behavioral decision log (decisions_*.csv).</summary>
+    public static bool DecisionLoggingEnabled { get; set; }
+
+    /// <summary>Restrict decision logging to these species IDs. Null = all species.</summary>
+    public static HashSet<int>? DecisionSpeciesFilter { get; set; }
+
+    /// <summary>Terrain histogram/terraform log cadence in ticks. 0 (default) = off.</summary>
+    public static int TerrainLogInterval { get; set; }
+
+    /// <summary>Nutrition economy log cadence in ticks. 0 (default) = off.</summary>
+    public static int NutritionLogInterval { get; set; }
+
+    public static bool TerrainLoggingEnabled => TerrainLogInterval > 0;
+    public static bool NutritionLoggingEnabled => NutritionLogInterval > 0;
+
+    /// <summary>
+    /// True when a decision by this species would actually be written. Callers use this to
+    /// skip building detail strings for the (default) disabled case.
+    /// </summary>
+    public static bool DecisionLoggingFor(int speciesId)
+        => DecisionLoggingEnabled && Instance != null
+           && (DecisionSpeciesFilter == null || DecisionSpeciesFilter.Contains(speciesId));
+
     private readonly StreamWriter _eventLog;
     private readonly StreamWriter _popLog;
     private readonly StreamWriter _statsLog;
     private readonly StreamWriter _latestEventLog;
     private readonly StreamWriter _latestPopLog;
     private readonly StreamWriter _latestStatsLog;
+    private readonly StreamWriter? _decisionLog;
+    private readonly StreamWriter? _latestDecisionLog;
+    private readonly StreamWriter? _terrainLog;
+    private readonly StreamWriter? _latestTerrainLog;
+    private readonly StreamWriter? _nutritionLog;
+    private readonly StreamWriter? _latestNutritionLog;
+
+    // World reference for the terrain/nutrition chunk scans (null in worldless contexts).
+    private readonly WorldManager? _world;
 
     private readonly Dictionary<int, int> _speciesCounts = new();
     private int _tick;
@@ -56,11 +106,18 @@ public sealed class EcosystemLogger : ISystem
     private readonly Dictionary<int, int> _intervalDeathsEnv       = new();
     private readonly Dictionary<int, int> _intervalKillsMade       = new();
 
-    // Snapshot interval in ticks (every 100 ticks = 5 seconds at 20 TPS)
-    private const int SnapshotInterval = 100;
+    // Per-terrain-interval terraform counters (all directions, and class-crossing shifts).
+    private int _intervalTerraformNudges;
+    private int _intervalTerraformShifts;
 
-    public EcosystemLogger(string logDir = "res://logs")
+    // Per-nutrition-interval flow counters (fed by WorldManager / TileRegenerationSystem).
+    private float _intervalNutritionConsumed;
+    private float _intervalNutritionRegen;
+    private float _intervalNutritionEnriched;
+
+    public EcosystemLogger(WorldManager? world = null, string logDir = "res://logs")
     {
+        _world = world;
         string resolvedDir = ProjectSettings.GlobalizePath(logDir);
         Directory.CreateDirectory(resolvedDir);
         LogDirectory = resolvedDir;
@@ -76,6 +133,28 @@ public sealed class EcosystemLogger : ISystem
         _latestPopLog   = Open(resolvedDir, "latest_population.csv");
         _latestStatsLog = Open(resolvedDir, "latest_species_stats.csv", StatsHeader);
 
+        if (DecisionLoggingEnabled)
+        {
+            const string decHeader = "tick,species,entity_id,x,y,system,decision,detail";
+            _decisionLog       = Open(resolvedDir, $"decisions_{timestamp}.csv", decHeader);
+            _latestDecisionLog = Open(resolvedDir, "latest_decisions.csv",       decHeader);
+        }
+
+        if (TerrainLoggingEnabled && world != null)
+        {
+            string terrainHeader = BuildTerrainHeader();
+            _terrainLog       = Open(resolvedDir, $"terrain_{timestamp}.csv", terrainHeader);
+            _latestTerrainLog = Open(resolvedDir, "latest_terrain.csv",       terrainHeader);
+        }
+
+        if (NutritionLoggingEnabled && world != null)
+        {
+            const string nutHeader =
+                "tick,total_nutrition,total_capacity,fill_pct,consumed,regenerated,corpse_enriched";
+            _nutritionLog       = Open(resolvedDir, $"nutrition_{timestamp}.csv", nutHeader);
+            _latestNutritionLog = Open(resolvedDir, "latest_nutrition.csv",       nutHeader);
+        }
+
         Instance = this;
 
         GD.Print("=========================================");
@@ -83,7 +162,18 @@ public sealed class EcosystemLogger : ISystem
         GD.Print($"  Quick access:   latest_events.csv");
         GD.Print($"                  latest_population.csv");
         GD.Print($"                  latest_species_stats.csv");
+        if (_decisionLog != null)  GD.Print("                  latest_decisions.csv");
+        if (_terrainLog != null)   GD.Print("                  latest_terrain.csv");
+        if (_nutritionLog != null) GD.Print("                  latest_nutrition.csv");
         GD.Print("=========================================");
+    }
+
+    private static string BuildTerrainHeader()
+    {
+        var header = "tick";
+        foreach (var name in Enum.GetNames<TileType>())
+            header += $",{name}";
+        return header + ",mean_moisture,terraform_nudges,terraform_shifts";
     }
 
     private const string StatsHeader =
@@ -102,6 +192,137 @@ public sealed class EcosystemLogger : ISystem
         _tick++;
         if (_tick % SnapshotInterval == 0)
             WritePopulationSnapshot(em);
+        if (_terrainLog != null && _tick % TerrainLogInterval == 0)
+            WriteTerrainSnapshot();
+        if (_nutritionLog != null && _tick % NutritionLogInterval == 0)
+            WriteNutritionSnapshot();
+    }
+
+    // ── Decision log (test scenes) ────────────────────────────────────────────
+
+    /// <summary>
+    /// Log a behavioral decision transition (hunt/flee/roam/escape start/stop and the
+    /// parameters that shaped it). Callers should gate on <see cref="DecisionLoggingFor"/>
+    /// so detail strings are never built when the log is off. The detail must not contain
+    /// commas (use ';' / '=' like the event log).
+    /// </summary>
+    public void LogDecision(int speciesId, int entityId, float x, float y,
+                             string system, string decision, string detail = "")
+    {
+        if (_decisionLog == null) return;
+        if (DecisionSpeciesFilter != null && !DecisionSpeciesFilter.Contains(speciesId)) return;
+        var name = SpeciesRegistry.GetById(speciesId)?.Name ?? speciesId.ToString();
+        string line = FormattableString.Invariant(
+            $"{_tick},{name},{entityId},{x:F1},{y:F1},{system},{decision},{detail}");
+        _decisionLog.WriteLine(line);
+        _latestDecisionLog!.WriteLine(line);
+    }
+
+    // ── Terrain tracking (test scenes) ────────────────────────────────────────
+
+    /// <summary>
+    /// Record one terraform moisture nudge (called centrally from
+    /// <see cref="WorldManager.Terraform"/> so every terraform path is covered). Nudges are
+    /// aggregated into the terrain CSV; a nudge that crosses a tile-class boundary also gets
+    /// a terraform_shift row in the events CSV.
+    /// </summary>
+    public void LogTerraform(float x, float y, TerraformDirection direction,
+                              TileType oldTile, TileType newTile, float oldMoisture, float newMoisture)
+    {
+        if (!TerrainLoggingEnabled) return;
+        _intervalTerraformNudges++;
+        if (oldTile != newTile)
+        {
+            _intervalTerraformShifts++;
+            WriteEvent($"{_tick},terraform_shift,Terrain,-1,{x:F1},{y:F1},{oldTile}->{newTile};dir={direction};moisture={oldMoisture:F3}->{newMoisture:F3}");
+        }
+    }
+
+    // ── Nutrition tracking (test scenes) ──────────────────────────────────────
+
+    /// <summary>Accumulate nutrition consumed by grazing/fertility feeding this interval.</summary>
+    public void CountNutritionConsumed(float amount)
+    {
+        if (NutritionLoggingEnabled) _intervalNutritionConsumed += amount;
+    }
+
+    /// <summary>Accumulate nutrition regenerated by TileRegenerationSystem this interval.</summary>
+    public void CountNutritionRegen(float amount)
+    {
+        if (NutritionLoggingEnabled) _intervalNutritionRegen += amount;
+    }
+
+    /// <summary>Accumulate nutrition added by corpse decomposition this interval.</summary>
+    public void CountNutritionEnriched(float amount)
+    {
+        if (NutritionLoggingEnabled) _intervalNutritionEnriched += amount;
+    }
+
+    /// <summary>
+    /// Full-world tile histogram + mean moisture + terraform activity row. A full chunk scan —
+    /// only viable on the small worlds where terrain logging is enabled (test scenes).
+    /// </summary>
+    private void WriteTerrainSnapshot()
+    {
+        var counts = new int[Enum.GetValues<TileType>().Length];
+        double moistureSum = 0;
+        long tiles = 0;
+
+        foreach (var chunk in _world!.GetLoadedChunks())
+        {
+            for (int y = 0; y < chunk.Size; y++)
+            {
+                for (int x = 0; x < chunk.Size; x++)
+                {
+                    counts[(int)chunk.GetTile(x, y)]++;
+                    moistureSum += chunk.GetMoisture(x, y);
+                    tiles++;
+                }
+            }
+        }
+
+        var line = _tick.ToString(CultureInfo.InvariantCulture);
+        foreach (int c in counts) line += $",{c}";
+        float meanMoisture = tiles > 0 ? (float)(moistureSum / tiles) : 0f;
+        line += FormattableString.Invariant(
+            $",{meanMoisture:F4},{_intervalTerraformNudges},{_intervalTerraformShifts}");
+        _terrainLog!.WriteLine(line);
+        _latestTerrainLog!.WriteLine(line);
+
+        _intervalTerraformNudges = 0;
+        _intervalTerraformShifts = 0;
+    }
+
+    /// <summary>
+    /// World nutrition economy row: standing total vs capacity plus this interval's flows
+    /// (consumed by feeding, regenerated by regrowth, enriched by decomposing corpses).
+    /// </summary>
+    private void WriteNutritionSnapshot()
+    {
+        double total = 0, capacity = 0;
+        foreach (var chunk in _world!.GetLoadedChunks())
+        {
+            for (int y = 0; y < chunk.Size; y++)
+            {
+                for (int x = 0; x < chunk.Size; x++)
+                {
+                    float cap = chunk.GetTile(x, y).NutritionCap();
+                    if (cap <= 0f) continue;
+                    capacity += cap;
+                    total += chunk.GetNutrition(x, y);
+                }
+            }
+        }
+
+        float fillPct = capacity > 0 ? (float)(total / capacity * 100.0) : 0f;
+        string line = FormattableString.Invariant(
+            $"{_tick},{total:F1},{capacity:F1},{fillPct:F1},{_intervalNutritionConsumed:F2},{_intervalNutritionRegen:F2},{_intervalNutritionEnriched:F2}");
+        _nutritionLog!.WriteLine(line);
+        _latestNutritionLog!.WriteLine(line);
+
+        _intervalNutritionConsumed = 0f;
+        _intervalNutritionRegen = 0f;
+        _intervalNutritionEnriched = 0f;
     }
 
     // ── Event log helpers ─────────────────────────────────────────────────────
@@ -381,5 +602,11 @@ public sealed class EcosystemLogger : ISystem
         _latestEventLog.Dispose();
         _latestPopLog.Dispose();
         _latestStatsLog.Dispose();
+        _decisionLog?.Dispose();
+        _latestDecisionLog?.Dispose();
+        _terrainLog?.Dispose();
+        _latestTerrainLog?.Dispose();
+        _nutritionLog?.Dispose();
+        _latestNutritionLog?.Dispose();
     }
 }

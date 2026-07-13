@@ -1,0 +1,30 @@
+# Shroomer bloom on a fertility gradient: does a bloom expand across lush grass,
+# stall on stripped ground, and wet the land as it grows?
+# Tests: terraforming (wetter), fertility feeding, spore spread, nutrition depletion.
+# Watch latest_terrain.csv (tile histogram drifting wet, terraform counts),
+# latest_nutrition.csv (consumption spike then regen), and terraform_shift events.
+
+[world]
+name = shroomer_bloom
+size_chunks = 3          # 96x96 tiles
+seed = 7
+base_tile = Grass
+no_factions = false
+
+[terrain]
+# Left half lush grass, right half arid — the bloom should favour the fertile side.
+band Arid x 64 96
+rect Wetland 8 40 12 12  # a moist seed pocket for the colony
+
+[spawn]
+Shroomer x12 @ 14,46 r5
+spore @ 14,46 x8 r6
+# A few fungivore deer to test bloom control by grazers.
+Deer x8 @ 40,60 r8
+
+[logging]
+decisions = true
+decision_species = Shroomer, Deer
+terrain_interval = 100
+nutrition_interval = 100
+snapshot_interval = 50

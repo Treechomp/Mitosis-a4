@@ -1,0 +1,35 @@
+# Three-way faction skirmish in a compact arena: a Sectid colony, a Shroomer bloom,
+# and a Faeling crystal in a triangle, with a small herbivore population as the
+# contested food base.
+# Tests: faction terraform tug-of-war, nest/crystal/spore mechanics, keeper behavior.
+# Watch latest_terrain.csv (moisture drift, terraform nudges/shifts per interval),
+# latest_population.csv (which faction grows), and decisions for keeper_siege roams.
+
+[world]
+name = faction_skirmish
+size_chunks = 4
+seed = 1337
+base_tile = Grass
+max_population = 6000
+
+[terrain]
+rect Wetland 8 8 20 20        # Shroomer-friendly corner
+rect Shrubland 100 8 20 20    # dry corner for the Sectids
+circle ShallowWater 64 110 6  # water feature at the Faeling end
+
+[spawn]
+Shroomer x10 @ 18,18 r5
+spore @ 18,18 x10 r8
+nest @ 110,18 colony=1 sectids=10
+nest @ 100,28 colony=1 sectids=8
+crystal @ 64,100
+crystal @ 72,104
+Deer x20 @ 64,64 r16 groups=3
+Rabbit x14 @ 64,64 r20
+
+[logging]
+decisions = true
+decision_species = Shroomer, Sectid, Faeling
+terrain_interval = 100
+nutrition_interval = 200
+snapshot_interval = 50

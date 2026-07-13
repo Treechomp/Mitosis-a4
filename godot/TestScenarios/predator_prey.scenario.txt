@@ -1,0 +1,27 @@
+# Predator–prey arena: one wolf pack vs a deer herd on plain grass.
+# Tests: hunting target selection, pack coordination, fleeing, fear responses.
+# Watch latest_decisions.csv for target_acquired / flee_start transitions and
+# latest_events.csv for hunt_start / hunt_fail / kill outcomes.
+
+[world]
+name = predator_prey
+size_chunks = 4          # 128x128 tiles
+seed = 42
+base_tile = Grass
+tps = 20
+
+[terrain]
+# A forest strip gives prey cover to flee into, and a pond breaks up pursuit lines.
+rect Forest 0 0 128 24
+circle ShallowWater 96 96 8
+
+[spawn]
+Deer x24 @ 48,64 r10 groups=3
+Rabbit x16 @ 60,80 r14
+Wolf x5 @ 100,40 r4 group
+
+[logging]
+decisions = true
+terrain_interval = 0
+nutrition_interval = 200
+snapshot_interval = 50

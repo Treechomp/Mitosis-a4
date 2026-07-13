@@ -298,7 +298,11 @@ public sealed class SporeSystem : ISystem
         return SpeciesRegistry.GetById(species.SpeciesId);
     }
 
-    private void SpawnSpore(EntityManager em, float x, float y, int parentSpeciesId)
+    /// <summary>
+    /// Create a spore entity. Public so test scenarios can seed spores directly
+    /// (e.g. fungivore / anti-bloom tests) — normal gameplay creates them via Shroomer spread.
+    /// </summary>
+    public void SpawnSpore(EntityManager em, float x, float y, int parentSpeciesId)
     {
         var parentDef = SpeciesRegistry.GetById(parentSpeciesId);
         int entity = em.CreateEntity();

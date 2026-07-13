@@ -155,26 +155,33 @@ public sealed class Chunk
     /// <summary>
     /// Add nutrition to a grazeable tile (decomposing remains enriching the soil),
     /// clamped to <see cref="MaxNutrition"/>. No effect on non-grazeable tiles.
+    /// Returns the amount actually added (after clamping).
     /// </summary>
-    public void AddNutrition(int localX, int localY, float amount)
+    public float AddNutrition(int localX, int localY, float amount)
     {
         if (localX < 0 || localX >= Size || localY < 0 || localY >= Size)
-            return;
+            return 0f;
         if (!_tiles[localX, localY].IsGrazeable())
-            return;
-        _nutrition[localX, localY] = MathF.Min(MaxNutrition, _nutrition[localX, localY] + amount);
+            return 0f;
+        float before = _nutrition[localX, localY];
+        float after = MathF.Min(MaxNutrition, before + amount);
+        _nutrition[localX, localY] = after;
+        return after - before;
     }
 
     /// <summary>
     /// Regenerate nutrition for all grazeable tiles in this chunk.
     /// Called periodically by TileRegenerationSystem.
+    /// Returns the total nutrition added across the chunk (0 when fully topped up),
+    /// so regeneration can be tracked by the test-scene nutrition log.
     /// <param name="tickMultiplier">Number of ticks since last regeneration (rate scaled accordingly).</param>
     /// </summary>
-    public void RegenerateNutrition(int tickMultiplier = 1)
+    public float RegenerateNutrition(int tickMultiplier = 1)
     {
-        if (!_hasDepleted) return; // fully topped up — nothing to do (skips the whole scan)
+        if (!_hasDepleted) return 0f; // fully topped up — nothing to do (skips the whole scan)
 
         float rate = RegenerationRate * tickMultiplier;
+        float totalAdded = 0f;
         bool anyStillDepleted = false;
         for (int y = 0; y < Size; y++)
         {
@@ -184,12 +191,15 @@ public sealed class Chunk
                 float cap = _tiles[x, y].NutritionCap();
                 if (cap > 0f && _nutrition[x, y] < cap)
                 {
-                    _nutrition[x, y] = MathF.Min(cap, _nutrition[x, y] + rate);
+                    float before = _nutrition[x, y];
+                    _nutrition[x, y] = MathF.Min(cap, before + rate);
+                    totalAdded += _nutrition[x, y] - before;
                     if (_nutrition[x, y] < cap) anyStillDepleted = true;
                 }
             }
         }
         _hasDepleted = anyStillDepleted;
+        return totalAdded;
     }
 
     /// <summary>

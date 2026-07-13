@@ -88,25 +88,42 @@ public partial class GameManager : Node3D
     [Export] public float FaelingShare = 0.04f;
     [Export] public float SectidShare  = 0.10f;  // Need denser starting swarms to reach kill-mass
 
-    // Core systems
-    private EntityManager _entityManager = null!;
-    private WorldManager  _worldManager  = null!;
-    private readonly List<ISystem> _systems = new();
-    private readonly Random _rng = new();
-    private LODSystem?       _lodSystem;
-    private NestSystem?      _nestSystem;
-    private CrystalSystem?   _crystalSystem;
-    private EcosystemLogger? _ecosystemLogger;
+    // Core systems — protected so the test-scene subclass (TestSceneManager) can spawn into
+    // and inspect the running simulation.
+    protected EntityManager _entityManager = null!;
+    protected WorldManager  _worldManager  = null!;
+    protected readonly List<ISystem> _systems = new();
+    protected readonly Random _rng = new();
+    protected LODSystem?       _lodSystem;
+    protected NestSystem?      _nestSystem;
+    protected CrystalSystem?   _crystalSystem;
+    protected SporeSystem?     _sporeSystem;
+    protected EcosystemLogger? _ecosystemLogger;
 
     // Extracted managers
-    private EntityFactory    _entityFactory    = null!;
-    private WorldSpawner     _worldSpawner     = null!;
-    private PlayerController _playerController = null!;
-    private RenderingManager _renderingManager = null!;
+    protected EntityFactory    _entityFactory    = null!;
+    protected WorldSpawner     _worldSpawner     = null!;
+    protected PlayerController _playerController = null!;
+    protected RenderingManager _renderingManager = null!;
 
     // Simulation timing
     private double _simulationAccumulator;
     private double _simulationDt;
+
+    // Time controls (used by the test-scene subclass): while paused the accumulator is
+    // discarded, so unpausing never fast-forwards a backlog of ticks.
+    protected bool SimulationPaused;
+    private bool _singleStepQueued;
+
+    /// <summary>Run exactly one simulation tick on the next frame while paused.</summary>
+    protected void QueueSingleStep() => _singleStepQueued = true;
+
+    /// <summary>Change the simulation rate at runtime (test scenes: fast-forward long runs).</summary>
+    protected void SetTargetTps(int tps)
+    {
+        TargetTPS = Math.Max(1, tps);
+        _simulationDt = 1.0 / TargetTPS;
+    }
 
     // Debug info
     private int    _fps;
@@ -135,7 +152,7 @@ public partial class GameManager : Node3D
     private const double SmoothingFactor = 0.05;
 
     // 3D scene refs
-    private Camera3D? _camera;
+    protected Camera3D? _camera;
     private Label?    _debugLabel;
 
     public override void _Ready()
@@ -163,7 +180,7 @@ public partial class GameManager : Node3D
             CliffStepHeight    = TerrainCliffStepHeight,
             RiverDensity       = TerrainRiverDensity,
         };
-        _worldManager = new WorldManager(ChunkSize, WorldSizeChunks, seed, terrainSettings);
+        _worldManager = CreateWorld(seed, terrainSettings);
         _simulationDt = 1.0 / TargetTPS;
 
         // Create extracted managers
@@ -208,12 +225,12 @@ public partial class GameManager : Node3D
 
         _nestSystem = new NestSystem(_worldManager, spatialHash, MaxPopulation);
         _systems.Add(_nestSystem);
-        var sporeSystem = new SporeSystem(_worldManager, spatialHash, MaxPopulation);
-        _systems.Add(sporeSystem);
+        _sporeSystem = new SporeSystem(_worldManager, spatialHash, MaxPopulation);
+        _systems.Add(_sporeSystem);
         _crystalSystem = new CrystalSystem(_worldManager, spatialHash, MaxPopulation);
         _systems.Add(_crystalSystem);
 
-        _ecosystemLogger = new EcosystemLogger();
+        _ecosystemLogger = new EcosystemLogger(_worldManager);
         if (!string.IsNullOrWhiteSpace(TrackSpecies))
         {
             EcosystemLogger.TrackedSpeciesId = SpeciesRegistry.GetId(TrackSpecies);
@@ -280,21 +297,7 @@ public partial class GameManager : Node3D
             ? $"[SpeciesToggle] Disabled {SpeciesToggle.DisabledCount} species: {string.Join(", ", SpeciesToggle.DisabledNames)}"
             : "[SpeciesToggle] All species enabled");
 
-        // Spawn faction structures. A disabled faction's budget folds back into the creature
-        // budget so a "no-faction" run still spawns a full InitialPopulation of other species.
-        bool faelingEnabled = SpeciesToggle.IsEnabled(SpeciesRegistry.GetId("Faeling"));
-        bool sectidEnabled  = SpeciesToggle.IsEnabled(SpeciesRegistry.GetId("Sectid"));
-        int faelingBudget  = faelingEnabled ? (int)(InitialPopulation * FaelingShare) : 0;
-        int sectidBudget   = sectidEnabled  ? (int)(InitialPopulation * SectidShare)  : 0;
-        int creatureBudget = InitialPopulation - faelingBudget - sectidBudget;
-
-        GD.Print("Spawning faction structures...");
-        _worldSpawner.SpawnCrystals(_crystalSystem!, _entityManager, faelingBudget);
-        _worldSpawner.SpawnInitialNests(_nestSystem!, _entityManager, sectidBudget);
-
-        GD.Print("Spawning creatures...");
-        int spawnedCount = _worldSpawner.SpawnCreatures(creatureBudget, HerbivoreRatio);
-        GD.Print($"Spawned {spawnedCount} creatures (+ faction structures from {faelingBudget} Faeling + {sectidBudget} Sectid budget)");
+        PopulateWorld();
 
         // Spawn player at world center
         float centerX = WorldSizeChunks * ChunkSize / 2f;
@@ -323,6 +326,37 @@ public partial class GameManager : Node3D
 
         SetupDebugUI();
         GD.Print($"Game ready! {_entityManager.EntityCount} entities");
+    }
+
+    /// <summary>
+    /// Build the world manager. Overridden by TestSceneManager to plug in a scenario-defined
+    /// terrain generator instead of the noise pipeline.
+    /// </summary>
+    protected virtual WorldManager CreateWorld(int seed, TerrainSettings terrainSettings)
+        => new(ChunkSize, WorldSizeChunks, seed, terrainSettings);
+
+    /// <summary>
+    /// Populate the freshly generated world. The default distributes InitialPopulation across
+    /// the map via WorldSpawner; TestSceneManager overrides this to execute a scenario's exact
+    /// spawn list instead. Species toggles are already applied when this runs.
+    /// </summary>
+    protected virtual void PopulateWorld()
+    {
+        // Spawn faction structures. A disabled faction's budget folds back into the creature
+        // budget so a "no-faction" run still spawns a full InitialPopulation of other species.
+        bool faelingEnabled = SpeciesToggle.IsEnabled(SpeciesRegistry.GetId("Faeling"));
+        bool sectidEnabled  = SpeciesToggle.IsEnabled(SpeciesRegistry.GetId("Sectid"));
+        int faelingBudget  = faelingEnabled ? (int)(InitialPopulation * FaelingShare) : 0;
+        int sectidBudget   = sectidEnabled  ? (int)(InitialPopulation * SectidShare)  : 0;
+        int creatureBudget = InitialPopulation - faelingBudget - sectidBudget;
+
+        GD.Print("Spawning faction structures...");
+        _worldSpawner.SpawnCrystals(_crystalSystem!, _entityManager, faelingBudget);
+        _worldSpawner.SpawnInitialNests(_nestSystem!, _entityManager, sectidBudget);
+
+        GD.Print("Spawning creatures...");
+        int spawnedCount = _worldSpawner.SpawnCreatures(creatureBudget, HerbivoreRatio);
+        GD.Print($"Spawned {spawnedCount} creatures (+ faction structures from {faelingBudget} Faeling + {sectidBudget} Sectid budget)");
     }
 
     private void SetupDebugUI()
@@ -379,24 +413,24 @@ public partial class GameManager : Node3D
         }
 
         // Fixed-timestep simulation
-        _simulationAccumulator += delta;
-        while (_simulationAccumulator >= _simulationDt)
+        if (SimulationPaused)
         {
-            _entityManager.SnapshotPositions();   // previous-tick positions for render lerp
-            _tickStopwatch.Restart();
-            for (int i = 0; i < _systems.Count; i++)
+            // Discard accumulated time so unpausing doesn't fast-forward a tick backlog.
+            _simulationAccumulator = 0;
+            if (_singleStepQueued)
             {
-                _systemStopwatch.Restart();
-                _systems[i].Process(_entityManager);
-                _systemStopwatch.Stop();
-                double ms = _systemStopwatch.Elapsed.TotalMilliseconds;
-                _systemTimingsMs[i] += (ms - _systemTimingsMs[i]) * SmoothingFactor;
+                RunSimulationTick();
+                _singleStepQueued = false;
             }
-            _tickStopwatch.Stop();
-            _entityManager.FinalizeNewborns();    // entities spawned this tick: prev = spawn pos
-            double tickMs = _tickStopwatch.Elapsed.TotalMilliseconds;
-            _totalTickMs += (tickMs - _totalTickMs) * SmoothingFactor;
-            _simulationAccumulator -= _simulationDt;
+        }
+        else
+        {
+            _simulationAccumulator += delta;
+            while (_simulationAccumulator >= _simulationDt)
+            {
+                RunSimulationTick();
+                _simulationAccumulator -= _simulationDt;
+            }
         }
 
         _playerController.UpdateCamera(_camera, delta);
@@ -417,6 +451,25 @@ public partial class GameManager : Node3D
             double ms = _renderStopwatch.Elapsed.TotalMilliseconds;
             _renderMs += (ms - _renderMs) * SmoothingFactor;
         }
+    }
+
+    /// <summary>One simulation tick: snapshot render positions, run every system, finalize.</summary>
+    private void RunSimulationTick()
+    {
+        _entityManager.SnapshotPositions();   // previous-tick positions for render lerp
+        _tickStopwatch.Restart();
+        for (int i = 0; i < _systems.Count; i++)
+        {
+            _systemStopwatch.Restart();
+            _systems[i].Process(_entityManager);
+            _systemStopwatch.Stop();
+            double ms = _systemStopwatch.Elapsed.TotalMilliseconds;
+            _systemTimingsMs[i] += (ms - _systemTimingsMs[i]) * SmoothingFactor;
+        }
+        _tickStopwatch.Stop();
+        _entityManager.FinalizeNewborns();    // entities spawned this tick: prev = spawn pos
+        double tickMs = _tickStopwatch.Elapsed.TotalMilliseconds;
+        _totalTickMs += (tickMs - _totalTickMs) * SmoothingFactor;
     }
 
     public override void _UnhandledInput(InputEvent @event)
@@ -519,6 +572,16 @@ public partial class GameManager : Node3D
             {
                 _debugLabel.Text += $"\n[F3] profiling";
             }
+
+            string extra = ExtraDebugText();
+            if (extra.Length > 0)
+                _debugLabel.Text += "\n" + extra;
         }
     }
+
+    /// <summary>
+    /// Extra lines appended to the debug overlay. Overridden by TestSceneManager to show
+    /// pause/speed state and the paint-mode brush.
+    /// </summary>
+    protected virtual string ExtraDebugText() => "";
 }

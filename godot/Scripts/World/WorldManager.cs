@@ -17,21 +17,38 @@ public sealed class WorldManager
     public int Seed { get; }
 
     private readonly Dictionary<(int, int), Chunk> _chunks;
-    private readonly TerrainGenerator _generator;
+    private readonly IChunkGenerator _generator;
     public readonly SpatialHash SpatialHash;
 
     public WorldManager(int chunkSize, int worldSizeChunks, int seed, TerrainSettings? terrainSettings = null)
+        : this(chunkSize, worldSizeChunks, seed,
+               CreateNoiseGenerator(seed, terrainSettings, chunkSize * worldSizeChunks))
+    {
+    }
+
+    /// <summary>
+    /// Construct with an explicit chunk generator (test scenes supply a scenario-driven one
+    /// instead of the noise pipeline). The generator must be fully initialised — the noise
+    /// path pre-computes its river map in <see cref="CreateNoiseGenerator"/>.
+    /// </summary>
+    public WorldManager(int chunkSize, int worldSizeChunks, int seed, IChunkGenerator generator)
     {
         ChunkSize = chunkSize;
         WorldSizeChunks = worldSizeChunks;
         Seed = seed;
 
         _chunks = new Dictionary<(int, int), Chunk>(worldSizeChunks * worldSizeChunks);
-        _generator = new TerrainGenerator(seed, terrainSettings);
+        _generator = generator;
         SpatialHash = new SpatialHash(chunkSize);
+    }
 
+    private static TerrainGenerator CreateNoiseGenerator(int seed, TerrainSettings? settings,
+        int worldSizeTiles)
+    {
+        var generator = new TerrainGenerator(seed, settings);
         // Pre-compute flow-based rivers before any chunks are generated
-        _generator.PrecomputeRivers(WorldSizeTiles);
+        generator.PrecomputeRivers(worldSizeTiles);
+        return generator;
     }
 
     /// <summary>
@@ -160,6 +177,37 @@ public sealed class WorldManager
         if (newTile != tile)
             chunk.SetTile(localX, localY, newTile);
 
+        // Terrain tracking (test scenes): every moisture nudge is counted; tile-class shifts
+        // additionally get an event row. Central here so ALL terraform paths (roaming
+        // terraformers, nest hatches, crystal pulses) are captured.
+        Systems.EcosystemLogger.Instance?.LogTerraform(worldX, worldY, direction, tile, newTile, m, nm);
+
+        DirtyChunks.Add((chunkX, chunkY));
+        return true;
+    }
+
+    /// <summary>
+    /// Test-scene tile painting: set a tile's type AND its moisture/temperature parameters to
+    /// the canonical values for that type (see <see cref="ScenarioTileParams"/>), so the
+    /// continuous palette, terraforming, and re-classification all agree with the painted type.
+    /// Elevation is left untouched — chunk mesh geometry is built once and only colours are
+    /// rebuilt on dirty chunks, so an elevation edit would desync gameplay from the visuals.
+    /// Painted water/mountain therefore renders flat (discrete colour) but behaves correctly.
+    /// </summary>
+    public bool PaintTile(float worldX, float worldY, TileType type)
+    {
+        if (worldX < 0f || worldY < 0f) return false;
+        int chunkX = (int)(worldX / ChunkSize);
+        int chunkY = (int)(worldY / ChunkSize);
+        var chunk = GetChunk(chunkX, chunkY);
+        if (chunk == null) return false;
+
+        int localX = (int)worldX % ChunkSize;
+        int localY = (int)worldY % ChunkSize;
+        var (_, moisture, temperature) = ScenarioTileParams.For(type, chunk.GetElevation(localX, localY));
+        chunk.SetMoisture(localX, localY, moisture);
+        chunk.SetTemperature(localX, localY, temperature);
+        chunk.SetTile(localX, localY, type);
         DirtyChunks.Add((chunkX, chunkY));
         return true;
     }
@@ -322,7 +370,11 @@ public sealed class WorldManager
 
         int localX = (int)worldX % ChunkSize;
         int localY = (int)worldY % ChunkSize;
-        return chunk.ConsumeNutrition(localX, localY, amount);
+        float consumed = chunk.ConsumeNutrition(localX, localY, amount);
+        // Nutrition tracking (test scenes): aggregate all grazing/fertility consumption.
+        if (consumed > 0f)
+            Systems.EcosystemLogger.Instance?.CountNutritionConsumed(consumed);
+        return consumed;
     }
 
     /// <summary>
@@ -340,7 +392,10 @@ public sealed class WorldManager
 
         int localX = (int)worldX % ChunkSize;
         int localY = (int)worldY % ChunkSize;
-        chunk.AddNutrition(localX, localY, amount);
+        float added = chunk.AddNutrition(localX, localY, amount);
+        // Nutrition tracking (test scenes): corpse decomposition enriching the soil.
+        if (added > 0f)
+            Systems.EcosystemLogger.Instance?.CountNutritionEnriched(added);
     }
 
     /// <summary>

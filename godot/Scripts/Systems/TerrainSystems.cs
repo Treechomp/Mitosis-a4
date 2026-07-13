@@ -259,9 +259,12 @@ public sealed class TileRegenerationSystem : ISystem
         if (_tickCounter % RegenInterval != 0)
             return;
 
+        float regenerated = 0f;
         foreach (var chunk in _worldManager.GetLoadedChunks())
         {
-            chunk.RegenerateNutrition(RegenInterval);
+            regenerated += chunk.RegenerateNutrition(RegenInterval);
         }
+        if (regenerated > 0f)
+            EcosystemLogger.Instance?.CountNutritionRegen(regenerated);
     }
 }

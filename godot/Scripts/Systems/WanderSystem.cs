@@ -60,10 +60,12 @@ public sealed class WanderSystem : ISystem
 
             // Get species definition for roaming parameters and turn rate
             SpeciesDefinition? wanderSpeciesDef = null;
+            int speciesId = -1;
             if (em.HasComponents(entity, ComponentFlags.Species))
             {
                 ref var sp = ref em.Species[entity];
-                wanderSpeciesDef = SpeciesRegistry.GetById(sp.SpeciesId);
+                speciesId = sp.SpeciesId;
+                wanderSpeciesDef = SpeciesRegistry.GetById(speciesId);
             }
             float roamDistance = wanderSpeciesDef?.RoamDistance ?? 60f;
             int roamCooldownBase = wanderSpeciesDef?.RoamCooldown ?? 500;
@@ -106,6 +108,7 @@ public sealed class WanderSystem : ISystem
                 if (shouldRoam)
                 {
                     float targetX, targetY;
+                    string roamReason;
 
                     // Keepers (Faelings with an active dominance reading): besiege the locally
                     // dominant faction — roam to a standoff ring around its sensed hotspot,
@@ -119,6 +122,7 @@ public sealed class WanderSystem : ISystem
                                out targetX, out targetY))
                     {
                         // Target already set toward the siege line
+                        roamReason = "keeper_siege";
                     }
                     // Faelings: seek damaged terrain (non-balanced tiles) to restore
                     else if (wanderSpeciesDef != null
@@ -127,6 +131,7 @@ public sealed class WanderSystem : ISystem
                         && TryFindDamagedTerrainTarget(pos.X, pos.Y, roamDistance, out targetX, out targetY))
                     {
                         // Target already set toward damaged terrain
+                        roamReason = "restore_terrain";
                     }
                     // Hungry foragers steer toward the best nearby food instead of wandering blind:
                     // grazers/FeedTile species toward food tiles, and predators with a HuntTerrain
@@ -141,6 +146,7 @@ public sealed class WanderSystem : ISystem
                         && TryFindFoodTarget(pos.X, pos.Y, roamDistance, wanderSpeciesDef, out targetX, out targetY))
                     {
                         // Target already set toward food
+                        roamReason = "seek_food";
                     }
                     else
                     {
@@ -149,6 +155,7 @@ public sealed class WanderSystem : ISystem
                         float dist = roamDistance * (0.5f + (float)_rng.NextDouble() * 0.5f);
                         targetX = pos.X + MathF.Cos(angle) * dist;
                         targetY = pos.Y + MathF.Sin(angle) * dist;
+                        roamReason = "random";
                     }
 
                     // Clamp to world bounds
@@ -158,6 +165,11 @@ public sealed class WanderSystem : ISystem
 
                     wander.RoamTargetX = targetX;
                     wander.RoamTargetY = targetY;
+
+                    if (EcosystemLogger.DecisionLoggingFor(speciesId))
+                        EcosystemLogger.Instance!.LogDecision(speciesId, entity, pos.X, pos.Y,
+                            "wander", "roam_start", FormattableString.Invariant(
+                                $"reason={roamReason};target={targetX:F0}:{targetY:F0};hunger_urgency={hungerUrgency:F2}"));
                 }
             }
 
@@ -176,6 +188,11 @@ public sealed class WanderSystem : ISystem
                     // Hungry creatures re-roam faster (min 100 ticks when starving)
                     int cooldown = (int)(roamCooldownBase * (1f - hungerUrgency * 0.8f));
                     wander.RoamCooldown = cooldown + _rng.Next(cooldown / 3);
+
+                    if (EcosystemLogger.DecisionLoggingFor(speciesId))
+                        EcosystemLogger.Instance!.LogDecision(speciesId, entity, pos.X, pos.Y,
+                            "wander", "roam_end", FormattableString.Invariant(
+                                $"cooldown={wander.RoamCooldown};hunger_urgency={hungerUrgency:F2}"));
                 }
                 else
                 {
@@ -212,9 +229,21 @@ public sealed class WanderSystem : ISystem
                 // Enter escape late (0.6) so minor discomfort doesn't trigger;
                 // exit early (0.1) so entity commits to reaching safe terrain.
                 if (!discomfort.IsEscaping && discomfort.Ratio > 0.6f)
+                {
                     discomfort.IsEscaping = true;
+                    if (_worldManager != null && EcosystemLogger.DecisionLoggingFor(speciesId))
+                        EcosystemLogger.Instance!.LogDecision(speciesId, entity, pos.X, pos.Y,
+                            "wander", "escape_start", FormattableString.Invariant(
+                                $"tile={_worldManager.GetTile(pos.X, pos.Y)};discomfort={discomfort.Ratio:F2}"));
+                }
                 else if (discomfort.IsEscaping && discomfort.Ratio < 0.1f)
+                {
                     discomfort.IsEscaping = false;
+                    if (_worldManager != null && EcosystemLogger.DecisionLoggingFor(speciesId))
+                        EcosystemLogger.Instance!.LogDecision(speciesId, entity, pos.X, pos.Y,
+                            "wander", "escape_end", FormattableString.Invariant(
+                                $"tile={_worldManager.GetTile(pos.X, pos.Y)}"));
+                }
 
                 if (discomfort.IsEscaping)
                 {

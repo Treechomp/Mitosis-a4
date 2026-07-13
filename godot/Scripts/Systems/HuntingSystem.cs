@@ -333,6 +333,14 @@ public sealed class HuntingSystem : ISystem
             // needs to defend itself / rally the group below.
             if (hungerRatio >= fullThreshold && predator.LastAttackedTicks <= 0)
             {
+                if (predator.HasTarget && em.HasComponents(entity, ComponentFlags.Species))
+                {
+                    int sid = em.Species[entity].SpeciesId;
+                    if (EcosystemLogger.DecisionLoggingFor(sid))
+                        EcosystemLogger.Instance!.LogDecision(sid, entity, pos.X, pos.Y,
+                            "hunting", "hunt_stop_sated",
+                            FormattableString.Invariant($"hunger={hungerRatio:P0}"));
+                }
                 predator.TargetEntity = -1;
                 predator.Phase = PackPhase.Idle;
                 predator.Role = PackRole.None;
@@ -736,6 +744,16 @@ public sealed class HuntingSystem : ISystem
                         EcosystemLogger.Instance?.LogHuntStart(
                             predSp.SpeciesId, preySp.SpeciesId,
                             entity, bestPrey, pos.X, pos.Y);
+                        // Decision log: WHY this target was taken (events log has the what).
+                        if (EcosystemLogger.DecisionLoggingFor(predSp.SpeciesId))
+                        {
+                            ref var bp = ref em.Positions[bestPrey];
+                            var preyName = SpeciesRegistry.GetById(preySp.SpeciesId)?.Name ?? "?";
+                            EcosystemLogger.Instance!.LogDecision(predSp.SpeciesId, entity,
+                                pos.X, pos.Y, "hunting", "target_acquired",
+                                FormattableString.Invariant(
+                                    $"prey={preyName}:{bestPrey};dist={MathF.Sqrt(MathUtils.DistanceSquared(pos.X, pos.Y, bp.X, bp.Y)):F1};hunger={hungerRatio:P0};urgency={urgency:F2};pack={isPack}"));
+                        }
                     }
                     if (isPack)
                     {

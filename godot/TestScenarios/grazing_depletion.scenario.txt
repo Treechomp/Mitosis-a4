@@ -1,0 +1,25 @@
+# Grazing pressure on a small island of grass: a dense herd must deplete the patch,
+# feel grazing-pressure discomfort, and migrate — then the patch should regrow.
+# Tests: nutrition depletion/regeneration, food-seeking roams, discomfort escape.
+# Watch latest_nutrition.csv (fill % dropping then recovering) and
+# latest_decisions.csv (roam_start reason=seek_food, escape_start).
+
+[world]
+name = grazing_depletion
+size_chunks = 3
+seed = 99
+base_tile = Dirt          # barren everywhere except the painted patches
+
+[terrain]
+circle Grass 30 48 12     # home patch — deliberately too small for the herd
+circle Grass 70 48 10     # refuge patch across the barrens
+
+[spawn]
+Deer x30 @ 30,48 r8 groups=4
+Rabbit x12 @ 30,44 r6
+
+[logging]
+decisions = true
+terrain_interval = 0
+nutrition_interval = 50
+snapshot_interval = 50

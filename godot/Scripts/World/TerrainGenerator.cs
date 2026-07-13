@@ -7,7 +7,7 @@ namespace Mitosis.World;
 /// Generates terrain using simplex noise with domain warping, temperature gradients,
 /// flow-based rivers, and landmark post-processing for diverse, biome-rich worlds.
 /// </summary>
-public sealed class TerrainGenerator
+public sealed class TerrainGenerator : IChunkGenerator
 {
     private readonly int _seed;
     private readonly FastNoiseLite _elevationNoise;

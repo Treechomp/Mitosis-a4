@@ -25,6 +25,9 @@ directed creature evolution) is upcoming — see `docs/godot-roadmap.md`.
 - `godot/Scripts/Systems/` — the per-tick game systems (movement, AI, hunting, fleeing, factions).
 - `godot/Scripts/Species/` — data-driven creature definitions (`SpeciesRegistry`, `SpeciesDefinition`).
 - `godot/Scripts/ECS/` — the Structure-of-Arrays entity store that runs thousands of creatures cheaply.
+- `godot/Scripts/Testing/` — the test-scene harness (this branch): small scenario-defined worlds,
+  exact spawns, extended logging. Run `Scenes/TestScene.tscn` (F6); scenarios live in
+  `godot/TestScenarios/`; see `docs/test-scenes.md`.
 - `docs/` — design docs. Start with `FEATURES_AND_DESIGN.md` (systems/creatures/terrain reference)
   and `godot-roadmap.md` (status). `faction-balance-plan.md` tracks the current balance workstream.
 
