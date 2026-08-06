@@ -436,16 +436,18 @@ public sealed class EcosystemLogger : ISystem
         int trackedId   = TrackedSpeciesId;
         int spores = 0, nests = 0, crystals = 0;
 
-        const ComponentFlags required = ComponentFlags.Species;
-        foreach (int entity in em.Query(required))
+        // Structures and spores are tallied separately, NOT as creatures of their faction.
+        // Iterate ALL entities (like the F3 overlay) rather than filtering on Species first:
+        // nests and crystals carry no Species component, so a Species-gated query could never
+        // see them and both columns were pinned at 0 for every run.
+        foreach (int entity in em.AllEntities())
         {
-            // Structures and spores are tallied separately, NOT as creatures of their faction —
-            // spores carry Species(Shroomer) for type checks, which silently inflated every
-            // "Shroomer" population figure in these CSVs (the F3 overlay already excluded them,
-            // so the two disagreed). Dedicated columns keep the information without the lie.
             if (em.HasComponents(entity, ComponentFlags.Spore))   { spores++;   continue; }
             if (em.HasComponents(entity, ComponentFlags.Nest))    { nests++;    continue; }
             if (em.HasComponents(entity, ComponentFlags.Crystal)) { crystals++; continue; }
+            // Spores carry Species(Shroomer) for type checks, which silently inflated every
+            // "Shroomer" population figure in these CSVs before the split above.
+            if (!em.HasComponents(entity, ComponentFlags.Species)) continue;
 
             ref var sp = ref em.Species[entity];
             int sid = sp.SpeciesId;

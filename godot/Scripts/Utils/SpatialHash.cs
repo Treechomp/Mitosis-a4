@@ -20,6 +20,13 @@ public sealed class SpatialHash
     private readonly Dictionary<int, long> _entityCells;
     private readonly Stack<List<int>> _cellPool;
 
+    // Last inserted position per entity, so QueryRadius can reject candidates that share a
+    // cell but lie outside the requested radius. Flat arrays (indexed by entity id, like the
+    // ECS component stores) — a dictionary lookup per candidate would cost more than the
+    // distance test it enables. ~128 KB total.
+    private readonly float[] _posX = new float[ECS.EntityManager.MaxEntities];
+    private readonly float[] _posY = new float[ECS.EntityManager.MaxEntities];
+
     public SpatialHash(float cellSize = 32f)
     {
         _cellSize = cellSize;
@@ -93,6 +100,15 @@ public sealed class SpatialHash
         var (cellX, cellY) = WorldToCell(x, y);
         long newKey = HashPosition(cellX, cellY);
 
+        // Record the exact position for radius filtering in QueryRadius. Must happen even on
+        // the same-cell fast path below, or a mover that stays inside its cell would be
+        // filtered against a stale position.
+        if ((uint)entityId < (uint)_posX.Length)
+        {
+            _posX[entityId] = x;
+            _posY[entityId] = y;
+        }
+
         // Check if entity already exists and is in the same cell
         if (_entityCells.TryGetValue(entityId, out long oldKey))
         {
@@ -141,8 +157,20 @@ public sealed class SpatialHash
     }
 
     /// <summary>
-    /// Query all entities within radius of a position.
-    /// Returns entities that might be in range (broad phase).
+    /// Query all entities within <paramref name="radius"/> of a position — an EXACT circle,
+    /// not a cell block.
+    ///
+    /// This used to return the raw cell contents ("broad phase"), leaving the precise distance
+    /// test to the caller. Most callers didn't do it, and because cells are 32 tiles wide the
+    /// scanned block is at minimum 3×3 cells (96×96 tiles) for ANY radius up to 32 — so a
+    /// nominal 2.5-tile query could reach ~45 tiles. That silently gave several systems
+    /// world-scale reach: fungivores ate blooms across the map, Shroomer spore AoE damaged
+    /// enemies far outside its radius, and every "how many X are near me" count (crowding,
+    /// competition, herd protection, pack presence, keeper sensing) was measured over the cell
+    /// block instead of its intended radius.
+    ///
+    /// Filtering here rather than at ~28 call sites makes the safe behaviour the default one,
+    /// and shrinks result lists so callers' own per-candidate work drops too.
     /// </summary>
     public void QueryRadius(float x, float y, float radius, List<int> results)
     {
@@ -150,6 +178,7 @@ public sealed class SpatialHash
 
         var (centerCellX, centerCellY) = WorldToCell(x, y);
         int cellRadius = (int)MathF.Ceiling(radius * _invCellSize);
+        float radiusSq = radius * radius;
 
         for (int dx = -cellRadius; dx <= cellRadius; dx++)
         {
@@ -160,7 +189,10 @@ public sealed class SpatialHash
                 {
                     foreach (int entityId in cell)
                     {
-                        results.Add(entityId);
+                        float ex = _posX[entityId] - x;
+                        float ey = _posY[entityId] - y;
+                        if (ex * ex + ey * ey <= radiusSq)
+                            results.Add(entityId);
                     }
                 }
             }
