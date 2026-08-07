@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using Godot;
 using Mitosis.Components;
@@ -264,6 +265,20 @@ public sealed class SpeciesDefinition
     public Dictionary<TileType, float>? TerrainConcealment { get; init; }
 
     /// <summary>
+    /// Per-terrain steering aversion overrides (0 = happily walks here, 1 = strongly avoided).
+    /// REPLACE semantics: a listed tile uses this value instead of the tile's generic
+    /// <see cref="TileTypeExtensions.GetAvoidanceWeight"/> — see TerrainProfile.SteerAversion.
+    ///
+    /// This is what keeps a species inside its own habitat. The generic weights encode "what an
+    /// ordinary land animal dislikes" (open water, mountains, and — awkwardly — swamp and bog),
+    /// so a wetland specialist steered by them drifts OFF its home ground toward the grass that
+    /// kills it. Any species whose habitat the generic table treats as unpleasant needs an entry
+    /// here. Hunger still overrides steering (see WanderSystem foraging), so a preference is a
+    /// pull, not a cage.
+    /// </summary>
+    public Dictionary<TileType, float>? TerrainAversionModifiers { get; init; }
+
+    /// <summary>
     /// Biomes where this species can spawn. Empty/null = spawn in any biome.
     /// </summary>
     public List<BiomeType>? PreferredBiomes { get; init; }
@@ -321,13 +336,24 @@ public sealed class SpeciesDefinition
     public float PackHuntMassExponent { get; init; } = 0.7f;
 
     /// <summary>
-    /// How much hunger a predator gains from killing this creature.
-    /// Defaults to BodyMass * 20 if not explicitly set (-1 means use default).
+    /// How much food this creature's carcass is worth (predator hunger, and the load a Sectid
+    /// ferries home to its nest). Defaults to the body-mass curve below; -1 means "use default".
     /// </summary>
     public float NutritionValue { get; init; } = -1f;
 
-    /// <summary>Resolved nutrition: explicit value or BodyMass * 20.</summary>
-    public float EffectiveNutrition => NutritionValue >= 0 ? NutritionValue : BodyMass * 20f;
+    // Carcass food from body mass. Superlinear (exponent > 1) so size matters more than a
+    // straight head-count: a swarm that brings down one large animal is far better paid than one
+    // that picks off the same mass in small game, which is the point of hunting big prey at all.
+    // The scale is pivoted so a mid-size prey animal (BodyMass 4 — Deer/Boar) keeps the value it
+    // had under the old flat BodyMass*20, leaving established predator/prey pairs roughly where
+    // they were; small prey drops (Rabbit 20 → 14) and large prey rises (Elk 140 → 161).
+    private const float NutritionMassExponent = 1.25f;
+    private const float NutritionMassScale    = 14.14f;  // = 20 * 4 / 4^1.25 (deer-neutral pivot)
+
+    /// <summary>Resolved carcass food: explicit <see cref="NutritionValue"/> or the mass curve.</summary>
+    public float EffectiveNutrition => NutritionValue >= 0
+        ? NutritionValue
+        : MathF.Pow(BodyMass, NutritionMassExponent) * NutritionMassScale;
 
     public List<string>? PreferredPrey { get; init; }
     public float PreferredPreyBias { get; init; } = 0.5f;

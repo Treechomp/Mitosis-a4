@@ -118,17 +118,34 @@ public static class SpeciesRegistry
             BaseWanderSpeed = 0.03f,
             DirectionChangeChance = 0.005f,
 
-            // Fleeing
-            FleeRange = 6f,
-            FleeSpeedMultiplier = 2.2f,  // Fast runners
+            // Fleeing. A deer is the biggest thing a Sectid swarm can realistically pull down, so
+            // it has to be genuinely hard to catch — the payoff for taking one is now large (see
+            // the body-mass carcass curve), and the difficulty is what stops that payoff from
+            // being free. Absolute flight speed is what matters, not the multiplier: at the old
+            // 2.2× a deer fled at 0.03×2.2 = 0.066, SLOWER than a rabbit's 0.096 and half a
+            // Sectid's 0.13 closing speed, so a lone Sectid simply ran one down. At 3.6× it makes
+            // 0.108 — outpacing a rabbit as a long-legged runner should, still catchable by a
+            // 0.14 wolf (its proper predator), but now a real chase for a swarm.
+            FleeRange = 10f,             // Long sightlines on open ground; spots threats early
+            FleeSpeedMultiplier = 3.6f,
+            FleeFearThreshold = 0.4f,    // Commits to running sooner than the 0.5 default
+            // Stamina: deep-chested distance runner. Drains slower and recovers faster than the
+            // 0.005/0.0025 default, and stays fast when tired — a deer outlasts pursuit rather
+            // than juking like a rabbit, so a relay of swarm members can no longer simply wear
+            // one down to the tired floor.
+            FleeStaminaDrain = 0.0028f,
+            FleeStaminaRecovery = 0.004f,
+            FleeTiredSpeedFloor = 0.62f,
 
             // Fear - standard herd animal, alert but not paranoid
             FearThreshold = 50f,
             FearMax = 100f,
-            FearAccumulationRate = 6f,
+            FearAccumulationRate = 9f,   // Bolts promptly once it does notice
             FearDecayRate = 1f,
             FearVigilanceDecay = 0.3f,
             FearVigilanceDuration = 120,
+            // Directed Flee, not Panic: a panicking deer swerves randomly and runs into the
+            // swarm. Committed straight-line flight is what actually makes it hard to bring down.
             DefaultFearResponse = FearResponse.Flee,
 
             // Survival
@@ -794,6 +811,9 @@ public static class SpeciesRegistry
             BaseWanderSpeed = 0.03f,
             DirectionChangeChance = 0.02f,
 
+            // Amphibian: at home in and out of the water, and never drowns in it.
+            SemiAquatic = true,
+
             // Fleeing
             FleeRange = 5f,
             FleeSpeedMultiplier = 2.0f,
@@ -846,6 +866,23 @@ public static class SpeciesRegistry
                 { TileType.ShallowWater, -1f },
                 { TileType.Sand, 4f },
                 { TileType.Arid, 6f },
+            },
+            // Habitat steering: Wetland (0.15) and Bog (0.25) are penalised by the generic
+            // weights, walking a marsh dweller out of its marsh.
+            TerrainAversionModifiers = new Dictionary<TileType, float>
+            {
+                { TileType.Wetland, 0f },
+                { TileType.Bog, 0.05f },
+                { TileType.Jungle, 0.15f },
+                { TileType.Forest, 0.2f },
+                { TileType.Grass, 0.35f },
+                { TileType.Shrubland, 0.5f },
+                { TileType.Steppe, 0.6f },
+                { TileType.Savanna, 0.6f },
+                { TileType.Dirt, 0.7f },
+                { TileType.Sand, 0.8f },
+                { TileType.Arid, 0.9f },
+                { TileType.Tundra, 0.8f },
             },
             AllowedSpawnTiles = new List<TileType> { TileType.Wetland, TileType.Bog },
             PreferredBiomes = new List<BiomeType> { BiomeType.Wetland, BiomeType.River },
@@ -926,6 +963,18 @@ public static class SpeciesRegistry
                 { TileType.ShallowWater, -3f },
                 { TileType.Wetland, -2f },
                 { TileType.Sand, 1f },
+            },
+            // Habitat steering: Reef is not classified as water, so it fell through to the
+            // generic weight (0.7) and repelled the very species that forage there.
+            TerrainAversionModifiers = new Dictionary<TileType, float>
+            {
+                { TileType.Reef, 0f },
+                { TileType.Wetland, 0.05f },
+                { TileType.Bog, 0.15f },
+                { TileType.Sand, 0.2f },
+                { TileType.Grass, 0.3f },
+                { TileType.Forest, 0.4f },
+                { TileType.Arid, 0.8f },
             },
             AllowedSpawnTiles = new List<TileType> { TileType.Grass, TileType.Wetland, TileType.ShallowWater },
             PreferredBiomes = new List<BiomeType> { BiomeType.Coast, BiomeType.Wetland, BiomeType.River },
@@ -1362,6 +1411,25 @@ public static class SpeciesRegistry
                 { TileType.Forest, 3f },
                 { TileType.Wetland, 5f },
             },
+            // Habitat steering: Sand (0.3) and Arid (0.15) read as unpleasant in the generic
+            // table, pushing desert specialists off their niche toward greener ground they are
+            // not adapted to. Inverted here.
+            TerrainAversionModifiers = new Dictionary<TileType, float>
+            {
+                { TileType.Sand, 0f },
+                { TileType.Arid, 0f },
+                { TileType.Dirt, 0.05f },
+                { TileType.Shrubland, 0.1f },
+                { TileType.Savanna, 0.15f },
+                { TileType.Steppe, 0.25f },
+                { TileType.Grass, 0.3f },
+                { TileType.Forest, 0.5f },
+                { TileType.Jungle, 0.6f },
+                { TileType.Wetland, 0.7f },
+                { TileType.Bog, 0.8f },
+                { TileType.Tundra, 0.7f },
+                { TileType.Ice, 0.85f },
+            },
             AllowedSpawnTiles = new List<TileType> { TileType.Sand, TileType.Arid, TileType.Dirt },
             PreferredBiomes = new List<BiomeType> { BiomeType.Desert },
 
@@ -1471,6 +1539,25 @@ public static class SpeciesRegistry
                 { TileType.Arid, -2f },
                 { TileType.Wetland, 6f },
             },
+            // Habitat steering: Sand (0.3) and Arid (0.15) read as unpleasant in the generic
+            // table, pushing desert specialists off their niche toward greener ground they are
+            // not adapted to. Inverted here.
+            TerrainAversionModifiers = new Dictionary<TileType, float>
+            {
+                { TileType.Sand, 0f },
+                { TileType.Arid, 0f },
+                { TileType.Dirt, 0.05f },
+                { TileType.Shrubland, 0.1f },
+                { TileType.Savanna, 0.15f },
+                { TileType.Steppe, 0.25f },
+                { TileType.Grass, 0.3f },
+                { TileType.Forest, 0.5f },
+                { TileType.Jungle, 0.6f },
+                { TileType.Wetland, 0.7f },
+                { TileType.Bog, 0.8f },
+                { TileType.Tundra, 0.7f },
+                { TileType.Ice, 0.85f },
+            },
             AllowedSpawnTiles = new List<TileType> { TileType.Sand, TileType.Arid },
             PreferredBiomes = new List<BiomeType> { BiomeType.Desert },
 
@@ -1562,6 +1649,25 @@ public static class SpeciesRegistry
                 { TileType.Arid, -3f },
                 { TileType.Forest, 3f },
                 { TileType.Wetland, 5f },
+            },
+            // Habitat steering: Sand (0.3) and Arid (0.15) read as unpleasant in the generic
+            // table, pushing desert specialists off their niche toward greener ground they are
+            // not adapted to. Inverted here.
+            TerrainAversionModifiers = new Dictionary<TileType, float>
+            {
+                { TileType.Sand, 0f },
+                { TileType.Arid, 0f },
+                { TileType.Dirt, 0.05f },
+                { TileType.Shrubland, 0.1f },
+                { TileType.Savanna, 0.15f },
+                { TileType.Steppe, 0.25f },
+                { TileType.Grass, 0.3f },
+                { TileType.Forest, 0.5f },
+                { TileType.Jungle, 0.6f },
+                { TileType.Wetland, 0.7f },
+                { TileType.Bog, 0.8f },
+                { TileType.Tundra, 0.7f },
+                { TileType.Ice, 0.85f },
             },
             AllowedSpawnTiles = new List<TileType> { TileType.Sand, TileType.Arid, TileType.Dirt },
             PreferredBiomes = new List<BiomeType> { BiomeType.Desert },
@@ -1668,6 +1774,25 @@ public static class SpeciesRegistry
                 { TileType.Arid, -1f },
                 { TileType.Shrubland, -1f },
                 { TileType.Wetland, 3f },
+            },
+            // Habitat steering: Sand (0.3) and Arid (0.15) read as unpleasant in the generic
+            // table, pushing desert specialists off their niche toward greener ground they are
+            // not adapted to. Inverted here.
+            TerrainAversionModifiers = new Dictionary<TileType, float>
+            {
+                { TileType.Sand, 0f },
+                { TileType.Arid, 0f },
+                { TileType.Dirt, 0.05f },
+                { TileType.Shrubland, 0.1f },
+                { TileType.Savanna, 0.15f },
+                { TileType.Steppe, 0.25f },
+                { TileType.Grass, 0.3f },
+                { TileType.Forest, 0.5f },
+                { TileType.Jungle, 0.6f },
+                { TileType.Wetland, 0.7f },
+                { TileType.Bog, 0.8f },
+                { TileType.Tundra, 0.7f },
+                { TileType.Ice, 0.85f },
             },
             AllowedSpawnTiles = new List<TileType> { TileType.Sand, TileType.Arid, TileType.Dirt, TileType.Shrubland },
             PreferredBiomes = new List<BiomeType> { BiomeType.Desert, BiomeType.Grassland },
@@ -1798,6 +1923,24 @@ public static class SpeciesRegistry
                 { TileType.Sand, 5f },
                 { TileType.Arid, 8f },
             },
+            // Habitat steering: the generic land-animal weights treat Ice (0.6) and Tundra (0.4)
+            // as near-hostile, which steers arctic specialists out of the only biome they are
+            // built for. Home ground is home.
+            TerrainAversionModifiers = new Dictionary<TileType, float>
+            {
+                { TileType.Reef, 0f },
+                { TileType.Ice, 0f },
+                { TileType.Tundra, 0f },
+                { TileType.Steppe, 0.05f },
+                { TileType.Taiga, 0.1f },
+                { TileType.Grass, 0.3f },
+                { TileType.Forest, 0.35f },
+                { TileType.Shrubland, 0.4f },
+                { TileType.Savanna, 0.6f },
+                { TileType.Jungle, 0.7f },
+                { TileType.Arid, 0.7f },
+                { TileType.Sand, 0.7f },
+            },
             AllowedSpawnTiles = new List<TileType> { TileType.Ice, TileType.Tundra, TileType.Steppe },
             PreferredBiomes = new List<BiomeType> { BiomeType.Arctic },
 
@@ -1894,6 +2037,23 @@ public static class SpeciesRegistry
                 { TileType.ShallowWater, -1f },
                 { TileType.Sand, 6f },
                 { TileType.Arid, 8f },
+            },
+            // Habitat steering: the generic land-animal weights treat Ice (0.6) and Tundra (0.4)
+            // as near-hostile, which steers arctic specialists out of the only biome they are
+            // built for. Home ground is home.
+            TerrainAversionModifiers = new Dictionary<TileType, float>
+            {
+                { TileType.Ice, 0f },
+                { TileType.Tundra, 0f },
+                { TileType.Steppe, 0.05f },
+                { TileType.Taiga, 0.1f },
+                { TileType.Grass, 0.3f },
+                { TileType.Forest, 0.35f },
+                { TileType.Shrubland, 0.4f },
+                { TileType.Savanna, 0.6f },
+                { TileType.Jungle, 0.7f },
+                { TileType.Arid, 0.7f },
+                { TileType.Sand, 0.7f },
             },
             AllowedSpawnTiles = new List<TileType> { TileType.Ice, TileType.Tundra, TileType.Steppe },
             PreferredBiomes = new List<BiomeType> { BiomeType.Arctic },
@@ -1994,6 +2154,23 @@ public static class SpeciesRegistry
                 { TileType.Sand, 4f },
                 { TileType.Arid, 6f },
             },
+            // Habitat steering: the generic land-animal weights treat Ice (0.6) and Tundra (0.4)
+            // as near-hostile, which steers arctic specialists out of the only biome they are
+            // built for. Home ground is home.
+            TerrainAversionModifiers = new Dictionary<TileType, float>
+            {
+                { TileType.Ice, 0f },
+                { TileType.Tundra, 0f },
+                { TileType.Steppe, 0.05f },
+                { TileType.Taiga, 0.1f },
+                { TileType.Grass, 0.3f },
+                { TileType.Forest, 0.35f },
+                { TileType.Shrubland, 0.4f },
+                { TileType.Savanna, 0.6f },
+                { TileType.Jungle, 0.7f },
+                { TileType.Arid, 0.7f },
+                { TileType.Sand, 0.7f },
+            },
             AllowedSpawnTiles = new List<TileType> { TileType.Tundra, TileType.Steppe },
             PreferredBiomes = new List<BiomeType> { BiomeType.Arctic },
 
@@ -2085,6 +2262,23 @@ public static class SpeciesRegistry
                 { TileType.Steppe, -2f },
                 { TileType.Sand, 5f },
                 { TileType.Arid, 7f },
+            },
+            // Habitat steering: the generic land-animal weights treat Ice (0.6) and Tundra (0.4)
+            // as near-hostile, which steers arctic specialists out of the only biome they are
+            // built for. Home ground is home.
+            TerrainAversionModifiers = new Dictionary<TileType, float>
+            {
+                { TileType.Ice, 0f },
+                { TileType.Tundra, 0f },
+                { TileType.Steppe, 0.05f },
+                { TileType.Taiga, 0.1f },
+                { TileType.Grass, 0.3f },
+                { TileType.Forest, 0.35f },
+                { TileType.Shrubland, 0.4f },
+                { TileType.Savanna, 0.6f },
+                { TileType.Jungle, 0.7f },
+                { TileType.Arid, 0.7f },
+                { TileType.Sand, 0.7f },
             },
             AllowedSpawnTiles = new List<TileType> { TileType.Tundra, TileType.Steppe },
             PreferredBiomes = new List<BiomeType> { BiomeType.Arctic },
@@ -2180,6 +2374,25 @@ public static class SpeciesRegistry
                 { TileType.Forest, -2f },
                 { TileType.Sand, 4f },
                 { TileType.Arid, 6f },
+            },
+            // Habitat steering: canopy species. Jungle (0.1) and Forest (0.05) both rank
+            // worse than open Grass (0.0) in the generic table, so the generic weights slowly
+            // walk rainforest animals out onto the plains.
+            TerrainAversionModifiers = new Dictionary<TileType, float>
+            {
+                { TileType.Jungle, 0f },
+                { TileType.Forest, 0.05f },
+                { TileType.Wetland, 0.2f },
+                { TileType.Savanna, 0.25f },
+                { TileType.Grass, 0.3f },
+                { TileType.Shrubland, 0.45f },
+                { TileType.Taiga, 0.5f },
+                { TileType.Steppe, 0.6f },
+                { TileType.Dirt, 0.65f },
+                { TileType.Sand, 0.75f },
+                { TileType.Arid, 0.85f },
+                { TileType.Tundra, 0.85f },
+                { TileType.Ice, 0.95f },
             },
             AllowedSpawnTiles = new List<TileType> { TileType.Jungle, TileType.Forest },
             PreferredBiomes = new List<BiomeType> { BiomeType.Tropical },
@@ -2351,6 +2564,25 @@ public static class SpeciesRegistry
                 { TileType.Sand, 4f },
                 { TileType.Arid, 6f },
             },
+            // Habitat steering: canopy species. Jungle (0.1) and Forest (0.05) both rank
+            // worse than open Grass (0.0) in the generic table, so the generic weights slowly
+            // walk rainforest animals out onto the plains.
+            TerrainAversionModifiers = new Dictionary<TileType, float>
+            {
+                { TileType.Jungle, 0f },
+                { TileType.Forest, 0.05f },
+                { TileType.Wetland, 0.2f },
+                { TileType.Savanna, 0.25f },
+                { TileType.Grass, 0.3f },
+                { TileType.Shrubland, 0.45f },
+                { TileType.Taiga, 0.5f },
+                { TileType.Steppe, 0.6f },
+                { TileType.Dirt, 0.65f },
+                { TileType.Sand, 0.75f },
+                { TileType.Arid, 0.85f },
+                { TileType.Tundra, 0.85f },
+                { TileType.Ice, 0.95f },
+            },
             AllowedSpawnTiles = new List<TileType> { TileType.Jungle, TileType.Forest },
             PreferredBiomes = new List<BiomeType> { BiomeType.Tropical },
 
@@ -2441,6 +2673,25 @@ public static class SpeciesRegistry
                 { TileType.Forest, -1f },
                 { TileType.Sand, 4f },
                 { TileType.Arid, 6f },
+            },
+            // Habitat steering: canopy species. Jungle (0.1) and Forest (0.05) both rank
+            // worse than open Grass (0.0) in the generic table, so the generic weights slowly
+            // walk rainforest animals out onto the plains.
+            TerrainAversionModifiers = new Dictionary<TileType, float>
+            {
+                { TileType.Jungle, 0f },
+                { TileType.Forest, 0.05f },
+                { TileType.Wetland, 0.2f },
+                { TileType.Savanna, 0.25f },
+                { TileType.Grass, 0.3f },
+                { TileType.Shrubland, 0.45f },
+                { TileType.Taiga, 0.5f },
+                { TileType.Steppe, 0.6f },
+                { TileType.Dirt, 0.65f },
+                { TileType.Sand, 0.75f },
+                { TileType.Arid, 0.85f },
+                { TileType.Tundra, 0.85f },
+                { TileType.Ice, 0.95f },
             },
             AllowedSpawnTiles = new List<TileType> { TileType.Jungle, TileType.Forest },
             PreferredBiomes = new List<BiomeType> { BiomeType.Tropical },
@@ -2569,13 +2820,36 @@ public static class SpeciesRegistry
             },
             TerrainComfortModifiers = new Dictionary<TileType, float>
             {
+                { TileType.Bog, -3f },       // Home ground — the generic table calls bog unpleasant
                 { TileType.Wetland, -3f },   // Loves wet terrain
                 { TileType.Forest, -1f },
                 { TileType.Grass, 0f },
                 { TileType.Sand, 3f },       // Uncomfortable on dry
                 { TileType.Arid, 6f },       // Very uncomfortable on arid
             },
-            AllowedSpawnTiles = new List<TileType> { TileType.Wetland, TileType.Forest },
+            // Habitat steering. The generic land-animal weights rank Grass (0.0) as nicer than
+            // Wetland (0.15) and Bog (0.25) — steering a Shroomer off the only substrate it can
+            // survive on and onto grass, which is below its SporeMoistureThreshold and therefore
+            // permanent drought. Inverted here: swamp is home, dry ground is what to avoid.
+            // Hunger still overrides this, so a bloom that strips its own bog does move on — just
+            // deliberately, at forage pace, instead of drifting out and dying well fed.
+            TerrainAversionModifiers = new Dictionary<TileType, float>
+            {
+                { TileType.Bog, 0f },
+                { TileType.Wetland, 0f },
+                { TileType.Jungle, 0.05f },
+                { TileType.Forest, 0.1f },   // wet enough to live on, but not home
+                { TileType.Taiga, 0.15f },
+                { TileType.Grass, 0.5f },    // below drought threshold — actively avoided
+                { TileType.Shrubland, 0.6f },
+                { TileType.Savanna, 0.65f },
+                { TileType.Steppe, 0.7f },
+                { TileType.Dirt, 0.75f },
+                { TileType.Tundra, 0.8f },
+                { TileType.Sand, 0.85f },
+                { TileType.Arid, 0.9f },
+            },
+            AllowedSpawnTiles = new List<TileType> { TileType.Wetland, TileType.Forest, TileType.Bog },
 
             // Feeding — Shroomers RELY ON and IMPACT land fertility, more than herbivores. Their
             // growth fuel is tile nutrition (FertilityConsumeRate/FertilityFeedNutrition below):
@@ -2697,9 +2971,14 @@ public static class SpeciesRegistry
             ReproCooldown = 9999, // Effectively disabled in ReproductionSystem
 
             // Nest breeding parameters
-            NestColonyRadius = 40f,
-            NestsForExpedition = 5,
-            NestSearchRadius = 15f,
+            // Colony shape. Nests used to sit ~15 tiles from their parent and expand after only 5
+            // in a 40-tile area, so a colony read as an evenly-spaced lattice creeping outward
+            // rather than a settlement. Now they pack tightly (≈4–9 tiles apart) and a colony
+            // fills out to a dozen nests before sending an expedition, giving dense colony blobs
+            // with open ground — and a frontline — between them.
+            NestColonyRadius = 26f,
+            NestsForExpedition = 12,
+            NestSearchRadius = 7f,
             ExpeditionDistance = 80f,
             NestFoodPerSpawn = 18f,  // Cheaper larva so a collapsing prey base can still fund the swarm
             NestSpawnDuration = 200f,
@@ -2748,6 +3027,24 @@ public static class SpeciesRegistry
                 { TileType.Wetland, 6f },          // Very uncomfortable in wetland
                 { TileType.River, -6f },           // Tolerates small creeks (net 2f/tick)
                 { TileType.ShallowWater, -2f },    // Slightly less bothered than default
+            },
+            // Habitat steering: the dry ground a colony makes for itself is home, not something
+            // to escape. Without this the generic weights rank Arid (0.15) and Sand (0.3) as worse
+            // than the Grass they haven't dried yet, so a colony keeps fleeing its own territory —
+            // 3,021 escape decisions and 2,573 hunts abandoned to discomfort in one test run.
+            TerrainAversionModifiers = new Dictionary<TileType, float>
+            {
+                { TileType.Arid, 0f },
+                { TileType.Sand, 0.05f },
+                { TileType.Steppe, 0.05f },
+                { TileType.Dirt, 0.05f },
+                { TileType.Shrubland, 0.1f },
+                { TileType.Savanna, 0.1f },
+                { TileType.Grass, 0.2f },      // hunting ground, not home
+                { TileType.Forest, 0.5f },
+                { TileType.Jungle, 0.6f },
+                { TileType.Wetland, 0.8f },    // enemy substrate
+                { TileType.Bog, 0.9f },
             },
             AllowedSpawnTiles = new List<TileType> { TileType.Arid, TileType.Sand },
 

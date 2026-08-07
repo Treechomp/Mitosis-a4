@@ -88,8 +88,12 @@ public static class TileTypeExtensions
     }
 
     /// <summary>
-    /// Check if a tile type can be grazed by herbivores.
-    /// Requires some vegetation — bare earth, sand, and bogs are not grazeable.
+    /// Check if a tile type can be grazed / drawn on for fertility.
+    /// Requires some vegetation — bare earth and sand are not grazeable.
+    /// Wetland and Bog carry productive (if soggy) growth: they are the Shroomers' home
+    /// substrate, and a habitat with no depletable fertility gives them nothing to consume and
+    /// no reason to ever expand out of it. Their heavy movement/discomfort penalties still keep
+    /// ordinary herbivores from treating swamp as prime pasture.
     /// </summary>
     public static bool IsGrazeable(this TileType tile)
     {
@@ -101,6 +105,8 @@ public static class TileTypeExtensions
                tile == TileType.Taiga ||
                tile == TileType.Steppe ||
                tile == TileType.Tundra ||
+               tile == TileType.Wetland ||
+               tile == TileType.Bog ||
                tile == TileType.Arid;
     }
 
@@ -114,12 +120,42 @@ public static class TileTypeExtensions
         return tile switch
         {
             TileType.Grass or TileType.Savanna or TileType.Jungle => 1.0f, // lush
+            TileType.Wetland => 0.9f,                                     // rich but waterlogged
             TileType.Forest or TileType.Shrubland => 0.8f,
+            TileType.Bog => 0.7f,                                         // acidic, still productive
             TileType.Steppe => 0.6f,                                       // cold grassland
             TileType.Taiga => 0.5f,                                       // cold forest
             TileType.Tundra => 0.25f,                                     // sparse arctic scrub
             TileType.Arid => 0.2f,                                        // sparse desert scrub
             _ => 0f                                                       // non-grazeable
+        };
+    }
+
+    /// <summary>
+    /// Substrate wetness (0 = bone dry, 1 = saturated) as fungal growth experiences it. Distinct
+    /// from a tile's continuous climate moisture: this is the discrete "can a Shroomer live on
+    /// this ground" scale, compared against SpeciesDefinition.SporeMoistureThreshold for drought
+    /// damage and spore spread. Shared so movement/foraging can steer clear of ground that would
+    /// kill the creature, instead of only discovering it via drought damage after arriving.
+    /// </summary>
+    public static float SubstrateMoisture(this TileType tile)
+    {
+        return tile switch
+        {
+            TileType.Bog or TileType.Wetland or TileType.ShallowWater or TileType.DeepWater => 1.0f,
+            TileType.River => 0.95f,
+            TileType.Reef => 0.9f,
+            TileType.Jungle => 0.8f,
+            TileType.Taiga or TileType.Forest => 0.7f,
+            TileType.Ice => 0.5f,
+            TileType.Grass => 0.4f,
+            TileType.Shrubland => 0.35f,
+            TileType.Steppe or TileType.Savanna => 0.25f,
+            TileType.Tundra => 0.2f,
+            TileType.Dirt => 0.15f,
+            TileType.Sand => 0.1f,
+            TileType.Arid or TileType.Lava => 0.0f,
+            _ => 0.2f,
         };
     }
 

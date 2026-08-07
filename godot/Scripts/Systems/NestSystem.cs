@@ -42,10 +42,19 @@ public sealed class NestSystem : ISystem
         _maxPopulation = maxPopulation;
     }
 
+    /// <summary>Surplus (in larvae-equivalents) a nest must bank before founding another.</summary>
+    private const float NestFoundingCostLarvae = 6f;
+
+    /// <summary>Ticks between ambient terraform pulses from each standing nest.</summary>
+    private const int AmbientTerraformInterval = 40;
+
+    private int _ambientTick;
+
     public void Process(EntityManager em)
     {
         _pendingSpawns.Clear();
         _pendingNests.Clear();
+        _ambientTick++;
 
         // Get Sectid species def for nest parameters
         var sectidDef = SpeciesRegistry.Get("Sectid");
@@ -87,14 +96,18 @@ public sealed class NestSystem : ISystem
             }
 
             // === MAX STAGE: TRY FOUNDING NEW NEST ===
-            if (nest.IsMaxStage && nest.FoodStored >= nest.FoodPerSpawn * 2f)
+            // Founding costs a real surplus, not pocket change. At the old 2× a larva, any nest
+            // that had eaten recently expanded, which is what made colony growth purely
+            // exponential: there was no state in which a fed nest declined to build.
+            float foundingCost = nest.FoodPerSpawn * NestFoundingCostLarvae;
+            if (nest.IsMaxStage && nest.FoodStored >= foundingCost)
             {
                 // Count nearby nests for colony check
                 int nearbyNests = CountNearbyNests(em, pos.X, pos.Y, sectidDef.NestColonyRadius, entity);
 
                 if (nearbyNests < sectidDef.NestsForExpedition)
                 {
-                    // Found new nest nearby
+                    // Found new nest nearby — packs the colony tighter rather than creeping out
                     TryFoundNest(pos.X, pos.Y, sectidDef.NestSearchRadius, nest.ColonyId);
                 }
                 else
@@ -104,8 +117,18 @@ public sealed class NestSystem : ISystem
                 }
 
                 if (_pendingNests.Count > 0)
-                    nest.FoodStored -= nest.FoodPerSpawn * 2f;
+                    nest.FoodStored -= foundingCost;
             }
+
+            // === AMBIENT TERRAFORMING ===
+            // A standing nest keeps working the ground under it whether or not it is hatching.
+            // Previously terraforming happened ONLY on a hatch, so interior nests — which get no
+            // deliveries once the frontline moves past them — fell silent and the colony's mark on
+            // the map stayed a scatter of small dry specks around whichever nests were still
+            // feeding. Slow, continuous drying lets a colony's footprint close into one contiguous
+            // territory, with the hatch burst still providing the fast advance at the frontier.
+            if (_ambientTick % AmbientTerraformInterval == 0)
+                AmbientTerraform(pos.X, pos.Y, sectidDef);
         }
 
         // === SECTID LIFE (food delivery + hibernation/waking) ===
@@ -172,6 +195,19 @@ public sealed class NestSystem : ISystem
         }
     }
 
+    /// <summary>
+    /// Slow upkeep drying from a standing nest, independent of hatching. Reaches wider than the
+    /// hatch burst so the footprints of clustered nests overlap into one continuous territory
+    /// rather than a field of separate dry specks.
+    /// </summary>
+    private void AmbientTerraform(float x, float y, SpeciesDefinition sectidDef)
+    {
+        float radius = sectidDef.TerraformRadius * 2.5f;
+        float ox = ((float)_rng.NextDouble() * 2f - 1f) * radius;
+        float oy = ((float)_rng.NextDouble() * 2f - 1f) * radius;
+        _worldManager.Terraform(x + ox, y + oy, sectidDef.TerraformDir, NestTerraformStep);
+    }
+
     private bool TryStartLarvae(ref Nest nest)
     {
         // Fill first empty slot
@@ -205,9 +241,15 @@ public sealed class NestSystem : ISystem
             float y = originY + MathF.Sin(angle) * dist;
 
             var tile = _worldManager.GetTile(x, y);
-            // Nests only on dry land tiles, away from water (no beach nests)
+            // Nests only on dry land tiles, away from water (no beach nests).
+            // Shrubland/Steppe/Dirt are included because they are the INTERMEDIATE stages of the
+            // colony's own drying (Grass → Shrubland → Steppe → Arid). Excluding them meant a
+            // colony could never build inside the territory it had already worked — it could only
+            // settle undried Grass or fully-desertified Arid, which forced nests ever outward and
+            // produced the evenly-scattered dotting instead of a dense colony.
             if (tile == TileType.Arid || tile == TileType.Sand || tile == TileType.Grass ||
-                tile == TileType.Savanna || tile == TileType.Tundra)
+                tile == TileType.Savanna || tile == TileType.Tundra ||
+                tile == TileType.Shrubland || tile == TileType.Steppe || tile == TileType.Dirt)
             {
                 if (_worldManager.HasWaterNearby(x, y, 3))
                     continue; // Too close to water — likely a beach
@@ -228,6 +270,14 @@ public sealed class NestSystem : ISystem
     private const float HibernateCriticalRatio = 0.15f; // At/below this, shelter immediately (no wait)
     private const int HibernateNoFoodTicks = 600;      // ~30s at 20 TPS of sustained hunger before dormancy
     private const float WakeRadius = 14f;              // Prey within this wakes a dormant Sectid
+
+    // === Off-duty camping ===
+    // A sated Sectid with no prey within IdleScanRadius for IdleCampTicks returns to the nest and
+    // goes dormant. This is what makes a colony read as a colony — workers at the mound between
+    // hunts — and it takes constant swarm pressure off the whole map.
+    private const float IdleCampHungerRatio = 0.6f;    // Must be comfortably fed to stand down
+    private const float IdleScanRadius = 26f;          // Roughly 2× hunt range: "nothing doing"
+    private const int IdleCampTicks = 300;             // ~15s at 20 TPS with nothing to hunt
 
     private void ProcessSectids(EntityManager em)
     {
@@ -320,6 +370,27 @@ public sealed class NestSystem : ISystem
             else
             {
                 carrier.NoFoodTicks = 0; // recovered — fed enough, stay active
+            }
+
+            // === Off duty: fed, nothing to hunt → go home and camp ===
+            // Deliberately gated on being WELL FED, the opposite of the starvation shelter above:
+            // a hungry colony keeps working, a fed one stops patrolling the whole map. Without
+            // this a swarm never rests, because the only route to the nest was starving.
+            bool onDuty = em.HasComponents(entity, ComponentFlags.Predator)
+                          && em.Predators[entity].HasTarget;
+            if (!onDuty && hungerRatio >= IdleCampHungerRatio
+                && !HuntablePreyNearby(em, entity, pos.X, pos.Y, IdleScanRadius))
+            {
+                carrier.IdleTicks += tickMult;
+                if (carrier.IdleTicks >= IdleCampTicks && FindNearestNest(em, pos.X, pos.Y) >= 0)
+                {
+                    carrier.IsHibernating = true;
+                    carrier.IdleTicks = 0;
+                }
+            }
+            else
+            {
+                carrier.IdleTicks = 0;
             }
         }
     }

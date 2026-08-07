@@ -101,20 +101,37 @@ public sealed class WanderSystem : ISystem
                 hungerUrgency = Math.Clamp(1f - ratio, 0f, 1f);  // 0 = full, 1 = starving
             }
 
+            // Standing on ground that actively damages us (fungal drought) overrides both the
+            // roam cooldown and every "am I hungry enough to bother" test. Being well fed is the
+            // trap, not the safeguard: dry ground is the FERTILE ground, so a Shroomer that drifts
+            // onto grass eats its fill, reports no hunger, and is therefore never eligible to
+            // roam again — it dies at 100% hunger with its energy ground down by drought.
+            bool onLethalGround = _worldManager != null && wanderSpeciesDef != null
+                && IsLethalSubstrate(wanderSpeciesDef, _worldManager.GetTile(pos.X, pos.Y));
+
             // Check if we should start roaming
-            if (!wander.IsRoaming && wander.RoamCooldown <= 0)
+            if (!wander.IsRoaming && (wander.RoamCooldown <= 0 || onLethalGround))
             {
-                bool shouldRoam = ShouldStartRoaming(entity, em, ref pos);
+                bool shouldRoam = onLethalGround || ShouldStartRoaming(entity, em, ref pos);
                 if (shouldRoam)
                 {
                     float targetX, targetY;
                     string roamReason;
 
+                    // Retreat to survivable substrate. Takes priority over everything else —
+                    // a creature being damaged by the ground it stands on has no more urgent
+                    // business than getting off it.
+                    if (onLethalGround
+                        && TryFindSafeSubstrateTarget(pos.X, pos.Y, roamDistance, wanderSpeciesDef!,
+                               out targetX, out targetY))
+                    {
+                        roamReason = "escape_substrate";
+                    }
                     // Keepers (Faelings with an active dominance reading): besiege the locally
                     // dominant faction — roam to a standoff ring around its sensed hotspot,
                     // from which their balanced terraform dries/restores the substrate the
                     // winner depends on. Containment, not a suicide charge into elder AoE.
-                    if (wanderSpeciesDef != null
+                    else if (wanderSpeciesDef != null
                         && wanderSpeciesDef.TerraformDir == TerraformDirection.Balanced
                         && em.HasComponents(entity, ComponentFlags.FaelingPower)
                         && em.FaelingPowers[entity].KeeperFaction != 0
@@ -150,9 +167,26 @@ public sealed class WanderSystem : ISystem
                     }
                     else
                     {
-                        // Default: random direction
+                        // Default: random direction — but never deliberately set off toward ground
+                        // that damages us. A specialist whose surroundings are all lethal finds no
+                        // food target at all and falls through to here, so an unguarded random
+                        // roam is exactly how a Shroomer that correctly refuses to FORAGE onto dry
+                        // land still ends up walking out into it and dying of drought.
                         float angle = (float)(_rng.NextDouble() * Math.PI * 2);
                         float dist = roamDistance * (0.5f + (float)_rng.NextDouble() * 0.5f);
+                        if (_worldManager != null && wanderSpeciesDef != null
+                            && wanderSpeciesDef.DroughtDamage > 0f)
+                        {
+                            for (int attempt = 0; attempt < 8; attempt++)
+                            {
+                                float tx = pos.X + MathF.Cos(angle) * dist;
+                                float ty = pos.Y + MathF.Sin(angle) * dist;
+                                if (!IsLethalSubstrate(wanderSpeciesDef, _worldManager.GetTile(tx, ty)))
+                                    break;
+                                angle = (float)(_rng.NextDouble() * Math.PI * 2);
+                                dist *= 0.75f; // pull the search in closer to safe ground
+                            }
+                        }
                         targetX = pos.X + MathF.Cos(angle) * dist;
                         targetY = pos.Y + MathF.Sin(angle) * dist;
                         roamReason = "random";
@@ -435,11 +469,66 @@ public sealed class WanderSystem : ISystem
     {
         if (_worldManager == null) return true; // No world to evaluate — assume fed, don't roam
         var tile = _worldManager.GetTile(x, y);
-        if (def.CanGraze && tile.IsGrazeable())
+        // Ground that would kill this species is never "food here", however rich it looks —
+        // otherwise a fertility feeder sits on lethal substrate eating happily until it dies
+        // (a well-fed creature never triggers the food-seeking roam that would carry it home).
+        if (IsLethalSubstrate(def, tile)) return false;
+        // Fertility feeders (Shroomers) draw growth fuel from tile nutrition like a grazer does,
+        // so a stripped tile is not food even though the tile type still qualifies.
+        if ((def.CanGraze || def.FertilityConsumeRate > 0f) && tile.IsGrazeable())
             return _worldManager.GetNutrition(x, y) > 0.1f;
         if (def.FeedTiles != null && def.FeedTiles.Contains(tile))
             return true;
         return false;
+    }
+
+    /// <summary>
+    /// True when standing on this tile does sustained damage to the species — currently the
+    /// fungal drought rule (substrate below SporeMoistureThreshold). Foraging must treat such
+    /// ground as worthless no matter how fertile it is.
+    /// </summary>
+    private static bool IsLethalSubstrate(SpeciesDefinition def, TileType tile)
+        => def.DroughtDamage > 0f && tile.SubstrateMoisture() < def.SporeMoistureThreshold;
+
+    /// <summary>
+    /// Find the nearest direction back to survivable ground for a species being damaged by the
+    /// substrate it is standing on. Samples the 8 compass directions and takes the one whose
+    /// closest safe tile is nearest, so a stranded creature heads for the edge of the dry patch
+    /// rather than picking a scenic route across it.
+    /// </summary>
+    private bool TryFindSafeSubstrateTarget(float x, float y, float roamDistance,
+        SpeciesDefinition def, out float targetX, out float targetY)
+    {
+        targetX = x;
+        targetY = y;
+        if (_worldManager == null) return false;
+
+        float bestDist = float.MaxValue;
+        for (int i = 0; i < 8; i++)
+        {
+            float angle = i * MathF.PI / 4f;
+            float dx = MathF.Cos(angle);
+            float dy = MathF.Sin(angle);
+
+            for (float t = 0.15f; t <= 1.0f; t += 0.15f)
+            {
+                float d = roamDistance * t;
+                float sx = x + dx * d;
+                float sy = y + dy * d;
+                if (IsLethalSubstrate(def, _worldManager.GetTile(sx, sy))) continue;
+                if (d < bestDist)
+                {
+                    bestDist = d;
+                    // Aim a little past the boundary so it settles inside the safe ground,
+                    // not on the very edge where the next random step drifts back out.
+                    targetX = x + dx * (d + 4f);
+                    targetY = y + dy * (d + 4f);
+                }
+                break; // nearest safe sample along this ray is all that matters
+            }
+        }
+
+        return bestDist < float.MaxValue;
     }
 
     /// <summary>
@@ -493,7 +582,9 @@ public sealed class WanderSystem : ISystem
         // Species-aware: hostile terrain scores 0 so foraging never steers a creature off its
         // element — but for an aquatic this means LAND, not water (fish forage IN water).
         if (TerrainProfile.SteerAversion(def, tile) > 0.6f) return 0f;
-        if (def.CanGraze && tile.IsGrazeable())
+        // Never forage toward ground that damages us (fungal drought), however fertile it is.
+        if (IsLethalSubstrate(def, tile)) return 0f;
+        if ((def.CanGraze || def.FertilityConsumeRate > 0f) && tile.IsGrazeable())
             return _worldManager.GetNutrition(x, y);
         if (def.FeedTiles != null && def.FeedTiles.Contains(tile))
             return 1f;

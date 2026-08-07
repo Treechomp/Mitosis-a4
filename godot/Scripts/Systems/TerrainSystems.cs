@@ -218,11 +218,27 @@ public sealed class TerraformSystem : ISystem
 
             ref var pos = ref em.Positions[entity];
 
-            // Pick a random tile within influence radius
-            float offsetX = ((float)_rng.NextDouble() * 2f - 1f) * terraform.Radius;
-            float offsetY = ((float)_rng.NextDouble() * 2f - 1f) * terraform.Radius;
-            float targetX = pos.X + offsetX;
-            float targetY = pos.Y + offsetY;
+            // Half the time, work the ground directly underfoot; otherwise a random tile in
+            // radius. Purely random placement meant a terraformer could not reliably maintain or
+            // convert the tile it was actually standing on: with radius 2 that is ~1 chance in 20
+            // per attempt, so a Shroomer at the edge of its swamp starved for substrate long
+            // before it could turn the neighbouring grass into ground it could live on. Working
+            // underfoot is what lets a slow frontier advance exist at all — the bloom converts
+            // where it stands, then steps forward — while the random half still spreads the
+            // influence outward into a patch rather than a single tile.
+            float targetX, targetY;
+            if (_rng.NextDouble() < 0.5)
+            {
+                targetX = pos.X;
+                targetY = pos.Y;
+            }
+            else
+            {
+                float offsetX = ((float)_rng.NextDouble() * 2f - 1f) * terraform.Radius;
+                float offsetY = ((float)_rng.NextDouble() * 2f - 1f) * terraform.Radius;
+                targetX = pos.X + offsetX;
+                targetY = pos.Y + offsetY;
+            }
 
             // Terraform nudges the moisture parameter; the tile's classification and its
             // continuous colour follow from the new params (docs/3d-terrain-plan.md Phase 2b).

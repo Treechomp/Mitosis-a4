@@ -55,8 +55,13 @@ public static class TerrainProfile
         if (s.IsFlying) return 0f;
         bool water = tile.IsWater();
         if (s.IsAquatic) return water ? 0f : 1f;
-        if (s.AvoidsWater) return water ? 1f : tile.GetAvoidanceWeight();
-        if (s.SemiAquatic) return water ? 0f : tile.GetAvoidanceWeight();
+        // Element barrier first (a non-swimmer never wades regardless of preference), then the
+        // species' own habitat preference, then the generic land-animal weights.
+        if (s.AvoidsWater && water) return 1f;
+        if (!water && s.TerrainAversionModifiers != null
+            && s.TerrainAversionModifiers.TryGetValue(tile, out float own))
+            return own;
+        if (s.SemiAquatic && water) return 0f;
         return tile.GetAvoidanceWeight();
     }
 

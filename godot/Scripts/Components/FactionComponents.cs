@@ -55,6 +55,10 @@ public struct FoodCarrier
     // that keeps a minimal viable colony alive through prey troughs.
     public bool IsHibernating;  // Dormant near nest, low metabolism, waiting for prey
     public int NoFoodTicks;     // Consecutive ticks hungry with no prey detected nearby
+    // Consecutive ticks fed but with nothing to hunt. A colony whose workers only ever came home
+    // to starve was never seen at rest: the hunger gate meant a well-fed swarm roamed the map
+    // forever. This is the off-duty counter — sated Sectids with no prey in reach go camp.
+    public int IdleTicks;
 
     public FoodCarrier(float maxCarry = 5f)
     {
@@ -63,6 +67,7 @@ public struct FoodCarrier
         TargetNest = -1;
         IsHibernating = false;
         NoFoodTicks = 0;
+        IdleTicks = 0;
     }
 
     public readonly bool IsCarrying => FoodCarried > 0f;
