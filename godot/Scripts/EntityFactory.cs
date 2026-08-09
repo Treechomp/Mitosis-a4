@@ -27,7 +27,7 @@ public sealed class EntityFactory
     public void SetPopulationCap(int cap) => _populationCap = cap;
 
     /// <summary>True if entity count is at or above the population cap.</summary>
-    public bool AtCapacity => _entityManager.EntityCount >= _populationCap;
+    public bool AtCapacity => _entityManager.CreatureCount >= _populationCap;
 
     /// <summary>
     /// Applies random variation to a base value (+-percentage).
@@ -49,7 +49,7 @@ public sealed class EntityFactory
                                bool forceSolitary = false, bool isAlpha = false)
     {
         // Hard population cap — refuse to spawn beyond the limit
-        if (_entityManager.EntityCount >= _populationCap)
+        if (_entityManager.CreatureCount >= _populationCap)
             return;
 
         int entity = _entityManager.CreateEntity();

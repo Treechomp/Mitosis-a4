@@ -250,14 +250,14 @@ public sealed class SporeSystem : ISystem
 
         foreach (var (x, y, speciesId) in _pendingSpores)
         {
-            if (em.EntityCount >= _maxPopulation) break;
+            if (em.CreatureCount >= _maxPopulation) break;
             SpawnSpore(em, x, y, speciesId);
             EcosystemLogger.Instance?.LogSporeCreated(x, y);
         }
 
         foreach (var (x, y, speciesId) in _pendingTransforms)
         {
-            if (em.EntityCount >= _maxPopulation) break;
+            if (em.CreatureCount >= _maxPopulation) break;
             SpawnShroomer(em, x, y, speciesId);
             EcosystemLogger.Instance?.LogSporeMatured(x, y);
             EcosystemLogger.Instance?.LogReproduction(speciesId, -1, x, y, 1);
@@ -410,11 +410,31 @@ public sealed class SporeSystem : ISystem
             if (!speciesDef.HasAoEAttack) continue;
 
             ref var growth = ref em.Growths[entity];
+
+            // === ELDER AREA DENIAL ===
+            // Tick the rage/recharge clocks first so they run even when no pulse fires this tick.
+            int rageTickMult = em.HasComponents(entity, ComponentFlags.SimulationLOD)
+                ? em.SimulationLODs[entity].TickInterval : 1;
+            if (growth.EnrageTicks > 0) growth.EnrageTicks -= rageTickMult;
+            else if (growth.EnrageCooldown > 0) growth.EnrageCooldown -= rageTickMult;
+
+            // "Predation from any source" resolves to the one signal every attacker leaves behind:
+            // recent damage (Energy.RegenCooldown is set by melee, thorns, venom and AoE alike).
+            bool underAttack = em.HasComponents(entity, ComponentFlags.Energy)
+                               && em.Energies[entity].RegenCooldown > 0;
+            bool isElder = growth.CurrentScale >= speciesDef.AoEEnrageScale;
+            if (isElder && underAttack && growth.EnrageTicks <= 0 && growth.EnrageCooldown <= 0)
+            {
+                growth.EnrageTicks = speciesDef.AoEEnrageDuration;
+                growth.EnrageCooldown = speciesDef.AoEEnrageDuration + speciesDef.AoEEnrageRecharge;
+            }
+            bool enraged = growth.EnrageTicks > 0;
+
             if (growth.CurrentScale < speciesDef.AoEMinScale) continue; // Only mature shroomers attack
 
-            // AoE pulse interval: slow passive pulses, faster reactive pulses when in combat
-            bool inCombat = em.HasComponents(entity, ComponentFlags.Energy) && em.Energies[entity].RegenCooldown > 0;
-            int aoeInterval = inCombat
+            // AoE pulse interval: slow passive pulses, faster reactive pulses when in combat.
+            // An enraged elder pulses on the combat clock regardless.
+            int aoeInterval = (underAttack || enraged)
                 ? speciesDef.EffectiveAoECombatCooldown
                 : speciesDef.EffectiveAoEPassiveCooldown;
             aoeInterval = Math.Max(1, aoeInterval);
@@ -429,6 +449,11 @@ public sealed class SporeSystem : ISystem
             float growthFactor = speciesDef.GetGrowthScalingFactor(growth.CurrentScale);
             float aoeRadius = speciesDef.AoEAttackRadius * growthFactor;
             float aoeDamage = speciesDef.AoEAttackDamage * growthFactor;
+            if (enraged)
+            {
+                aoeRadius *= speciesDef.AoEEnrageRadiusMultiplier;
+                aoeDamage *= speciesDef.AoEEnrageDamageMultiplier;
+            }
 
             _spatialHash.QueryRadius(pos.X, pos.Y, aoeRadius, _nearbyBuffer);
 
@@ -438,9 +463,12 @@ public sealed class SporeSystem : ISystem
                 if (!em.HasComponents(other, ComponentFlags.Species | ComponentFlags.Energy)) continue;
 
                 ref var otherSpecies = ref em.Species[other];
-                // Only damage Faelings and Sectids (enemy terraformers)
-                if (otherSpecies.Type != SpeciesType.Faeling && otherSpecies.Type != SpeciesType.Sectid)
-                    continue;
+                // A grown Shroomer is dangerous to EVERYTHING that comes near, not only to rival
+                // terraformers: the spore cloud does not check what is nibbling it. Restricting
+                // this to Faelings/Sectids left adults defenceless against ordinary grazers, and
+                // an unchecked herbivore population simply ate blooms out of existence.
+                // Its own kind is exempt so a bloom doesn't shred itself.
+                if (otherSpecies.Type == SpeciesType.Shroomer) continue;
 
                 // Don't damage spores
                 if (em.HasComponents(other, ComponentFlags.Spore)) continue;

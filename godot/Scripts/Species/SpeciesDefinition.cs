@@ -378,6 +378,21 @@ public sealed class SpeciesDefinition
     public bool CanGraze { get; init; } = false;
     public float GrazeNutrition { get; init; } = 0.5f;
 
+    /// <summary>
+    /// Nutrition stripped from a tile per grazing tick. Was one hardcoded rate for every grazer,
+    /// which made a rabbit and a deer press the pasture identically. Body size should show in the
+    /// ground they leave behind.
+    /// </summary>
+    public float GrazeConsumeRate { get; init; } = 0.02f;
+
+    /// <summary>
+    /// Tile nutrition below which this species stops treating ground as worth feeding on and
+    /// starts looking elsewhere. A picky heavy browser abandons a patch long before a small
+    /// generalist that can still make a living on what's left — this is the knob that staggers
+    /// migration between species instead of moving every herbivore at the same instant.
+    /// </summary>
+    public float MinAcceptableNutrition { get; init; } = 0.1f;
+
     // === FUNGIVORY (spore / immature-Shroomer eating) ===
     /// <summary>
     /// If true, this species consumes nearby Shroomer spores and immature Shroomers directly — a
@@ -388,6 +403,14 @@ public sealed class SpeciesDefinition
     /// <summary>Max Shroomer <c>Growth.CurrentScale</c> a fungivore will eat (spores are always
     /// edible). Kept below the ~2.5 growth-spurt band so nibblers meet only weak AoE/thorns.</summary>
     public float FungivoreMaxScale { get; init; } = 2.0f;
+
+    /// <summary>
+    /// Whether this fungivore crops sprouted Shroomers as well as spores. Off by default: a
+    /// grazer nibbling spores off the ground is bloom control, but eating living Shroomers made
+    /// small herbivores the hard counter to the entire faction — an unchecked rabbit population
+    /// ate a bloom to extinction in testing. Sprout-croppers must opt in.
+    /// </summary>
+    public bool FungivoreEatsSprouts { get; init; } = false;
     /// <summary>Reach in tiles within which a fungivore consumes spores/sprouts each feed tick.</summary>
     public float FungivoreFeedRadius { get; init; } = 2.5f;
     /// <summary>Hunger restored per spore/sprout eaten.</summary>
@@ -563,6 +586,25 @@ public sealed class SpeciesDefinition
     /// Returns a value between AoEMinScaleFactor (at InitialScale) and 1.0 (at GrowthMaxScale).
     /// Shape: slow increase at birth → growth spurt mid-life → tapering toward elder age.
     /// </summary>
+    // === Elder area denial (Shroomers) ===
+    // A fully grown Shroomer that is attacked floods its surroundings with a lethal spore bloom
+    // for a short window, then must recharge. The recharge window is deliberate counterplay: a
+    // lone hunter cannot outlast it, but a persistent swarm that keeps bodies on it can time
+    // bites for the gap. Intended to be beatable only by sustained pressure (or, later, by a
+    // stronger Faeling).
+
+    /// <summary>Growth scale at which the elder denial burst unlocks.</summary>
+    public float AoEEnrageScale { get; init; } = float.MaxValue;   // never, unless set
+
+    /// <summary>Ticks the heightened denial zone stays up once triggered.</summary>
+    public int AoEEnrageDuration { get; init; } = 200;
+
+    /// <summary>Ticks after the burst ends before it can be triggered again — the vulnerable gap.</summary>
+    public int AoEEnrageRecharge { get; init; } = 500;
+
+    public float AoEEnrageDamageMultiplier { get; init; } = 3f;
+    public float AoEEnrageRadiusMultiplier { get; init; } = 1.5f;
+
     public float GetGrowthScalingFactor(float currentScale)
     {
         if (GrowthMaxScale <= InitialScale) return 1f;

@@ -112,11 +112,20 @@ public struct Growth
     public float MaxScale;      // Maximum growth multiplier
     public float GrowthRate;    // Scale increase per tick
 
+    // Elder area denial. An elder attacked by anything floods its surroundings with a lethal
+    // bloom for EnrageTicks, then must recharge for EnrageCooldown before it can do so again.
+    // The recharge IS the counterplay: it is the window in which a patient swarm gets its bites
+    // in, so an elder is brought down by persistence rather than by a single brave charge.
+    public int EnrageTicks;     // Remaining ticks of the heightened denial zone (0 = dormant)
+    public int EnrageCooldown;  // Ticks until it can rage again (0 = ready)
+
     public Growth(float maxScale = 3f, float growthRate = 0.00005f)
     {
         CurrentScale = 1f;
         MaxScale = maxScale;
         GrowthRate = growthRate;
+        EnrageTicks = 0;
+        EnrageCooldown = 0;
     }
 }
 

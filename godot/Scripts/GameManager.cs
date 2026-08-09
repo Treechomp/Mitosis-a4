@@ -204,7 +204,7 @@ public partial class GameManager : Node3D
         _lodSystem = new LODSystem(spatialHash);
         _systems.Add(_lodSystem);
         _systems.Add(new MovementSystem(ChunkSize, WorldSizeChunks, _worldManager));
-        _systems.Add(new SpatialHashUpdateSystem(spatialHash));
+        _systems.Add(new SpatialHashUpdateSystem(spatialHash, _worldManager.PredatorHash));
         _systems.Add(new TerrainDiscomfortSystem(_worldManager));
         _systems.Add(new HungerSystem());
         _systems.Add(new GrazingSystem(_worldManager, spatialHash));

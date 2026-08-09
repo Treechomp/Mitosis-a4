@@ -138,7 +138,7 @@ public sealed class NestSystem : ISystem
         var sectidSpeciesId = SpeciesRegistry.GetId("Sectid");
         foreach (var (x, y, colonyId) in _pendingSpawns)
         {
-            if (em.EntityCount >= _maxPopulation) break;
+            if (em.CreatureCount >= _maxPopulation) break;
             SpawnSectid(em, x, y, colonyId);
             EcosystemLogger.Instance?.LogReproduction(sectidSpeciesId, -1, x, y, 1);
         }
@@ -146,7 +146,7 @@ public sealed class NestSystem : ISystem
         // === SPAWN PENDING NESTS (respect population cap) ===
         foreach (var (x, y, colonyId) in _pendingNests)
         {
-            if (em.EntityCount >= _maxPopulation) break;
+            if (em.CreatureCount >= _maxPopulation) break;
             SpawnNest(em, x, y, colonyId);
         }
     }

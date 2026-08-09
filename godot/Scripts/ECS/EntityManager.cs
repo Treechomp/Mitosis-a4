@@ -151,6 +151,19 @@ public sealed class EntityManager
 
     public int EntityCount => _entityCount;
 
+    private int _carrionCount;
+
+    /// <summary>Number of carcasses currently lying in the world.</summary>
+    public int CarrionCount => _carrionCount;
+
+    /// <summary>
+    /// Living population for the purposes of the MaxPopulation budget: every entity except
+    /// carcasses. Corpses are world scenery on a decay timer, not inhabitants — counting them
+    /// meant a die-off silently spent the creature budget on its own bodies and throttled the
+    /// recovery, worst exactly when the world was trying to repopulate.
+    /// </summary>
+    public int CreatureCount => _entityCount - _carrionCount;
+
     /// <summary>
     /// Create a new entity. Returns entity ID.
     /// </summary>
@@ -209,6 +222,7 @@ public sealed class EntityManager
 
         OnEntityDying?.Invoke(entityId);
 
+        if ((_componentFlags[entityId] & ComponentFlags.Carrion) != 0) _carrionCount--;
         _alive[entityId] = false;
         _componentFlags[entityId] = ComponentFlags.None;
         _freeIds.Enqueue(entityId);
@@ -227,6 +241,7 @@ public sealed class EntityManager
             if (entityId >= 0 && entityId < MaxEntities && _alive[entityId])
             {
                 OnEntityDying?.Invoke(entityId);
+                if ((_componentFlags[entityId] & ComponentFlags.Carrion) != 0) _carrionCount--;
                 _alive[entityId] = false;
                 _componentFlags[entityId] = ComponentFlags.None;
                 _freeIds.Enqueue(entityId);
@@ -260,6 +275,10 @@ public sealed class EntityManager
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void AddComponent(int entityId, ComponentFlags flag)
     {
+        // Track carrion so population caps can exclude it (see CreatureCount).
+        if ((flag & ComponentFlags.Carrion) != 0
+            && (_componentFlags[entityId] & ComponentFlags.Carrion) == 0)
+            _carrionCount++;
         _componentFlags[entityId] |= flag;
     }
 
@@ -269,6 +288,9 @@ public sealed class EntityManager
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void RemoveComponent(int entityId, ComponentFlags flag)
     {
+        if ((flag & ComponentFlags.Carrion) != 0
+            && (_componentFlags[entityId] & ComponentFlags.Carrion) != 0)
+            _carrionCount--;
         _componentFlags[entityId] &= ~flag;
     }
 

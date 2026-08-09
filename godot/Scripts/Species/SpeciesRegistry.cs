@@ -154,10 +154,13 @@ public static class SpeciesRegistry
             MaxLifespan = 30000,
             MaturityAge = 2000,
 
-            // Reproduction
-            ReproHungerThreshold = 210f,
+            // Reproduction — deer consistently over-performed in wide-world runs, outgrowing what
+            // predators could crop. Slower turnaround and a fuller belly required before breeding,
+            // so herd growth now depends on actually finding good pasture rather than being
+            // near-automatic. Works together with the higher graze draw above.
+            ReproHungerThreshold = 228f,   // of MaxHunger 240 — must be genuinely well fed
             ReproEnergyThreshold = 80f,
-            ReproCooldown = 600,
+            ReproCooldown = 900,
 
             // Social
             GroupAffinity = 0.7f,
@@ -180,8 +183,14 @@ public static class SpeciesRegistry
                 { TileType.Taiga, 0.3f },
             },
 
-            // Grazing
+            // Grazing — a big browser takes a lot per mouthful and gives up on thin pasture
+            // early, so a herd visibly strips a meadow and then has to move on. Roughly 3× a
+            // rabbit's draw, and it abandons ground at 0.28 nutrition where a rabbit stays
+            // down to 0.08 — the two species therefore migrate at different times rather than
+            // sweeping the map as one front.
             CanGraze = true,
+            GrazeConsumeRate = 0.035f,
+            MinAcceptableNutrition = 0.28f,
             GrazeNutrition = 0.5f,
 
             // Separation
@@ -269,10 +278,14 @@ public static class SpeciesRegistry
                 { TileType.Grass, 0.1f },
             },
 
-            // Grazing
+            // Grazing — light feeder that can still get by on ground a deer has given up on,
+            // so the two species stagger their migrations instead of moving as one mass.
             CanGraze = true,
+            GrazeConsumeRate = 0.012f,
+            MinAcceptableNutrition = 0.08f,
             GrazeNutrition = 0.3f,
-            IsFungivore = true,  // nibbles Shroomer spores/sprouts
+            IsFungivore = true,  // nibbles Shroomer spores (not living sprouts — see
+                                 // FungivoreEatsSprouts; adult Shroomers now repel grazers)
 
             // Roaming - smaller territory, more frequent moves
             RoamDistance = 40f,
@@ -1951,8 +1964,16 @@ public static class SpeciesRegistry
             // source as long as they're IN the water, which the comfort fix now lets them stay in.
             // They remain Omnivore (can still opportunistically catch a Fish entity) and prey.
             CanGraze = false,
+            // Water is where a penguin HUNTS, not a pasture it can live off. At the old 0.55/tick
+            // simply floating in the sea fed it faster than its hunger decayed, so it never needed
+            // to catch anything — which is why fish populations ran away with only sharks cropping
+            // them. Cut to a subsistence floor (scraps of plankton and krill) that carries a bird
+            // through a lean patch but leaves fish as the actual meal.
             FeedTiles = new List<TileType> { TileType.ShallowWater, TileType.DeepWater, TileType.Reef, TileType.River },
-            FeedNutrition = 0.55f,
+            // Must stay BELOW effective hunger decay (0.04 x the global 0.3 scale = 0.012/tick)
+            // or the floor alone keeps the bird pinned at full, back above SatedHunger, and it
+            // never opportunistically hunts at all — the exact failure being fixed here.
+            FeedNutrition = 0.004f,
 
             SeparationRadius = 1.0f,   // Huddle close
             SeparationStrength = 0.01f,
@@ -2869,8 +2890,12 @@ public static class SpeciesRegistry
             // Terraform - increases moisture
             TerraformDir = TerraformDirection.Wetter,
             TerraformRadius = 2.0f,
-            TerraformStrength = 0.03f,
-            TerraformCooldown = 8,
+            // Raised 0.03 -> 0.10 and the cooldown halved: at the old rate a bloom managed 3 tile
+            // conversions across an entire test run, so it could never reach the fertile ground it
+            // needs and was permanently confined to the patch it spawned on. Scaled by body size
+            // in TerraformSystem, so sprouts still barely mark the ground.
+            TerraformStrength = 0.10f,
+            TerraformCooldown = 4,
 
             // AoE attack — S-curve growth scaling (smoothstep):
             //   Radius/damage = max_value * (minFactor + (1-minFactor) * smoothstep(t))
@@ -2889,6 +2914,16 @@ public static class SpeciesRegistry
             AoEPassiveCooldown = 350,    // Slow passive pulses (every 17.5s at 20 TPS)
             AoECombatCooldown = 60,      // Reactive pulses when attacked (3s)
             AoEMinScaleFactor = 0.08f,   // 8% of max at birth → S-curve → 100% at max
+            // Elder area denial: a near-fully-grown Shroomer that is attacked by ANYTHING floods
+            // its surroundings for 10s with a bloom that kills nearly everything caught in it,
+            // then spends 30s recharging. Nothing brings an elder down in a straight fight; the
+            // recharge gap is the only way in, so it takes a swarm with the bodies to spare and
+            // the patience to keep coming back (or, later, a strong enough Faeling).
+            AoEEnrageScale = 3.2f,               // of GrowthMaxScale 4 — genuinely old
+            AoEEnrageDuration = 200,             // 10s at 20 TPS
+            AoEEnrageRecharge = 600,             // 30s vulnerable window afterwards
+            AoEEnrageDamageMultiplier = 4f,      // 30 → 120 per pulse at full growth
+            AoEEnrageRadiusMultiplier = 1.6f,    // 14 → 22 tiles
 
             // Thorn defense — S-curve growth-scaled counter-damage on melee attackers
             // Scale 1.0: 20 * 0.08 = 1.6 dmg/hit  (barely stings)

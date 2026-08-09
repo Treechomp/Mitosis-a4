@@ -476,7 +476,7 @@ public sealed class WanderSystem : ISystem
         // Fertility feeders (Shroomers) draw growth fuel from tile nutrition like a grazer does,
         // so a stripped tile is not food even though the tile type still qualifies.
         if ((def.CanGraze || def.FertilityConsumeRate > 0f) && tile.IsGrazeable())
-            return _worldManager.GetNutrition(x, y) > 0.1f;
+            return _worldManager.GetNutrition(x, y) > def.MinAcceptableNutrition;
         if (def.FeedTiles != null && def.FeedTiles.Contains(tile))
             return true;
         return false;
@@ -585,7 +585,12 @@ public sealed class WanderSystem : ISystem
         // Never forage toward ground that damages us (fungal drought), however fertile it is.
         if (IsLethalSubstrate(def, tile)) return 0f;
         if ((def.CanGraze || def.FertilityConsumeRate > 0f) && tile.IsGrazeable())
-            return _worldManager.GetNutrition(x, y);
+        {
+            // Ground already below what this species will settle for scores nothing, so a picky
+            // browser routes past thin pasture a small generalist would happily stop on.
+            float n = _worldManager.GetNutrition(x, y);
+            return n > def.MinAcceptableNutrition ? n : 0f;
+        }
         if (def.FeedTiles != null && def.FeedTiles.Contains(tile))
             return 1f;
         // Predator hunting grounds: a hungry predator with no prey in range scores its

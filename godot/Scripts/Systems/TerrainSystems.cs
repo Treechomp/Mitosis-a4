@@ -242,7 +242,11 @@ public sealed class TerraformSystem : ISystem
 
             // Terraform nudges the moisture parameter; the tile's classification and its
             // continuous colour follow from the new params (docs/3d-terrain-plan.md Phase 2b).
-            _worldManager.Terraform(targetX, targetY, terraform.Direction, MoistureStep);
+            // Larger individuals shift more ground per act, so a mature bloom actually opens new
+            // habitat ahead of itself instead of only maintaining the tile it stands on.
+            float sizeScale = em.HasComponents(entity, ComponentFlags.Growth)
+                ? em.Growths[entity].CurrentScale : 1f;
+            _worldManager.Terraform(targetX, targetY, terraform.Direction, MoistureStep * sizeScale);
         }
     }
 }

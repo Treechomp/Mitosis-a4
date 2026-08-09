@@ -15,10 +15,12 @@ namespace Mitosis.Systems;
 public sealed class SpatialHashUpdateSystem : ISystem
 {
     private readonly SpatialHash _spatialHash;
+    private readonly SpatialHash? _predatorHash;
 
-    public SpatialHashUpdateSystem(SpatialHash spatialHash)
+    public SpatialHashUpdateSystem(SpatialHash spatialHash, SpatialHash? predatorHash = null)
     {
         _spatialHash = spatialHash;
+        _predatorHash = predatorHash;
     }
 
     public void Process(EntityManager em)
@@ -33,6 +35,17 @@ public sealed class SpatialHashUpdateSystem : ISystem
 
             ref var pos = ref em.Positions[entity];
             _spatialHash.Update(entity, pos.X, pos.Y);
+
+            // Mirror active threats into the predator-only index so prey scan a short list.
+            // A dormant Sectid frightens nobody, so it drops out until it wakes.
+            if (_predatorHash != null)
+            {
+                bool threat = em.HasComponents(entity, ComponentFlags.Predator)
+                              && !(em.HasComponents(entity, ComponentFlags.FoodCarrier)
+                                   && em.FoodCarriers[entity].IsHibernating);
+                if (threat) _predatorHash.Update(entity, pos.X, pos.Y);
+                else _predatorHash.Remove(entity);
+            }
         }
     }
 }

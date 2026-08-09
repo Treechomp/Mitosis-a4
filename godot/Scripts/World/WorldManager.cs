@@ -20,6 +20,25 @@ public sealed class WorldManager
     private readonly IChunkGenerator _generator;
     public readonly SpatialHash SpatialHash;
 
+    /// <summary>
+    /// Index containing ONLY entities that can currently threaten prey. Fleeing is the most
+    /// expensive system in the game because every prey animal sweeps its flee radius every tick;
+    /// against the full index a rabbit in a 600-strong warren walks hundreds of other rabbits to
+    /// discover there is no predator nearby. Predators are a small minority, so the same query
+    /// against this index usually returns nothing at all. Dormant Sectids drop out of it.
+    /// </summary>
+    public readonly SpatialHash PredatorHash;
+
+    /// <summary>
+    /// Neighbour-lookup cell size, in tiles. Deliberately decoupled from ChunkSize (32): a query
+    /// always sweeps at least a 3×3 block of cells, so 32-tile cells meant every small query —
+    /// separation and collision run at 2-3 tiles — swept 96×96 tiles and walked hundreds of
+    /// entities to find the two or three actually in range. Those two systems plus fleeing were
+    /// 56% of tick cost. Sized to the small end of the query range instead: big queries (hunt and
+    /// flee ranges of 8-30) still touch few cells, and the common tiny ones touch almost nothing.
+    /// </summary>
+    public const int SpatialCellSize = 8;
+
     public WorldManager(int chunkSize, int worldSizeChunks, int seed, TerrainSettings? terrainSettings = null)
         : this(chunkSize, worldSizeChunks, seed,
                CreateNoiseGenerator(seed, terrainSettings, chunkSize * worldSizeChunks))
@@ -39,7 +58,8 @@ public sealed class WorldManager
 
         _chunks = new Dictionary<(int, int), Chunk>(worldSizeChunks * worldSizeChunks);
         _generator = generator;
-        SpatialHash = new SpatialHash(chunkSize);
+        SpatialHash = new SpatialHash(SpatialCellSize);
+        PredatorHash = new SpatialHash(SpatialCellSize);
     }
 
     private static TerrainGenerator CreateNoiseGenerator(int seed, TerrainSettings? settings,

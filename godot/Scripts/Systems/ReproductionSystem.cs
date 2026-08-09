@@ -35,12 +35,12 @@ public sealed class ReproductionSystem : ISystem
         _toSpawn.Clear();
 
         // Don't reproduce if at population cap
-        if (em.EntityCount >= _maxPopulation)
+        if (em.CreatureCount >= _maxPopulation)
             return;
 
         // Global population pressure: as population approaches cap, reproduction becomes
         // increasingly unlikely. This prevents local pockets from ignoring the global limit.
-        float populationRatio = (float)em.EntityCount / _maxPopulation;
+        float populationRatio = (float)em.CreatureCount / _maxPopulation;
         float globalPressure = 1f; // 1.0 = no suppression
         if (populationRatio > 0.5f)
         {
@@ -91,7 +91,7 @@ public sealed class ReproductionSystem : ISystem
                 continue;
 
             // Check population cap again
-            if (em.EntityCount + _toSpawn.Count >= _maxPopulation)
+            if (em.CreatureCount + _toSpawn.Count >= _maxPopulation)
                 break;
 
             ref var pos = ref em.Positions[entity];
@@ -147,14 +147,14 @@ public sealed class ReproductionSystem : ISystem
         // Spawn offspring
         foreach (var (x, y, speciesType, speciesId) in _toSpawn)
         {
-            if (em.EntityCount >= _maxPopulation) break;
+            if (em.CreatureCount >= _maxPopulation) break;
             SpawnCreature(em, x, y, speciesType, speciesId);
         }
     }
 
     private void SpawnCreature(EntityManager em, float x, float y, SpeciesType speciesType, int speciesId)
     {
-        if (em.EntityCount >= _maxPopulation) return;
+        if (em.CreatureCount >= _maxPopulation) return;
         // Disabled species never spawn, even via reproduction (belt-and-suspenders: with no
         // initial population a disabled species can't reproduce anyway, but this keeps the
         // toggle a hard guarantee regardless of how offspring are queued).

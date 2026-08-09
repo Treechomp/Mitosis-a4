@@ -165,7 +165,7 @@ public sealed class CrystalSystem : ISystem
         var faelingSpeciesId = SpeciesRegistry.GetId("Faeling");
         foreach (var (x, y, crystalEntity, inheritedPower) in _pendingFaelings)
         {
-            if (em.EntityCount >= _maxPopulation) break;
+            if (em.CreatureCount >= _maxPopulation) break;
             int faeling = SpawnFaeling(em, x, y, crystalEntity, inheritedPower);
             if (faeling >= 0)
             {

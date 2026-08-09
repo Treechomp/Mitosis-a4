@@ -32,7 +32,11 @@ public sealed class CarrionSystem : ISystem
     private const float EatRange = 1.8f;           // must be this close to feed
     private const float SeekRadius = 18f;          // eaters notice corpses within this
     private const int FeedCommitTicks = 20;        // suppress re-hunting while feeding on a corpse
-    private const float DecompositionEnrich = 0.01f; // fraction of rotted nutrition that fertilises soil
+    // Fraction of rotted nutrition that fertilises the soil. At 0.01 a whole deer returned under
+    // a single tile's worth of grazing — invisible against the ~1,500 units a herd strips per
+    // logging interval. A carcass left to rot should be a genuine local windfall that pulls
+    // grazers back to a spot, which only reads if the number is big enough to see.
+    private const float DecompositionEnrich = 0.35f;
 
     public CarrionSystem(SpatialHash spatialHash, WorldManager worldManager)
     {

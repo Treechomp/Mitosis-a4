@@ -24,10 +24,15 @@ public sealed class FleeingSystem : ISystem
     // Reused buffer for the per-prey nearby-predator spatial query.
     private readonly List<int> _nearbyPredators = new(64);
 
+    // Predator-only index when a world supplies one (WorldManager.PredatorHash); falls back to
+    // the full index so the system still works standalone.
+    private readonly SpatialHash _threatHash;
+
     public FleeingSystem(SpatialHash spatialHash, WorldManager? worldManager = null)
     {
         _spatialHash = spatialHash;
         _worldManager = worldManager;
+        _threatHash = worldManager?.PredatorHash ?? spatialHash;
     }
 
     public void Process(EntityManager em)
@@ -61,7 +66,7 @@ public sealed class FleeingSystem : ISystem
             // Stealth-aware: stealthed predators reduce effective detection range. Only predators
             // within FleeRange matter, so query just that neighbourhood from the spatial hash.
             _nearbyPredators.Clear();
-            _spatialHash.QueryRadius(pos.X, pos.Y, prey.FleeRange, _nearbyPredators);
+            _threatHash.QueryRadius(pos.X, pos.Y, prey.FleeRange, _nearbyPredators);
             var (fleeDir, hasThreat, closestDistSq) = CalculateFleeVector(
                 em, pos.X, pos.Y, _nearbyPredators, fleeRangeSq, mySpeciesId);
 

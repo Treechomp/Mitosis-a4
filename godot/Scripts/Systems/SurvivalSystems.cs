@@ -213,8 +213,8 @@ public sealed class GrazingSystem : ISystem
     public void Process(EntityManager em)
     {
         const ComponentFlags required = ComponentFlags.Position | ComponentFlags.Species | ComponentFlags.Hunger;
-        // Amount of nutrition consumed from a tile per grazing tick
-        const float nutritionConsumeRate = 0.02f;
+        // Nutrition stripped per grazing tick is per-species now (GrazeConsumeRate) — a rabbit
+        // and a deer no longer press the same pasture at the same rate.
         _eaten.Clear();
         _claimed.Clear();
 
@@ -244,7 +244,7 @@ public sealed class GrazingSystem : ISystem
                     float nutrition = _worldManager.GetNutrition(pos.X, pos.Y);
                     if (nutrition > 0.05f)
                     {
-                        float requested = nutritionConsumeRate * tickMult;
+                        float requested = herbDef.GrazeConsumeRate * tickMult;
                         float consumed = _worldManager.ConsumeNutrition(pos.X, pos.Y, requested);
                         // Food gained scales with tile nutrition level. Guard the ratio:
                         // requested can only be 0 if tickMult is 0, which would make this 0/0 = NaN.
@@ -282,11 +282,16 @@ public sealed class GrazingSystem : ISystem
                     float nutrition = _worldManager.GetNutrition(pos.X, pos.Y);
                     if (nutrition > 0.05f)
                     {
-                        float requested = speciesDef.FertilityConsumeRate * tickMult;
+                        // Appetite scales with body size: a hulking elder strips the ground far
+                        // faster than a sprout, so a bloom's drain accelerates as it matures and
+                        // it exhausts its patch — and must advance — sooner the longer it stands.
+                        float sizeFactor = em.HasComponents(entity, ComponentFlags.Growth)
+                            ? em.Growths[entity].CurrentScale : 1f;
+                        float requested = speciesDef.FertilityConsumeRate * sizeFactor * tickMult;
                         float consumed = _worldManager.ConsumeNutrition(pos.X, pos.Y, requested);
                         float richness = requested > 0f ? consumed / requested : 0f;
                         hunger.Current = MathF.Min(hunger.Max,
-                            hunger.Current + speciesDef.FertilityFeedNutrition * richness * tickMult);
+                            hunger.Current + speciesDef.FertilityFeedNutrition * richness * sizeFactor * tickMult);
                     }
                 }
 
@@ -327,7 +332,8 @@ public sealed class GrazingSystem : ISystem
 
             bool isSpore = em.HasComponents(other, ComponentFlags.Spore);
             bool isEdibleShroomer = false;
-            if (!isSpore && em.HasComponents(other, ComponentFlags.Species | ComponentFlags.Growth))
+            if (!isSpore && def.FungivoreEatsSprouts
+                && em.HasComponents(other, ComponentFlags.Species | ComponentFlags.Growth))
             {
                 if (em.Species[other].Type == SpeciesType.Shroomer &&
                     em.Growths[other].CurrentScale <= def.FungivoreMaxScale)
