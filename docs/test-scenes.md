@@ -18,6 +18,26 @@ The simulation stack is the **real one** — the same systems in the same order 
 `GameManager` and overrides two hooks (`CreateWorld`, `PopulateWorld`), so mainline system
 changes flow into test scenes automatically.
 
+### Observation tools (available in BOTH Main and TestScene)
+
+| Key | Action |
+| --- | --- |
+| `LMB` | inspect the creature under the cursor — live panel, top right |
+| `Tab` / `Shift+Tab` | cycle the highlighted species (highlighted creatures render near-white) |
+| `H` | highlight the selected creature's own species |
+| `G` | jump the camera to the next member of the highlighted species |
+| `F` | toggle free camera (detached from the player creature and from terrain speed) |
+| `Esc` | clear selection and highlight |
+
+The inspector reports **drives**, not just vitals: hunt target and distance, pack phase/role,
+flee state and stamina, fear ratio and response, terrain discomfort, roam target, colony
+carrying/dormancy, growth and elder-enrage state. That's what tells you *why* a species is
+behaving the way the CSVs say it is — e.g. a predator sitting at `hunt no target` while starving
+next to prey is a target-acquisition failure, not a balance problem.
+
+In the test scene, terrain paint mode (`P`) takes over the left mouse button; every other
+observation control keeps working while painting.
+
 ### Runtime controls (beyond the normal WASD/zoom/F3)
 
 | Key | Action |

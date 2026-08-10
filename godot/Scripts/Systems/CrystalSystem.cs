@@ -337,7 +337,7 @@ public sealed class CrystalSystem : ISystem
                 ranged.CurrentCooldown = ranged.Cooldown;
                 ranged.TargetEntity = bestTarget;
 
-                if (EcosystemLogger.TrackedSpeciesId >= 0
+                if (EcosystemLogger.IsTrackingSpecies
                     && em.HasComponents(entity, ComponentFlags.Species)
                     && em.HasComponents(bestTarget, ComponentFlags.Species))
                 {

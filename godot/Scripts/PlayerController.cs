@@ -31,6 +31,34 @@ public sealed class PlayerController
 
     public int PlayerEntity => _playerEntity;
 
+    // === Free camera (observation mode) ===
+    // Detaches the view from the player creature. Following the player means panning is capped by
+    // whatever terrain it happens to be crossing — fine for playing, useless for watching a herd
+    // on the far side of a swamp. In free mode the focus moves directly, at a rate proportional to
+    // the zoom level so a pan covers the same fraction of the screen however far out you are.
+    public bool FreeCamera { get; set; }
+    private float _freeGridX, _freeGridY;
+
+    /// <summary>Place the free camera on a grid position (switches into free mode).</summary>
+    public void FocusOn(float gridX, float gridY)
+    {
+        _freeGridX = gridX;
+        _freeGridY = gridY;
+        FreeCamera = true;
+    }
+
+    /// <summary>Entering free mode starts from wherever the view currently is.</summary>
+    public void EnterFreeCameraAtPlayer()
+    {
+        if (_playerEntity >= 0 && _entityManager.IsAlive(_playerEntity))
+        {
+            ref var p = ref _entityManager.Positions[_playerEntity];
+            _freeGridX = p.X;
+            _freeGridY = p.Y;
+        }
+        FreeCamera = true;
+    }
+
     // --- 3D camera state ---
     // Focus point: the world-space XZ position the camera orbits around (Y always = 0).
     private Vector3 _cameraFocus;
@@ -70,6 +98,12 @@ public sealed class PlayerController
 
     public void HandleInput()
     {
+        if (FreeCamera)
+        {
+            HandleFreeCameraInput();
+            return;
+        }
+
         if (_playerEntity < 0 || !_entityManager.IsAlive(_playerEntity))
             return;
 
@@ -147,9 +181,48 @@ public sealed class PlayerController
         }
     }
 
+    /// <summary>
+    /// Free-camera panning: moves the focus directly in grid space, ignoring the player entity
+    /// and terrain speed entirely. Speed scales with the orthographic size so zoomed-out sweeps
+    /// cover ground quickly and close-up nudges stay precise.
+    /// </summary>
+    private void HandleFreeCameraInput()
+    {
+        float inputForward = 0f, inputRight = 0f;
+        if (Input.IsActionPressed("move_up"))    inputForward += 1f;
+        if (Input.IsActionPressed("move_down"))  inputForward -= 1f;
+        if (Input.IsActionPressed("move_right")) inputRight   += 1f;
+        if (Input.IsActionPressed("move_left"))  inputRight   -= 1f;
+        if (inputForward == 0f && inputRight == 0f) return;
+
+        float len = MathF.Sqrt(inputForward * inputForward + inputRight * inputRight);
+        if (len > 1f) { inputForward /= len; inputRight /= len; }
+
+        float speed = _cameraSize / (TileSize * 32f) * 2.0f;
+        if (Input.IsKeyPressed(Key.Shift)) speed *= PlayerSprintMultiplier;
+
+        float yawRad = Mathf.DegToRad(_cameraYaw);
+        float sinY = MathF.Sin(yawRad), cosY = MathF.Cos(yawRad);
+        float worldDX = inputForward * sinY - inputRight * cosY;
+        float worldDZ = inputForward * cosY + inputRight * sinY;
+
+        // World XZ -> grid: grid X follows world X, grid Y is world -Z.
+        _freeGridX += worldDX * speed;
+        _freeGridY -= worldDZ * speed;
+    }
+
     public void UpdateCamera(Camera3D? camera, double delta)
     {
-        if (camera == null || _playerEntity < 0 || !_entityManager.IsAlive(_playerEntity))
+        if (camera == null) return;
+
+        if (FreeCamera)
+        {
+            _cameraFocus = _cameraFocus.Lerp(PlayerFocusPoint(_freeGridX, _freeGridY), (float)(8.0 * delta));
+            ApplyCameraTransform(camera);
+            return;
+        }
+
+        if (_playerEntity < 0 || !_entityManager.IsAlive(_playerEntity))
             return;
 
         ref var pos = ref _entityManager.Positions[_playerEntity];

@@ -145,9 +145,19 @@ public partial class TestSceneManager : GameManager
 
     // ── Input: time controls + paint mode ─────────────────────────────────────
 
+    /// <summary>
+    /// Paint mode owns the left mouse button, so click-to-inspect steps aside while it is on.
+    /// Everything else (species cycling, jump, free camera) stays available throughout.
+    /// </summary>
+    protected override void HandleObservationInput(InputEvent @event)
+    {
+        if (_paintMode && @event is InputEventMouseButton) return;
+        base.HandleObservationInput(@event);
+    }
+
     public override void _UnhandledInput(InputEvent @event)
     {
-        base._UnhandledInput(@event); // F3 profiling + wheel zoom
+        base._UnhandledInput(@event); // F3 profiling + wheel zoom + observation tools
 
         if (@event is InputEventKey { Pressed: true, Echo: false } key)
             HandleKey(key.Keycode);

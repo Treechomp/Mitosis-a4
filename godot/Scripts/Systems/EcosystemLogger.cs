@@ -47,7 +47,23 @@ public sealed class EcosystemLogger : ISystem
     /// Use <c>SpeciesRegistry.GetId("Wolf")</c> etc. to resolve the ID.
     /// Set to -1 (default) to disable.
     /// </summary>
-    public static int TrackedSpeciesId { get; set; } = -1;
+    public static int TrackedSpeciesId
+    {
+        get => _trackedSpeciesId;
+        set { _trackedSpeciesId = value; IsTrackingSpecies = true; }
+    }
+    private static int _trackedSpeciesId;
+
+    /// <summary>
+    /// Whether a species is being tracked. A separate flag rather than a negative sentinel:
+    /// species ids come from string.GetHashCode() and are negative about half the time (Wolf is
+    /// -1711233758), so every "id >= 0" guard silently disabled tracking for those species —
+    /// the TrackSpecies debug feature simply did nothing for half the roster.
+    /// </summary>
+    public static bool IsTrackingSpecies { get; private set; }
+
+    /// <summary>Turn per-entity tracking off.</summary>
+    public static void ClearTrackedSpecies() => IsTrackingSpecies = false;
 
     // ── Test-scene logging configuration ─────────────────────────────────────
     // All of these must be set BEFORE the logger is constructed (the extra CSV files are only
@@ -405,7 +421,7 @@ public sealed class EcosystemLogger : ISystem
                               float damage, float x, float y, string source)
     {
         int tracked = TrackedSpeciesId;
-        if (tracked < 0 || (attackerSid != tracked && targetSid != tracked)) return;
+        if (!IsTrackingSpecies || (attackerSid != tracked && targetSid != tracked)) return;
         var aName = SpeciesRegistry.GetById(attackerSid)?.Name ?? attackerSid.ToString();
         var tName = SpeciesRegistry.GetById(targetSid)?.Name   ?? targetSid.ToString();
         if (attackerSid == tracked)
@@ -473,7 +489,7 @@ public sealed class EcosystemLogger : ISystem
             }
 
             // Verbose per-entity snapshot for the tracked species.
-            if (trackedId >= 0 && sid == trackedId)
+            if (IsTrackingSpecies && sid == trackedId)
                 WriteTrackedEntitySnapshot(entity, sid, em);
         }
 

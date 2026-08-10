@@ -51,6 +51,16 @@ public sealed class RenderingManager
     // Animation state
     private int _frameTick;
 
+    // === Observation overlay ===
+    // Highlighting is applied at draw time rather than by mutating Renderable.Color, so nothing
+    // about the simulation state changes just because you are looking at something.
+    public int HighlightSpeciesId { get; set; }
+    /// <summary>Species ids are hash codes and often negative, so highlighting needs its own flag.</summary>
+    public bool HighlightActive { get; set; }
+    public int SelectedEntity { get; set; } = -1;
+    private static readonly Color HighlightColor = new(1f, 1f, 1f);
+    private static readonly Color SelectionColor = new(1f, 0.2f, 0.9f);
+
     public RenderingManager(EntityManager entityManager, WorldManager worldManager,
                             int chunkSize, int worldSizeChunks, int tileSize, float heightScale = 0f)
     {
@@ -480,7 +490,22 @@ public sealed class RenderingManager
             var mm = _shapeMMIs[shapeIdx].Multimesh;
             int i = _shapeIndices[shapeIdx]++;
             mm.SetInstanceTransform(i, transform);
-            mm.SetInstanceColor(i, rend.Color);
+
+            var color = rend.Color;
+            if (entity == SelectedEntity)
+            {
+                color = SelectionColor;
+            }
+            else if (HighlightActive
+                     && _entityManager.HasComponents(entity, ComponentFlags.Species)
+                     && _entityManager.Species[entity].SpeciesId == HighlightSpeciesId
+                     && !_entityManager.HasComponents(entity, ComponentFlags.Carrion))
+            {
+                // Blend toward white rather than replacing: the species keeps its silhouette and
+                // its own hue is still readable, it just pops out of the crowd.
+                color = color.Lerp(HighlightColor, 0.75f);
+            }
+            mm.SetInstanceColor(i, color);
         }
 
         // Set visible counts

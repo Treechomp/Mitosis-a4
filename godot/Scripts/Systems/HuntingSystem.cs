@@ -921,7 +921,7 @@ public sealed class HuntingSystem : ISystem
                         preyEnergy.Current -= actualDamage;
                         preyEnergy.RegenCooldown = 60; // 3s combat cooldown at 20 TPS
 
-                        if (EcosystemLogger.TrackedSpeciesId >= 0
+                        if (EcosystemLogger.IsTrackingSpecies
                             && em.HasComponents(predator.TargetEntity, ComponentFlags.Species))
                         {
                             int aSid = em.HasComponents(entity, ComponentFlags.Species)
@@ -963,7 +963,7 @@ public sealed class HuntingSystem : ISystem
                                     ref var predEnergy = ref em.Energies[entity];
                                     predEnergy.Current -= thornDamage;
                                     predEnergy.RegenCooldown = 30;
-                                    if (EcosystemLogger.TrackedSpeciesId >= 0
+                                    if (EcosystemLogger.IsTrackingSpecies
                                         && em.HasComponents(entity, ComponentFlags.Species))
                                     {
                                         EcosystemLogger.Instance?.LogCombatHit(

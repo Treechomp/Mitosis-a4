@@ -477,7 +477,7 @@ public sealed class SporeSystem : ISystem
                 otherEnergy.Current -= aoeDamage;
                 otherEnergy.RegenCooldown = 60; // 3s combat cooldown at 20 TPS
 
-                if (EcosystemLogger.TrackedSpeciesId >= 0
+                if (EcosystemLogger.IsTrackingSpecies
                     && em.HasComponents(entity, ComponentFlags.Species))
                 {
                     ref var otherPos = ref em.Positions[other];

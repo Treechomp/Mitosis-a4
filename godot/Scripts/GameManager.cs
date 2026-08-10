@@ -154,6 +154,10 @@ public partial class GameManager : Node3D
     // 3D scene refs
     protected Camera3D? _camera;
     private Label?    _debugLabel;
+    private Label?    _inspectorLabel;
+
+    /// <summary>Click-to-inspect / species highlight / free camera. See ObservationController.</summary>
+    protected Tools.ObservationController? _observation;
 
     public override void _Ready()
     {
@@ -324,8 +328,12 @@ public partial class GameManager : Node3D
         foreach (var mmi in shapeMMIs)
             AddChild(mmi);
 
+        _observation = new Tools.ObservationController(_entityManager, _worldManager);
+
         SetupDebugUI();
         GD.Print($"Game ready! {_entityManager.EntityCount} entities");
+        GD.Print("Observation: LMB=inspect  Tab=cycle species  G=jump to next  " +
+                 "H=highlight selected species  F=free camera  Esc=clear");
     }
 
     /// <summary>
@@ -376,6 +384,19 @@ public partial class GameManager : Node3D
         _debugLabel.AddThemeFontOverride("font", monoFont);
         _debugLabel.AddThemeFontSizeOverride("font_size", 14);
         canvasLayer.AddChild(_debugLabel);
+
+        // Inspector panel, anchored top-right so it never covers the stats/profiling readout.
+        _inspectorLabel = new Label();
+        _inspectorLabel.Position = new Vector2(10, 10);
+        _inspectorLabel.SetAnchorsPreset(Control.LayoutPreset.TopRight);
+        _inspectorLabel.GrowHorizontal = Control.GrowDirection.Begin;
+        _inspectorLabel.AddThemeColorOverride("font_color", new Color(1f, 0.95f, 0.75f));
+        _inspectorLabel.AddThemeColorOverride("font_shadow_color", Colors.Black);
+        _inspectorLabel.AddThemeConstantOverride("shadow_offset_x", 1);
+        _inspectorLabel.AddThemeConstantOverride("shadow_offset_y", 1);
+        _inspectorLabel.AddThemeFontOverride("font", monoFont);
+        _inspectorLabel.AddThemeFontSizeOverride("font_size", 13);
+        canvasLayer.AddChild(_inspectorLabel);
     }
 
     public override void _Process(double delta)
@@ -478,6 +499,56 @@ public partial class GameManager : Node3D
 
         if (@event is InputEventKey { Pressed: true, Keycode: Key.F3 })
             _showProfiling = !_showProfiling;
+
+        HandleObservationInput(@event);
+    }
+
+    /// <summary>
+    /// Observation controls. Virtual so a subclass can suppress them while its own modal tools
+    /// are active (the test scene's terrain painting also uses the left mouse button).
+    /// </summary>
+    protected virtual void HandleObservationInput(InputEvent @event)
+    {
+        if (_observation == null || _camera == null) return;
+
+        if (@event is InputEventMouseButton { Pressed: true, ButtonIndex: MouseButton.Left } mb)
+        {
+            if (!_observation.SelectAtScreen(_camera, mb.Position, TileSize, ElevationHeightScale))
+                _observation.Validate();
+            return;
+        }
+
+        if (@event is not InputEventKey { Pressed: true, Echo: false } key) return;
+
+        switch (key.Keycode)
+        {
+            case Key.Tab:
+                _observation.CycleSpecies(key.ShiftPressed ? -1 : 1);
+                break;
+
+            case Key.H:
+                _observation.HighlightSelectedSpecies();
+                break;
+
+            case Key.G:
+                // Jump to the next member of the highlighted species. Camera goes free so the
+                // view can sit anywhere on the map, not just where the player creature can walk.
+                if (_observation.TryGetNextMember(out float jx, out float jy, out _))
+                    _playerController?.FocusOn(jx, jy);
+                break;
+
+            case Key.F:
+                if (_playerController != null)
+                {
+                    if (_playerController.FreeCamera) _playerController.FreeCamera = false;
+                    else _playerController.EnterFreeCameraAtPlayer();
+                }
+                break;
+
+            case Key.Escape:
+                _observation.ClearSelection();
+                break;
+        }
     }
 
     private void UpdateStats(double delta)
@@ -577,6 +648,8 @@ public partial class GameManager : Node3D
             if (extra.Length > 0)
                 _debugLabel.Text += "\n" + extra;
         }
+
+        UpdateInspectorPanel();
     }
 
     /// <summary>
@@ -584,4 +657,34 @@ public partial class GameManager : Node3D
     /// pause/speed state and the paint-mode brush.
     /// </summary>
     protected virtual string ExtraDebugText() => "";
+
+    /// <summary>Right-hand observation panel: highlighted species tally + selected creature.</summary>
+    private void UpdateInspectorPanel()
+    {
+        if (_inspectorLabel == null || _observation == null) return;
+
+        _observation.Validate();
+        var sb = new System.Text.StringBuilder(600);
+
+        if (_observation.HasHighlight)
+        {
+            sb.Append("HIGHLIGHT: ").Append(_observation.HighlightedSpeciesName)
+              .Append("  (").Append(_observation.CountSpecies(_observation.HighlightedSpeciesId))
+              .Append(" alive)   [G] jump\n\n");
+        }
+
+        string inspector = _observation.BuildInspectorText();
+        if (inspector.Length > 0) sb.Append(inspector);
+        else if (sb.Length == 0)
+            sb.Append("[LMB] inspect   [Tab] species   [H] highlight selected   [F] free cam");
+
+        if (_playerController is { FreeCamera: true }) sb.Append("\n[FREE CAMERA]");
+
+        _inspectorLabel.Text = sb.ToString();
+
+        // Feed the render overlay so highlighted/selected creatures stand out in the world.
+        _renderingManager.HighlightSpeciesId = _observation.HighlightedSpeciesId;
+        _renderingManager.HighlightActive = _observation.HasHighlight;
+        _renderingManager.SelectedEntity = _observation.SelectedEntity;
+    }
 }
