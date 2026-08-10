@@ -20,6 +20,14 @@ public sealed class TerrainDiscomfortSystem : ISystem
     private readonly WorldManager _worldManager;
     private readonly List<int> _toKill = new(16);
 
+    /// <summary>
+    /// Ceiling on accumulated discomfort, as a multiple of the species' threshold. Sits above the
+    /// largest tolerance any consumer applies (a committed swarm hunter tolerates ~2.1) so the
+    /// "this ground is intolerable" signal still discriminates, while keeping recovery bounded:
+    /// at a typical threshold 50 and decay 2/tick a creature clears the cap in about 70 ticks.
+    /// </summary>
+    private const float MaxDiscomfortRatio = 3f;
+
     public TerrainDiscomfortSystem(WorldManager worldManager)
     {
         _worldManager = worldManager;
@@ -93,17 +101,24 @@ public sealed class TerrainDiscomfortSystem : ISystem
                 }
             }
 
-            // Accumulate or decay discomfort
+            // Accumulate or decay discomfort, LOD-compensated so a distant creature builds and
+            // sheds it at the same real-time rate as one under the camera.
             if (tileDiscomfort > 0)
-            {
-                // Accumulate discomfort
-                discomfort.Current += tileDiscomfort;
-            }
+                discomfort.Current += tileDiscomfort * tickMult;
             else
-            {
-                // Decay discomfort on comfortable terrain
-                discomfort.Current = MathF.Max(0, discomfort.Current - discomfort.DecayRate);
-            }
+                discomfort.Current = MathF.Max(0, discomfort.Current - discomfort.DecayRate * tickMult);
+
+            // Cap the accumulation. Discomfort was unbounded, so a creature that crossed genuinely
+            // hostile ground (Mountain accrues 15/tick, Lava 20) banked a debt in the thousands —
+            // ratios of 4000%+ were observed — and then could not pay it off: escape only clears
+            // below ratio 0.1, and HuntingSystem refuses to hold a target while the ratio exceeds
+            // its tolerance. The result was a creature permanently locked in "escape", never
+            // hunting again however hungry, though still able to feed from carcasses (scavenging
+            // does not consult discomfort). Nothing needs a ratio above the cap: every consumer
+            // asks "how far past threshold am I", and the highest tolerance in play is ~2.1.
+            float maxDiscomfort = discomfort.Threshold * MaxDiscomfortRatio;
+            if (discomfort.Current > maxDiscomfort)
+                discomfort.Current = maxDiscomfort;
 
             // === Drowning / Suffocation ===
             if (speciesDef != null && em.HasComponents(entity, ComponentFlags.Energy))

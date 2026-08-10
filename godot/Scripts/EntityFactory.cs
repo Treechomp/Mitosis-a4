@@ -45,12 +45,21 @@ public sealed class EntityFactory
     /// <param name="groupId">Pre-assigned group ID (-1 for no group)</param>
     /// <param name="forceSolitary">Force solitary social type</param>
     /// <param name="isAlpha">Whether this is the group leader (higher leadership score)</param>
-    public void SpawnCreature(float x, float y, SpeciesDefinition species, int groupId = -1,
-                               bool forceSolitary = false, bool isAlpha = false)
+    /// <param name="startAge">Explicit starting age; null = the usual randomised age. Offspring
+    /// pass 0. This exists so REPRODUCTION can route through this method too — it used to
+    /// assemble creatures itself, and the two copies silently drifted apart: every creature born
+    /// in the world was missing TerrainDiscomfort, Fear, Social and Growth. Newborns therefore
+    /// could not drown, never felt terrain or grazing pressure, never accumulated fear, and — for
+    /// pack species — were invisible to pack coordination, which requires Social. A single
+    /// assembly path is the only thing that keeps those in step.</param>
+    /// <returns>The new entity id, or -1 when the population cap refused the spawn.</returns>
+    public int SpawnCreature(float x, float y, SpeciesDefinition species, int groupId = -1,
+                               bool forceSolitary = false, bool isAlpha = false,
+                               int? startAge = null)
     {
         // Hard population cap — refuse to spawn beyond the limit
         if (_entityManager.CreatureCount >= _populationCap)
-            return;
+            return -1;
 
         int entity = _entityManager.CreateEntity();
         float variation = species.StatVariation;
@@ -67,7 +76,7 @@ public sealed class EntityFactory
 
         // Age with variation
         _entityManager.Ages[entity] = new Age(
-            current: _rng.Next(0, species.MaturityAge * 2),  // Start at random age
+            current: startAge ?? _rng.Next(0, species.MaturityAge * 2),  // Start at random age
             maxLifespan: (int)Vary(species.MaxLifespan, variation),
             maturityAge: (int)Vary(species.MaturityAge, variation)
         );
@@ -236,6 +245,7 @@ public sealed class EntityFactory
 
         // Faelings spawned from crystals get their components from CrystalSystem,
         // not from GameManager, so no special handling needed here.
+        return entity;
     }
 
     /// <summary>

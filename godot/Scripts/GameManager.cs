@@ -223,7 +223,7 @@ public partial class GameManager : Node3D
         // is fed/held at the corpse before NestSystem decides whether to ferry the load home.
         _systems.Add(new CarrionSystem(spatialHash, _worldManager));
         _systems.Add(new AgingSystem());
-        _systems.Add(new ReproductionSystem(_worldManager, MaxPopulation, spatialHash));
+        _systems.Add(new ReproductionSystem(_worldManager, MaxPopulation, spatialHash, _entityFactory));
         _systems.Add(new TerraformSystem(_worldManager));
         _systems.Add(new TileRegenerationSystem(_worldManager));
 

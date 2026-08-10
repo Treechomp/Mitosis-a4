@@ -19,15 +19,18 @@ public sealed class ReproductionSystem : ISystem
     private readonly SpatialHash _spatialHash;
     private readonly int _maxPopulation;
     private readonly Random _rng = new();
-    private readonly List<(float x, float y, SpeciesType speciesType, int speciesId)> _toSpawn = new(32);
+    private readonly List<(float x, float y, SpeciesType speciesType, int speciesId, int groupId)> _toSpawn = new(32);
     private readonly List<int> _nearbyBuffer = new(64);
 
+    private readonly EntityFactory _entityFactory;
+
     public ReproductionSystem(World.WorldManager worldManager, int maxPopulation,
-                               SpatialHash spatialHash)
+                               SpatialHash spatialHash, EntityFactory entityFactory)
     {
         _worldManager = worldManager;
         _maxPopulation = maxPopulation;
         _spatialHash = spatialHash;
+        _entityFactory = entityFactory;
     }
 
     public void Process(EntityManager em)
@@ -140,109 +143,43 @@ public sealed class ReproductionSystem : ISystem
             // Queue offspring for spawning (inherit parent species)
             for (int i = 0; i < reproduction.OffspringCount; i++)
             {
-                _toSpawn.Add((spawnX, spawnY, species.Type, species.SpeciesId));
+                _toSpawn.Add((spawnX, spawnY, species.Type, species.SpeciesId,
+                    em.HasComponents(entity, ComponentFlags.Social) ? em.Socials[entity].GroupId : -1));
             }
         }
 
         // Spawn offspring
-        foreach (var (x, y, speciesType, speciesId) in _toSpawn)
+        foreach (var (x, y, speciesType, speciesId, groupId) in _toSpawn)
         {
             if (em.CreatureCount >= _maxPopulation) break;
-            SpawnCreature(em, x, y, speciesType, speciesId);
+            SpawnCreature(em, x, y, speciesType, speciesId, groupId);
         }
     }
 
-    private void SpawnCreature(EntityManager em, float x, float y, SpeciesType speciesType, int speciesId)
+    /// <summary>
+    /// Bring one offspring into the world. Delegates to EntityFactory so a creature born here is
+    /// assembled exactly like one spawned at worldgen. This used to be a parallel copy of the
+    /// assembly code, and it had drifted: newborns were created without TerrainDiscomfort, Fear,
+    /// Social or Growth. The consequences were invisible in short tests but severe over a long
+    /// run — born creatures could not drown, ignored terrain and grazing pressure, never built
+    /// fear, and pack species could not be seen by pack coordination at all (it keys on Social),
+    /// so an ageing wolf population lost the ability to hunt together as its founders died off.
+    /// </summary>
+    private void SpawnCreature(EntityManager em, float x, float y, SpeciesType speciesType,
+        int speciesId, int groupId)
     {
         if (em.CreatureCount >= _maxPopulation) return;
         // Disabled species never spawn, even via reproduction (belt-and-suspenders: with no
         // initial population a disabled species can't reproduce anyway, but this keeps the
         // toggle a hard guarantee regardless of how offspring are queued).
         if (!SpeciesToggle.IsEnabled(speciesId)) return;
-        int entity = em.CreateEntity();
 
-        em.Positions[entity] = new Position(x, y);
-        em.AddComponent(entity, ComponentFlags.Position);
-
-        em.Velocities[entity] = new Velocity();
-        em.AddComponent(entity, ComponentFlags.Velocity);
-
-        em.ChunkPositions[entity] = new ChunkPosition();
-        em.AddComponent(entity, ComponentFlags.ChunkPosition);
-
-        em.SimulationLODs[entity] = new SimulationLOD(LODLevel.Full);
-        em.AddComponent(entity, ComponentFlags.SimulationLOD);
-
-        // Use SpeciesRegistry to inherit parent stats where possible
         var speciesDef = SpeciesRegistry.GetById(speciesId);
+        if (speciesDef == null) return;
 
-        em.Species[entity] = new Species(speciesType, 0, speciesId);
-        em.AddComponent(entity, ComponentFlags.Species);
-
-        em.Ages[entity] = new Age(
-            current: 0,
-            maxLifespan: (int)speciesDef.MaxLifespan,
-            maturityAge: (int)speciesDef.MaturityAge
-        );
-        em.AddComponent(entity, ComponentFlags.Age);
-
-        em.Energies[entity] = new Energy(speciesDef.MaxEnergy, speciesDef.MaxEnergy);
-        em.AddComponent(entity, ComponentFlags.Energy);
-
-        em.Hungers[entity] = new Hunger(
-            current: speciesDef.MaxHunger * 0.6f,
-            max: speciesDef.MaxHunger,
-            decayRate: speciesDef.HungerDecayRate
-        );
-        em.AddComponent(entity, ComponentFlags.Hunger);
-
-        em.Reproductions[entity] = new Reproduction(
-            hungerThreshold: speciesDef.ReproHungerThreshold,
-            energyThreshold: speciesDef.ReproEnergyThreshold,
-            hungerCost: speciesDef.ReproHungerCost,
-            energyCost: speciesDef.ReproEnergyCost,
-            cooldown: (int)speciesDef.ReproCooldown,
-            offspringCount: speciesDef.OffspringCount,
-            spawnRadius: speciesDef.SpawnRadius
-        );
-        em.AddComponent(entity, ComponentFlags.Reproduction);
-
-        em.Wanders[entity] = new Wander(
-            speed: speciesDef.BaseWanderSpeed,
-            changeDirectionChance: speciesDef.DirectionChangeChance
-        );
-        em.AddComponent(entity, ComponentFlags.Wander);
-
-        em.Renderables[entity] = new Renderable(
-            speciesDef.BaseColor, speciesDef.BaseSize, speciesDef.Shape);
-        em.AddComponent(entity, ComponentFlags.Renderable);
-
-        // Prey behavior (herbivores and faction species are prey)
-        if (speciesDef.IsPrey)
-        {
-            em.Preys[entity] = new Prey(speciesDef.FleeRange, speciesDef.FleeSpeedMultiplier);
-            em.AddComponent(entity, ComponentFlags.Prey);
-        }
-
-        // Predator behavior
-        if (speciesDef.IsPredator)
-        {
-            em.Predators[entity] = new Predator(
-                speciesDef.HuntRange, speciesDef.AttackRange, speciesDef.AttackPower,
-                (int)speciesDef.AttackCooldown);
-            em.AddComponent(entity, ComponentFlags.Predator);
-        }
-
-        // Terraform for faction species
-        if (speciesDef.Diet == DietType.Terraformer)
-        {
-            em.Terraforms[entity] = new Terraform(
-                direction: speciesDef.TerraformDir,
-                radius: speciesDef.TerraformRadius,
-                strength: speciesDef.TerraformStrength,
-                cooldown: speciesDef.TerraformCooldown
-            );
-            em.AddComponent(entity, ComponentFlags.Terraform);
-        }
+        // Offspring start at age 0 and inherit the parent's group so herds and packs stay whole
+        // across generations instead of every newborn being an unaffiliated loner.
+        _entityFactory.SpawnCreature(x, y, speciesDef, groupId, forceSolitary: false,
+            isAlpha: false, startAge: 0);
     }
 }

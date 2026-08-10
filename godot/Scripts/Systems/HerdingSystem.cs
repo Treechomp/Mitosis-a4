@@ -156,7 +156,24 @@ public sealed class HerdingSystem : ISystem
                 ref var leaderPos = ref em.Positions[recognizedLeader];
                 float distToLeader = MathF.Sqrt(MathUtils.DistanceSquared(pos.X, pos.Y, leaderPos.X, leaderPos.Y));
 
-                if (distToLeader <= leaderInfluenceRadius)
+                // Keep a leader only while it still outranks us. Leadership score tracks age
+                // (age/lifespan, recomputed every tick), so the ordering shifts continuously —
+                // but a recognised leader was previously retained for as long as it stayed alive
+                // and in range, never re-checked. Stale assignments made from different moments
+                // could then form a CYCLE (observed: wolf 40 → 43 → 44 → 40). A cycle has no
+                // member that is its own leader, and HuntingSystem identifies the pack leader as
+                // exactly that, so such a pack had no leader at all: no shared target, no roles,
+                // no convergence. Re-validating makes "my leader outranks me" an invariant, which
+                // is a strict order and therefore acyclic by construction.
+                // Drop the link the MOMENT the ordering inverts rather than waiting out the
+                // lost-leader timer, which would leave a cycle intact for hundreds of ticks.
+                if (em.Socials[recognizedLeader].LeadershipScore <= social.LeadershipScore)
+                {
+                    social.RecognizedLeader = -1;
+                    recognizedLeader = -1;
+                    social.LeaderLostTicks = leaderLostThreshold; // re-elect on the spot
+                }
+                else if (distToLeader <= leaderInfluenceRadius)
                 {
                     // Leader is in range
                     leaderX = leaderPos.X;
