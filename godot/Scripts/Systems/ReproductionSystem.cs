@@ -99,11 +99,26 @@ public sealed class ReproductionSystem : ISystem
 
             ref var pos = ref em.Positions[entity];
 
+            var parentTile = _worldManager.GetTile(pos.X, pos.Y);
+
             // Species that must come ashore to breed (penguins hauling out onto the ice) wait
             // until they are standing on that ground. WanderSystem walks them there — see
             // SpeciesDefinition.BreedingTiles.
-            if (!speciesDef.CanBreedOnTile(_worldManager.GetTile(pos.X, pos.Y)))
+            if (!speciesDef.CanBreedOnTile(parentTile))
                 continue;
+
+            // Fertility-coupled breeding: rich ground multiplies, exhausted ground barely breeds.
+            // Gives a population a brake that isn't predation — a shoal that has eaten its water
+            // down stops replacing itself there long before it starves.
+            if (speciesDef.BreedingNutritionSensitivity > 0f)
+            {
+                float cap = parentTile.NutritionCap();
+                float richness = cap > 0f
+                    ? Math.Clamp(_worldManager.GetNutrition(pos.X, pos.Y) / cap, 0f, 1f) : 0f;
+                float pass = 1f - speciesDef.BreedingNutritionSensitivity * (1f - richness);
+                if (_rng.NextDouble() > pass)
+                    continue;
+            }
 
             // Local density suppression — skip if too many same-species nearby
             // Prevents exponential population explosions in well-fed areas

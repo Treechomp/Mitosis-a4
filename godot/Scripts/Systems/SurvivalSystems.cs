@@ -253,10 +253,25 @@ public sealed class GrazingSystem : ISystem
                         hunger.Current = MathF.Min(hunger.Max, hunger.Current + foodGained * tickMult);
                     }
                 }
-                // FeedTiles fallback: species that feed from specific tiles (e.g. Fish from water)
+                // FeedTiles: species that feed from specific tiles (e.g. Fish from water). With a
+                // FeedConsumeRate they strip that tile's fertility exactly as a grazer strips
+                // pasture, and are paid in proportion to what they actually got — so a shoal eats
+                // its patch of water down and has to move on. Without one they feed for free
+                // (unchanged behaviour, still used as a subsistence floor elsewhere).
                 else if (herbDef.FeedTiles != null && herbDef.FeedTiles.Contains(tile))
                 {
-                    hunger.Current = MathF.Min(hunger.Max, hunger.Current + herbDef.FeedNutrition * tickMult);
+                    if (herbDef.FeedConsumeRate > 0f)
+                    {
+                        float requested = herbDef.FeedConsumeRate * tickMult;
+                        float consumed = _worldManager.ConsumeNutrition(pos.X, pos.Y, requested);
+                        float richness = requested > 0f ? consumed / requested : 0f;
+                        hunger.Current = MathF.Min(hunger.Max,
+                            hunger.Current + herbDef.FeedNutrition * richness * tickMult);
+                    }
+                    else
+                    {
+                        hunger.Current = MathF.Min(hunger.Max, hunger.Current + herbDef.FeedNutrition * tickMult);
+                    }
                 }
 
                 // Fungivory: eat nearby Shroomer spores / immature Shroomers (bloom control).

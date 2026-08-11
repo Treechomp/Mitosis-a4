@@ -492,14 +492,24 @@ public sealed class WanderSystem : ISystem
         // otherwise a fertility feeder sits on lethal substrate eating happily until it dies
         // (a well-fed creature never triggers the food-seeking roam that would carry it home).
         if (IsLethalSubstrate(def, tile)) return false;
-        // Fertility feeders (Shroomers) draw growth fuel from tile nutrition like a grazer does,
-        // so a stripped tile is not food even though the tile type still qualifies.
-        if ((def.CanGraze || def.FertilityConsumeRate > 0f) && tile.IsGrazeable())
+        // Anything that draws fertility from the ground it stands on — grazers, Shroomers, and
+        // water-feeding shoals — sees a stripped tile as no food at all, whatever its type.
+        if (DrawsFertility(def, tile))
             return _worldManager.GetNutrition(x, y) > def.MinAcceptableNutrition;
         if (def.FeedTiles != null && def.FeedTiles.Contains(tile))
             return true;
         return false;
     }
+
+    /// <summary>
+    /// True when this species eats by stripping the tile's own fertility here — grazing pasture,
+    /// a Shroomer drawing growth fuel, or a shoal feeding on the water column. Such a tile is only
+    /// worth anything while it still holds nutrition, which is what turns local depletion into
+    /// migration rather than starvation in place.
+    /// </summary>
+    private static bool DrawsFertility(SpeciesDefinition def, TileType tile)
+        => ((def.CanGraze || def.FertilityConsumeRate > 0f) && tile.IsGrazeable())
+           || (def.FeedConsumeRate > 0f && def.FeedTiles != null && def.FeedTiles.Contains(tile));
 
     /// <summary>
     /// True when standing on this tile does sustained damage to the species — currently the
@@ -661,10 +671,11 @@ public sealed class WanderSystem : ISystem
         if (TerrainProfile.SteerAversion(def, tile) > 0.6f) return 0f;
         // Never forage toward ground that damages us (fungal drought), however fertile it is.
         if (IsLethalSubstrate(def, tile)) return 0f;
-        if ((def.CanGraze || def.FertilityConsumeRate > 0f) && tile.IsGrazeable())
+        if (DrawsFertility(def, tile))
         {
             // Ground already below what this species will settle for scores nothing, so a picky
-            // browser routes past thin pasture a small generalist would happily stop on.
+            // browser routes past thin pasture a small generalist would happily stop on — and a
+            // shoal steers toward richer water instead of milling over the patch it just stripped.
             float n = _worldManager.GetNutrition(x, y);
             return n > def.MinAcceptableNutrition ? n : 0f;
         }

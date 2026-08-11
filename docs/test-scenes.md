@@ -153,6 +153,7 @@ All are opt-in per scenario and cost nothing in the main game (static toggles, o
 | `shroomer_bloom.scenario.txt` | terraforming (wetter), fertility feeding, spore spread, fungivory |
 | `faction_skirmish.scenario.txt` | three-way faction terraform tug-of-war, nests/crystals/spores |
 | `aquatic_biome.scenario.txt` | element-aware discomfort, shark/fish habitat preference, penguin haul-out breeding, world-edge steering |
+| `freshwater_pond.scenario.txt` | inland fish regulation with no marine predators: plankton depletion + fertility-coupled breeding, otters and crocodiles |
 
 ## Where the code lives
 

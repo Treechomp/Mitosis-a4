@@ -246,15 +246,28 @@ Runs once before chunk generation, on a full-world base-elevation map built with
 
 ### Tile nutrition (grazing economy)
 
-Grazeable tiles carry per-tile nutrition (0–1). Herbivores consume it; it regrows slowly,
-driving migration. Stored per-tile in `Chunk`.
+Tiles carry per-tile fertility (0–1) up to a per-biome `NutritionCap`. Herbivores consume it; it
+regrows slowly, driving migration. Stored per-tile in `Chunk`.
+
+**Water carries fertility too** — plankton, not pasture. Water is deliberately still excluded
+from `IsGrazeable`, so land herbivores can't treat a lake as a meadow; only species that list a
+water tile in their `FeedTiles` draw on it. Before this, water had a cap of 0 and fish fed from
+an infinite flat supply, so a shoal could only ever be limited by predation — which is exactly
+why an inland pond with no shark or penguin anywhere near it filled solid with fish. The
+gradient (Reef 1.0 > ShallowWater 0.7 > River 0.45 > DeepWater 0.2) also gives shoals a reason
+to hold on the shelf, where their predators can reach them, instead of dispersing into the deep.
 
 | Parameter | Value |
 |-----------|-------|
 | Max nutrition | 1.0 |
-| Consume rate | 0.02 / grazing tick |
-| Regen rate | 0.0005 / tick (applied every 4 ticks at 4× — see TileRegenerationSystem) |
-| Grazeable start | 1.0 (Tundra starts 0.2, Arid starts 0.15 — sparse) |
+| Consume rate | 0.02 / grazing tick (`GrazeConsumeRate`); water feeders use `FeedConsumeRate` |
+| Regen rate | 0.0005 / tick — see TileRegenerationSystem for how the passes are batched |
+| Grazeable start | at the tile's `NutritionCap` (Tundra 0.25, Arid 0.2 — sparse) |
+
+**Fertility-coupled breeding** (`BreedingNutritionSensitivity`, 0–1): the chance to reproduce is
+scaled by the parent tile's fraction of its own cap. At 1.0 (Fish) rich water breeds a shoal
+back fast after predation and exhausted water barely breeds at all — a population brake that
+works with no predator present, which is what a landlocked pond needs.
 
 ### World parameters
 
@@ -323,7 +336,7 @@ spore/nest/crystal, AoE + growth, venom, visuals, and `StatVariation`). Species 
 `Species/SpeciesRegistry.cs` and are looked up by name-hash (`GetId(name) =
 name.GetHashCode()`); **`SpeciesRegistry.cs` is the authoritative source for exact tuning.**
 
-There are **28 species**: 5 generalists, 20 biome-specific, and 3 factions.
+There are **29 species**: 5 generalists, 21 biome-specific, and 3 factions.
 
 ### Roster
 
@@ -334,8 +347,9 @@ There are **28 species**: 5 generalists, 20 biome-specific, and 3 factions.
 | Wolf | Carnivore | 3.5 | 0.06 / 0.12 | PackCoordinated | Prefers Deer/Rabbit |
 | Fox | Carnivore | 2.0 | 0.05 / 0.11 | Ambush | Rabbit specialist; stealth pounce + scavenges |
 | Crocodile | Carnivore | 8.0 | 0.02 / 0.08 | Ambush | Semi-aquatic; water stealth + pounce |
-| Fish | Herbivore | 0.5 | 0.05 / – | – | **Aquatic**; feeds from water |
-| Shark | Carnivore | 10.0 | 0.04 / 0.22 | Solo | **Aquatic** apex; very fast + long detection (HuntRange 24); Fish/Penguin/Turtle |
+| Fish | Herbivore | 0.5 | 0.05 / – | – | **Aquatic**; strips water-column fertility (`FeedConsumeRate`) and breeds in proportion to it (`BreedingNutritionSensitivity` 1.0); shoals on shelf/reef; calorie-dense (`NutritionValue` 18) so one is a real meal |
+| Shark | Carnivore | 10.0 | 0.04 / 0.22 | Solo | **Aquatic** apex; very fast + long detection (HuntRange 24); Penguin/Turtle, with Fish only as `FallbackPrey` below 45% hunger; prefers DeepWater by steering, tolerates the shallows |
+| Otter | **Omnivore** | 1.2 | 0.03 / 0.14 | Solo | Semi-aquatic freshwater fish specialist (`ExclusivePrey` = Fish); hunts in river/pond, dens ashore to breed (`BreedingTiles`); **territorial with a wide SocialRadius (18)**, which is what keeps it sparse enough to thin a shoal rather than eat it out; itself prey for wolves/foxes/bears/crocs |
 | Frog | Herbivore | 0.3 | 0.03 / – | – | Wetland/Bog; panics |
 | Turtle | Herbivore | 6.0 | 0.015 / – | – | Semi-aquatic; very slow; freezes |
 | Elk | Herbivore | 7.0 | 0.025 / – | – | Large grassland herd |
@@ -381,7 +395,8 @@ swarm scales by colony size and can threaten large predators.
 
 ```
 Wolf → Deer, Rabbit      Fox → Rabbit       Crocodile → prey at water's edge
-Shark → Fish, Penguin, Turtle     Bear → Deer/Elk/Boar    Hawk → Rabbit/Frog/Lizard/Fish
+Shark → Penguin/Turtle (Fish only when hungry)   Bear → Deer/Elk/Boar   Hawk → Rabbit/Frog/Lizard/Fish
+Fresh water: Fish → Otter, Crocodile   (the inland shoal's predators; sharks/penguins are marine only)
 Cold web:  Fish → (Penguin) → Arctic Fox / Polar Bear / Shark   (Penguin both eats and is eaten)
 Faeling (ranged) → Sectid, Shroomer
 Shroomer (AoE)   → Sectid, Faeling
@@ -533,6 +548,15 @@ remained (the consumed/requested ratio is guarded against a zero tick interval, 
 otherwise be `0/0 = NaN`); omnivores (Boar) graze and hunt; faction species feed on their
 `FeedTiles`. Capped at max hunger.
 
+**`FeedTiles` with a `FeedConsumeRate`** (Fish on water) work exactly like grazing: the tile's
+fertility is stripped and food is paid in proportion to what was actually there, so a shoal eats
+its patch of water down and has to move on. With no `FeedConsumeRate` the tile is an
+inexhaustible supply — still the right model for a subsistence floor (Shroomers on their own
+barren swamp, Penguins skimming the water column), but not for a species the water has to carry.
+Everything downstream keys off the same question — foraging (`WanderSystem.DrawsFertility`),
+food scoring, and the grazing-pressure term in terrain discomfort — so depleted water pushes a
+shoal out the same way bare pasture pushes a herd.
+
 **Fungivory (Shroomer-bloom control).** A species flagged `IsFungivore` (Boar — the primary,
 widest reach; plus Rabbit, Lizard, Monkey) also consumes the nearest Shroomer **spore or
 immature Shroomer** (`Growth.CurrentScale ≤ FungivoreMaxScale`, default 2.0, below the AoE/thorn
@@ -598,6 +622,26 @@ The gate is `CurrentCooldown <= 0` and the per-tick decrement is clamped at 0 �
 the decrement subtracts `tickMult` (> 1), which previously overshot 0 into a stuck negative so
 the `== 0` gate never re-fired and the predator paced its prey forever without hitting (prey
 appeared "invulnerable"). This was the root of the long-standing prolonged-push bug.
+
+**Unreachable prey** (`HuntApproachStallTicks`, 200): a pursuit that never gets closer is
+abandoned and logged as `unreachable`. This is the gap the engagement clock above leaves open —
+it only runs *in* striking distance, so a target the hunter can neither reach nor lose had no
+timeout of any kind. A Shark that locked onto a Penguin standing a few tiles inland paced the
+shoreline indefinitely: never engaged (no progress check), never 3× hunt range away (no escape
+check). The hunter tracks its closest approach and gives up if it fails to improve on it by
+`HuntApproachMinGain` (0.5 tiles) within the window. Ambushers are exempt — lying in wait
+without approaching *is* their tactic — as are pack members holding a coordination station.
+
+**Desperation** (`DesperationHunger`, default 0.3 — `FleeingSystem`): below that hunger ratio a
+prey animal's effective flee radius shrinks toward 35% of normal, so it feeds in ground a
+well-fed individual would refuse. It is the other half of the same deadlock: the penguin above
+starved on the ice rather than enter water a shark was in. Risk beats certainty.
+
+**Fallback prey** (`FallbackPrey` / `FallbackPreyHunger`): prey a predator only bothers with
+when genuinely hungry. `PreferredPrey` can only express "I like these", one flat multiplier over
+the whole list — so a Shark rated a Fish and a Penguin identically and simply ate whichever was
+nearer, which is always the fish. Sharks and Polar Bears now take Fish only below 45% hunger,
+leaving the base of the web to be thinned rather than cropped flat.
 
 **Performance**: the across-water test (`GetWaterFractionOnPath`, which samples tiles along the
 predator→prey line) is the dominant per-candidate cost and scales with prey *density*, not

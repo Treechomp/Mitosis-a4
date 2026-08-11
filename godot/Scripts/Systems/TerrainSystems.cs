@@ -108,14 +108,22 @@ public sealed class TerrainDiscomfortSystem : ISystem
                 ref var hunger = ref em.Hungers[entity];
                 float hungerFactor = 1f - (hunger.Current / hunger.Max);
 
-                if (!tile.IsGrazeable())
+                // "Can I eat where I'm standing" is species-specific: a shoal feeds on the water
+                // column, which the grazeable-tile test would call barren ground.
+                bool feedsHere = speciesDef != null
+                    ? (speciesDef.CanGraze || speciesDef.FertilityConsumeRate > 0f) && tile.IsGrazeable()
+                      || speciesDef.FeedConsumeRate > 0f && speciesDef.FeedTiles != null
+                         && speciesDef.FeedTiles.Contains(tile)
+                    : tile.IsGrazeable();
+
+                if (!feedsHere)
                 {
-                    // Not grazeable at all — full pressure
+                    // Nothing here to eat at all — full pressure
                     tileDiscomfort += discomfort.GrazingPressure * hungerFactor;
                 }
                 else
                 {
-                    // Grazeable but possibly depleted — pressure scales with depletion, reaching
+                    // Edible but possibly depleted — pressure scales with depletion, reaching
                     // full strength on ground that is stripped bare. To a hungry grazer that is
                     // exactly as useless as ground that never grew anything, and since discomfort
                     // now settles at a level instead of piling up, a discounted pressure would
@@ -304,21 +312,33 @@ public sealed class TerraformSystem : ISystem
 }
 
 /// <summary>
-/// Regenerates nutrition on grazeable tiles across all loaded chunks.
-/// Runs every tick but the regeneration rate per tile is very slow, so
-/// depleted areas take many ticks to recover — driving migration patterns.
+/// Regenerates tile fertility (pasture and, since water gained a nutrition cap, the water column)
+/// across the loaded world. The per-tile rate is very slow, so depleted areas take many ticks to
+/// recover — which is what drives migration rather than a static carrying capacity.
+///
+/// Cost is managed in two ways, because a full pass is a 1024-tile scan per chunk and the number
+/// of chunks holding depleted ground went up sharply once shoals started stripping water:
+///  1. Chunks that are fully topped up carry a <c>_hasDepleted</c> flag and skip the scan entirely.
+///  2. The remaining work is spread round-robin over <see cref="RegenSweepPasses"/> passes, so any
+///     single tick touches only a slice of the world.
+/// Neither changes the net rate: the step is multiplied by exactly the time between visits, so a
+/// tile still gains the same fertility per tick on average — it just arrives in fewer, larger
+/// increments, which is invisible against a variable that takes ~2000 ticks to refill.
 /// </summary>
 public sealed class TileRegenerationSystem : ISystem
 {
     private readonly WorldManager _worldManager;
     private int _tickCounter;
+    private int _sweepCursor;
+
+    /// <summary>Ticks between regeneration passes.</summary>
+    private const int RegenInterval = 4;
 
     /// <summary>
-    /// Only regenerate every N ticks; multiply rate by N to keep net regeneration identical.
-    /// At RegenerationRate 0.0005/tick, tiles take 2000 ticks to fully recover —
-    /// a 4-tick gap is invisible but cuts this system's cost by ~75%.
+    /// How many passes one full sweep of the world is spread across. Combined with RegenInterval,
+    /// a given chunk is visited every 32 ticks and steps forward by 32× the base rate.
     /// </summary>
-    private const int RegenInterval = 4;
+    private const int RegenSweepPasses = 8;
 
     public TileRegenerationSystem(WorldManager worldManager)
     {
@@ -331,10 +351,31 @@ public sealed class TileRegenerationSystem : ISystem
         if (_tickCounter % RegenInterval != 0)
             return;
 
+        int total = _worldManager.LoadedChunkCount;
+        if (total == 0)
+            return;
+
+        // Slice bounds for this pass. The cursor walks the chunk collection in its natural order;
+        // that order only shifts if chunks are added, and a chunk visited twice (or skipped once)
+        // in that rare case is harmless for a variable this slow.
+        int sliceSize = (total + RegenSweepPasses - 1) / RegenSweepPasses;
+        int start = _sweepCursor * sliceSize;
+        if (start >= total)
+        {
+            _sweepCursor = 0;
+            start = 0;
+        }
+        int end = Math.Min(start + sliceSize, total);
+        _sweepCursor = (_sweepCursor + 1) % RegenSweepPasses;
+
+        const int stepTicks = RegenInterval * RegenSweepPasses;
         float regenerated = 0f;
+        int index = 0;
         foreach (var chunk in _worldManager.GetLoadedChunks())
         {
-            regenerated += chunk.RegenerateNutrition(RegenInterval);
+            if (index >= end) break;
+            if (index++ < start) continue;
+            regenerated += chunk.RegenerateNutrition(stepTicks);
         }
         if (regenerated > 0f)
             EcosystemLogger.Instance?.CountNutritionRegen(regenerated);

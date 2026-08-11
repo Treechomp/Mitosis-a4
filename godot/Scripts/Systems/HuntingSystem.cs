@@ -35,6 +35,19 @@ public sealed class HuntingSystem : ISystem
     // have removed in that window to count as progress, how long to avoid a target we gave up on,
     // and the fraction of our own HP we'll lose before bailing on a too-dangerous target.
     private const int HuntReevalInterval = 150;
+
+    /// <summary>
+    /// Ticks a pursuit may run without the hunter ever getting closer before it is abandoned as
+    /// unreachable. The engagement clock below only runs once in striking distance, so a target
+    /// the hunter can neither reach nor lose had no timeout at all: a Shark that locked onto a
+    /// Penguin standing on the ice paced the shoreline indefinitely — it was never engaged (so no
+    /// progress check) and never 3× hunt range away (so no escape check). Meanwhile the penguin
+    /// refused to enter the water with a shark in it and starved. Ten seconds at 20 TPS.
+    /// </summary>
+    private const int HuntApproachStallTicks = 200;
+
+    /// <summary>Tiles of closure that count as real progress toward a target (noise floor).</summary>
+    private const float HuntApproachMinGain = 0.5f;
     private const float HuntMinProgress = 5f;
     private const int HuntAvoidDuration = 600;
     private const float HuntSelfDamageBailFraction = 0.4f;
@@ -262,6 +275,7 @@ public sealed class HuntingSystem : ISystem
 
                 bool giveUp = false;
                 bool collectiveFail = false; // whole hunt is stalled (vs. just this one retreating hurt)
+                bool unreachable = false;    // gave up because we could never close the distance
 
                 // Bail immediately if the hunt is costing us too much health (strong/counterattacking prey)
                 if (em.HasComponents(entity, ComponentFlags.Energy) && predator.SelfStartEnergy > 0f
@@ -295,6 +309,33 @@ public sealed class HuntingSystem : ISystem
                     // only in-range attacking time (and a committing pack gets a fresh full window).
                     predator.HuntTicks = 0;
                     predator.TargetLastEnergy = targetEnergy;
+
+                    // Closing-the-gap clock. A pursuit that never gets nearer cannot be won, and
+                    // the most common reason is that the prey is somewhere we physically cannot
+                    // follow — ashore, across a cliff, over deep water. Give up on it the same way
+                    // we give up on prey we can't damage. Ambushers are exempt: lying in wait
+                    // without approaching is their entire tactic. Pack coordinators are exempt for
+                    // the same reason the progress check exempts them — a flanker holding station
+                    // is doing its job, not stalling.
+                    if (!packCoordinating && speciesDef.HuntingTactic != HuntingTactic.Ambush)
+                    {
+                        float tgtDist = MathF.Sqrt(tgtDistSq);
+                        if (tgtDist < predator.TargetBestDist - HuntApproachMinGain)
+                        {
+                            predator.TargetBestDist = tgtDist;
+                            predator.ApproachTicks = 0;
+                        }
+                        else
+                        {
+                            predator.ApproachTicks += tickMult;
+                            if (predator.ApproachTicks >= HuntApproachStallTicks)
+                            {
+                                giveUp = true;
+                                collectiveFail = true; // nobody can reach it — drop the pack target too
+                                unreachable = true;
+                            }
+                        }
+                    }
                 }
 
                 if (giveUp)
@@ -302,7 +343,8 @@ public sealed class HuntingSystem : ISystem
                     if (em.HasComponents(entity, ComponentFlags.Species))
                     {
                         ref var sp = ref em.Species[entity];
-                        EcosystemLogger.Instance?.LogHuntFail(sp.SpeciesId, entity, pos.X, pos.Y, "not_viable");
+                        EcosystemLogger.Instance?.LogHuntFail(sp.SpeciesId, entity, pos.X, pos.Y,
+                            unreachable ? "unreachable" : "not_viable");
                     }
                     predator.AvoidTarget = predator.TargetEntity;
                     predator.AvoidTicks = HuntAvoidDuration;
@@ -641,6 +683,12 @@ public sealed class HuntingSystem : ISystem
                         // everything not on it (e.g. Penguins only ever hunt Fish).
                         if (speciesDef.ExclusivePrey != null
                             && !speciesDef.ExclusivePrey.Contains(preyDef.Name))
+                            continue;
+
+                        // Fallback tier: small fry a well-fed predator won't waste effort on
+                        // (a Shark passes over fish until it is genuinely hungry, so the shoal
+                        // is thinned rather than cropped flat).
+                        if (!speciesDef.WillHunt(preyDef.Name, hungerRatio))
                             continue;
                     }
 
@@ -1605,6 +1653,8 @@ public sealed class HuntingSystem : ISystem
     private static void BeginHuntTracking(EntityManager em, int self, ref Predator predator, int target)
     {
         predator.HuntTicks = 0;
+        predator.ApproachTicks = 0;
+        predator.TargetBestDist = float.MaxValue;
         predator.TargetLastEnergy = em.HasComponents(target, ComponentFlags.Energy)
             ? em.Energies[target].Current : 0f;
         predator.SelfStartEnergy = em.HasComponents(self, ComponentFlags.Energy)

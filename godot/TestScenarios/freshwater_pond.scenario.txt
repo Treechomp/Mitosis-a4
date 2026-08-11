@@ -1,0 +1,41 @@
+# An inland pond and a river reach, far from any sea. This is the case that used to have
+# nothing holding fish in check: sharks and penguins only patrol the ocean, and hawks skim
+# too few to matter, so a landlocked shoal grew until it hit the population cap.
+# Two brakes are under test here:
+#   1. Plankton — water now carries fertility that a shoal strips and that regrows slowly,
+#      so an unfished pond levels off on its own and rich water breeds faster than thin water.
+#   2. Otters — a sparse, territorial, semi-aquatic fish specialist that hunts in the water
+#      and dens on the bank to breed, plus crocodiles working the river.
+# Watch latest_nutrition.csv (fill % dropping as the shoal grows, recovering as it thins),
+# latest_population.csv (fish should oscillate, not ramp), and latest_decisions.csv for
+# Otter seek_breeding_ground roams.
+
+[world]
+name = freshwater_pond
+size_chunks = 3          # 96x96 tiles
+seed = 404
+base_tile = Grass
+tps = 20
+
+[terrain]
+circle ShallowWater 28 30 11   # the isolated pond — otters only, no crocs
+rect Wetland 14 44 30 6        # marshy bank for denning
+band River y 68 74             # the river reach, running the width of the map
+rect Wetland 0 62 96 6         # river margin
+rect Forest 0 0 96 18          # cover, and somewhere for land prey to live
+
+[spawn]
+Fish x36 @ 28,30 r8 groups=3
+Fish x30 @ 48,71 r16 groups=2
+Otter x3 @ 24,46 r6
+Otter x2 @ 60,64 r6
+Crocodile x2 @ 70,71 r6
+Deer x10 @ 60,10 r10 groups=2
+Rabbit x10 @ 30,12 r10
+
+[logging]
+decisions = true
+decision_species = Otter, Fish, Crocodile
+terrain_interval = 0
+nutrition_interval = 100
+snapshot_interval = 50

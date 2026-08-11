@@ -65,6 +65,8 @@ public struct Predator
     public float SelfStartEnergy;  // Our own energy when this hunt began (damage-taken check)
     public int AvoidTarget;        // Entity recently given up on — don't re-acquire (-1 = none)
     public int AvoidTicks;         // Ticks remaining on the avoid suppression
+    public int ApproachTicks;      // Ticks since we last got meaningfully closer to the target
+    public float TargetBestDist;   // Closest we have come to this target (tiles)
 
     // === Defensive rally ===
     // Who hit us last and for how long we remember it — drives the "call to action" where a
@@ -94,6 +96,8 @@ public struct Predator
         SelfStartEnergy = 0f;
         AvoidTarget = -1;
         AvoidTicks = 0;
+        ApproachTicks = 0;
+        TargetBestDist = float.MaxValue;
         LastAttacker = -1;
         LastAttackedTicks = 0;
     }

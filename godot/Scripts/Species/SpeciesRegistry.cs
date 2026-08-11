@@ -604,6 +604,12 @@ public static class SpeciesRegistry
                 { TileType.Sand, 0f },            // Neutral on sand (sunbathing)
             },
 
+            // Diet: crocs are the resident predator of the rivers and swamps where inland fish
+            // live, so fish and otters belong on the menu alongside the big game that comes down
+            // to drink. Gives freshwater a second check on the shoal.
+            PreferredPrey = new List<string> { "Fish", "Otter", "Tapir", "Deer" },
+            PreferredPreyBias = 0.5f,
+
             // Trophic - large ambush predator
             // Croc (mass 8.0) vs Deer (mass 4.0): easily
             // Croc (mass 8.0) vs Rabbit (mass 1.0): easily
@@ -670,6 +676,11 @@ public static class SpeciesRegistry
             ReproHungerCost = 45f,
             ReproEnergyCost = 18f,       // scaled to the smaller MaxEnergy (45)
             OffspringCount = 2,
+            // Fully coupled to the water they're in: a rich shelf breeds a shoal back after heavy
+            // predation, exhausted water barely breeds at all. This is the brake that works where
+            // there is no predator — an isolated pond fills until the plankton gives out and then
+            // levels off, instead of solidifying with fish because nothing there eats them.
+            BreedingNutritionSensitivity = 1.0f,
 
             // Social - tight schools
             GroupAffinity = 0.9f,
@@ -679,10 +690,11 @@ public static class SpeciesRegistry
             SocialRadius = 8f,
             LeaderInfluenceRadius = 5f,
 
-            // Terrain - water only
+            // Terrain - water only. GrazingPressure gives stripped water the same "move on" push
+            // that bare pasture gives a grazer, so a shoal drifts to fresh feeding grounds.
             DiscomfortThreshold = 20f,
             DiscomfortDecayRate = 1f,
-            GrazingPressure = 0f,
+            GrazingPressure = 1.2f,
             TerrainSpeedModifiers = new Dictionary<TileType, float>
             {
                 { TileType.ShallowWater, 1.1f },
@@ -709,17 +721,30 @@ public static class SpeciesRegistry
             AllowedSpawnTiles = new List<TileType> { TileType.ShallowWater, TileType.DeepWater },
             PreferredBiomes = new List<BiomeType> { BiomeType.Ocean, BiomeType.Coast, BiomeType.River },
 
-            // Grazing - fish graze on aquatic vegetation (shallow water tiles)
+            // Feeding — the water column itself (plankton/algae), which is now a finite, per-tile
+            // resource rather than an inexhaustible supply. A shoal strips its patch over a few
+            // hundred ticks and the water regrows over ~1400, so the shoal has to keep moving;
+            // the Reef and the sunlit shelf are worth far more than the open deep (NutritionCap).
             CanGraze = false,
-            FeedTiles = new List<TileType> { TileType.ShallowWater, TileType.DeepWater, TileType.River },
-            FeedNutrition = 0.3f,  // Feed from water (plankton/algae)
+            FeedTiles = new List<TileType>
+            {
+                TileType.ShallowWater, TileType.DeepWater, TileType.River, TileType.Reef,
+            },
+            FeedNutrition = 0.3f,
+            FeedConsumeRate = 0.006f,
+            MinAcceptableNutrition = 0.06f,  // thin water is worth leaving, not starving on
 
             // Separation
             SeparationRadius = 1.0f,
             SeparationStrength = 0.015f,
 
-            // Trophic - small prey
+            // Trophic - small prey, but oily and calorie-dense: the generic mass curve rated a
+            // fish at ~6 food, so filling a shark took ~47 of them and an otter ~25. That is a
+            // treadmill no shoal survives — the predator isn't overpowered, its meal is just
+            // worthless, so it must kill constantly to stay alive. Pricing a fish as a real meal
+            // is what lets a predator be sated by a few and leave the rest of the shoal alone.
             BodyMass = 0.5f,
+            NutritionValue = 18f,
 
             // Visuals - small blue
             BaseColor = new Color(0.3f, 0.6f, 0.9f),
@@ -821,8 +846,14 @@ public static class SpeciesRegistry
             // Trophic - large aquatic apex
             BodyMass = 10.0f,
             SoloHuntMaxRatio = 1.5f,
-            PreferredPrey = new List<string> { "Fish", "Penguin", "Turtle" },
+            // Proper game first. Fish are a famine ration: an apex predator that treats the shoal
+            // as its staple crops the base of the food web flat, which is what happened before
+            // this tier existed (Fish and Penguin scored identically, so the shark simply ate
+            // whichever was nearer — and fish are always nearer).
+            PreferredPrey = new List<string> { "Penguin", "Turtle" },
             PreferredPreyBias = 0.4f,
+            FallbackPrey = new List<string> { "Fish" },
+            FallbackPreyHunger = 0.45f,
 
             // Visuals - large dark blue triangle
             BaseColor = new Color(0.2f, 0.3f, 0.5f),
@@ -938,6 +969,166 @@ public static class SpeciesRegistry
             BaseSize = 4f,
             Shape = ShapeType.Circle,
             StatVariation = 0.25f,
+        });
+
+        // The freshwater answer to fish. Sharks and penguins only patrol the sea, so a pond or a
+        // river fish population had nothing above it at all — hawks skim the odd one, which never
+        // came close to matching a shoal's breeding rate. The otter is a small semi-aquatic fish
+        // specialist built on the same pattern as the penguin (hunts in the water, breeds on the
+        // bank), and being an omnivore it is itself prey for wolves, foxes, bears and jaguars —
+        // so it plugs into the land food web rather than sitting on top of an isolated one.
+        Register(new SpeciesDefinition
+        {
+            Name = "Otter",
+            MaxEnergy = 70f,
+            Diet = DietType.Omnivore,      // predator AND prey, like the Penguin
+            DefaultSocialType = SocialType.Territorial,   // holds a stretch of bank
+            SemiAquatic = true,
+            SpawnWeight = 0.5f,   // sparse: an otter territory is a long stretch of river
+
+            // Movement - clumsy ashore, superb in the water
+            BaseWanderSpeed = 0.03f,
+            DirectionChangeChance = 0.01f,
+
+            // Combat — agile pursuit hunter, small teeth but fish are fragile
+            // Hunts only when actually hungry. The default opportunistic gate (0.8) means a
+            // predator is hunting nearly all the time, killing far more than it can eat — with a
+            // small fast prey animal in a confined pond that is the difference between an otter
+            // that thins a shoal and one that empties it. Short reach for the same reason: an
+            // otter should command a stretch of water, not all of it at once.
+            HuntingTactic = HuntingTactic.Solo,
+            HuntRange = 6f,
+            AttackRange = 0.8f,
+            AttackPower = 20f,
+            AttackCooldown = 14,
+            BaseHuntSpeed = 0.14f,
+            HuntThreshold = 0.55f,
+            TrackingHungerThreshold = 0.4f,
+            TrackingRange = 40f,
+            ForageHungerThreshold = 0.8f,
+            HuntTerrain = new List<TileType>
+            {
+                TileType.River, TileType.ShallowWater, TileType.DeepWater, TileType.Reef,
+            },
+            ExclusivePrey = new List<string> { "Fish" },
+            PreferredPrey = new List<string> { "Fish" },
+            PreferredPreyBias = 0.4f,
+
+            // Fleeing - quick and slippery
+            FleeRange = 7f,
+            FleeSpeedMultiplier = 2.2f,
+            FearThreshold = 35f,
+            FearMax = 80f,
+            FearAccumulationRate = 9f,
+            FearDecayRate = 1.5f,
+            DefaultFearResponse = FearResponse.Flee,
+
+            // Survival. Appetite is deliberately modest against the new fish value (18): about
+            // twenty fish a lifetime-window, which a healthy shoal replaces from natural turnover.
+            // A hungrier otter simply eats its own pond empty and starves with it.
+            MaxHunger = 100f,
+            HungerDecayRate = 0.03f,
+            MaxLifespan = 16000,
+            MaturityAge = 900,
+
+            // Reproduction - on the bank, in a holt. Deliberately slow for a small animal: an
+            // otter is meant to hold a shoal in check, not convert it into otters. It must be
+            // near-full to breed and waits a long season between litters, so its numbers lag the
+            // fish rather than tracking them — a fast-breeding specialist just eats the pond out
+            // and then starves with it.
+            ReproHungerThreshold = 88f,
+            ReproEnergyThreshold = 55f,
+            ReproCooldown = 2500,
+            ReproHungerCost = 35f,
+            ReproEnergyCost = 20f,
+
+            // Social — territorial, and this is the knob that actually decides how many otters a
+            // stretch of water can hold. ReproductionSystem suppresses breeding above
+            // max(6, PreferredGroupSize × 2) neighbours within 1.5 × SocialRadius, so a wide
+            // social radius is what makes them SPARSE. Left at ordinary herd values (radius 7)
+            // a pair on one pond bred to fifty and ate the shoal to extinction while never once
+            // dropping below 80% fed — the runaway was fecundity, not appetite.
+            GroupAffinity = 0.3f,
+            PreferredGroupSize = 3f,
+            CohesionStrength = 0.015f,
+            AlignmentStrength = 0.01f,
+            SocialRadius = 18f,
+            LeaderInfluenceRadius = 8f,
+
+            RoamDistance = 45f,
+            RoamCooldown = 350,
+
+            // Terrain - riverbank specialist; water costs nothing (semi-aquatic, see
+            // TerrainProfile.DiscomfortRate), so these values only describe life ashore.
+            DiscomfortThreshold = 45f,
+            DiscomfortDecayRate = 2f,
+            GrazingPressure = 0f,
+            TerrainSpeedModifiers = new Dictionary<TileType, float>
+            {
+                { TileType.River, 1.7f },
+                { TileType.ShallowWater, 1.5f },
+                { TileType.DeepWater, 1.5f },
+                { TileType.Wetland, 0.9f },
+                { TileType.Grass, 0.7f },
+                { TileType.Forest, 0.6f },
+            },
+            TerrainComfortModifiers = new Dictionary<TileType, float>
+            {
+                { TileType.Wetland, -3f },
+                { TileType.Bog, -2f },
+                { TileType.Forest, -1f },
+                { TileType.Arid, 6f },
+                { TileType.Sand, 4f },
+            },
+            // Home ground is the waterline: the generic weights treat wetland and bog as nearly
+            // hostile, which would walk a riverbank animal away from the only place it can eat.
+            TerrainAversionModifiers = new Dictionary<TileType, float>
+            {
+                { TileType.Wetland, 0f },
+                { TileType.Bog, 0.05f },
+                { TileType.Forest, 0.15f },
+                { TileType.Grass, 0.25f },
+                { TileType.Taiga, 0.3f },
+                { TileType.Shrubland, 0.4f },
+                { TileType.Savanna, 0.7f },
+                { TileType.Steppe, 0.7f },
+                { TileType.Sand, 0.85f },
+                { TileType.Arid, 0.9f },
+            },
+            TerrainConcealment = new Dictionary<TileType, float>
+            {
+                { TileType.Wetland, 0.35f },
+                { TileType.Bog, 0.3f },
+            },
+            AllowedSpawnTiles = new List<TileType>
+            {
+                TileType.Wetland, TileType.Bog, TileType.Grass, TileType.Forest,
+            },
+            // Comes out of the water to den and raise cubs, exactly as the penguin hauls out.
+            BreedingTiles = new List<TileType>
+            {
+                TileType.Wetland, TileType.Bog, TileType.Grass, TileType.Forest,
+                TileType.Shrubland, TileType.Taiga,
+            },
+            PreferredBiomes = new List<BiomeType>
+            {
+                BiomeType.River, BiomeType.Wetland, BiomeType.Forest, BiomeType.Grassland,
+            },
+
+            CanGraze = false,
+
+            SeparationRadius = 1.2f,
+            SeparationStrength = 0.02f,
+
+            // Trophic - small mustelid; comfortably prey for any mid-size land carnivore
+            BodyMass = 1.2f,
+            SoloHuntMaxRatio = 1.0f,
+
+            // Visuals - sleek dark brown
+            BaseColor = new Color(0.42f, 0.29f, 0.18f),
+            BaseSize = 7f,
+            Shape = ShapeType.Teardrop,
+            StatVariation = 0.2f,
         });
 
         Register(new SpeciesDefinition
@@ -2113,7 +2304,10 @@ public static class SpeciesRegistry
             // Trophic - arctic apex
             BodyMass = 14.0f,
             SoloHuntMaxRatio = 1.5f,
-            PreferredPrey = new List<string> { "Penguin", "Fish", "Musk Ox" },
+            // Seals-and-penguins first; fish only when the ice is lean (see Shark).
+            PreferredPrey = new List<string> { "Penguin", "Musk Ox" },
+            FallbackPrey = new List<string> { "Fish" },
+            FallbackPreyHunger = 0.45f,
             PreferredPreyBias = 0.4f,
 
             // Visuals - white

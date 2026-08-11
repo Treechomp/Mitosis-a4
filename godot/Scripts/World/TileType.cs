@@ -119,23 +119,35 @@ public static class TileTypeExtensions
     }
 
     /// <summary>
-    /// Maximum grazing nutrition this biome's soil holds and regenerates back to (0 = not
-    /// grazeable). This is what differentiates carrying capacity by biome: lush grassland/jungle
-    /// stays teeming, while arid/tundra soil tops out low and can only sustain sparse populations.
+    /// Maximum food this tile's fertility holds and regenerates back to (0 = barren). This is what
+    /// differentiates carrying capacity by biome: lush grassland/jungle stays teeming, while
+    /// arid/tundra soil tops out low and can only sustain sparse populations.
+    ///
+    /// Water carries fertility too — plankton, not pasture. It is deliberately NOT covered by
+    /// <see cref="IsGrazeable"/>, so land herbivores still can't treat a lake as a meadow; only
+    /// species that list a water tile in their FeedTiles draw on it. Before water had any
+    /// fertility at all, fish fed from an infinite flat supply and the shoal could only ever be
+    /// limited by predation — which is exactly how a pond with no predator in it ended up solid
+    /// fish. The gradient (reef richest, open ocean nearly a desert) also gives shoals a reason to
+    /// hold on the shelf where their predators can reach them.
     /// </summary>
     public static float NutritionCap(this TileType tile)
     {
         return tile switch
         {
             TileType.Grass or TileType.Savanna or TileType.Jungle => 1.0f, // lush
+            TileType.Reef => 1.0f,                                        // coral: the richest water
             TileType.Wetland => 0.9f,                                     // rich but waterlogged
             TileType.Forest or TileType.Shrubland => 0.8f,
             TileType.Bog => 0.7f,                                         // acidic, still productive
+            TileType.ShallowWater => 0.7f,                                // sunlit shelf
             TileType.Steppe => 0.6f,                                       // cold grassland
             TileType.Taiga => 0.5f,                                       // cold forest
+            TileType.River => 0.45f,                                      // moderate, and flushed
+            TileType.DeepWater => 0.2f,                                   // open ocean is a desert
             TileType.Tundra => 0.25f,                                     // sparse arctic scrub
             TileType.Arid => 0.2f,                                        // sparse desert scrub
-            _ => 0f                                                       // non-grazeable
+            _ => 0f                                                       // barren
         };
     }
 

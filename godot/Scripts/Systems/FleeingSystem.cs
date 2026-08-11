@@ -28,6 +28,13 @@ public sealed class FleeingSystem : ISystem
     // the full index so the system still works standalone.
     private readonly SpatialHash _threatHash;
 
+    /// <summary>
+    /// How much of its flee radius a fully desperate (starving) animal gives up. At 0.65 a prey
+    /// animal on the edge of starvation reacts only inside ~35% of its usual reaction distance —
+    /// enough to keep feeding in contested ground, not enough to walk into a predator's jaws.
+    /// </summary>
+    private const float DesperationFleeRangeCut = 0.65f;
+
     public FleeingSystem(SpatialHash spatialHash, WorldManager? worldManager = null)
     {
         _spatialHash = spatialHash;
@@ -54,7 +61,25 @@ public sealed class FleeingSystem : ISystem
             ref var vel = ref em.Velocities[entity];
             ref var wander = ref em.Wanders[entity];
 
-            float fleeRangeSq = prey.FleeRange * prey.FleeRange;
+            var speciesDef = em.HasComponents(entity, ComponentFlags.Species)
+                ? SpeciesRegistry.GetById(em.Species[entity].SpeciesId) : null;
+
+            // Desperation: a starving animal cannot afford to be careful. Its effective flee
+            // radius shrinks, so it tolerates a predator it can see and only bolts when one is
+            // genuinely on top of it. Without this, prey holds a safe position until it dies of
+            // hunger — a penguin refused to enter the water for as long as a shark was anywhere
+            // in it, and starved on the ice while its food swam past. Risk beats certainty.
+            float desperation = 0f;
+            if (speciesDef != null && speciesDef.DesperationHunger > 0f
+                && em.HasComponents(entity, ComponentFlags.Hunger))
+            {
+                float hungerRatio = em.Hungers[entity].Percent;
+                if (hungerRatio < speciesDef.DesperationHunger)
+                    desperation = 1f - hungerRatio / speciesDef.DesperationHunger;
+            }
+
+            float effectiveFleeRange = prey.FleeRange * (1f - desperation * DesperationFleeRangeCut);
+            float fleeRangeSq = effectiveFleeRange * effectiveFleeRange;
             // For decision logging: detect flee start/stop transitions this tick.
             bool wasFleeing = prey.IsFleeing;
 
@@ -66,7 +91,7 @@ public sealed class FleeingSystem : ISystem
             // Stealth-aware: stealthed predators reduce effective detection range. Only predators
             // within FleeRange matter, so query just that neighbourhood from the spatial hash.
             _nearbyPredators.Clear();
-            _threatHash.QueryRadius(pos.X, pos.Y, prey.FleeRange, _nearbyPredators);
+            _threatHash.QueryRadius(pos.X, pos.Y, effectiveFleeRange, _nearbyPredators);
             var (fleeDir, hasThreat, closestDistSq) = CalculateFleeVector(
                 em, pos.X, pos.Y, _nearbyPredators, fleeRangeSq, mySpeciesId);
 
@@ -135,8 +160,6 @@ public sealed class FleeingSystem : ISystem
             // Flee stamina: drains while fleeing, recovers at rest (LOD-scaled).
             int tickMult = em.HasComponents(entity, ComponentFlags.SimulationLOD)
                 ? em.SimulationLODs[entity].TickInterval : 1;
-            var speciesDef = em.HasComponents(entity, ComponentFlags.Species)
-                ? SpeciesRegistry.GetById(em.Species[entity].SpeciesId) : null;
             float staminaDrain = speciesDef?.FleeStaminaDrain ?? 0.005f;
             float staminaRecover = speciesDef?.FleeStaminaRecovery ?? 0.0025f;
             float tiredFloor = speciesDef?.FleeTiredSpeedFloor ?? 0.5f;

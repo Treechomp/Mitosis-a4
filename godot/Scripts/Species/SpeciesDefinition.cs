@@ -302,6 +302,15 @@ public sealed class SpeciesDefinition
     /// </summary>
     public bool AvoidsWater { get; init; } = false;
 
+    /// <summary>
+    /// Hunger ratio below which this species starts trading safety for food: its effective flee
+    /// radius shrinks toward the desperate floor as hunger approaches zero, so it will feed in
+    /// ground a well-fed individual would refuse to enter. 0 disables it (structures, factions).
+    /// The alternative is prey that starves to death holding a safe position — observed with
+    /// penguins that would not enter the sea while a shark was in it.
+    /// </summary>
+    public float DesperationHunger { get; init; } = 0.3f;
+
     /// <summary>Ticks in wrong element (water for land, land for aquatic) before damage starts.
     /// Good swimmers get longer grace; panicky species drown fast. Default 60 (3 sec at 20 TPS).</summary>
     public int WrongElementGraceTicks { get; init; } = 60;
@@ -313,6 +322,23 @@ public sealed class SpeciesDefinition
     /// Specific tile types where this species can spawn. If null, uses default logic.
     /// </summary>
     public List<TileType>? AllowedSpawnTiles { get; init; }
+
+    /// <summary>
+    /// Fertility stripped from a FeedTile per feeding tick (0 = the tile is an inexhaustible
+    /// supply, the old behaviour). The FeedTiles analogue of GrazeConsumeRate: it is what makes a
+    /// water-feeding shoal deplete its own grounds instead of grazing an infinite buffet.
+    /// </summary>
+    public float FeedConsumeRate { get; init; } = 0f;
+
+    /// <summary>
+    /// How strongly local tile fertility gates reproduction, 0..1. At 0 (default) breeding ignores
+    /// the ground entirely; at 1 the chance to breed equals the tile's fraction of its own cap, so
+    /// a species multiplies in rich ground and barely at all in exhausted ground.
+    ///
+    /// This is the negative feedback that stops a boom without needing a predator: a shoal that
+    /// eats its water down also stops breeding in it, and the survivors leave rather than stack up.
+    /// </summary>
+    public float BreedingNutritionSensitivity { get; init; } = 0f;
 
     /// <summary>
     /// Tiles a PARENT must be standing on to reproduce. Null/empty = breeds wherever it lives.
@@ -372,6 +398,26 @@ public sealed class SpeciesDefinition
 
     public List<string>? PreferredPrey { get; init; }
     public float PreferredPreyBias { get; init; } = 0.5f;
+
+    /// <summary>
+    /// Prey this species treats as a lean fallback rather than proper game: ignored entirely while
+    /// hunger sits above <see cref="FallbackPreyHunger"/>, and taken without hesitation below it.
+    ///
+    /// PreferredPrey alone can only say "I like this better" — one flat multiplier applied to every
+    /// name on the list, so a Shark rated a Fish and a Penguin identically and simply ate whichever
+    /// was nearer. That is what let a shoal be grazed flat by an apex predator that should be after
+    /// bigger game. A fallback tier makes the small prey a famine ration instead of a staple, which
+    /// is what keeps the base of the food web from being cropped to nothing.
+    /// </summary>
+    public List<string>? FallbackPrey { get; init; }
+
+    /// <summary>Hunger ratio (0 = starving, 1 = full) below which FallbackPrey becomes eligible.</summary>
+    public float FallbackPreyHunger { get; init; } = 0.4f;
+
+    /// <summary>True when this predator, at its current hunger, will bother with the given prey.</summary>
+    public bool WillHunt(string preyName, float hungerRatio)
+        => FallbackPrey == null || hungerRatio < FallbackPreyHunger
+           || !FallbackPrey.Contains(preyName);
 
     /// <summary>
     /// Hard prey restriction: if non-null, this predator can ONLY target these species
