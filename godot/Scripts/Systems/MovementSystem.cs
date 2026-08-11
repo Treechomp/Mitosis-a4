@@ -23,6 +23,12 @@ public sealed class MovementSystem : ISystem
     /// </summary>
     private const float CliffThreshold = 0.28f;
 
+    /// <summary>
+    /// Distance from the map border at which movement bounces back inward. Half a tile — just
+    /// enough that a creature never ends up standing exactly on the clamp line.
+    /// </summary>
+    private const float EdgeBuffer = 0.5f;
+
     public MovementSystem(int chunkSize, int worldSizeChunks, WorldManager worldManager)
     {
         _chunkSize = chunkSize;
@@ -104,6 +110,37 @@ public sealed class MovementSystem : ISystem
             // Calculate movement delta with terrain speed modifier
             float dx = vel.Dx * speedMult;
             float dy = vel.Dy * speedMult;
+
+            // World edge = barrier, not a wall to lean on. TryMove clamps the position, which
+            // stops the creature without ever changing where it is trying to go: it kept pushing
+            // in the same direction forever, so animals piled up along the border (worst for the
+            // aquatic species, since out of bounds reads as DeepWater and looks like open sea).
+            // Reflecting the offending velocity component turns it back inward; WanderSystem's
+            // edge aversion then steers it properly on its next decision.
+            if (em.HasComponents(entity, ComponentFlags.Species))
+            {
+                if (pos.X + dx < EdgeBuffer && dx < 0f)
+                {
+                    dx = -dx;
+                    vel.Dx = -vel.Dx;
+                }
+                else if (pos.X + dx > _worldSizeTiles - EdgeBuffer && dx > 0f)
+                {
+                    dx = -dx;
+                    vel.Dx = -vel.Dx;
+                }
+
+                if (pos.Y + dy < EdgeBuffer && dy < 0f)
+                {
+                    dy = -dy;
+                    vel.Dy = -vel.Dy;
+                }
+                else if (pos.Y + dy > _worldSizeTiles - EdgeBuffer && dy > 0f)
+                {
+                    dy = -dy;
+                    vel.Dy = -vel.Dy;
+                }
+            }
 
             // Try to move
             bool moved = TryMove(ref pos, dx, dy, isFlying);

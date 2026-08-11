@@ -152,6 +152,7 @@ All are opt-in per scenario and cost nothing in the main game (static toggles, o
 | `grazing_depletion.scenario.txt` | nutrition depletion/regen, food-seek roams, discomfort escape |
 | `shroomer_bloom.scenario.txt` | terraforming (wetter), fertility feeding, spore spread, fungivory |
 | `faction_skirmish.scenario.txt` | three-way faction terraform tug-of-war, nests/crystals/spores |
+| `aquatic_biome.scenario.txt` | element-aware discomfort, shark/fish habitat preference, penguin haul-out breeding, world-edge steering |
 
 ## Where the code lives
 

@@ -314,6 +314,21 @@ public sealed class SpeciesDefinition
     /// </summary>
     public List<TileType>? AllowedSpawnTiles { get; init; }
 
+    /// <summary>
+    /// Tiles a PARENT must be standing on to reproduce. Null/empty = breeds wherever it lives.
+    ///
+    /// This is what makes a semi-aquatic species genuinely amphibious rather than an ordinary
+    /// animal that happens to tolerate water: a penguin hunts at sea but must haul out onto the
+    /// ice to raise a chick, so the colony's whole rhythm — go to sea hungry, come ashore fed —
+    /// falls out of the breeding cycle instead of having to be scripted. WanderSystem gives
+    /// breeding-ready adults a roam target on the nearest such ground ("seek_breeding_ground").
+    /// </summary>
+    public List<TileType>? BreedingTiles { get; init; }
+
+    /// <summary>True when a parent standing on this tile is allowed to reproduce.</summary>
+    public bool CanBreedOnTile(TileType tile)
+        => BreedingTiles == null || BreedingTiles.Count == 0 || BreedingTiles.Contains(tile);
+
     public bool CanSpawnInBiome(BiomeType biome)
     {
         if (PreferredBiomes == null || PreferredBiomes.Count == 0)

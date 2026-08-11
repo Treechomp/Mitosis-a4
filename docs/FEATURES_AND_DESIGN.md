@@ -434,6 +434,15 @@ bypasses clamp/damping. **Creatures off their element** (`TerrainProfile.IsImpas
 on land, insect in water) move at 5% speed — they flounder in place and suffocate/drown (§6.3)
 rather than chasing prey/corpses across the wrong terrain.
 
+**World edge = barrier.** A creature whose step would cross the border has that velocity
+component **reflected** inward (buffer 0.5 tiles), and every terrain-steering sampler maxes its
+tile aversion with `WorldManager.EdgeAversion` — a ramp to 1 across the outer **3 tiles**. Both
+halves are needed: clamping the position alone stopped creatures at the border without ever
+changing where they were trying to go, so they pressed into it indefinitely. It hit swimmers
+hardest, because out of bounds `GetTile` answers **DeepWater**, which reads as "more open sea,
+keep going" to precisely the species that live in it — land animals were incidentally repelled by
+the same answer.
+
 ### 6.x Terrain Profile — `Species/TerrainProfile.cs` (resolver, not a system)
 
 The single resolver for how a species relates to a tile, consulted by Movement / Wander /
@@ -448,18 +457,50 @@ code paths). Three dimensions:
   not a movement wall, so "only accidental shoring/drowning" emerges without trapping entities.
 - **`SteerAversion`** `[0..1]` — species-aware steering dislike (aquatic avoid land, semi-aquatic
   fine in water, insects avoid water, land animals standard), used by all movement steering.
+  A species' `TerrainAversionModifiers` are consulted on **every** tile including water, which is
+  how a preference *within* an element is expressed: a Shark reads DeepWater 0 / ShallowWater 0.3,
+  so it patrols the deep but hunts the shelf freely. Fish invert it (shelf 0, deep 0.25) and shoal
+  where their predators can reach them.
+- **`DiscomfortRate`** — species-aware discomfort accrual per tick, the input to §6.3. Element-
+  aware: the wrong element is maximally uncomfortable, the **home element (water for aquatic and
+  semi-aquatic species) costs nothing**, everything else takes the tile baseline, then the
+  species' `TerrainComfortModifiers` are added and the result floored at zero.
 - **`Concealment`** — per-tile camouflage (override else tile `GetCoverBonus`), reducing the
   species' detectability in both hunting (harder to target) and fleeing (noticed from closer).
 
-**Soft** terrain preference (overridable by hunger/fear) stays in TerrainDiscomfortSystem's
-comfort/discomfort. See `docs/terrain-handling-audit.md` and `docs/terrain-profile-design.md`.
+Aversion and discomfort are deliberately different things: aversion is a **pull** (where would I
+rather be), discomfort is an **intolerance** (how long can I stand it here). Habitat preference
+belongs in aversion. Routing it through discomfort instead is what stranded sharks and fish: the
+tile table rates open water as punishing, their negative comfort modifiers only partly cancelled
+it, and the leftover positive rate accumulated until both species were permanently "escaping" —
+in their own feeding grounds, with hunting disabled the whole time.
+
+`IsSubmerged` (water **plus Reef**) is what the aquatic element checks use; `IsWater` — which
+governs where land creatures drown and cannot spawn — deliberately excludes coral. A shark over a
+reef is not beached.
+
+See `docs/terrain-handling-audit.md` and `docs/terrain-profile-design.md`.
 
 ### 6.3 Terrain Discomfort — `TerrainSystems.cs` (gated)
 
-Accumulates discomfort on uncomfortable tiles, decays on comfortable ones. Flying creatures
-ignore it. Hungry herbivores on non-grazeable tiles get extra `GrazingPressure` (scaled by
-hunger and tile depletion). This is the **soft** terrain preference — overridable by hunger/fear
-(a pressed Rabbit will cross a river it normally avoids). Also tracks **drowning/suffocation**:
+Discomfort **settles toward a level** rather than piling up: each tile has an equilibrium of
+`rate × 20` (capped at 3× the species' threshold), approached at 5% of the remaining gap per
+tick and shed at the species' `DecayRate` once on better ground. So a tile is either tolerable
+forever or drives a creature off within a few dozen ticks, decided by its rate — Wetland (0.5)
+settles at ~0.2 of a typical threshold and a herd simply grazes there; Tundra (2) settles at ~0.8
+and pushes animals on; Mountain (15) pins to the ceiling in about four ticks.
+
+Under the old pure accumulation, **any** net-positive rate reached the ceiling eventually, so
+"mildly disliked" and "lethal" differed only in how many ticks they took to lock a creature into
+a permanent escape (which also disables hunting — see §6.x tolerance). That is the bug behind
+both the 4000%-discomfort wolves and the sharks fleeing their own sea.
+
+The accrual rate is resolved by `TerrainProfile.DiscomfortRate` (§6.2), so aquatic species feel
+nothing in water. Flying creatures ignore discomfort entirely. Hungry herbivores on non-grazeable
+**or stripped** tiles get extra `GrazingPressure` (scaled by hunger, at full strength once the
+tile is bare — a dead pasture is as useless as bare rock). This is the **soft** terrain
+preference — overridable by hunger/fear (a pressed Rabbit will cross a river it normally avoids).
+Also tracks **drowning/suffocation**:
 a creature in the wrong element (depth-aware — land creatures wade shallow water but drown in
 deep, insects drown in any water, aquatics suffocate on land; aquatic/semi-aquatic never drown)
 takes energy damage after a grace period (`WrongElementGraceTicks` / `WrongElementDamageRate`).
@@ -690,6 +731,15 @@ mature, hunger ≥ threshold, energy ≥ threshold, local same-species density b
 spawns `OffspringCount` offspring on a valid tile near the parent (offspring start at 60%
 hunger, 100% energy, age 0). Both the spawn loop and `EntityFactory.SpawnCreature` re-check the
 hard cap, and offspring of a species disabled via the species toggle (§9) are refused here too.
+
+**Breeding grounds.** A species with `BreedingTiles` may only breed while the **parent** stands on
+one of them, and `WanderSystem` gives a fed, mature adult that is off them a roam target on the
+nearest patch (`seek_breeding_ground`, which overrides the roam cooldown the way lethal ground
+does). This is what makes a semi-aquatic species genuinely amphibious rather than a land animal
+that tolerates water: a Penguin's `HuntThreshold` (0.75) sits above its `ReproHungerThreshold`
+(≈0.63), so it fishes until full, then hauls out onto the ice to breed, then goes back to sea when
+the hunger cost of breeding lands — the colony's whole rhythm falls out of two numbers instead of
+being scripted.
 
 ---
 

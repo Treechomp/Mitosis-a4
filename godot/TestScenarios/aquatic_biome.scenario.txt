@@ -1,0 +1,34 @@
+# Cold sea with an ice shelf: a fish shoal, sharks off the drop-off, and a penguin
+# colony on the ice. The arena the aquatic-biome bugs were found in.
+# Tests: element-aware discomfort (nobody should escape their own water), shark
+# preference for deep water without abandoning the shallow feeding grounds,
+# penguins hunting at sea and hauling out onto the ice to breed, and world-edge
+# recognition (an all-water map has nothing else to turn a swimmer around).
+# Watch latest_decisions.csv for seek_breeding_ground roams and for the ABSENCE of
+# escape_start on Fish/Shark, and latest_events.csv for shark kills.
+
+[world]
+name = aquatic_biome
+size_chunks = 4          # 128x128 tiles
+seed = 77
+base_tile = ShallowWater
+tps = 20
+
+[terrain]
+band Ice y 0 16                # the shelf the colony breeds on
+rect Tundra 40 0 48 6          # a little solid ground behind the ice
+rect DeepWater 0 88 128 40     # the drop-off, where sharks patrol
+circle Reef 92 64 10           # coral: submerged, and the richest fishing
+
+[spawn]
+Fish x60 @ 64,50 r20 groups=4
+Fish x30 @ 96,64 r10 groups=2
+Shark x6 @ 64,108 r16          # inside the drop-off — spawns are exact, not tile-validated
+Penguin x18 @ 60,10 r10 group
+
+[logging]
+decisions = true
+decision_species = Penguin, Shark, Fish
+terrain_interval = 0
+nutrition_interval = 200
+snapshot_interval = 50

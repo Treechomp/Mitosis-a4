@@ -28,6 +28,28 @@ public sealed class TerrainDiscomfortSystem : ISystem
     /// </summary>
     private const float MaxDiscomfortRatio = 3f;
 
+    /// <summary>
+    /// Ticks' worth of accrual a tile sustains: discomfort rises toward (rate × this) rather than
+    /// piling up without limit, so every tile has a settling level and only ground whose level
+    /// clears the escape threshold ever drives a creature off it.
+    ///
+    /// This is what makes "disliked but liveable" expressible at all. Under pure accumulation ANY
+    /// net-positive rate reached the ceiling given enough time, so a mild dislike and lethal
+    /// ground differed only in how many ticks they took to lock a creature into a permanent
+    /// escape — the reported sharks-fleeing-their-own-feeding-grounds bug, and equally why grazers
+    /// could not settle in a wetland. At scale 20: Wetland (0.5/tick) settles at 10 ≈ 0.2 of a
+    /// typical threshold and is simply tolerated; Tundra (2) settles at 40 ≈ 0.8 and pushes a
+    /// creature on; Mountain (15) pins to the ceiling within a few ticks, as before.
+    /// </summary>
+    private const float DiscomfortEquilibriumScale = 20f;
+
+    /// <summary>
+    /// Fraction of the remaining gap to the settling level closed per tick. 0.05 gives roughly the
+    /// old time-to-escape on genuinely hostile ground (Mountain ~4 ticks, Ice ~20) while making
+    /// the approach asymptotic instead of linear.
+    /// </summary>
+    private const float DiscomfortApproachRate = 0.05f;
+
     public TerrainDiscomfortSystem(WorldManager worldManager)
     {
         _worldManager = worldManager;
@@ -53,30 +75,32 @@ public sealed class TerrainDiscomfortSystem : ISystem
             ref var pos = ref em.Positions[entity];
             ref var discomfort = ref em.TerrainDiscomforts[entity];
 
-            // Get current tile and apply species-specific comfort modifier
+            // Get current tile. The accrual rate is resolved species-aware (TerrainProfile), so an
+            // aquatic creature is at home in water instead of being punished by a tile table
+            // written from a land animal's point of view.
             var tile = _worldManager.GetTile(pos.X, pos.Y);
-            float tileDiscomfort = tile.GetDiscomfortRate();
             bool inWater = tile.IsWater();
 
             SpeciesDefinition? speciesDef = null;
+            float tileDiscomfort;
             if (em.HasComponents(entity, ComponentFlags.Species))
             {
                 speciesDef = SpeciesRegistry.GetById(em.Species[entity].SpeciesId);
-                if (speciesDef != null)
+                // Flying creatures ignore terrain discomfort entirely
+                if (speciesDef != null && speciesDef.IsFlying)
                 {
-                    // Flying creatures ignore terrain discomfort entirely
-                    if (speciesDef.IsFlying)
-                    {
-                        discomfort.Current = MathF.Max(0, discomfort.Current - discomfort.DecayRate);
-                        discomfort.WrongElementTicks = 0;
-                        continue;
-                    }
-                    tileDiscomfort += speciesDef.GetTerrainComfortModifier(tile);
+                    discomfort.Current = MathF.Max(0, discomfort.Current - discomfort.DecayRate);
+                    discomfort.WrongElementTicks = 0;
+                    continue;
                 }
+                tileDiscomfort = speciesDef != null
+                    ? TerrainProfile.DiscomfortRate(speciesDef, tile)
+                    : tile.GetDiscomfortRate();
             }
-
-            // Clamp so negative comfort can't cause negative discomfort accumulation
-            tileDiscomfort = MathF.Max(0, tileDiscomfort);
+            else
+            {
+                tileDiscomfort = tile.GetDiscomfortRate();
+            }
 
             // Add grazing pressure for hungry herbivores on non-grazeable or depleted terrain
             if (discomfort.GrazingPressure > 0 && em.HasComponents(entity, ComponentFlags.Hunger))
@@ -91,34 +115,46 @@ public sealed class TerrainDiscomfortSystem : ISystem
                 }
                 else
                 {
-                    // Grazeable but possibly depleted — pressure scales with depletion
+                    // Grazeable but possibly depleted — pressure scales with depletion, reaching
+                    // full strength on ground that is stripped bare. To a hungry grazer that is
+                    // exactly as useless as ground that never grew anything, and since discomfort
+                    // now settles at a level instead of piling up, a discounted pressure would
+                    // simply never reach the escape threshold — stranding herds on dead pasture.
                     float nutrition = _worldManager.GetNutrition(pos.X, pos.Y);
                     if (nutrition < 0.3f)
                     {
                         float depletionFactor = 1f - (nutrition / 0.3f);
-                        tileDiscomfort += discomfort.GrazingPressure * hungerFactor * depletionFactor * 0.5f;
+                        tileDiscomfort += discomfort.GrazingPressure * hungerFactor * depletionFactor;
                     }
                 }
             }
 
-            // Accumulate or decay discomfort, LOD-compensated so a distant creature builds and
-            // sheds it at the same real-time rate as one under the camera.
-            if (tileDiscomfort > 0)
-                discomfort.Current += tileDiscomfort * tickMult;
-            else
-                discomfort.Current = MathF.Max(0, discomfort.Current - discomfort.DecayRate * tickMult);
+            // The level this ground settles at, capped at the ceiling. Discomfort was unbounded,
+            // so a creature that crossed genuinely hostile ground (Mountain accrues 15/tick, Lava
+            // 20) banked a debt in the thousands — ratios of 4000%+ were observed — and then could
+            // not pay it off: escape only clears below ratio 0.1, and HuntingSystem refuses to
+            // hold a target while the ratio exceeds its tolerance. The result was a creature
+            // permanently locked in "escape", never hunting again however hungry, though still
+            // able to feed from carcasses (scavenging does not consult discomfort). Nothing needs
+            // a ratio above the ceiling: every consumer asks "how far past threshold am I", and
+            // the highest tolerance in play is ~2.1.
+            float settlingLevel = MathF.Min(tileDiscomfort * DiscomfortEquilibriumScale,
+                                            discomfort.Threshold * MaxDiscomfortRatio);
 
-            // Cap the accumulation. Discomfort was unbounded, so a creature that crossed genuinely
-            // hostile ground (Mountain accrues 15/tick, Lava 20) banked a debt in the thousands —
-            // ratios of 4000%+ were observed — and then could not pay it off: escape only clears
-            // below ratio 0.1, and HuntingSystem refuses to hold a target while the ratio exceeds
-            // its tolerance. The result was a creature permanently locked in "escape", never
-            // hunting again however hungry, though still able to feed from carcasses (scavenging
-            // does not consult discomfort). Nothing needs a ratio above the cap: every consumer
-            // asks "how far past threshold am I", and the highest tolerance in play is ~2.1.
-            float maxDiscomfort = discomfort.Threshold * MaxDiscomfortRatio;
-            if (discomfort.Current > maxDiscomfort)
-                discomfort.Current = maxDiscomfort;
+            // Approach it asymptotically while it is above us, shed it at the species' own decay
+            // rate once we're on better ground. LOD-compensated so a distant creature builds and
+            // sheds at the same real-time rate as one under the camera (the approach fraction is
+            // clamped so a coarse LOD tier can't overshoot past the target).
+            if (settlingLevel > discomfort.Current)
+            {
+                float approach = MathF.Min(1f, DiscomfortApproachRate * tickMult);
+                discomfort.Current += (settlingLevel - discomfort.Current) * approach;
+            }
+            else
+            {
+                discomfort.Current = MathF.Max(settlingLevel,
+                    discomfort.Current - discomfort.DecayRate * tickMult);
+            }
 
             // === Drowning / Suffocation ===
             if (speciesDef != null && em.HasComponents(entity, ComponentFlags.Energy))
@@ -133,7 +169,8 @@ public sealed class TerrainDiscomfortSystem : ISystem
                     isDrowning = inWater;
                 else
                     isDrowning = tile.IsDeepWater();
-                bool isSuffocating = !inWater && speciesDef.IsAquatic;
+                // Reef counts as submerged: a shark chasing a fish over coral is still in the sea.
+                bool isSuffocating = speciesDef.IsAquatic && !tile.IsSubmerged();
 
                 if (isDrowning || isSuffocating)
                 {

@@ -112,6 +112,35 @@ public sealed class WorldManager
     }
 
     /// <summary>
+    /// True when a world position lies inside the map. Steering treats everything outside as a
+    /// barrier: <see cref="GetTile"/> answers DeepWater beyond the edge, which reads as "more
+    /// ocean, keep going" to exactly the species that live in it — sharks, fish and penguins swam
+    /// into the void and ground against the position clamp instead of turning back.
+    /// </summary>
+    public bool IsInBounds(float worldX, float worldY)
+        => worldX >= 0f && worldY >= 0f && worldX < WorldSizeTiles && worldY < WorldSizeTiles;
+
+    /// <summary>Width in tiles of the band along the map border that creatures steer away from.</summary>
+    public const float EdgeMargin = 3f;
+
+    /// <summary>
+    /// Steering aversion [0..1] contributed purely by proximity to the world border: 0 well
+    /// inside, ramping to 1 at the boundary and beyond. Every terrain-steering system maxes its
+    /// tile aversion with this, so the edge reads as a barrier to be turned along rather than a
+    /// wall to lean on — creatures used to press into it indefinitely, since the position clamp
+    /// stopped them moving without ever changing where they were trying to go.
+    /// </summary>
+    public float EdgeAversion(float worldX, float worldY)
+    {
+        float size = WorldSizeTiles;
+        float dist = MathF.Min(MathF.Min(worldX, worldY),
+                               MathF.Min(size - worldX, size - worldY));
+        if (dist >= EdgeMargin) return 0f;
+        if (dist <= 0f) return 1f;
+        return 1f - dist / EdgeMargin;
+    }
+
+    /// <summary>
     /// Get tile type at world coordinates.
     /// </summary>
     public TileType GetTile(float worldX, float worldY)

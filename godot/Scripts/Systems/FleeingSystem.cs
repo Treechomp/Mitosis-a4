@@ -365,8 +365,17 @@ public sealed class FleeingSystem : ISystem
         // Species-aware terrain aversion: an aquatic fish must treat LAND as the thing to avoid
         // (not water), so it won't flee ashore and strand. Falls back to raw tile weight if the
         // species is unknown.
-        float Aversion(TileType t) => speciesDef != null
-            ? TerrainProfile.SteerAversion(speciesDef, t) : t.GetAvoidanceWeight();
+        // Sampled by POSITION, so the world border counts as terrain to avoid: cornered prey now
+        // slides along the edge instead of pressing into it until the predator arrives.
+        float Aversion(float sx, float sy)
+        {
+            float edge = _worldManager!.EdgeAversion(sx, sy);
+            if (edge >= 1f) return 1f;
+            var t = _worldManager.GetTile(sx, sy);
+            float terrain = speciesDef != null
+                ? TerrainProfile.SteerAversion(speciesDef, t) : t.GetAvoidanceWeight();
+            return MathF.Max(edge, terrain);
+        }
 
         float fleeSpeed = wander.Speed * prey.FleeSpeedMultiplier * staminaFactor;
 
@@ -381,8 +390,7 @@ public sealed class FleeingSystem : ISystem
             // Check if fleeing would take us to worse terrain
             float fleeAheadX = pos.X + fleeDir.X * 2f;
             float fleeAheadY = pos.Y + fleeDir.Y * 2f;
-            var aheadTile = _worldManager.GetTile(fleeAheadX, fleeAheadY);
-            float aheadAvoid = Aversion(aheadTile);
+            float aheadAvoid = Aversion(fleeAheadX, fleeAheadY);
 
             // If fleeing leads to worse terrain, try to find a compromise direction
             if (aheadAvoid > 0.5f)
@@ -391,8 +399,8 @@ public sealed class FleeingSystem : ISystem
                 float perpX = -fleeDir.Y;
                 float perpY = fleeDir.X;
 
-                float leftAvoid = Aversion(_worldManager.GetTile(pos.X + perpX * 2f, pos.Y + perpY * 2f));
-                float rightAvoid = Aversion(_worldManager.GetTile(pos.X - perpX * 2f, pos.Y - perpY * 2f));
+                float leftAvoid = Aversion(pos.X + perpX * 2f, pos.Y + perpY * 2f);
+                float rightAvoid = Aversion(pos.X - perpX * 2f, pos.Y - perpY * 2f);
 
                 // Blend flee direction with side-step based on discomfort (less adjustment when afraid)
                 float blendFactor = discomfortRatio * 0.5f * (1f - fearRatio);

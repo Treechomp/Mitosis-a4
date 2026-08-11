@@ -99,6 +99,12 @@ public sealed class ReproductionSystem : ISystem
 
             ref var pos = ref em.Positions[entity];
 
+            // Species that must come ashore to breed (penguins hauling out onto the ice) wait
+            // until they are standing on that ground. WanderSystem walks them there — see
+            // SpeciesDefinition.BreedingTiles.
+            if (!speciesDef.CanBreedOnTile(_worldManager.GetTile(pos.X, pos.Y)))
+                continue;
+
             // Local density suppression — skip if too many same-species nearby
             // Prevents exponential population explosions in well-fed areas
             if (_spatialHash != null)

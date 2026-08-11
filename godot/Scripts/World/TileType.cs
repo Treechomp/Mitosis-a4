@@ -62,6 +62,14 @@ public static class TileTypeExtensions
     /// <summary>Open/deep water — land creatures route around it and drown in it.</summary>
     public static bool IsDeepWater(this TileType tile) => tile == TileType.DeepWater;
 
+    /// <summary>
+    /// Underwater ground from an aquatic creature's point of view: open water plus Reef, which is
+    /// coral — submerged, and the richest hunting ground in the sea. Reef is deliberately NOT part
+    /// of <see cref="IsWater"/>, which governs where LAND creatures drown and cannot spawn; a shark
+    /// swimming over a reef is not beached, so the aquatic element checks use this instead.
+    /// </summary>
+    public static bool IsSubmerged(this TileType tile) => tile.IsWater() || tile == TileType.Reef;
+
     /// <summary>Wadeable water — shallow/river that land creatures cross and fish in safely.</summary>
     public static bool IsWadeableWater(this TileType tile)
         => tile == TileType.ShallowWater || tile == TileType.River;

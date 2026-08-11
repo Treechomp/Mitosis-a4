@@ -109,10 +109,20 @@ public sealed class WanderSystem : ISystem
             bool onLethalGround = _worldManager != null && wanderSpeciesDef != null
                 && IsLethalSubstrate(wanderSpeciesDef, _worldManager.GetTile(pos.X, pos.Y));
 
+            // Ready to breed but standing somewhere this species cannot (a penguin at sea, which
+            // must haul out onto the ice). Heading for that ground outranks the roam cooldown the
+            // same way lethal ground does — otherwise a fed adult drifts offshore for hundreds of
+            // ticks with nothing to do, and the colony only breeds when the sea happens to wash it
+            // back onto land.
+            bool needsBreedingGround = _worldManager != null && wanderSpeciesDef?.BreedingTiles != null
+                && !wanderSpeciesDef.CanBreedOnTile(_worldManager.GetTile(pos.X, pos.Y))
+                && IsBreedingReady(em, entity);
+
             // Check if we should start roaming
-            if (!wander.IsRoaming && (wander.RoamCooldown <= 0 || onLethalGround))
+            if (!wander.IsRoaming && (wander.RoamCooldown <= 0 || onLethalGround || needsBreedingGround))
             {
-                bool shouldRoam = onLethalGround || ShouldStartRoaming(entity, em, ref pos);
+                bool shouldRoam = onLethalGround || needsBreedingGround
+                    || ShouldStartRoaming(entity, em, ref pos);
                 if (shouldRoam)
                 {
                     float targetX, targetY;
@@ -126,6 +136,15 @@ public sealed class WanderSystem : ISystem
                                out targetX, out targetY))
                     {
                         roamReason = "escape_substrate";
+                    }
+                    // Haul out to breed: head for the nearest ground this species can raise young
+                    // on. Only reached by a fed, mature adult off its breeding ground, so it never
+                    // competes with feeding — hunger keeps a penguin at sea until it is full.
+                    else if (needsBreedingGround
+                        && TryFindTileTarget(pos.X, pos.Y, roamDistance, wanderSpeciesDef!.BreedingTiles!,
+                               out targetX, out targetY))
+                    {
+                        roamReason = "seek_breeding_ground";
                     }
                     // Keepers (Faelings with an active dominance reading): besiege the locally
                     // dominant faction — roam to a standoff ring around its sensed hotspot,
@@ -315,12 +334,12 @@ public sealed class WanderSystem : ISystem
                 {
                     float aheadX = pos.X + newDir.X * _lookAheadDistance;
                     float aheadY = pos.Y + newDir.Y * _lookAheadDistance;
-                    var aheadTile = _worldManager.GetTile(aheadX, aheadY);
+                    float aheadAversion = AversionAt(wanderSpeciesDef, aheadX, aheadY);
 
                     // If new direction leads to bad terrain, try to pick a safer one
-                    if (Aversion(wanderSpeciesDef, aheadTile) > 0.3f)
+                    if (aheadAversion > 0.3f)
                     {
-                        float bestAvoidance = Aversion(wanderSpeciesDef, aheadTile);
+                        float bestAvoidance = aheadAversion;
                         var bestDir = newDir;
 
                         for (int i = 0; i < 4; i++)
@@ -328,7 +347,7 @@ public sealed class WanderSystem : ISystem
                             var testDir = MathUtils.RandomDirection(_rng);
                             float testX = pos.X + testDir.X * _lookAheadDistance;
                             float testY = pos.Y + testDir.Y * _lookAheadDistance;
-                            float avoidWeight = Aversion(wanderSpeciesDef, _worldManager.GetTile(testX, testY));
+                            float avoidWeight = AversionAt(wanderSpeciesDef, testX, testY);
 
                             if (avoidWeight < bestAvoidance)
                             {
@@ -532,6 +551,61 @@ public sealed class WanderSystem : ISystem
     }
 
     /// <summary>
+    /// True when this creature is mature, off cooldown and well enough fed/rested to reproduce —
+    /// i.e. everything ReproductionSystem checks except where it is standing.
+    /// </summary>
+    private static bool IsBreedingReady(EntityManager em, int entity)
+    {
+        const ComponentFlags needed = ComponentFlags.Reproduction | ComponentFlags.Age
+                                    | ComponentFlags.Hunger | ComponentFlags.Energy;
+        if (!em.HasComponents(entity, needed)) return false;
+        ref var repro = ref em.Reproductions[entity];
+        if (repro.CurrentCooldown > 0) return false;
+        if (!em.Ages[entity].IsMature) return false;
+        return em.Hungers[entity].Current >= repro.HungerThreshold
+            && em.Energies[entity].Current >= repro.EnergyThreshold;
+    }
+
+    /// <summary>
+    /// Nearest point on one of the given tile types, searched along the 8 compass directions.
+    /// Shares the shape of TryFindSafeSubstrateTarget: closest hit wins, and the target is placed
+    /// a little past the boundary so the creature settles inside rather than on the rim.
+    /// </summary>
+    private bool TryFindTileTarget(float x, float y, float roamDistance, List<TileType> wanted,
+        out float targetX, out float targetY)
+    {
+        targetX = x;
+        targetY = y;
+        if (_worldManager == null) return false;
+
+        float bestDist = float.MaxValue;
+        for (int i = 0; i < 8; i++)
+        {
+            float angle = i * MathF.PI / 4f;
+            float dx = MathF.Cos(angle);
+            float dy = MathF.Sin(angle);
+
+            for (float t = 0.1f; t <= 1.0f; t += 0.1f)
+            {
+                float d = roamDistance * t;
+                float sx = x + dx * d;
+                float sy = y + dy * d;
+                if (!_worldManager.IsInBounds(sx, sy)) break;
+                if (!wanted.Contains(_worldManager.GetTile(sx, sy))) continue;
+                if (d < bestDist)
+                {
+                    bestDist = d;
+                    targetX = x + dx * (d + 3f);
+                    targetY = y + dy * (d + 3f);
+                }
+                break; // nearest hit along this ray is all that matters
+            }
+        }
+
+        return bestDist < float.MaxValue;
+    }
+
+    /// <summary>
     /// Find a roam target toward the best nearby food for a grazing species.
     /// Samples 8 compass directions out to roamDistance, scoring each by food availability
     /// (tile nutrition for grazers, presence for FeedTile species), with a mild bias toward
@@ -578,7 +652,10 @@ public sealed class WanderSystem : ISystem
     /// </summary>
     private float GetFoodScore(float x, float y, SpeciesDefinition def)
     {
-        var tile = _worldManager!.GetTile(x, y);
+        // Never forage off the edge of the map (out of bounds reads as DeepWater, which is food
+        // to an aquatic species).
+        if (!_worldManager!.IsInBounds(x, y)) return 0f;
+        var tile = _worldManager.GetTile(x, y);
         // Species-aware: hostile terrain scores 0 so foraging never steers a creature off its
         // element — but for an aquatic this means LAND, not water (fish forage IN water).
         if (TerrainProfile.SteerAversion(def, tile) > 0.6f) return 0f;
@@ -621,8 +698,10 @@ public sealed class WanderSystem : ISystem
 
             float testX = x + dx * _lookAheadDistance;
             float testY = y + dy * _lookAheadDistance;
-            // Aquatic creatures escape toward water; everyone else toward calmer land.
-            float avoidance = Aversion(sp, _worldManager.GetTile(testX, testY));
+            // Aquatic creatures escape toward water; everyone else toward calmer land. Never off
+            // the map: outside the border reads as DeepWater, which an escaping fish would happily
+            // pick as the calmest direction available.
+            float avoidance = AversionAt(sp, testX, testY);
 
             if (avoidance < bestAvoidance)
             {
@@ -649,8 +728,7 @@ public sealed class WanderSystem : ISystem
         float aheadX = x + currentDir.X * _lookAheadDistance;
         float aheadY = y + currentDir.Y * _lookAheadDistance;
 
-        var aheadTile = _worldManager.GetTile(aheadX, aheadY);
-        float aheadAvoidance = Aversion(sp, aheadTile);
+        float aheadAvoidance = AversionAt(sp, aheadX, aheadY);
 
         if (aheadAvoidance > 0.2f)
         {
@@ -668,8 +746,8 @@ public sealed class WanderSystem : ISystem
         float rightX = x - perpX * _lookAheadDistance;
         float rightY = y - perpY * _lookAheadDistance;
 
-        float leftAvoidance = Aversion(sp, _worldManager.GetTile(leftX, leftY));
-        float rightAvoidance = Aversion(sp, _worldManager.GetTile(rightX, rightY));
+        float leftAvoidance = AversionAt(sp, leftX, leftY);
+        float rightAvoidance = AversionAt(sp, rightX, rightY);
 
         // Steer toward better side
         if (leftAvoidance < rightAvoidance)
@@ -693,6 +771,20 @@ public sealed class WanderSystem : ISystem
     /// </summary>
     private static float Aversion(SpeciesDefinition? sp, TileType tile)
         => sp != null ? TerrainProfile.SteerAversion(sp, tile) : tile.GetAvoidanceWeight();
+
+    /// <summary>
+    /// Steering aversion for a sampled POSITION: the tile's own aversion, or the world border's,
+    /// whichever is stronger. Sampling by tile alone made the map edge invisible to steering —
+    /// out there GetTile answers DeepWater, so land animals happened to avoid it while the aquatic
+    /// species that live in deep water were actively drawn over the boundary and stuck there.
+    /// </summary>
+    private float AversionAt(SpeciesDefinition? sp, float x, float y)
+    {
+        if (_worldManager == null) return 0f;
+        float edge = _worldManager.EdgeAversion(x, y);
+        if (edge >= 1f) return 1f;
+        return MathF.Max(edge, Aversion(sp, _worldManager.GetTile(x, y)));
+    }
 
     // Siege standoff in tiles: just outside a full-grown Shroomer's max AoE reach (14), so a
     // keeper besieging a bloom bombards/terraforms from the rim instead of dying inside it.

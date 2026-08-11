@@ -660,7 +660,10 @@ public sealed class HuntingSystem : ISystem
                     if (_worldManager != null)
                     {
                         var preyTile = _worldManager.GetTile(preyPos.X, preyPos.Y);
-                        float terrainPenalty = preyTile.GetAvoidanceWeight() * 50f;
+                        // Species-aware: the raw tile table rates open water as near-impassable,
+                        // which penalised an aquatic hunter for every target it has — a shark
+                        // scored fish in deep water as if it were chasing them up a mountain.
+                        float terrainPenalty = TerrainProfile.SteerAversion(speciesDef, preyTile) * 50f;
                         terrainPenalty *= (1f - urgency * 0.7f);
                         score += terrainPenalty;
 

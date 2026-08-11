@@ -689,13 +689,22 @@ public static class SpeciesRegistry
                 { TileType.DeepWater, 1.2f },
                 { TileType.River, 1.0f },
             },
+            // Only land is uncomfortable — water is the home element and costs nothing
+            // (TerrainProfile.DiscomfortRate).
             TerrainComfortModifiers = new Dictionary<TileType, float>
             {
-                { TileType.ShallowWater, -3f },
-                { TileType.DeepWater, -5f },
-                { TileType.River, -2f },
                 { TileType.Grass, 10f },
                 { TileType.Sand, 10f },
+            },
+            // Shoaling fish hold to the sunlit shelf and the reef rather than the open deep. This
+            // is what puts them where their predators can reach them: penguins can only dive so
+            // far from the colony, and it gives sharks a reason to come in off the drop-off.
+            TerrainAversionModifiers = new Dictionary<TileType, float>
+            {
+                { TileType.ShallowWater, 0f },
+                { TileType.Reef, 0f },
+                { TileType.River, 0.1f },
+                { TileType.DeepWater, 0.25f },
             },
             AllowedSpawnTiles = new List<TileType> { TileType.ShallowWater, TileType.DeepWater },
             PreferredBiomes = new List<BiomeType> { BiomeType.Ocean, BiomeType.Coast, BiomeType.River },
@@ -781,12 +790,24 @@ public static class SpeciesRegistry
                 { TileType.ShallowWater, 1.3f },
                 { TileType.River, 0.6f },
             },
+            // Water carries no intrinsic discomfort for an aquatic species (TerrainProfile.
+            // DiscomfortRate) — only land does, and these values pile onto that. A shark's
+            // preference for the open ocean is a STEERING pull (below), not an intolerance:
+            // expressing it as discomfort is what previously drove sharks out of the shallows
+            // and, once the accumulated debt passed the escape threshold, out of hunting entirely.
             TerrainComfortModifiers = new Dictionary<TileType, float>
             {
-                { TileType.DeepWater, -5f },
-                { TileType.ShallowWater, -2f },
                 { TileType.Grass, 15f },
                 { TileType.Sand, 15f },
+            },
+            // Prefers deep water, patrols the reef, and hunts the shallows freely — the shelf is
+            // where the fish are. River is cramped for a big shark, but not barred.
+            TerrainAversionModifiers = new Dictionary<TileType, float>
+            {
+                { TileType.DeepWater, 0f },
+                { TileType.Reef, 0.1f },
+                { TileType.ShallowWater, 0.3f },
+                { TileType.River, 0.45f },
             },
             AllowedSpawnTiles = new List<TileType> { TileType.DeepWater },
             PreferredBiomes = new List<BiomeType> { BiomeType.Ocean },
@@ -1955,6 +1976,11 @@ public static class SpeciesRegistry
                 { TileType.Sand, 0.7f },
             },
             AllowedSpawnTiles = new List<TileType> { TileType.Ice, TileType.Tundra, TileType.Steppe },
+            // Hunts at sea, breeds ashore. A fed adult that is off this ground gets a roam target
+            // on the nearest patch of it (WanderSystem "seek_breeding_ground"), which is what makes
+            // the colony's cycle — out to the shoals hungry, back onto the ice full — emerge on its
+            // own rather than a penguin breeding wherever it happens to be floating.
+            BreedingTiles = new List<TileType> { TileType.Ice, TileType.Tundra, TileType.Steppe },
             PreferredBiomes = new List<BiomeType> { BiomeType.Arctic },
 
             // Penguins feed FROM the water, not by chasing individual fish across the sea. Active
