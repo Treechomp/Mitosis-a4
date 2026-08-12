@@ -109,6 +109,28 @@ public sealed class CollisionSystem : ISystem
         _tileSize = tileSize; // Convert pixel sizes to tile/world units
     }
 
+    /// <summary>
+    /// How readily an entity is displaced by a collision: inverse of its effective mass, or 0 for
+    /// something rooted in place. Growing creatures use their grown mass, so an elder Shroomer is
+    /// as immovable as its bulk suggests rather than as light as a sprout.
+    /// </summary>
+    private static float PushWeight(EntityManager em, int entity)
+    {
+        // Structures are built into the ground.
+        if (em.HasComponents(entity, ComponentFlags.Nest) || em.HasComponents(entity, ComponentFlags.Crystal))
+            return 0f;
+
+        float mass = 1f;
+        if (em.HasComponents(entity, ComponentFlags.Species))
+        {
+            var def = SpeciesRegistry.GetById(em.Species[entity].SpeciesId);
+            if (def != null) mass = def.BodyMass;
+            if (em.HasComponents(entity, ComponentFlags.Growth))
+                mass *= em.Growths[entity].CurrentScale;
+        }
+        return 1f / MathF.Max(0.05f, mass);
+    }
+
     public void Process(EntityManager em)
     {
         const ComponentFlags required = ComponentFlags.Position | ComponentFlags.Renderable;
@@ -160,12 +182,22 @@ public sealed class CollisionSystem : ISystem
                         float nx = dx / dist;
                         float ny = dy / dist;
 
-                        // Push both entities apart (half the overlap each)
-                        float push = overlap * 0.5f;
-                        pos.X += nx * push;
-                        pos.Y += ny * push;
-                        otherPos.X -= nx * push;
-                        otherPos.Y -= ny * push;
+                        // Split the overlap by INVERSE MASS, so heft decides who gives ground.
+                        // A flat half-and-half meant body mass told the simulation only what a
+                        // corpse was worth to eat: a fox shunted a turtle as easily as the turtle
+                        // shunted the fox, and wolves walked a full-grown Shroomer around while
+                        // hunting it. Structures are immovable outright — a nest is built into the
+                        // ground and should not be shoved across the map by passing traffic.
+                        float wA = PushWeight(em, entity);
+                        float wB = PushWeight(em, other);
+                        float wTotal = wA + wB;
+                        if (wTotal <= 0f)
+                            continue;   // two immovables: neither yields
+
+                        pos.X += nx * overlap * (wA / wTotal);
+                        pos.Y += ny * overlap * (wA / wTotal);
+                        otherPos.X -= nx * overlap * (wB / wTotal);
+                        otherPos.Y -= ny * overlap * (wB / wTotal);
                     }
                 }
             }

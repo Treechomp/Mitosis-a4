@@ -1595,7 +1595,14 @@ public static class SpeciesRegistry
 
             // Fleeing - very fast
             FleeRange = 6f,
-            FleeSpeedMultiplier = 2.6f,
+            // A lizard is a sprinter, not a marathoner: an explosive dash for cover, then
+            // it is spent. The default stamina curve let it hold 2.6x speed for ~200 ticks
+            // (26 tiles), outrunning a fox indefinitely and towing its pursuer clean across
+            // the map — often into water the predator had no business entering.
+            FleeSpeedMultiplier = 2.8f,
+            FleeStaminaDrain = 0.022f,      // ~45 ticks of full sprint
+            FleeStaminaRecovery = 0.004f,
+            FleeTiredSpeedFloor = 0.35f,    // blown, and easily run down
 
             // Fear - skittish
             FearThreshold = 30f,

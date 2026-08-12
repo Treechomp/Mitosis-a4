@@ -678,6 +678,21 @@ a predator in a world containing only small prey still hunts it normally. `Hunge
 reach. Measured on a stacked test (small game deliberately placed nearer than large), bears went
 from 39% to 73% big-game targeting.
 
+**Reef counts as water for anything that cannot swim.** `IsSubmerged` (water **plus Reef**) now
+backs the `AvoidsWater` barrier, the drowning test, the across-water path sampler and habitat
+steering — not just the aquatic checks. Reef sat outside `IsWater`, so to a Sectid it was an
+ordinary walkable tile: no barrier, aversion 0.70, 6/tick discomfort. Swarms strolled onto the reef
+after fish and the discomfort system was never at fault — the tile simply never registered as
+water. It is now impassable (aversion 1.0, 20/tick) for non-swimmers and free for aquatic and
+semi-aquatic species, while ordinary land animals still wade it.
+
+**Collision splits overlap by inverse mass** (`CollisionSystem.PushWeight`), and **structures are
+immovable** (`Nest`/`Crystal` weight 0). A flat half-and-half meant `BodyMass` told the simulation
+only what a corpse was worth to eat: a fox shunted a turtle as easily as the turtle shunted the
+fox, wolves walked a full-grown Shroomer around while hunting it, and nests were pushed across the
+map by passing traffic. Growing creatures use their *grown* mass, so an elder Shroomer is as hard
+to move as its bulk implies.
+
 **Combat reach is surface-to-surface** (`Utils/BodyMetrics`): the attack test adds both bodies'
 radii to `AttackRange`. CollisionSystem holds two creatures apart by the sum of their radii, so
 testing raw centre distance made any sufficiently bulky target *literally unhittable* — a

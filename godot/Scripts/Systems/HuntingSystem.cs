@@ -1867,7 +1867,7 @@ public sealed class HuntingSystem : ISystem
     // Fish) that must stay in water — anything NOT water blocks it. Otherwise: deep water only for
     // waders (land predators), any water for non-swimmers (insects passing deepOnly = false).
     private static bool IsBlockingTerrain(TileType tile, bool avoidLand, bool deepOnly)
-        => avoidLand ? !tile.IsWater() : (deepOnly ? tile.IsDeepWater() : tile.IsWater());
+        => avoidLand ? !tile.IsSubmerged() : (deepOnly ? tile.IsDeepWater() : tile.IsSubmerged());
 
     /// <summary>
     /// Steer a hunting predator off terrain it can't safely traverse, so pursuit doesn't beach a

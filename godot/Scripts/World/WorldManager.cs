@@ -492,7 +492,9 @@ public sealed class WorldManager
             float sx = x1 + stepX * i;
             float sy = y1 + stepY * i;
             var t = GetTile(sx, sy);
-            if (deepOnly ? t.IsDeepWater() : t.IsWater())
+            // Non-deep sampling is used by species that cannot swim at all, so it counts Reef
+            // (submerged coral) as water too.
+            if (deepOnly ? t.IsDeepWater() : t.IsSubmerged())
                 waterCount++;
         }
 

@@ -174,7 +174,7 @@ public sealed class TerrainDiscomfortSystem : ISystem
                 if (speciesDef.IsAquatic || speciesDef.SemiAquatic)
                     isDrowning = false;
                 else if (speciesDef.AvoidsWater)
-                    isDrowning = inWater;
+                    isDrowning = tile.IsSubmerged();   // includes Reef — see TerrainProfile
                 else
                     isDrowning = tile.IsDeepWater();
                 // Reef counts as submerged: a shark chasing a fish over coral is still in the sea.

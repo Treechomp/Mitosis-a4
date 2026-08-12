@@ -47,7 +47,12 @@ public static class TerrainProfile
     {
         if (s.IsFlying) return false;
         if (s.IsAquatic) return !tile.IsSubmerged();
-        if (s.AvoidsWater) return tile.IsWater();
+        // Submerged, not IsWater: Reef is coral UNDER water, so a creature that cannot swim at all
+        // cannot stand on it either. Reef sat outside IsWater, so it was just another walkable tile
+        // to a Sectid — no barrier, aversion 0.70, a mere 6/tick discomfort — and swarms strolled
+        // onto the reef after fish. The discomfort was never too weak; the tile simply never
+        // registered as water.
+        if (s.AvoidsWater) return tile.IsSubmerged();
         return false;
     }
 

@@ -29,6 +29,9 @@ public sealed class NestSystem : ISystem
     private readonly Random _rng = SimRandom.Create();
     private readonly List<int> _nearbyBuffer = new(64);
 
+    /// <summary>How far a carrier will look for a nest to haul food back to.</summary>
+    private const float NestSearchRadius = 60f;
+
     // Spawn tracking
     private readonly List<(float x, float y, int colonyId)> _pendingSpawns = new(16);
     private readonly List<(float x, float y, int colonyId)> _pendingNests = new(4);
@@ -55,6 +58,9 @@ public sealed class NestSystem : ISystem
         _pendingSpawns.Clear();
         _pendingNests.Clear();
         _ambientTick++;
+
+        // Snapshot the nests once per tick — every carrier's nest lookup reads this list.
+        RefreshNestCache(em);
 
         // Get Sectid species def for nest parameters
         var sectidDef = SpeciesRegistry.Get("Sectid");
@@ -475,23 +481,39 @@ public sealed class NestSystem : ISystem
         return false;
     }
 
+    /// <summary>
+    /// Nests present this tick, refreshed once in Process. There are a handful of them and they are
+    /// created/destroyed rarely, so a linear scan of this list beats what this used to do: a
+    /// 60-TILE-radius spatial query, per carrier, per tick, just to locate one of five nests. At
+    /// cell size 8 that query sweeps ~225 cells and walks every creature in them — and a Sectid
+    /// colony is exactly where creatures are densest. It made NestSystem the third most expensive
+    /// system in the game while doing almost no work.
+    /// </summary>
+    private readonly List<int> _nestCache = new(32);
+
+    private void RefreshNestCache(EntityManager em)
+    {
+        _nestCache.Clear();
+        foreach (int nest in em.Query(ComponentFlags.Nest | ComponentFlags.Position))
+            _nestCache.Add(nest);
+    }
+
     private int FindNearestNest(EntityManager em, float x, float y)
     {
         int best = -1;
-        float bestDistSq = float.MaxValue;
+        float bestDistSq = NestSearchRadius * NestSearchRadius;
 
-        _spatialHash.QueryRadius(x, y, 60f, _nearbyBuffer);
-        foreach (int other in _nearbyBuffer)
+        foreach (int nest in _nestCache)
         {
-            if (!em.IsAlive(other) || !em.HasComponents(other, ComponentFlags.Nest | ComponentFlags.Position))
+            if (!em.IsAlive(nest))
                 continue;
 
-            ref var otherPos = ref em.Positions[other];
-            float distSq = MathUtils.DistanceSquared(x, y, otherPos.X, otherPos.Y);
+            ref var nestPos = ref em.Positions[nest];
+            float distSq = MathUtils.DistanceSquared(x, y, nestPos.X, nestPos.Y);
             if (distSq < bestDistSq)
             {
                 bestDistSq = distSq;
-                best = other;
+                best = nest;
             }
         }
 
