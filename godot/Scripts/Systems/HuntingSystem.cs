@@ -48,6 +48,15 @@ public sealed class HuntingSystem : ISystem
 
     /// <summary>Tiles of closure that count as real progress toward a target (noise floor).</summary>
     private const float HuntApproachMinGain = 0.5f;
+
+    /// <summary>
+    /// Hard ceiling on how long one quarry may be pursued, whatever the progress. The stall clock
+    /// alone can be kept alive indefinitely by a target that keeps drifting into reach and back
+    /// out: a fox pacing a shoreline sets a new closest-approach every time the fish swims to its
+    /// side of the pond, resetting the clock forever. Thirty seconds at 20 TPS — far longer than
+    /// any hunt that was ever going to succeed.
+    /// </summary>
+    private const int HuntMaxPursuitTicks = 600;
     private const float HuntMinProgress = 5f;
     private const int HuntAvoidDuration = 600;
     private const float HuntSelfDamageBailFraction = 0.4f;
@@ -276,6 +285,15 @@ public sealed class HuntingSystem : ISystem
                 bool giveUp = false;
                 bool collectiveFail = false; // whole hunt is stalled (vs. just this one retreating hurt)
                 bool unreachable = false;    // gave up because we could never close the distance
+
+                // Hard pursuit ceiling — see HuntMaxPursuitTicks.
+                predator.PursuitTicks += tickMult;
+                if (predator.PursuitTicks >= HuntMaxPursuitTicks)
+                {
+                    giveUp = true;
+                    collectiveFail = true;
+                    unreachable = true;
+                }
 
                 // Bail immediately if the hunt is costing us too much health (strong/counterattacking prey)
                 if (em.HasComponents(entity, ComponentFlags.Energy) && predator.SelfStartEnergy > 0f
@@ -593,6 +611,14 @@ public sealed class HuntingSystem : ISystem
                 }
             }
 
+            // Prey-size ceiling. Hoisted out of the acquisition block below so hunger TRACKING can
+            // apply the same gate: the two used to disagree, and tracking's laxer rules are what
+            // walked predators up to prey they could never bite. The pack/swarm bonus is folded in
+            // by the acquisition block when it runs; otherwise this stays at the solo bound, which
+            // is the conservative choice for deciding what is worth walking toward.
+            bool isSwarm = speciesDef.IsSwarmHunter;
+            float maxPreyMass = speciesDef.BodyMass * speciesDef.SoloHuntMaxRatio;
+
             // Find target if we don't have one (and not suppressed from recent abandon)
             if (!predator.HasTarget && predator.PhaseTimer <= 0)
             {
@@ -603,7 +629,6 @@ public sealed class HuntingSystem : ISystem
                 // Calculate effective hunting mass (solo or pack)
                 float effectiveMass = speciesDef.BodyMass;
                 float maxHuntRatio = speciesDef.SoloHuntMaxRatio;
-                bool isSwarm = speciesDef.IsSwarmHunter;
                 if (isPack)
                 {
                     // Count nearby pack/swarm members for effective mass
@@ -633,7 +658,7 @@ public sealed class HuntingSystem : ISystem
                     float exponent = speciesDef.PackHuntMassExponent;
                     effectiveMass *= MathF.Pow(packSize, exponent);
                 }
-                float maxPreyMass = effectiveMass * maxHuntRatio;
+                maxPreyMass = effectiveMass * maxHuntRatio;
 
                 float bestScore = float.MaxValue;
                 int bestPrey = -1;
@@ -641,56 +666,13 @@ public sealed class HuntingSystem : ISystem
 
                 foreach (int preyEntity in _nearbyEntities)
                 {
-                    if (!em.IsAlive(preyEntity))
-                        continue;
-
                     // Skip a target we recently gave up on as non-viable
                     if (preyEntity == predator.AvoidTarget)
                         continue;
 
-                    // Swarm hunters can target any living creature (including predators)
-                    // Normal hunters can only target entities with the Prey flag
-                    bool isValidTarget = em.HasComponents(preyEntity, ComponentFlags.Prey);
-                    if (!isValidTarget && isSwarm)
-                        isValidTarget = em.HasComponents(preyEntity, ComponentFlags.Energy | ComponentFlags.Species);
-                    if (!isValidTarget)
+                    if (!IsEligiblePrey(em, entity, preyEntity, speciesDef, maxPreyMass,
+                            hungerRatio, isSwarm))
                         continue;
-
-                    // Size-based eligibility: prey must not be too large
-                    float preyMass = GetPreyBodyMass(preyEntity, em);
-                    if (preyMass > maxPreyMass)
-                        continue;  // Too large to hunt
-
-                    // Skip same-species targets (no cannibalism) and unhuntable species
-                    if (em.HasComponents(preyEntity, ComponentFlags.Species))
-                    {
-                        ref var preySpecies = ref em.Species[preyEntity];
-                        var preyDef = SpeciesRegistry.GetById(preySpecies.SpeciesId);
-
-                        // Don't hunt your own kind
-                        if (em.HasComponents(entity, ComponentFlags.Species))
-                        {
-                            ref var mySpecies = ref em.Species[entity];
-                            if (preySpecies.SpeciesId == mySpecies.SpeciesId)
-                                continue;
-                        }
-
-                        if (preyDef.UnhuntableByPredators
-                            && speciesDef.Diet == DietType.Carnivore)
-                            continue;  // Faelings can't be hunted by carnivores
-
-                        // Specialist diet: a predator with an ExclusivePrey list ignores
-                        // everything not on it (e.g. Penguins only ever hunt Fish).
-                        if (speciesDef.ExclusivePrey != null
-                            && !speciesDef.ExclusivePrey.Contains(preyDef.Name))
-                            continue;
-
-                        // Fallback tier: small fry a well-fed predator won't waste effort on
-                        // (a Shark passes over fish until it is genuinely hungry, so the shoal
-                        // is thinned rather than cropped flat).
-                        if (!speciesDef.WillHunt(preyDef.Name, hungerRatio))
-                            continue;
-                    }
 
                     ref var preyPos = ref em.Positions[preyEntity];
                     float distSq = MathUtils.DistanceSquared(pos.X, pos.Y, preyPos.X, preyPos.Y);
@@ -817,8 +799,16 @@ public sealed class HuntingSystem : ISystem
             }
 
             // Hunger-driven tracking: when hungry and no target, search wide range
-            if (!predator.HasTarget && hungerRatio < speciesDef.TrackingHungerThreshold
-                && em.HasComponents(entity, ComponentFlags.Velocity))
+            bool canTrack = !predator.HasTarget && hungerRatio < speciesDef.TrackingHungerThreshold
+                && em.HasComponents(entity, ComponentFlags.Velocity);
+            if (!canTrack)
+            {
+                // Keep the field truthful: it is read as "what this predator is currently walking
+                // toward", so a value left over from the last time tracking ran is a lie (and one
+                // that reads exactly like the fixation bug when inspecting a creature).
+                predator.TrackedEntity = -1;
+            }
+            if (canTrack)
             {
                 // Wide-range scan for nearest prey (simulates scent/tracking)
                 _nearbyEntities.Clear();
@@ -830,23 +820,13 @@ public sealed class HuntingSystem : ISystem
 
                 foreach (int preyEntity in _nearbyEntities)
                 {
-                    if (!em.IsAlive(preyEntity))
+                    // Only walk toward prey we could actually attack on arrival. Tracking used to
+                    // run its own, much laxer test — see IsEligiblePrey for what that cost.
+                    if (preyEntity == predator.AvoidTarget)
                         continue;
-
-                    // Swarm hunters can track any living creature
-                    bool isTrackable = em.HasComponents(preyEntity, ComponentFlags.Prey);
-                    if (!isTrackable && speciesDef.IsSwarmHunter)
-                        isTrackable = em.HasComponents(preyEntity, ComponentFlags.Energy | ComponentFlags.Species);
-                    if (!isTrackable)
+                    if (!IsEligiblePrey(em, entity, preyEntity, speciesDef, maxPreyMass,
+                            hungerRatio, isSwarm))
                         continue;
-
-                    // Don't track your own species
-                    if (em.HasComponents(entity, ComponentFlags.Species) &&
-                        em.HasComponents(preyEntity, ComponentFlags.Species))
-                    {
-                        if (em.Species[entity].SpeciesId == em.Species[preyEntity].SpeciesId)
-                            continue;
-                    }
 
                     ref var preyPos2 = ref em.Positions[preyEntity];
                     float trackDistSq = MathUtils.DistanceSquared(pos.X, pos.Y, preyPos2.X, preyPos2.Y);
@@ -869,9 +849,56 @@ public sealed class HuntingSystem : ISystem
                     bestTrackTarget = preyEntity;
                 }
 
+                // Tracking stall. Walking toward prey you never get closer to is as fruitless as
+                // an unwinnable chase, and here it is worse: with no target set, none of the
+                // hunt-abandon logic runs, so nothing else can ever break the loop. This is what
+                // keeps a fox from lingering at the shoreline over a fish it can't reach.
+                if (bestTrackTarget >= 0)
+                {
+                    if (bestTrackTarget != predator.TrackedEntity)
+                    {
+                        predator.TrackedEntity = bestTrackTarget;
+                        predator.ApproachTicks = 0;
+                        predator.PursuitTicks = 0;
+                        predator.TargetBestDist = float.MaxValue;
+                    }
+
+                    predator.PursuitTicks += tickMult;
+                    float trackDist = MathF.Sqrt(bestTrackDistSq);
+                    if (trackDist < predator.TargetBestDist - HuntApproachMinGain
+                        && predator.PursuitTicks < HuntMaxPursuitTicks)
+                    {
+                        predator.TargetBestDist = trackDist;
+                        predator.ApproachTicks = 0;
+                    }
+                    else
+                    {
+                        predator.ApproachTicks += tickMult;
+                        if (predator.ApproachTicks >= HuntApproachStallTicks
+                            || predator.PursuitTicks >= HuntMaxPursuitTicks)
+                        {
+                            predator.AvoidTarget = bestTrackTarget;
+                            predator.AvoidTicks = HuntAvoidDuration;
+                            predator.TrackedEntity = -1;
+                            predator.ApproachTicks = 0;
+                            predator.PursuitTicks = 0;
+                            predator.TargetBestDist = float.MaxValue;
+                            if (em.HasComponents(entity, ComponentFlags.Species))
+                                EcosystemLogger.Instance?.LogHuntFail(em.Species[entity].SpeciesId,
+                                    entity, pos.X, pos.Y, "track_unreachable");
+                            bestTrackTarget = -1;
+                        }
+                    }
+                }
+                else
+                {
+                    predator.TrackedEntity = -1;
+                }
+
                 if (bestTrackTarget >= 0)
                 {
                     // Move toward prey at wander speed (tracking, not chasing)
+                    predator.TrackedEntity = bestTrackTarget;
                     ref var vel = ref em.Velocities[entity];
                     ref var trackPreyPos = ref em.Positions[bestTrackTarget];
                     float tdx = trackPreyPos.X - pos.X;
@@ -1646,6 +1673,63 @@ public sealed class HuntingSystem : ISystem
     }
 
     /// <summary>
+    /// Whether this predator could ever attack the given prey at all: the species/diet/mass gates
+    /// that decide eligibility, independent of distance, terrain or scoring.
+    ///
+    /// Shared by BOTH target acquisition and hunger tracking, which is the whole point. They used
+    /// to apply different rules — tracking asked only "is it prey, is it my own species, is there
+    /// water in the way" and ignored the mass ceiling, ExclusivePrey, the fallback tier and the
+    /// give-up blacklist entirely. A Fox (mass gate 2.4) would therefore track a Turtle (mass 6),
+    /// walk the whole way to it, and then be refused by acquisition on arrival — so it pressed
+    /// into the turtle indefinitely with no target set, no attack, and no damage to either side.
+    /// Several solitary foxes each picking the same nearest turtle produced the observed pile-up.
+    /// No target is ever assigned on that path, so none of the abandon logic could rescue it
+    /// either; the only real fix is to never start walking.
+    /// </summary>
+    private bool IsEligiblePrey(EntityManager em, int self, int prey, SpeciesDefinition selfDef,
+        float maxPreyMass, float hungerRatio, bool isSwarm)
+    {
+        if (prey == self || !em.IsAlive(prey))
+            return false;
+
+        // Swarm hunters can target any living creature (including predators); normal hunters
+        // only entities flagged as Prey.
+        bool valid = em.HasComponents(prey, ComponentFlags.Prey);
+        if (!valid && isSwarm)
+            valid = em.HasComponents(prey, ComponentFlags.Energy | ComponentFlags.Species);
+        if (!valid)
+            return false;
+
+        // Size-based eligibility: prey must not be too large.
+        if (GetPreyBodyMass(prey, em) > maxPreyMass)
+            return false;
+
+        if (!em.HasComponents(prey, ComponentFlags.Species))
+            return true;
+
+        ref var preySpecies = ref em.Species[prey];
+        var preyDef = SpeciesRegistry.GetById(preySpecies.SpeciesId);
+
+        // Don't hunt your own kind.
+        if (em.HasComponents(self, ComponentFlags.Species)
+            && em.Species[self].SpeciesId == preySpecies.SpeciesId)
+            return false;
+
+        // Faelings can't be hunted by carnivores.
+        if (preyDef.UnhuntableByPredators && selfDef.Diet == DietType.Carnivore)
+            return false;
+
+        // Specialist diet: a predator with an ExclusivePrey list ignores everything not on it
+        // (e.g. Penguins only ever hunt Fish).
+        if (selfDef.ExclusivePrey != null && !selfDef.ExclusivePrey.Contains(preyDef.Name))
+            return false;
+
+        // Fallback tier: small fry a well-fed predator won't waste effort on (a Shark passes
+        // over fish until it is genuinely hungry, so the shoal is thinned rather than cropped).
+        return selfDef.WillHunt(preyDef.Name, hungerRatio);
+    }
+
+    /// <summary>
     /// Record the baselines used by target-viability re-evaluation when a hunt begins:
     /// the target's current HP (to measure damage progress) and our own HP (to detect when a
     /// counterattacking target is hurting us too much to be worth it).
@@ -1654,7 +1738,9 @@ public sealed class HuntingSystem : ISystem
     {
         predator.HuntTicks = 0;
         predator.ApproachTicks = 0;
+        predator.PursuitTicks = 0;
         predator.TargetBestDist = float.MaxValue;
+        predator.TrackedEntity = -1;
         predator.TargetLastEnergy = em.HasComponents(target, ComponentFlags.Energy)
             ? em.Energies[target].Current : 0f;
         predator.SelfStartEnergy = em.HasComponents(self, ComponentFlags.Energy)

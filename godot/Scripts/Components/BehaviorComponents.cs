@@ -67,6 +67,8 @@ public struct Predator
     public int AvoidTicks;         // Ticks remaining on the avoid suppression
     public int ApproachTicks;      // Ticks since we last got meaningfully closer to the target
     public float TargetBestDist;   // Closest we have come to this target (tiles)
+    public int TrackedEntity;      // Prey being walked toward by hunger tracking (-1 = none)
+    public int PursuitTicks;       // Total ticks spent on the current quarry, progress or not
 
     // === Defensive rally ===
     // Who hit us last and for how long we remember it — drives the "call to action" where a
@@ -98,6 +100,8 @@ public struct Predator
         AvoidTicks = 0;
         ApproachTicks = 0;
         TargetBestDist = float.MaxValue;
+        TrackedEntity = -1;
+        PursuitTicks = 0;
         LastAttacker = -1;
         LastAttackedTicks = 0;
     }

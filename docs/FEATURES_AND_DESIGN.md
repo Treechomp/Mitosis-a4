@@ -349,7 +349,7 @@ There are **29 species**: 5 generalists, 21 biome-specific, and 3 factions.
 | Crocodile | Carnivore | 8.0 | 0.02 / 0.08 | Ambush | Semi-aquatic; water stealth + pounce |
 | Fish | Herbivore | 0.5 | 0.05 / – | – | **Aquatic**; strips water-column fertility (`FeedConsumeRate`) and breeds in proportion to it (`BreedingNutritionSensitivity` 1.0); shoals on shelf/reef; calorie-dense (`NutritionValue` 18) so one is a real meal |
 | Shark | Carnivore | 10.0 | 0.04 / 0.22 | Solo | **Aquatic** apex; very fast + long detection (HuntRange 24); Penguin/Turtle, with Fish only as `FallbackPrey` below 45% hunger; prefers DeepWater by steering, tolerates the shallows |
-| Otter | **Omnivore** | 1.2 | 0.03 / 0.14 | Solo | Semi-aquatic freshwater fish specialist (`ExclusivePrey` = Fish); hunts in river/pond, dens ashore to breed (`BreedingTiles`); **territorial with a wide SocialRadius (18)**, which is what keeps it sparse enough to thin a shoal rather than eat it out; itself prey for wolves/foxes/bears/crocs |
+| Otter | **Omnivore** | 1.2 | 0.03 / 0.14 | Solo | Semi-aquatic freshwater fish specialist (`ExclusivePrey` = Fish); works the **shallows and rivers, not the open deep** — that boundary is what makes deep water a fish refuge; dens ashore to breed (`BreedingTiles`) and flees to water when hunted; **territorial with a wide SocialRadius (18)**, which keeps it sparse enough to thin a shoal rather than eat it out; itself prey for wolves/foxes/bears/crocs |
 | Frog | Herbivore | 0.3 | 0.03 / – | – | Wetland/Bog; panics |
 | Turtle | Herbivore | 6.0 | 0.015 / – | – | Semi-aquatic; very slow; freezes |
 | Elk | Herbivore | 7.0 | 0.025 / – | – | Large grassland herd |
@@ -397,6 +397,8 @@ swarm scales by colony size and can threaten large predators.
 Wolf → Deer, Rabbit      Fox → Rabbit       Crocodile → prey at water's edge
 Shark → Penguin/Turtle (Fish only when hungry)   Bear → Deer/Elk/Boar   Hawk → Rabbit/Frog/Lizard/Fish
 Fresh water: Fish → Otter, Crocodile   (the inland shoal's predators; sharks/penguins are marine only)
+Deep water is a refuge: no land or bank-dwelling hunter follows a fish into it, so a cropped
+shoal always has a reservoir to recover from. Only Sharks, Penguins and Crocodiles reach there.
 Cold web:  Fish → (Penguin) → Arctic Fox / Polar Bear / Shark   (Penguin both eats and is eaten)
 Faeling (ranged) → Sectid, Shroomer
 Shroomer (AoE)   → Sectid, Faeling
@@ -623,6 +625,25 @@ the decrement subtracts `tickMult` (> 1), which previously overshot 0 into a stu
 the `== 0` gate never re-fired and the predator paced its prey forever without hitting (prey
 appeared "invulnerable"). This was the root of the long-standing prolonged-push bug.
 
+**Prey eligibility is one shared test** (`IsEligiblePrey`) used by target acquisition *and* hunger
+tracking. It has to be: they used to disagree. Tracking asked only "is it prey, is it my own
+species, is there water in the way" and ignored the mass ceiling, `ExclusivePrey`, the fallback
+tier and the give-up blacklist — so a Fox (mass gate 2.4) would track a **Turtle** (mass 6), walk
+all the way to it, be refused by acquisition on arrival, and then press into it indefinitely: no
+target set, no attack, no damage either way. Several solitary foxes each picking the same nearest
+turtle produced the observed pile-up. Because no target is ever assigned on that path, none of the
+abandon logic below could rescue it — the only fix is to never start walking.
+
+**Tracking has its own stall check**, mirroring the pursuit one: a tracked animal that stops
+getting closer is blacklisted (`track_unreachable`) instead of being walked at forever.
+
+**Hard pursuit ceiling** (`HuntMaxPursuitTicks`, 600): no single quarry may be pursued longer
+than this, whatever the progress. The stall clock alone can be kept alive indefinitely by prey
+that drifts into reach and back out — a fox pacing a shoreline sets a new closest-approach every
+time the fish swims to its side of the pond. Note this deliberately does **not** stop a land
+predator fishing where it genuinely can: fish that come into wading depth get hunted normally,
+and only the truly unreachable ones hit the ceiling.
+
 **Unreachable prey** (`HuntApproachStallTicks`, 200): a pursuit that never gets closer is
 abandoned and logged as `unreachable`. This is the gap the engagement clock above leaves open —
 it only runs *in* striking distance, so a target the hunter can neither reach nor lose had no
@@ -631,6 +652,13 @@ shoreline indefinitely: never engaged (no progress check), never 3× hunt range 
 check). The hunter tracks its closest approach and gives up if it fails to improve on it by
 `HuntApproachMinGain` (0.5 tiles) within the window. Ambushers are exempt — lying in wait
 without approaching *is* their tactic — as are pack members holding a coordination station.
+
+**Refuge flight** (`FleeingSystem`, `RefugeSearchRadius` 10 / `RefugePull` 0.55): a semi-aquatic
+animal caught ashore biases its flee vector toward the nearest water, which its land-bound
+pursuers won't enter. Blended with the away-from-predator direction, never replacing it, so it
+can't run into the threat. Without it an Otter flees in a straight line across open ground from a
+faster Wolf — a race it always loses, which is why otters vanished from ordinary worlds shortly
+after being introduced.
 
 **Desperation** (`DesperationHunger`, default 0.3 — `FleeingSystem`): below that hunger ratio a
 prey animal's effective flee radius shrinks toward 35% of normal, so it feeds in ground a

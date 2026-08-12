@@ -984,7 +984,7 @@ public static class SpeciesRegistry
             Diet = DietType.Omnivore,      // predator AND prey, like the Penguin
             DefaultSocialType = SocialType.Territorial,   // holds a stretch of bank
             SemiAquatic = true,
-            SpawnWeight = 0.5f,   // sparse: an otter territory is a long stretch of river
+            SpawnWeight = 0.8f,   // thinly spread by territory, but seeded often enough to persist
 
             // Movement - clumsy ashore, superb in the water
             BaseWanderSpeed = 0.03f,
@@ -1006,9 +1006,13 @@ public static class SpeciesRegistry
             TrackingHungerThreshold = 0.4f,
             TrackingRange = 40f,
             ForageHungerThreshold = 0.8f,
+            // Forages the shallows and the river, not the open deep. That boundary matters for
+            // more than flavour: deep water is the one place no land or bank-dwelling predator can
+            // follow a fish, so it becomes the reservoir a cropped shoal recovers from. Without it
+            // a lake has no refuge at all and the otters simply finish the fish off.
             HuntTerrain = new List<TileType>
             {
-                TileType.River, TileType.ShallowWater, TileType.DeepWater, TileType.Reef,
+                TileType.River, TileType.ShallowWater, TileType.Reef,
             },
             ExclusivePrey = new List<string> { "Fish" },
             PreferredPrey = new List<string> { "Fish" },
@@ -1036,9 +1040,13 @@ public static class SpeciesRegistry
             // near-full to breed and waits a long season between litters, so its numbers lag the
             // fish rather than tracking them — a fast-breeding specialist just eats the pond out
             // and then starves with it.
-            ReproHungerThreshold = 88f,
-            ReproEnergyThreshold = 55f,
-            ReproCooldown = 2500,
+            // The wide SocialRadius above is what caps otter density, so the breeding CYCLE can
+            // afford to be quick: it has to be, because an otter is small prey for every land
+            // carnivore in the world and a slow-breeding sparse animal simply gets eaten out of
+            // existence (which is what happened on its first outing).
+            ReproHungerThreshold = 78f,
+            ReproEnergyThreshold = 45f,
+            ReproCooldown = 1500,
             ReproHungerCost = 35f,
             ReproEnergyCost = 20f,
 
@@ -1084,12 +1092,15 @@ public static class SpeciesRegistry
             // hostile, which would walk a riverbank animal away from the only place it can eat.
             TerrainAversionModifiers = new Dictionary<TileType, float>
             {
+                { TileType.River, 0f },
+                { TileType.ShallowWater, 0f },
                 { TileType.Wetland, 0f },
                 { TileType.Bog, 0.05f },
                 { TileType.Forest, 0.15f },
                 { TileType.Grass, 0.25f },
                 { TileType.Taiga, 0.3f },
                 { TileType.Shrubland, 0.4f },
+                { TileType.DeepWater, 0.65f },   // a bank animal, not a diver — see HuntTerrain
                 { TileType.Savanna, 0.7f },
                 { TileType.Steppe, 0.7f },
                 { TileType.Sand, 0.85f },

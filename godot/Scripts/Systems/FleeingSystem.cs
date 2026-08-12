@@ -35,6 +35,12 @@ public sealed class FleeingSystem : ISystem
     /// </summary>
     private const float DesperationFleeRangeCut = 0.65f;
 
+    /// <summary>How far a fleeing semi-aquatic animal will look for water to escape into.</summary>
+    private const float RefugeSearchRadius = 10f;
+
+    /// <summary>How strongly the refuge direction pulls on the flee vector (0 = ignored, 1 = only refuge).</summary>
+    private const float RefugePull = 0.55f;
+
     public FleeingSystem(SpatialHash spatialHash, WorldManager? worldManager = null)
     {
         _spatialHash = spatialHash;
@@ -379,6 +385,39 @@ public sealed class FleeingSystem : ISystem
     }
 
     /// <summary>
+    /// Direction to the nearest water within <see cref="RefugeSearchRadius"/>, or zero if there is
+    /// none in reach. Sampled along the 8 compass rays, nearest hit wins — the same cheap shape
+    /// the wander system uses to find safe substrate.
+    /// </summary>
+    private Godot.Vector2 FindRefugeDirection(float x, float y)
+    {
+        if (_worldManager == null) return Godot.Vector2.Zero;
+
+        float bestDist = float.MaxValue;
+        var best = Godot.Vector2.Zero;
+        for (int i = 0; i < 8; i++)
+        {
+            float angle = i * MathF.PI / 4f;
+            float dx = MathF.Cos(angle);
+            float dy = MathF.Sin(angle);
+            for (float d = 1.5f; d <= RefugeSearchRadius; d += 1.5f)
+            {
+                float sx = x + dx * d;
+                float sy = y + dy * d;
+                if (!_worldManager.IsInBounds(sx, sy)) break;
+                if (!_worldManager.GetTile(sx, sy).IsSubmerged()) continue;
+                if (d < bestDist)
+                {
+                    bestDist = d;
+                    best = new Godot.Vector2(dx, dy);
+                }
+                break;
+            }
+        }
+        return best;
+    }
+
+    /// <summary>
     /// Normal flee response - run away, considering terrain.
     /// </summary>
     private void ApplyFleeResponse(ref Position pos, ref Velocity vel, ref Wander wander,
@@ -398,6 +437,25 @@ public sealed class FleeingSystem : ISystem
             float terrain = speciesDef != null
                 ? TerrainProfile.SteerAversion(speciesDef, t) : t.GetAvoidanceWeight();
             return MathF.Max(edge, terrain);
+        }
+
+        // Refuge: a semi-aquatic animal caught ashore runs for the water, which its land-bound
+        // pursuers won't follow it into. Without this an otter flees in a straight line across
+        // open ground from a faster wolf, which is a losing race every time — the reason otters
+        // vanished from ordinary worlds soon after being introduced. The bias is blended with the
+        // away-from-predator direction rather than replacing it, so it never runs INTO the threat.
+        if (_worldManager != null && speciesDef != null && speciesDef.SemiAquatic
+            && !_worldManager.GetTile(pos.X, pos.Y).IsSubmerged())
+        {
+            var refuge = FindRefugeDirection(pos.X, pos.Y);
+            if (refuge.LengthSquared() > 0.01f)
+            {
+                // Weighted toward the refuge but never against the escape: if the water lies
+                // behind the predator the flee vector still dominates.
+                var blended = fleeDir * (1f - RefugePull) + refuge * RefugePull;
+                if (blended.Dot(fleeDir) > 0f && blended.LengthSquared() > 0.01f)
+                    fleeDir = blended.Normalized();
+            }
         }
 
         float fleeSpeed = wander.Speed * prey.FleeSpeedMultiplier * staminaFactor;
