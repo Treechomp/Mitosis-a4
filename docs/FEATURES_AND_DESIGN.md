@@ -349,6 +349,15 @@ There are **29 species**: 5 generalists, 21 biome-specific, and 3 factions.
 | Crocodile | Carnivore | 8.0 | 0.02 / 0.08 | Ambush | Semi-aquatic; water stealth + pounce |
 | Fish | Herbivore | 0.5 | 0.05 / – | – | **Aquatic**; strips water-column fertility (`FeedConsumeRate`) and breeds in proportion to it (`BreedingNutritionSensitivity` 1.0); shoals on shelf/reef; calorie-dense (`NutritionValue` 18) so one is a real meal |
 | Shark | Carnivore | 10.0 | 0.04 / 0.22 | Solo | **Aquatic** apex; very fast + long detection (HuntRange 24); Penguin/Turtle, with Fish only as `FallbackPrey` below 45% hunger; prefers DeepWater by steering, tolerates the shallows |
+*Thorn defence* (`ThornDamageBase`, `ThornMassReference`) scales with the **attacker's** body
+mass — sqrt(mass/reference), clamped — so a Bear (2.4×) or Jaguar (1.9×) impales itself far worse
+than a Sectid (0.5×). Flat thorns punished exactly the wrong attacker: damage-for-damage they cost
+a swarm most, since many small mouths pay the full toll on every one of their many bites, while a
+wolf pack paid the same 20 for a 50-damage blow. Measured on a mature bloom (scale 2.5): a 4-wolf
+pack now takes 671 ticks and loses 45% of its health instead of 52 ticks at 35%; lone bears,
+jaguars and boar trios break off; an 8-Sectid swarm still kills it in 40 ticks, keeping the
+faction's designated counter-role intact.
+
 | Otter | **Omnivore** | 1.2 | 0.03 / 0.14 | Solo | Semi-aquatic freshwater fish specialist (`ExclusivePrey` = Fish); works the **shallows and rivers, not the open deep** — that boundary is what makes deep water a fish refuge; dens ashore to breed (`BreedingTiles`) and flees to water when hunted; **territorial with a wide SocialRadius (18)**, which keeps it sparse enough to thin a shoal rather than eat it out; itself prey for wolves/foxes/bears/crocs |
 | Frog | Herbivore | 0.3 | 0.03 / – | – | Wetland/Bog; panics |
 | Turtle | Herbivore | 6.0 | 0.015 / – | – | Semi-aquatic; very slow; freezes |
@@ -668,6 +677,22 @@ a predator in a world containing only small prey still hunts it normally. `Hunge
 (0.85) erases most of the preference as hunger rises: a desperate predator takes what it can
 reach. Measured on a stacked test (small game deliberately placed nearer than large), bears went
 from 39% to 73% big-game targeting.
+
+**Combat reach is surface-to-surface** (`Utils/BodyMetrics`): the attack test adds both bodies'
+radii to `AttackRange`. CollisionSystem holds two creatures apart by the sum of their radii, so
+testing raw centre distance made any sufficiently bulky target *literally unhittable* — a
+full-grown Shroomer (radius 1.125) and a Jaguar (0.375) cannot come closer than 1.5 tiles against
+a 1.0 reach. Wolves lost the ability to bite a Shroomer past growth scale 1, Bears and Jaguars
+past scale 2; only Sectids, with a long 1.3 reach on a tiny body, could still touch one. That was
+never a design decision — it silently made Sectids the sole predator of mature blooms, and it is
+what produced the pounce-shove-give-up-return loop.
+
+**The element barrier holds for the whole hunt**, not just at acquisition. Prey moves: a fish
+shoved briefly ashore is a legal Sectid target at that instant, and the moment it slipped back
+into the water the swarm followed it in. A target standing on terrain `TerrainProfile.IsImpassable`
+rejects is dropped (`prey_off_element`), and the **shared pack-target channel applies eligibility
+too** — without that, one member publishing a fish to the group let every Sectid re-adopt it each
+tick, straight back into the water, however many times the individual checks dropped it.
 
 **Prey eligibility is one shared test** (`IsEligiblePrey`) used by target acquisition *and* hunger
 tracking. It has to be: they used to disagree. Tracking asked only "is it prey, is it my own

@@ -3160,7 +3160,7 @@ public static class SpeciesRegistry
             // Scale 1.0: 20 * 0.08 = 1.6 dmg/hit  (barely stings)
             // Scale 2.5: 20 * 0.50 = 10 dmg/hit   (serious deterrent)
             // Scale 4.0: 20 * 1.00 = 20 dmg/hit   (lethal to small attackers)
-            ThornDamageBase = 20f,       // Max thorn damage (scaled by same S-curve)
+            ThornDamageBase = 35f,       // Max thorn damage at reference mass (S-curve + attacker mass scaled)
 
             // Trophic - medium-small fungi (huntable, spores are edible)
             BodyMass = 2.5f,

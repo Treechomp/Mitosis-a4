@@ -102,10 +102,15 @@ public sealed class HuntingSystem : ISystem
     // ordinary neighbourhoods are unaffected; only pathological crowds get clamped.
     private const int MaxHuntCandidates = 48;
 
-    public HuntingSystem(SpatialHash spatialHash, WorldManager? worldManager = null)
+    /// <summary>Pixels per tile, so combat reach can be measured in the same units as collision.</summary>
+    private readonly float _tileSize;
+
+    public HuntingSystem(SpatialHash spatialHash, WorldManager? worldManager = null,
+        float tileSize = BodyMetrics.DefaultTileSize)
     {
         _spatialHash = spatialHash;
         _worldManager = worldManager;
+        _tileSize = tileSize;
     }
 
     public void Process(EntityManager em)
@@ -267,6 +272,34 @@ public sealed class HuntingSystem : ISystem
                     predator.TargetEntity = -1;
                     predator.Phase = PackPhase.Idle;
                     predator.Role = PackRole.None;
+                }
+            }
+
+            // Prey that has moved onto ground we cannot follow it onto. Eligibility is tested when
+            // a target is chosen, but prey MOVES: a fish shoved briefly ashore by the crowd is a
+            // perfectly legal Sectid target at that instant, and the moment it slips back into the
+            // water the swarm follows it in and drowns. The element barrier has to hold for the
+            // whole hunt, not just its first tick.
+            if (predator.HasTarget && em.IsAlive(predator.TargetEntity) && _worldManager != null)
+            {
+                ref var tgtTile = ref em.Positions[predator.TargetEntity];
+                if (TerrainProfile.IsImpassable(speciesDef, _worldManager.GetTile(tgtTile.X, tgtTile.Y)))
+                {
+                    if (em.HasComponents(entity, ComponentFlags.Species))
+                        EcosystemLogger.Instance?.LogHuntFail(em.Species[entity].SpeciesId,
+                            entity, pos.X, pos.Y, "prey_off_element");
+                    int offElementTarget = predator.TargetEntity;
+                    predator.TargetEntity = -1;
+                    predator.Phase = PackPhase.Idle;
+                    predator.Role = PackRole.None;
+                    // Clear the SHARED target too, or the swarm simply re-adopts it next tick.
+                    if (em.HasComponents(entity, ComponentFlags.Social))
+                    {
+                        int gid = em.Socials[entity].GroupId;
+                        if (gid >= 0 && _groupTargets.TryGetValue(gid, out int gt)
+                            && gt == offElementTarget)
+                            _groupTargets.Remove(gid);
+                    }
                 }
             }
 
@@ -475,6 +508,15 @@ public sealed class HuntingSystem : ISystem
             // Hungrier = more desperate = faster hunting (up to 1.5x at starvation)
             float speedMultiplier = 1f + (urgency * 0.5f);
 
+            // Prey-size ceiling. Hoisted out of the acquisition block below so hunger TRACKING can
+            // apply the same gate: the two used to disagree, and tracking's laxer rules are what
+            // walked predators up to prey they could never bite. The pack/swarm bonus is folded in
+            // by the acquisition block when it runs; otherwise this stays at the solo bound, which
+            // is the conservative choice for deciding what is worth walking toward. Declared this early
+            // because the shared pack-target channel below has to apply it too.
+            bool isSwarm = speciesDef.IsSwarmHunter;
+            float maxPreyMass = speciesDef.BodyMass * speciesDef.SoloHuntMaxRatio;
+
             // Check for pack membership and coordination
             // A predator is only "in a pack" if it has SocialType.Pack, a valid group,
             // AND at least one nearby pack member. Otherwise it hunts solo.
@@ -525,8 +567,14 @@ public sealed class HuntingSystem : ISystem
                 // Adopt pack target — any member's chase triggers group hunt
                 // But only if the target is within reasonable range (3× hunt range) and we
                 // haven't personally given up on it as non-viable.
+                // The shared target still has to be one WE could attack. Without this the group
+                // channel bypassed every eligibility rule: one member targeting a fish that was
+                // briefly ashore published it to the whole colony, and every Sectid then re-adopted
+                // it each tick — straight back into the water — however many times the individual
+                // checks dropped it.
                 if (isPack && _groupTargets.TryGetValue(groupId, out int packTarget) && em.IsAlive(packTarget)
-                    && packTarget != predator.AvoidTarget)
+                    && packTarget != predator.AvoidTarget
+                    && IsEligiblePrey(em, entity, packTarget, speciesDef, maxPreyMass, hungerRatio, isSwarm))
                 {
                     if (!predator.HasTarget || predator.TargetEntity != packTarget)
                     {
@@ -630,14 +678,6 @@ public sealed class HuntingSystem : ISystem
                     }
                 }
             }
-
-            // Prey-size ceiling. Hoisted out of the acquisition block below so hunger TRACKING can
-            // apply the same gate: the two used to disagree, and tracking's laxer rules are what
-            // walked predators up to prey they could never bite. The pack/swarm bonus is folded in
-            // by the acquisition block when it runs; otherwise this stays at the solo bound, which
-            // is the conservative choice for deciding what is worth walking toward.
-            bool isSwarm = speciesDef.IsSwarmHunter;
-            float maxPreyMass = speciesDef.BodyMass * speciesDef.SoloHuntMaxRatio;
 
             // Find target if we don't have one (and not suppressed from recent abandon)
             if (!predator.HasTarget && predator.PhaseTimer <= 0)
@@ -1025,8 +1065,15 @@ public sealed class HuntingSystem : ISystem
                     }
                 }
 
-                // Attack if in range
-                float attackRangeSq = predator.AttackRange * predator.AttackRange;
+                // Attack if in range. Reach is measured SURFACE to surface, not centre to centre:
+                // CollisionSystem holds two bodies apart by the sum of their radii, so testing raw
+                // centre distance against AttackRange made any sufficiently bulky target
+                // unhittable. A grown Shroomer and a Jaguar cannot come closer than 1.5 tiles
+                // against a 1.0 reach, so the jaguar pounced, shoved it around, made no progress,
+                // gave up, and came back later — precisely the reported behaviour. See BodyMetrics.
+                float reach = predator.AttackRange
+                            + BodyRadius(em, entity) + BodyRadius(em, predator.TargetEntity);
+                float attackRangeSq = reach * reach;
                 // Pounce attack multiplier: amplified damage during pounce burst
                 float attackMult = (isAmbush && predator.PounceTimer > 0) ? speciesDef.PounceAttackMult : 1f;
 
@@ -1078,7 +1125,15 @@ public sealed class HuntingSystem : ISystem
                             {
                                 ref var growth = ref em.Growths[predator.TargetEntity];
                                 float thornFactor = preyDef.GetGrowthScalingFactor(growth.CurrentScale);
-                                float thornDamage = preyDef.ThornDamageBase * thornFactor;
+                                // Bigger attacker, deeper impalement. Square-rooted so the spread
+                                // stays sane across the roster (Sectid 0.5 → 0.5x, Wolf 3.5 →
+                                // 1.3x, Jaguar 7 → 1.9x, Bear 12 → 2.4x) and clamped at both ends.
+                                float massScale = 1f;
+                                if (preyDef.ThornMassReference > 0f)
+                                    massScale = Math.Clamp(
+                                        MathF.Sqrt(speciesDef.BodyMass / preyDef.ThornMassReference),
+                                        0.4f, 3f);
+                                float thornDamage = preyDef.ThornDamageBase * thornFactor * massScale;
                                 if (em.HasComponents(entity, ComponentFlags.Energy))
                                 {
                                     ref var predEnergy = ref em.Energies[entity];
@@ -1735,6 +1790,19 @@ public sealed class HuntingSystem : ISystem
         if (prey == self || !em.IsAlive(prey))
             return false;
 
+        // Never target something standing in our wrong element. A hard element barrier means the
+        // predator cannot follow at all, so the hunt can only ever end in drowning or a shoving
+        // match — and for a swarm hunter, which may target ANY living creature, nothing else was
+        // stopping it: Sectids (AvoidsWater) were seen diving into water after fish. The
+        // across-water path test elsewhere only rejects a route with enough water ON THE WAY, so
+        // prey sitting just off a shoreline slipped through it.
+        if (_worldManager != null && em.HasComponents(prey, ComponentFlags.Position))
+        {
+            ref var pp = ref em.Positions[prey];
+            if (TerrainProfile.IsImpassable(selfDef, _worldManager.GetTile(pp.X, pp.Y)))
+                return false;
+        }
+
         // Swarm hunters can target any living creature (including predators); normal hunters
         // only entities flagged as Prey.
         bool valid = em.HasComponents(prey, ComponentFlags.Prey);
@@ -1907,6 +1975,14 @@ public sealed class HuntingSystem : ISystem
     /// <summary>
     /// Spores use a small fixed mass. Growing creatures scale mass with CurrentScale.
     /// </summary>
+    /// <summary>
+    /// Physical body radius in tiles, matching what CollisionSystem enforces. Entities without a
+    /// Renderable (never in practice for creatures) count as points.
+    /// </summary>
+    private float BodyRadius(EntityManager em, int entity)
+        => em.HasComponents(entity, ComponentFlags.Renderable)
+            ? BodyMetrics.Radius(em.Renderables[entity].Size, _tileSize) : 0f;
+
     private float GetPreyBodyMass(int preyEntity, EntityManager em)
     {
         if (em.HasComponents(preyEntity, ComponentFlags.Spore))

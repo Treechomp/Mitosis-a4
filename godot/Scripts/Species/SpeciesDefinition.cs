@@ -574,6 +574,18 @@ public sealed class SpeciesDefinition
     /// 0 = no thorn defense.</summary>
     public float ThornDamageBase { get; init; } = 0f;
 
+    /// <summary>
+    /// Attacker body mass at which thorns deal exactly <see cref="ThornDamageBase"/>. Counter-damage
+    /// scales with sqrt(attackerMass / this), clamped, so a big animal driving its whole weight
+    /// onto the spines is hurt far more than something small biting at the edge.
+    ///
+    /// Flat thorns punish exactly the wrong attacker. Damage-for-damage they cost a swarm most —
+    /// many small mouths take the full toll on every one of their many bites — while a wolf pack
+    /// pays the same 20 for a 50-damage blow. That is backwards for a bloom that is supposed to
+    /// shrug off large predators and still be ground down by persistent Sectid swarms.
+    /// </summary>
+    public float ThornMassReference { get; init; } = 2f;
+
     // === GROWTH (Shroomers, Faelings) ===
     /// <summary>Max growth scale multiplier. 0 or negative = no growth component.</summary>
     public float GrowthMaxScale { get; init; } = 0f;
