@@ -42,9 +42,17 @@ public sealed class MovementSystem : ISystem
 
         foreach (int entity in em.Query(required))
         {
-            // LOD gate: skip if not due for update this tick
-            if (!em.DueThisTick[entity])
-                continue;
+            // NOT LOD-gated. Movement is integration, not decision-making, and gating it made the
+            // world run at different SPEEDS in different places: with velocity held constant, a
+            // Low-tier creature covered 13% of the ground a Full-tier one did over the same wall
+            // clock, and a Minimal-tier one 6%. Distant herds crawled, distant hunts stalled, and
+            // how fast the ecosystem advanced depended on where the player happened to stand.
+            //
+            // What LOD should buy is fewer DECISIONS — the expensive part — not less motion. So
+            // every creature integrates its velocity every tick, and the gate below applies only to
+            // the bookkeeping that belongs on the decision cadence (clamp and damping), leaving a
+            // distant creature to coast on its last decision instead of stuttering.
+            bool due = em.DueThisTick[entity];
 
             ref var pos = ref em.Positions[entity];
             ref var vel = ref em.Velocities[entity];
@@ -53,9 +61,10 @@ public sealed class MovementSystem : ISystem
             if (vel.Dx == 0 && vel.Dy == 0)
                 continue;
 
-            // Clamp creature velocity to prevent unbounded accumulation from additive systems
-            // Only applies to creatures (entities with Species) — not the player
-            if (em.HasComponents(entity, ComponentFlags.Species))
+            // Clamp creature velocity to prevent unbounded accumulation from additive systems.
+            // Only applies to creatures (entities with Species) — not the player. Behaviour
+            // systems only write velocity on a due tick, so this only needs checking then.
+            if (due && em.HasComponents(entity, ComponentFlags.Species))
             {
                 const float maxSpeed = 0.25f;
                 float speedSq = vel.Dx * vel.Dx + vel.Dy * vel.Dy;
@@ -67,44 +76,58 @@ public sealed class MovementSystem : ISystem
                 }
             }
 
-            // Get current tile for speed modifier
-            var currentTile = _worldManager.GetTile(pos.X, pos.Y);
-            float speedMult = currentTile.GetSpeedMultiplier();
-
-            // Flying creatures ignore terrain speed penalties
-            bool isFlying = false;
-            if (em.HasComponents(entity, ComponentFlags.Species))
+            // Terrain speed. Resolved only on a DUE tick and cached: the species lookup, the
+            // TerrainProfile probe and the slope elevation sample are the expensive part of moving,
+            // and none of it changes appreciably between one decision and the next. Between due
+            // ticks the entity coasts on the cached value, so its SPEED stays exact while the
+            // lookups stay LOD-gated. (Ungating the lookups too made Movement 37% of the tick.)
+            bool isFlying = em.HasComponents(entity, ComponentFlags.Species)
+                            && SpeciesRegistry.GetById(em.Species[entity].SpeciesId).IsFlying;
+            float speedMult;
+            if (due || vel.CachedSpeedMult <= 0f)
             {
-                var speciesDef = SpeciesRegistry.GetById(em.Species[entity].SpeciesId);
-                if (speciesDef.IsFlying)
-                {
-                    isFlying = true;
-                    speedMult = 1f;
-                }
-                else
-                {
-                    // REPLACE semantics: a species' own speed for this tile overrides the tile's
-                    // intrinsic grip (applies on every tile — sand/snow/grass grip is the fallback
-                    // for tiles the species doesn't list). See TerrainProfile.Speed.
-                    speedMult = TerrainProfile.Speed(speciesDef, currentTile);
+                var currentTile = _worldManager.GetTile(pos.X, pos.Y);
+                speedMult = currentTile.GetSpeedMultiplier();
 
-                    // Wrong element (e.g. an aquatic creature flopping on land, or an insect that
-                    // wandered into water): it can barely move while it suffocates/drowns. Keeps
-                    // beached fish from roaming inland after prey/corpses.
-                    if (TerrainProfile.IsImpassable(speciesDef, currentTile))
-                        speedMult *= 0.05f;
+                // Flying creatures ignore terrain speed penalties
+                if (em.HasComponents(entity, ComponentFlags.Species))
+                {
+                    var speciesDef = SpeciesRegistry.GetById(em.Species[entity].SpeciesId);
+                    if (speciesDef.IsFlying)
+                    {
+                        speedMult = 1f;
+                    }
+                    else
+                    {
+                        // REPLACE semantics: a species' own speed for this tile overrides the tile's
+                        // intrinsic grip (applies on every tile — sand/snow/grass grip is the fallback
+                        // for tiles the species doesn't list). See TerrainProfile.Speed.
+                        speedMult = TerrainProfile.Speed(speciesDef, currentTile);
+
+                        // Wrong element (e.g. an aquatic creature flopping on land, or an insect that
+                        // wandered into water): it can barely move while it suffocates/drowns. Keeps
+                        // beached fish from roaming inland after prey/corpses.
+                        if (TerrainProfile.IsImpassable(speciesDef, currentTile))
+                            speedMult *= 0.05f;
+                    }
                 }
+
+                // Slope resistance: uphill movement is slower (non-flying only)
+                if (!isFlying)
+                {
+                    float currentElev = _worldManager.GetElevation(pos.X, pos.Y);
+                    float destX = Math.Clamp(pos.X + vel.Dx, 0f, _worldSizeTiles - 0.01f);
+                    float destY = Math.Clamp(pos.Y + vel.Dy, 0f, _worldSizeTiles - 0.01f);
+                    float elevRise = _worldManager.GetElevation(destX, destY) - currentElev;
+                    if (elevRise > 0f)
+                        speedMult *= Math.Max(0.25f, 1f - elevRise * 8f);
+                }
+
+                vel.CachedSpeedMult = speedMult;
             }
-
-            // Slope resistance: uphill movement is slower (non-flying only)
-            if (!isFlying)
+            else
             {
-                float currentElev = _worldManager.GetElevation(pos.X, pos.Y);
-                float destX = Math.Clamp(pos.X + vel.Dx, 0f, _worldSizeTiles - 0.01f);
-                float destY = Math.Clamp(pos.Y + vel.Dy, 0f, _worldSizeTiles - 0.01f);
-                float elevRise = _worldManager.GetElevation(destX, destY) - currentElev;
-                if (elevRise > 0f)
-                    speedMult *= Math.Max(0.25f, 1f - elevRise * 8f);
+                speedMult = vel.CachedSpeedMult;
             }
 
             // Calculate movement delta with terrain speed modifier
@@ -186,10 +209,11 @@ public sealed class MovementSystem : ISystem
                 em.ChunkPositions[entity].Update(in pos, _chunkSize);
             }
 
-            // Dampen creature velocity each frame so stale forces decay naturally.
+            // Dampen creature velocity on the DECISION cadence, so stale forces decay naturally
+            // while a distant creature still coasts between decisions rather than stalling.
             // When a behavior system actively sets velocity, it refreshes above this decay.
-            // When no system is commanding movement, velocity fades to zero over ~10 frames.
-            if (em.HasComponents(entity, ComponentFlags.Species))
+            // When no system is commanding movement, velocity fades to zero over ~10 decisions.
+            if (due && em.HasComponents(entity, ComponentFlags.Species))
             {
                 const float damping = 0.85f;
                 vel.Dx *= damping;
@@ -223,7 +247,13 @@ public sealed class MovementSystem : ISystem
 
         // Ground creatures are blocked by cliff faces (steep elevation jumps).
         // Gradual slopes just slow movement via the slope resistance in Process().
-        if (!isFlying)
+        //
+        // Only tested when the step actually leaves the current TILE. A creature moves ~0.05
+        // tiles per tick, so the overwhelming majority of steps stay inside one tile, where
+        // elevation varies smoothly and no cliff can be crossed by definition — cliffs are
+        // boundaries between tiles. Skipping those cases removes two elevation samples from
+        // nearly every move, which is what the movement cost was almost entirely made of.
+        if (!isFlying && ((int)newX != (int)pos.X || (int)newY != (int)pos.Y))
         {
             float srcElev = _worldManager.GetElevation(pos.X, pos.Y);
             float destElev = _worldManager.GetElevation(newX, newY);

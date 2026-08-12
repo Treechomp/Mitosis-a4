@@ -27,10 +27,22 @@ public struct Velocity
     public float Dx;
     public float Dy;
 
+    /// <summary>
+    /// Terrain speed multiplier resolved on this entity's last DUE tick (0 = not yet resolved).
+    ///
+    /// Movement runs every tick for everyone so the world advances at one speed everywhere, but
+    /// resolving terrain per entity per tick is expensive: a species lookup, a TerrainProfile
+    /// dictionary probe and an elevation sample for the slope. None of that changes appreciably
+    /// between one decision and the next, so it is computed on the decision cadence and reused in
+    /// between — the motion stays exact while the lookups stay LOD-gated.
+    /// </summary>
+    public float CachedSpeedMult;
+
     public Velocity(float dx = 0f, float dy = 0f)
     {
         Dx = dx;
         Dy = dy;
+        CachedSpeedMult = 0f;
     }
 }
 

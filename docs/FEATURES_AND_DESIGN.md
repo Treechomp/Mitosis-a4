@@ -428,6 +428,38 @@ Sectid (swarm)   → spores + any living creature
 
 ### 6.1 LOD System — `LODSystem.cs` (not gated)
 
+**LOD gates DECISIONS, not motion.** Movement is deliberately *not* LOD-gated: it is integration,
+and gating it made the world run at different speeds in different places. With velocity held
+constant, a Low-tier creature covered 13% of the ground a Full-tier one did over the same wall
+clock and a Minimal-tier one 6% — distant herds crawled, distant hunts stalled, and how fast the
+ecosystem advanced depended on where the player happened to be standing. Every creature now
+integrates every tick; the gate applies only to the bookkeeping that belongs on the decision
+cadence (velocity clamp and damping), so a distant creature coasts on its last decision instead of
+stuttering.
+
+Motion is kept cheap by two things rather than by skipping it:
+ - the terrain speed multiplier (species lookup + `TerrainProfile` probe + slope elevation sample)
+   is resolved on the entity's due tick and cached in `Velocity.CachedSpeedMult`;
+ - the cliff test only samples elevation when a step actually leaves the current tile — at ~0.05
+   tiles per tick almost every step stays inside one, and cliffs are boundaries *between* tiles.
+
+Net effect measured on 5,000 creatures in a 512-tile world: movement became correct at every tier
+**and** the whole tick got cheaper, 12.5 → 11.4 ms, with Movement itself at 1.5 ms while running
+for every entity every tick.
+
+**Update phases are staggered** (`TicksUntilUpdate = entity % TickInterval` on downgrade; upgrades
+still fire immediately so an entity entering view is responsive at once). Without it the
+population falls into lockstep — everything spawned together shares a phase, and a tier change
+resets the countdown, re-synchronising every entity in a cell as the player moves — so cost
+arrived in waves rather than flat. Measured peak-to-median tick cost fell from 2.30× to 1.53×.
+
+**Known limits.** Tier boundaries are multiples of the camera's visible radius (`fullRange` =
+visible × 1.15, then ×2, ×3, ×5), so in a world only a few visible-radii across the far tiers
+never engage: in a 512-tile world with radius 60, Minimal held 0 entities until movement was
+fixed. Rate compensation is also still uneven — `Carrion`, `Herding`, `Separation`/`Collision` and
+`Wander` are gated but never multiply by `TickInterval`, so quantities they advance per due tick
+(roam cooldowns, corpse decay, separation impulses) still run slower for distant entities.
+
 Runs first each tick. Maps each entity to its spatial-hash cell (cell size ~32) and caches one
 distance-to-player per cell (avoids per-entity `sqrt`), assigns a tier with hysteresis, and
 writes `DueThisTick[]`. Visible radius is derived from camera zoom (floored at 16 tiles).

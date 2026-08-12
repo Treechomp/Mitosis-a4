@@ -132,9 +132,21 @@ public sealed class LODSystem : ISystem
             // leaving TickInterval at 0, which causes divide-by-zero (NaN) downstream.
             if (newLevel != lod.Level || lod.TickInterval <= 0)
             {
+                // Upgrading (moving closer, to a FASTER tier) forces an immediate update so an
+                // entity entering view is responsive at once. Downgrading staggers by entity id
+                // instead of resetting to 0.
+                //
+                // Without the stagger the population falls into lockstep and updates in waves:
+                // everything spawned together shares a phase, and because a tier change resets the
+                // countdown, a cell crossing a boundary re-synchronises every entity in it. The
+                // per-tick cost then swings with the wave rather than sitting flat — measured at
+                // 2.3x median at the peak, which is what a frame-time spike is made of. Spreading
+                // the phase over the interval keeps the same average work per entity while making
+                // the cost per tick nearly constant.
+                bool upgrading = newLevel < lod.Level;
                 lod.Level = newLevel;
                 lod.TickInterval = SimulationLOD.GetTickInterval(newLevel);
-                lod.TicksUntilUpdate = 0;
+                lod.TicksUntilUpdate = upgrading ? 0 : entity % lod.TickInterval;
             }
 
             // Countdown: decrement first, then check if due.
