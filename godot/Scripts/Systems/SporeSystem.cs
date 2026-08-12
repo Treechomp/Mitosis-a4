@@ -28,7 +28,7 @@ public sealed class SporeSystem : ISystem
 {
     private readonly WorldManager _worldManager;
     private readonly SpatialHash _spatialHash;
-    private readonly Random _rng = new();
+    private readonly Random _rng = SimRandom.Create();
 
     private readonly List<(float x, float y, int speciesId)> _pendingSpores = new(16);
     private readonly List<(float x, float y, int speciesId)> _pendingTransforms = new(8);

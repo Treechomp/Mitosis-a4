@@ -25,7 +25,7 @@ public sealed class CrystalSystem : ISystem
 {
     private readonly WorldManager _worldManager;
     private readonly SpatialHash _spatialHash;
-    private readonly Random _rng = new();
+    private readonly Random _rng = SimRandom.Create();
 
     private readonly List<(float x, float y, int crystalEntity, float inheritedPower)> _pendingFaelings = new(4);
     private readonly List<int> _nearbyBuffer = new(32);

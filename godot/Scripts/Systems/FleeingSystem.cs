@@ -19,7 +19,7 @@ public sealed class FleeingSystem : ISystem
 {
     private readonly SpatialHash _spatialHash;
     private readonly WorldManager? _worldManager;
-    private readonly Random _rng = new();
+    private readonly Random _rng = SimRandom.Create();
 
     // Reused buffer for the per-prey nearby-predator spatial query.
     private readonly List<int> _nearbyPredators = new(64);

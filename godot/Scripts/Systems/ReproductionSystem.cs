@@ -18,7 +18,7 @@ public sealed class ReproductionSystem : ISystem
     private readonly World.WorldManager _worldManager;
     private readonly SpatialHash _spatialHash;
     private readonly int _maxPopulation;
-    private readonly Random _rng = new();
+    private readonly Random _rng = SimRandom.Create();
     private readonly List<(float x, float y, SpeciesType speciesType, int speciesId, int groupId)> _toSpawn = new(32);
     private readonly List<int> _nearbyBuffer = new(64);
 

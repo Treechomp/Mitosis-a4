@@ -144,6 +144,14 @@ All are opt-in per scenario and cost nothing in the main game (static toggles, o
 
 `latest_*.csv` copies are always the most recent run, same as the existing logs.
 
+## Reproducibility
+
+Runs are deterministic. Every simulation random stream comes from `Utils/SimRandom`, which
+`GameManager` fixes to the run's seed before the system stack is built, so the same world seed and
+scenario file replay identically. Previously each system time-seeded its own `Random`, which made
+two runs of one scenario incomparable — any difference between them might be the change under test
+or might be the dice. Leave `WorldSeed` at 0 for a fresh nondeterministic run.
+
 ## Shipped scenarios
 
 | File | Exercises |

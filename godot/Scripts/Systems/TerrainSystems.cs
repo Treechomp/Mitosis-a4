@@ -227,7 +227,7 @@ public sealed class TerrainDiscomfortSystem : ISystem
 public sealed class TerraformSystem : ISystem
 {
     private readonly World.WorldManager _worldManager;
-    private readonly Random _rng = new();
+    private readonly Random _rng = SimRandom.Create();
 
     // Moisture nudged per successful terraform event (continuous; classification + colour
     // follow). Roughly one discrete biome step's worth of moisture. Tunable.

@@ -18,7 +18,7 @@ namespace Mitosis.Systems;
 /// </summary>
 public sealed class WanderSystem : ISystem
 {
-    private readonly Random _rng = new();
+    private readonly Random _rng = SimRandom.Create();
     private readonly WorldManager? _worldManager;
     private readonly SpatialHash? _spatialHash;
     private readonly float _lookAheadDistance;
@@ -118,10 +118,54 @@ public sealed class WanderSystem : ISystem
                 && !wanderSpeciesDef.CanBreedOnTile(_worldManager.GetTile(pos.X, pos.Y))
                 && IsBreedingReady(em, entity);
 
-            // Check if we should start roaming
-            if (!wander.IsRoaming && (wander.RoamCooldown <= 0 || onLethalGround || needsBreedingGround))
+            // === Terrain escape state (hysteresis) ===
+            // Decided HERE, before the roaming block, because roaming used to win outright: the
+            // escape check sat after an early `continue`, so a creature that walked into a lake
+            // while roaming never evaluated it at all and just kept swimming toward the target it
+            // had picked on dry land. That is the reported "locked into the direction it already
+            // had" — the escape urge was real, it simply never got a say in where to go.
+            bool needsEscape = false;
+            if (em.HasComponents(entity, ComponentFlags.TerrainDiscomfort))
             {
-                bool shouldRoam = onLethalGround || needsBreedingGround
+                ref var discomfort = ref em.TerrainDiscomforts[entity];
+
+                // Wide gap prevents oscillation at terrain edges. Enter escape late (0.6) so
+                // minor discomfort doesn't trigger; exit early (0.1) so the creature commits to
+                // reaching safe terrain.
+                if (!discomfort.IsEscaping && discomfort.Ratio > 0.6f)
+                {
+                    discomfort.IsEscaping = true;
+                    if (_worldManager != null && EcosystemLogger.DecisionLoggingFor(speciesId))
+                        EcosystemLogger.Instance!.LogDecision(speciesId, entity, pos.X, pos.Y,
+                            "wander", "escape_start", FormattableString.Invariant(
+                                $"tile={_worldManager.GetTile(pos.X, pos.Y)};discomfort={discomfort.Ratio:F2}"));
+                }
+                else if (discomfort.IsEscaping && discomfort.Ratio < 0.1f)
+                {
+                    discomfort.IsEscaping = false;
+                    if (_worldManager != null && EcosystemLogger.DecisionLoggingFor(speciesId))
+                        EcosystemLogger.Instance!.LogDecision(speciesId, entity, pos.X, pos.Y,
+                            "wander", "escape_end", FormattableString.Invariant(
+                                $"tile={_worldManager.GetTile(pos.X, pos.Y)}"));
+                }
+                needsEscape = discomfort.IsEscaping;
+            }
+
+            // Abandon a roam that is carrying us further through the ground we're fleeing. A
+            // target on comfortable ground is kept — that one is already the way out.
+            if (needsEscape && wander.IsRoaming && _worldManager != null && wanderSpeciesDef != null
+                && !IsComfortableGround(wanderSpeciesDef,
+                       _worldManager.GetTile(wander.RoamTargetX, wander.RoamTargetY)))
+            {
+                wander.RoamTargetX = 0f;
+                wander.RoamTargetY = 0f;
+            }
+
+            // Check if we should start roaming
+            if (!wander.IsRoaming
+                && (wander.RoamCooldown <= 0 || onLethalGround || needsBreedingGround || needsEscape))
+            {
+                bool shouldRoam = onLethalGround || needsBreedingGround || needsEscape
                     || ShouldStartRoaming(entity, em, ref pos);
                 if (shouldRoam)
                 {
@@ -136,6 +180,16 @@ public sealed class WanderSystem : ISystem
                                out targetX, out targetY))
                     {
                         roamReason = "escape_substrate";
+                    }
+                    // Get off intolerable ground, heading for the NEAREST comfortable tile rather
+                    // than nudging the current heading a little. The old per-tick steering looked
+                    // only 1.5 tiles ahead, so anything more than a step from shore saw nothing
+                    // but more of the same water and had no gradient to follow at all.
+                    else if (needsEscape && wanderSpeciesDef != null
+                        && TryFindComfortableTarget(pos.X, pos.Y, roamDistance, wanderSpeciesDef,
+                               out targetX, out targetY))
+                    {
+                        roamReason = "escape_terrain";
                     }
                     // Haul out to breed: head for the nearest ground this species can raise young
                     // on. Only reached by a fed, mature adult off its breeding ground, so it never
@@ -254,13 +308,14 @@ public sealed class WanderSystem : ISystem
                     float roamMult = wander.RoamSpeedMultiplier + hungerUrgency * 1.5f;
                     float roamSpeed = wander.Speed * roamMult;
 
-                    // Blend roam direction with terrain avoidance
+                    // Blend roam direction with terrain avoidance — but avoidance may only steer
+                    // the route, never veto the destination.
                     var roamDir = new Vector2(dx / dist, dy / dist);
                     if (_worldManager != null)
                     {
                         var avoidance = GetTerrainAvoidance(pos.X, pos.Y, roamDir, wanderSpeciesDef);
                         if (avoidance.LengthSquared() > 0.01f)
-                            roamDir = (roamDir + avoidance * 2f).Normalized();
+                            roamDir = SteerWithoutReversing(roamDir, avoidance);
                     }
 
                     wander.CurrentDirection = roamDir;
@@ -271,45 +326,20 @@ public sealed class WanderSystem : ISystem
 
             // === Normal wander logic ===
 
-            // Check if entity has high discomfort - prioritize escaping
-            // Uses hysteresis: enter escape at ratio > 0.5, exit at ratio < 0.2
-            bool needsEscape = false;
-            if (em.HasComponents(entity, ComponentFlags.TerrainDiscomfort))
+            // Escaping without a roam target (nothing comfortable within roam range): steer by the
+            // local gradient instead. The blend weight is CLAMPED — it used to be the raw
+            // discomfort ratio, which the 300% cap lets reach 3.0, giving the current heading a
+            // weight of (1 - 3) = -2 and flipping it backwards instead of turning away from it.
+            if (needsEscape)
             {
-                ref var discomfort = ref em.TerrainDiscomforts[entity];
-
-                // Hysteresis: wide gap prevents oscillation at terrain edges.
-                // Enter escape late (0.6) so minor discomfort doesn't trigger;
-                // exit early (0.1) so entity commits to reaching safe terrain.
-                if (!discomfort.IsEscaping && discomfort.Ratio > 0.6f)
+                var escapeDir = FindEscapeDirection(pos.X, pos.Y, wanderSpeciesDef);
+                if (escapeDir.LengthSquared() > 0.01f)
                 {
-                    discomfort.IsEscaping = true;
-                    if (_worldManager != null && EcosystemLogger.DecisionLoggingFor(speciesId))
-                        EcosystemLogger.Instance!.LogDecision(speciesId, entity, pos.X, pos.Y,
-                            "wander", "escape_start", FormattableString.Invariant(
-                                $"tile={_worldManager.GetTile(pos.X, pos.Y)};discomfort={discomfort.Ratio:F2}"));
-                }
-                else if (discomfort.IsEscaping && discomfort.Ratio < 0.1f)
-                {
-                    discomfort.IsEscaping = false;
-                    if (_worldManager != null && EcosystemLogger.DecisionLoggingFor(speciesId))
-                        EcosystemLogger.Instance!.LogDecision(speciesId, entity, pos.X, pos.Y,
-                            "wander", "escape_end", FormattableString.Invariant(
-                                $"tile={_worldManager.GetTile(pos.X, pos.Y)}"));
-                }
-
-                if (discomfort.IsEscaping)
-                {
-                    needsEscape = true;
-                    // Find direction to escape (toward lowest avoidance terrain)
-                    var escapeDir = FindEscapeDirection(pos.X, pos.Y, wanderSpeciesDef);
-                    if (escapeDir.LengthSquared() > 0.01f)
-                    {
-                        // Blend escape direction strongly with current direction
-                        float escapeUrgency = discomfort.Ratio;  // 0.2 to 1+
-                        wander.CurrentDirection = (wander.CurrentDirection * (1 - escapeUrgency) +
-                                                   escapeDir * escapeUrgency).Normalized();
-                    }
+                    float escapeUrgency = Math.Clamp(
+                        em.HasComponents(entity, ComponentFlags.TerrainDiscomfort)
+                            ? em.TerrainDiscomforts[entity].Ratio : 1f, 0f, 1f);
+                    wander.CurrentDirection = (wander.CurrentDirection * (1 - escapeUrgency) +
+                                               escapeDir * escapeUrgency).Normalized();
                 }
             }
 
@@ -689,34 +719,145 @@ public sealed class WanderSystem : ISystem
         return 0f;
     }
 
+    /// <summary>Distance a creature scans along each compass ray when looking for a way out.</summary>
+    private const float EscapeScanDistance = 24f;
+
     /// <summary>
-    /// Find the best direction to escape uncomfortable terrain.
+    /// Apply a terrain-avoidance nudge to a direction the creature has already committed to,
+    /// without ever turning it back on itself.
+    ///
+    /// The plain blend (<c>(dir + avoidance * 2).Normalized()</c>) reverses whenever the ground
+    /// ahead scores above 0.5, because the push-back term then outweighs the direction itself.
+    /// In UNIFORM bad ground that is every tick and in every direction: a creature crossing a lake
+    /// (shallow water aversion 0.75) had its heading flipped on the spot, tick after tick, so it
+    /// oscillated in place a few tiles from where it started while its roam target sat on the
+    /// shore it had correctly chosen. Avoidance is for routing around an obstacle; when there is
+    /// no way around, the answer is to keep going, not to turn back.
+    ///
+    /// The forward component is preserved and only the sideways part of the nudge is applied.
     /// </summary>
-    private Vector2 FindEscapeDirection(float x, float y, SpeciesDefinition? sp)
+    private static Vector2 SteerWithoutReversing(Vector2 desired, Vector2 avoidance)
     {
-        if (_worldManager == null)
-            return Vector2.Zero;
+        var blended = desired + avoidance * 2f;
+        if (blended.LengthSquared() < 0.0001f)
+            return desired;
 
-        float bestAvoidance = float.MaxValue;
-        Vector2 bestDir = Vector2.Zero;
+        var candidate = blended.Normalized();
+        if (candidate.Dot(desired) > 0.1f)
+            return candidate;
 
-        // Sample 8 directions
+        // The nudge would reverse (or stall) us: strip its backward component and keep the
+        // sideways steer, so we skirt the obstacle instead of bouncing off it.
+        var sideways = avoidance - desired * avoidance.Dot(desired);
+        if (sideways.LengthSquared() < 0.0001f)
+            return desired;
+        return (desired + sideways.Normalized() * 0.6f).Normalized();
+    }
+
+    /// <summary>
+    /// True when standing on this tile costs the species nothing — the definition of "far enough
+    /// out of the water", and the target an escaping creature is actually looking for.
+    /// </summary>
+    private static bool IsComfortableGround(SpeciesDefinition sp, TileType tile)
+        => TerrainProfile.DiscomfortRate(sp, tile) <= 0f;
+
+    /// <summary>
+    /// Nearest genuinely comfortable ground, searched along the 8 compass rays out to roam range.
+    /// Same shape as TryFindSafeSubstrateTarget: closest hit wins and the target sits a little
+    /// past the boundary so the creature settles inside the safe ground rather than on its rim.
+    /// </summary>
+    private bool TryFindComfortableTarget(float x, float y, float roamDistance,
+        SpeciesDefinition def, out float targetX, out float targetY)
+    {
+        targetX = x;
+        targetY = y;
+        if (_worldManager == null) return false;
+
+        float range = MathF.Max(roamDistance, EscapeScanDistance);
+        float step = MathF.Max(1f, range / 24f);
+        float bestDist = float.MaxValue;
+
         for (int i = 0; i < 8; i++)
         {
             float angle = i * MathF.PI / 4f;
             float dx = MathF.Cos(angle);
             float dy = MathF.Sin(angle);
 
-            float testX = x + dx * _lookAheadDistance;
-            float testY = y + dy * _lookAheadDistance;
-            // Aquatic creatures escape toward water; everyone else toward calmer land. Never off
-            // the map: outside the border reads as DeepWater, which an escaping fish would happily
-            // pick as the calmest direction available.
-            float avoidance = AversionAt(sp, testX, testY);
-
-            if (avoidance < bestAvoidance)
+            for (float d = step; d <= range; d += step)
             {
-                bestAvoidance = avoidance;
+                float sx = x + dx * d;
+                float sy = y + dy * d;
+                if (!_worldManager.IsInBounds(sx, sy)) break;
+                if (!IsComfortableGround(def, _worldManager.GetTile(sx, sy))) continue;
+                if (d < bestDist)
+                {
+                    bestDist = d;
+                    targetX = x + dx * (d + 3f);
+                    targetY = y + dy * (d + 3f);
+                }
+                break; // nearest safe sample along this ray is all that matters
+            }
+        }
+
+        return bestDist < float.MaxValue;
+    }
+
+    /// <summary>
+    /// Fallback escape heading when nothing comfortable is in range: the ray whose terrain
+    /// improves soonest, else the least-bad one overall.
+    ///
+    /// This used to sample a single point 1.5 tiles along each ray, which fails in exactly the
+    /// case it exists for — a creature more than a step into open water sees nothing but water in
+    /// all eight directions. Worse, the ties were broken by iteration order (strictly-less-than
+    /// against a running best), so every animal in the middle of a lake picked due EAST. Now each
+    /// ray is walked outward, and the scan starts at a random compass point so genuine ties
+    /// scatter instead of pointing the whole map the same way.
+    /// </summary>
+    private Vector2 FindEscapeDirection(float x, float y, SpeciesDefinition? sp)
+    {
+        if (_worldManager == null)
+            return Vector2.Zero;
+
+        float bestScore = float.MaxValue;
+        Vector2 bestDir = Vector2.Zero;
+        int startRay = _rng.Next(8);
+
+        for (int k = 0; k < 8; k++)
+        {
+            int i = (k + startRay) % 8;
+            float angle = i * MathF.PI / 4f;
+            float dx = MathF.Cos(angle);
+            float dy = MathF.Sin(angle);
+
+            // Walk outward: score by how far we must travel before the ground improves, so the
+            // shortest way out wins. Rays that never improve are ranked behind every ray that
+            // does, by their average unpleasantness.
+            float firstImprovement = float.MaxValue;
+            float sum = 0f;
+            int samples = 0;
+            float here = AversionAt(sp, x, y);
+
+            for (float d = _lookAheadDistance; d <= EscapeScanDistance; d += _lookAheadDistance)
+            {
+                float testX = x + dx * d;
+                float testY = y + dy * d;
+                float avoidance = AversionAt(sp, testX, testY);
+                sum += avoidance;
+                samples++;
+                if (avoidance < here - 0.05f)
+                {
+                    firstImprovement = d;
+                    break;
+                }
+            }
+
+            float score = firstImprovement < float.MaxValue
+                ? firstImprovement
+                : EscapeScanDistance + (samples > 0 ? sum / samples : 1f) * EscapeScanDistance;
+
+            if (score < bestScore)
+            {
+                bestScore = score;
                 bestDir = new Vector2(dx, dy);
             }
         }

@@ -630,6 +630,29 @@ the decrement subtracts `tickMult` (> 1), which previously overshot 0 into a stu
 the `== 0` gate never re-fired and the predator paced its prey forever without hitting (prey
 appeared "invulnerable"). This was the root of the long-standing prolonged-push bug.
 
+**Escaping bad terrain is a ROAM, not a nudge.** When discomfort crosses the escape threshold the
+creature takes a roam target on the nearest tile that costs it nothing (`TryFindComfortableTarget`,
+8 rays out to roam range) and commits to walking there, logged as `escape_terrain`. Three separate
+faults used to leave a land animal circling in open water:
+
+1. **Roaming was evaluated first and won outright.** The escape check sat after the roaming
+   block's early `continue`, so a creature that walked into a lake mid-roam never evaluated escape
+   at all — it kept swimming toward the target it had picked on dry land. An in-flight roam whose
+   target is not comfortable ground is now abandoned when escape begins.
+2. **The escape scan looked 1.5 tiles ahead.** More than a step from shore, all eight rays sampled
+   water and tied; the tie was broken by iteration order, so every animal in a lake picked due
+   **east**. The fallback scan now walks each ray outward (`EscapeScanDistance` 24) scoring by how
+   soon the ground improves, and starts at a random compass point so genuine ties scatter.
+3. **Terrain avoidance reversed the roam.** `(dir + avoidance × 2)` flips whenever the ground ahead
+   scores above 0.5 — which in uniform bad ground is every tick, in every direction. A creature
+   crossing shallow water (aversion 0.75) had its heading inverted on the spot each tick and
+   oscillated a few tiles from where it started, target still correctly on the shore.
+   `SteerWithoutReversing` keeps the forward component and applies only the sideways part: avoidance
+   routes around an obstacle, and when there is no way around, the answer is to keep going.
+
+The blend weight for the fallback heading is also clamped to [0,1] — it was the raw discomfort
+ratio, which the 300% cap lets reach 3.0, giving the current heading a weight of −2.
+
 **Prey payoff** (`GoodMealFraction` 0.25, `MinMealFraction` 0.05): a hunt costs about the same
 effort whatever it catches, so what separates good prey from bad is how much of the predator it
 actually feeds. Scoring used to be pure distance, which is why an apex predator spent its life

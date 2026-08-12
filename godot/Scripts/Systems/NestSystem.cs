@@ -26,7 +26,7 @@ public sealed class NestSystem : ISystem
 {
     private readonly WorldManager _worldManager;
     private readonly SpatialHash _spatialHash;
-    private readonly Random _rng = new();
+    private readonly Random _rng = SimRandom.Create();
     private readonly List<int> _nearbyBuffer = new(64);
 
     // Spawn tracking

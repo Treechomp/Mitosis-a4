@@ -9,6 +9,7 @@ using Mitosis.Systems;
 using Mitosis.SpeciesData;
 using Mitosis.World;
 using static Mitosis.ECS.EntityManager;
+using Mitosis.Utils;
 
 namespace Mitosis;
 
@@ -93,7 +94,8 @@ public partial class GameManager : Node3D
     protected EntityManager _entityManager = null!;
     protected WorldManager  _worldManager  = null!;
     protected readonly List<ISystem> _systems = new();
-    protected readonly Random _rng = new();
+    // Assigned in _Ready once the run's seed is known — a field initializer would run before it.
+    protected Random _rng = new();
     protected LODSystem?       _lodSystem;
     protected NestSystem?      _nestSystem;
     protected CrystalSystem?   _crystalSystem;
@@ -166,6 +168,14 @@ public partial class GameManager : Node3D
         // structures/spores/Faelings). Centralised here so future death causes need no extra wiring.
         _entityManager.OnEntityDying = id => CarrionSystem.SpawnCorpse(_entityManager, id);
         int seed = WorldSeed != 0 ? WorldSeed : (int)(DateTime.UtcNow.Ticks & 0x7FFFFFFF);
+
+        // Fix every simulation random stream to this run's seed, BEFORE anything that draws from
+        // one is constructed. Without it each system time-seeded itself and the same world seed
+        // replayed differently every time — which makes a seed meaningless to the player and makes
+        // two runs of the same test scenario incomparable (any difference might be the change
+        // under test or might be the dice). An explicit WorldSeed now reproduces a run exactly.
+        SimRandom.SetSeed(WorldSeed != 0 ? seed : 0);
+        _rng = SimRandom.Create();
         var terrainSettings = new TerrainSettings
         {
             ElevationFrequency = ElevationFrequency,
