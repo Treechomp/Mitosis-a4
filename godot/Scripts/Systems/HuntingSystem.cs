@@ -50,6 +50,26 @@ public sealed class HuntingSystem : ISystem
     private const float HuntApproachMinGain = 0.5f;
 
     /// <summary>
+    /// What fraction of a predator's stomach counts as a proper meal. Prey worth this much or more
+    /// scores at full value; anything less is discounted in proportion to how far short it falls.
+    /// </summary>
+    private const float GoodMealFraction = 0.25f;
+
+    /// <summary>
+    /// Floor on the meal fraction, i.e. the largest payoff penalty any prey can carry (1/0.05 =
+    /// 20x). Keeps a crumb from being scored as literally worthless, which would make a starving
+    /// specialist ignore the only food in reach.
+    /// </summary>
+    private const float MinMealFraction = 0.05f;
+
+    /// <summary>
+    /// How much of the payoff preference hunger erases. At 0.85 a starving predator is nearly
+    /// indifferent to size and simply takes what it can reach, while a merely peckish one still
+    /// holds out for something worth the chase.
+    /// </summary>
+    private const float HungerFlattensPayoff = 0.85f;
+
+    /// <summary>
     /// Hard ceiling on how long one quarry may be pursued, whatever the progress. The stall clock
     /// alone can be kept alive indefinitely by a target that keeps drifting into reach and back
     /// out: a fox pacing a shoreline sets a new closest-approach every time the fish swims to its
@@ -707,6 +727,29 @@ public sealed class HuntingSystem : ISystem
                             // Urgency reduces penalty (desperate hunters tolerate more)
                             score += comfortPenalty * 20f * (1f - urgency * 0.5f);
                         }
+                    }
+
+                    // Payoff: a hunt costs roughly the same effort whatever it catches, so what
+                    // separates good prey from bad is how much of the predator it actually feeds.
+                    // Scoring was pure distance, which is why an apex predator spent its life
+                    // running down whatever happened to be nearest — a Bear chasing lizards while
+                    // elk grazed past it. Now a low-value target must be proportionally CLOSER to
+                    // win: for a Bear a lizard is ~5% of a meal and carries a 20x distance
+                    // penalty, so it only gets taken when practically underfoot.
+                    //
+                    // This is a preference, not a gate — nothing is ever excluded for being small,
+                    // so a specialist whose whole diet is small game (Hawk, Penguin, Otter) never
+                    // starves on principle. Hunger flattens it further: a desperate predator takes
+                    // what it can reach.
+                    if (em.HasComponents(preyEntity, ComponentFlags.Species))
+                    {
+                        var valueDef = SpeciesRegistry.GetById(em.Species[preyEntity].SpeciesId);
+                        float mealFraction = Math.Clamp(
+                            valueDef.EffectiveNutrition / (speciesDef.MaxHunger * GoodMealFraction),
+                            MinMealFraction, 1f);
+                        float payoffPenalty = 1f / mealFraction;
+                        float selectivity = 1f - urgency * HungerFlattensPayoff;
+                        score *= 1f + (payoffPenalty - 1f) * selectivity;
                     }
 
                     // Concealment: camouflaged prey are harder to detect (Rabbit in forest,

@@ -396,6 +396,11 @@ swarm scales by colony size and can threaten large predators.
 ```
 Wolf → Deer, Rabbit      Fox → Rabbit       Crocodile → prey at water's edge
 Shark → Penguin/Turtle (Fish only when hungry)   Bear → Deer/Elk/Boar   Hawk → Rabbit/Frog/Lizard/Fish
+
+What a predator *can* take is bounded by mass (`BodyMass × SoloHuntMaxRatio`, times a pack bonus);
+what it *prefers* is set by the payoff term in §6.7. The two together are what makes the trophic
+layers hold: a solitary Fox (gate 2.0) simply cannot take a Deer (4.0), while a Bear (gate 18)
+can take anything but will pass over a lizard for an elk several times further away.
 Fresh water: Fish → Otter, Crocodile   (the inland shoal's predators; sharks/penguins are marine only)
 Deep water is a refuge: no land or bank-dwelling hunter follows a fish into it, so a cropped
 shoal always has a reservoir to recover from. Only Sharks, Penguins and Crocodiles reach there.
@@ -624,6 +629,22 @@ The gate is `CurrentCooldown <= 0` and the per-tick decrement is clamped at 0 �
 the decrement subtracts `tickMult` (> 1), which previously overshot 0 into a stuck negative so
 the `== 0` gate never re-fired and the predator paced its prey forever without hitting (prey
 appeared "invulnerable"). This was the root of the long-standing prolonged-push bug.
+
+**Prey payoff** (`GoodMealFraction` 0.25, `MinMealFraction` 0.05): a hunt costs about the same
+effort whatever it catches, so what separates good prey from bad is how much of the predator it
+actually feeds. Scoring used to be pure distance, which is why an apex predator spent its life
+running down whatever happened to be nearest — a Bear chasing lizards while elk grazed past. Each
+candidate's score is now multiplied by `1 / (nutrition / (MaxHunger × 0.25))`, clamped to 20×, so
+a low-value target must be proportionally *closer* to win. For a Bear a lizard is ~5% of a meal
+and must be inside ~23% of an elk's distance to be chosen; for a Hawk the same lizard is ~11% of
+a meal and the threshold is ~34%. The effect therefore grades with predator size on its own.
+
+Crucially this is a **preference, not a gate** — nothing is ever excluded for being small, so a
+specialist whose entire diet is small game (Hawk, Penguin, Otter) never starves on principle, and
+a predator in a world containing only small prey still hunts it normally. `HungerFlattensPayoff`
+(0.85) erases most of the preference as hunger rises: a desperate predator takes what it can
+reach. Measured on a stacked test (small game deliberately placed nearer than large), bears went
+from 39% to 73% big-game targeting.
 
 **Prey eligibility is one shared test** (`IsEligiblePrey`) used by target acquisition *and* hunger
 tracking. It has to be: they used to disagree. Tracking asked only "is it prey, is it my own
