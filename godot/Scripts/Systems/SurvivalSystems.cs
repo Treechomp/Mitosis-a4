@@ -41,7 +41,7 @@ public sealed class HungerSystem : ISystem
 
             // LOD tick multiplier: compensate for skipped ticks so rates stay correct
             int tickMult = em.HasComponents(entity, ComponentFlags.SimulationLOD)
-                ? em.SimulationLODs[entity].TickInterval : 1;
+                ? em.SimulationLODs[entity].EffectiveInterval : 1;
 
             ref var hunger = ref em.Hungers[entity];
 
@@ -150,7 +150,7 @@ public sealed class AgingSystem : ISystem
 
             // LOD tick multiplier: age at correct rate regardless of update frequency
             int tickMult = em.HasComponents(entity, ComponentFlags.SimulationLOD)
-                ? em.SimulationLODs[entity].TickInterval : 1;
+                ? em.SimulationLODs[entity].EffectiveInterval : 1;
 
             ref var age = ref em.Ages[entity];
             age.Current += tickMult;
@@ -226,7 +226,7 @@ public sealed class GrazingSystem : ISystem
 
             // LOD tick multiplier: consume/gain food at correct rate
             int tickMult = em.HasComponents(entity, ComponentFlags.SimulationLOD)
-                ? em.SimulationLODs[entity].TickInterval : 1;
+                ? em.SimulationLODs[entity].EffectiveInterval : 1;
 
             ref var species = ref em.Species[entity];
             ref var pos = ref em.Positions[entity];

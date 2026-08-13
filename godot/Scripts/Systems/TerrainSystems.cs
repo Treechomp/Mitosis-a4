@@ -70,7 +70,7 @@ public sealed class TerrainDiscomfortSystem : ISystem
             // of LOD, or a beached aquatic at a coarse tier barely takes damage and roams the land
             // near-immortally instead of suffocating.
             int tickMult = em.HasComponents(entity, ComponentFlags.SimulationLOD)
-                ? em.SimulationLODs[entity].TickInterval : 1;
+                ? em.SimulationLODs[entity].EffectiveInterval : 1;
 
             ref var pos = ref em.Positions[entity];
             ref var discomfort = ref em.TerrainDiscomforts[entity];
@@ -259,7 +259,7 @@ public sealed class TerraformSystem : ISystem
 
             // LOD tick multiplier: terraform cooldowns count down at correct rate
             int tickMult = em.HasComponents(entity, ComponentFlags.SimulationLOD)
-                ? em.SimulationLODs[entity].TickInterval : 1;
+                ? em.SimulationLODs[entity].EffectiveInterval : 1;
 
             ref var terraform = ref em.Terraforms[entity];
 

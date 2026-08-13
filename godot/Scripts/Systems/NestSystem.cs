@@ -299,7 +299,7 @@ public sealed class NestSystem : ISystem
                 continue;
 
             int tickMult = em.HasComponents(entity, ComponentFlags.SimulationLOD)
-                ? em.SimulationLODs[entity].TickInterval : 1;
+                ? em.SimulationLODs[entity].EffectiveInterval : 1;
 
             ref var carrier = ref em.FoodCarriers[entity];
             ref var pos = ref em.Positions[entity];

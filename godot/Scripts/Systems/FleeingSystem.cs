@@ -165,7 +165,7 @@ public sealed class FleeingSystem : ISystem
 
             // Flee stamina: drains while fleeing, recovers at rest (LOD-scaled).
             int tickMult = em.HasComponents(entity, ComponentFlags.SimulationLOD)
-                ? em.SimulationLODs[entity].TickInterval : 1;
+                ? em.SimulationLODs[entity].EffectiveInterval : 1;
             float staminaDrain = speciesDef?.FleeStaminaDrain ?? 0.005f;
             float staminaRecover = speciesDef?.FleeStaminaRecovery ?? 0.0025f;
             float tiredFloor = speciesDef?.FleeTiredSpeedFloor ?? 0.5f;

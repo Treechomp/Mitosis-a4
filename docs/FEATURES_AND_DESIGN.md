@@ -453,12 +453,29 @@ population falls into lockstep — everything spawned together shares a phase, a
 resets the countdown, re-synchronising every entity in a cell as the player moves — so cost
 arrived in waves rather than flat. Measured peak-to-median tick cost fell from 2.30× to 1.53×.
 
+**The gate and the multiplier are one thing.** A system that multiplies a rate by the LOD interval
+*must* also skip non-due ticks — compensation pays back ticks that were actually skipped, so
+applying it every tick is not compensation but multiplication. Shroomer growth did exactly that
+and grew 10× faster at Low tier, 20× at Minimal. If you add `EffectiveInterval` to a loop, add
+`if (!em.DueThisTick[entity]) continue;` in the same edit.
+
+**Compensate by `EffectiveInterval`, not `TickInterval`.** `TickInterval` is only the nominal
+interval of the *current* tier; when an entity changes tier the countdown is reset, so the real gap
+is whatever the old tier and the reset left behind. `LODSystem` publishes the ticks that actually
+elapsed since the last due tick, which is what a rate must be multiplied by — otherwise every
+boundary the player walks past over- or under-counts the entity's hunger, ageing and growth.
+
 **Known limits.** Tier boundaries are multiples of the camera's visible radius (`fullRange` =
 visible × 1.15, then ×2, ×3, ×5), so in a world only a few visible-radii across the far tiers
 never engage: in a 512-tile world with radius 60, Minimal held 0 entities until movement was
 fixed. Rate compensation is also still uneven — `Carrion`, `Herding`, `Separation`/`Collision` and
-`Wander` are gated but never multiply by `TickInterval`, so quantities they advance per due tick
-(roam cooldowns, corpse decay, separation impulses) still run slower for distant entities.
+`Wander` are gated but never multiply at all, so quantities they advance per due tick (roam
+cooldowns, corpse decay, separation impulses) still run slower for distant entities.
+
+**Population cap vs. entity count.** `MaxPopulation` limits `CreatureCount` (= `EntityCount` −
+`CarrionCount`); corpses deliberately do not consume the population budget. The debug overlay
+reports both separately — it used to print raw `EntityCount`, so a world sitting exactly on its
+ceiling displayed ~12% over it and read as a runaway.
 
 Runs first each tick. Maps each entity to its spatial-hash cell (cell size ~32) and caches one
 distance-to-player per cell (avoids per-entity `sqrt`), assigns a tier with hysteresis, and

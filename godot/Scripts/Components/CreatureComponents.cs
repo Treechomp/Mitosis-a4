@@ -172,12 +172,26 @@ public struct SimulationLOD
     public int TickInterval;      // Cached interval for this LOD level (avoids switch per system)
     public float DistanceToPlayer;
 
+    /// <summary>Ticks elapsed since this entity was last due (maintained by LODSystem).</summary>
+    public int TicksSinceUpdate;
+
+    /// <summary>
+    /// Ticks that ACTUALLY elapsed since the previous due tick — what a rate-compensating system
+    /// must multiply by. Distinct from <see cref="TickInterval"/>, which is only the nominal
+    /// interval of the current tier: when an entity changes tier the countdown is reset, so the
+    /// real gap is whatever the old tier and the reset left behind. Multiplying by the nominal
+    /// interval then over- or under-counts every time the player moves past a boundary.
+    /// </summary>
+    public int EffectiveInterval;
+
     public SimulationLOD(LODLevel level = LODLevel.Full)
     {
         Level = level;
         TicksUntilUpdate = 0;
         TickInterval = GetTickInterval(level);
         DistanceToPlayer = 0f;
+        TicksSinceUpdate = 0;
+        EffectiveInterval = 1;
     }
 
     /// <summary>

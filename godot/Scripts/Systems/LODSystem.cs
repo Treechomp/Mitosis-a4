@@ -154,11 +154,19 @@ public sealed class LODSystem : ISystem
             // the decrement brings it to -1, which triggers the reset-and-due branch.
             // This guarantees "force immediate" actually fires for ALL tick intervals,
             // not just interval=1.
+            // A default-constructed SimulationLOD zero-inits this; multiplying a rate by 0
+            // would silently freeze the entity's hunger, ageing and growth.
+            if (lod.EffectiveInterval <= 0) lod.EffectiveInterval = 1;
+
+            lod.TicksSinceUpdate++;
             lod.TicksUntilUpdate--;
             if (lod.TicksUntilUpdate <= 0)
             {
                 dueArray[entity] = true;
                 lod.TicksUntilUpdate = lod.TickInterval;
+                // Publish the REAL gap, not the nominal one — see SimulationLOD.EffectiveInterval.
+                lod.EffectiveInterval = Math.Max(1, lod.TicksSinceUpdate);
+                lod.TicksSinceUpdate = 0;
             }
             else
             {

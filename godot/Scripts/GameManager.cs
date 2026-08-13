@@ -601,7 +601,14 @@ public partial class GameManager : Node3D
         if (_debugLabel != null)
         {
             _debugLabel.Text =
-                $"FPS: {_fps}  |  TPS: {TargetTPS}  |  Entities: {_entityManager.EntityCount}\n" +
+                // Show what the cap ACTUALLY limits. This read EntityCount, which includes
+                // corpses, while MaxPopulation limits CreatureCount, which excludes them — so a
+                // world sitting exactly on its ceiling displayed ~12% over it and looked like a
+                // runaway. Corpses are now reported separately instead of being folded into the
+                // number the cap is compared against.
+                $"FPS: {_fps}  |  TPS: {TargetTPS}  |  " +
+                $"Creatures: {_entityManager.CreatureCount}/{MaxPopulation}" +
+                $"  (+{_entityManager.CarrionCount} carrion)\n" +
                 $"LOD: Full={_lodSystem?.CountFull ?? 0}  " +
                 $"High={_lodSystem?.CountHigh ?? 0}  " +
                 $"Med={_lodSystem?.CountMedium ?? 0}  " +

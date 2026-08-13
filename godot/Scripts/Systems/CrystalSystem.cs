@@ -259,7 +259,7 @@ public sealed class CrystalSystem : ISystem
 
             // LOD tick multiplier: attack cooldown counts down at correct rate
             int tickMult = em.HasComponents(entity, ComponentFlags.SimulationLOD)
-                ? em.SimulationLODs[entity].TickInterval : 1;
+                ? em.SimulationLODs[entity].EffectiveInterval : 1;
 
             ref var ranged = ref em.RangedAttacks[entity];
             ref var pos = ref em.Positions[entity];

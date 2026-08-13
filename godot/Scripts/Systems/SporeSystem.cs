@@ -62,7 +62,7 @@ public sealed class SporeSystem : ISystem
 
             // LOD tick multiplier: moisture/wither accumulate at correct rate
             int tickMult = em.HasComponents(entity, ComponentFlags.SimulationLOD)
-                ? em.SimulationLODs[entity].TickInterval : 1;
+                ? em.SimulationLODs[entity].EffectiveInterval : 1;
 
             ref var spore = ref em.Spores[entity];
             ref var pos = ref em.Positions[entity];
@@ -116,7 +116,7 @@ public sealed class SporeSystem : ISystem
 
             // LOD tick multiplier: roll spread chance multiple times to compensate
             int tickMult = em.HasComponents(entity, ComponentFlags.SimulationLOD)
-                ? em.SimulationLODs[entity].TickInterval : 1;
+                ? em.SimulationLODs[entity].EffectiveInterval : 1;
 
             var shroomDef = SpeciesRegistry.GetById(species.SpeciesId);
             ref var pos = ref em.Positions[entity];
@@ -213,12 +213,20 @@ public sealed class SporeSystem : ISystem
         const ComponentFlags growthRequired = ComponentFlags.Growth | ComponentFlags.Renderable;
         foreach (int entity in em.Query(growthRequired))
         {
+            // LOD gate. This loop applied the LOD multiplier WITHOUT skipping ticks, which is not
+            // compensation — it is multiplication: a Shroomer at Low tier grew 10x as fast as one
+            // beside the player, and at Minimal 20x. Compensation is only correct when it pays back
+            // ticks that were actually skipped, so the gate and the multiplier must always appear
+            // together.
+            if (!em.DueThisTick[entity])
+                continue;
+
             ref var growth = ref em.Growths[entity];
             if (growth.CurrentScale >= growth.MaxScale) continue;
 
             // LOD tick multiplier: growth rate compensated for skipped ticks
             int growthTickMult = em.HasComponents(entity, ComponentFlags.SimulationLOD)
-                ? em.SimulationLODs[entity].TickInterval : 1;
+                ? em.SimulationLODs[entity].EffectiveInterval : 1;
 
             float prevScale = growth.CurrentScale;
             growth.CurrentScale = MathF.Min(growth.MaxScale, growth.CurrentScale + growth.GrowthRate * growthTickMult);
@@ -414,7 +422,7 @@ public sealed class SporeSystem : ISystem
             // === ELDER AREA DENIAL ===
             // Tick the rage/recharge clocks first so they run even when no pulse fires this tick.
             int rageTickMult = em.HasComponents(entity, ComponentFlags.SimulationLOD)
-                ? em.SimulationLODs[entity].TickInterval : 1;
+                ? em.SimulationLODs[entity].EffectiveInterval : 1;
             if (growth.EnrageTicks > 0) growth.EnrageTicks -= rageTickMult;
             else if (growth.EnrageCooldown > 0) growth.EnrageCooldown -= rageTickMult;
 
