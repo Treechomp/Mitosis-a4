@@ -252,7 +252,7 @@ public static class TileTypeExtensions
             TileType.Bog => 0.55f,           // Squishy waterlogged ground
             TileType.Tundra => 0.5f,         // Frozen ground, very slow
             TileType.Ice => 0.45f,           // Slippery ice, very slow
-            TileType.Reef => 0.35f,          // Shallow rocky water
+            TileType.Reef => 0.4f,           // Coral shelf: shallow water (see GetClutter)
             TileType.River => 0.35f,
             TileType.ShallowWater => 0.4f,
             TileType.DeepWater => 0.25f,
@@ -327,6 +327,26 @@ public static class TileTypeExtensions
     }
 
     /// <summary>
+    /// How obstructed a tile is for a large body [0..1]: 0 = open going, 1 = a maze of gaps that
+    /// only small animals fit through. Unlike GetSpeedMultiplier — which is the same for every
+    /// species — clutter is resolved against body size in TerrainProfile.Speed.
+    ///
+    /// Reef is the case this exists for. Its flat 0.35 speed slowed a minnow and a shark by the
+    /// identical amount, which is backwards: coral is open water threaded with gaps, so small fish
+    /// forage through it freely while a shark has to pick its way. Making the penalty size-aware
+    /// turns the reef into what it should be — a nursery and feeding ground for small species, and
+    /// partial (never total) refuge from the big ones, which can still hunt there, just poorly.
+    /// </summary>
+    public static float GetClutter(this TileType tile)
+    {
+        return tile switch
+        {
+            TileType.Reef => 1.0f,            // Coral thickets: the archetypal cluttered tile
+            _ => 0f
+        };
+    }
+
+    /// <summary>
     /// Get the stealth cover bonus for this tile (used by ambush hunters).
     /// Higher = better concealment.
     /// </summary>
@@ -337,6 +357,7 @@ public static class TileTypeExtensions
             TileType.Jungle => 0.4f,          // Dense vegetation, excellent cover
             TileType.Forest => 0.2f,          // Good cover
             TileType.Taiga => 0.2f,           // Cold forest, same cover as forest
+            TileType.Reef => 0.25f,           // Coral heads break sightlines underwater
             TileType.Wetland => 0.15f,        // Some cover
             TileType.Bog => 0.15f,            // Reeds and muck
             TileType.Shrubland => 0.1f,       // Sparse bushes

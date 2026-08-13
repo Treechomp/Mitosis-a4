@@ -70,7 +70,18 @@ public sealed class WanderSystem : ISystem
             float roamDistance = wanderSpeciesDef?.RoamDistance ?? 60f;
             int roamCooldownBase = wanderSpeciesDef?.RoamCooldown ?? 500;
             float bodyMass = wanderSpeciesDef?.BodyMass ?? 1f;
-            float turnRate = Math.Clamp(TurnRateScale / bodyMass, TurnRateMin, TurnRateMax);
+
+            // Turn rate is a PER-TICK approach rate, but this system only runs on the entity's
+            // decision cadence, so a distant creature was getting one 6%-of-the-way turn where a
+            // nearby one got twenty. Compensating restores the same total turn per unit of world
+            // time at every LOD tier — see DecisionCadence.
+            int decisionInterval = DecisionCadence.Interval(em, entity);
+            float turnRate = DecisionCadence.BlendRate(
+                Math.Clamp(TurnRateScale / bodyMass, TurnRateMin, TurnRateMax), decisionInterval);
+
+            // Terrain sampling reaches as far as this creature will actually travel before it
+            // decides again, so it never coasts past ground it "checked".
+            float lookAhead = DecisionCadence.Horizon(em, entity, _lookAheadDistance);
 
             // Skip if fleeing
             if (em.HasComponents(entity, ComponentFlags.Prey) && em.Preys[entity].IsFleeing)
@@ -313,7 +324,7 @@ public sealed class WanderSystem : ISystem
                     var roamDir = new Vector2(dx / dist, dy / dist);
                     if (_worldManager != null)
                     {
-                        var avoidance = GetTerrainAvoidance(pos.X, pos.Y, roamDir, wanderSpeciesDef);
+                        var avoidance = GetTerrainAvoidance(pos.X, pos.Y, roamDir, wanderSpeciesDef, lookAhead);
                         if (avoidance.LengthSquared() > 0.01f)
                             roamDir = SteerWithoutReversing(roamDir, avoidance);
                     }
@@ -332,7 +343,7 @@ public sealed class WanderSystem : ISystem
             // weight of (1 - 3) = -2 and flipping it backwards instead of turning away from it.
             if (needsEscape)
             {
-                var escapeDir = FindEscapeDirection(pos.X, pos.Y, wanderSpeciesDef);
+                var escapeDir = FindEscapeDirection(pos.X, pos.Y, wanderSpeciesDef, lookAhead);
                 if (escapeDir.LengthSquared() > 0.01f)
                 {
                     float escapeUrgency = Math.Clamp(
@@ -346,7 +357,7 @@ public sealed class WanderSystem : ISystem
             // Terrain avoidance (proactive - avoid entering bad terrain)
             if (_worldManager != null && !needsEscape)
             {
-                var avoidance = GetTerrainAvoidance(pos.X, pos.Y, wander.CurrentDirection, wanderSpeciesDef);
+                var avoidance = GetTerrainAvoidance(pos.X, pos.Y, wander.CurrentDirection, wanderSpeciesDef, lookAhead);
                 if (avoidance.LengthSquared() > 0.01f)
                 {
                     wander.CurrentDirection = (wander.CurrentDirection + avoidance * 2f).Normalized();
@@ -362,9 +373,8 @@ public sealed class WanderSystem : ISystem
                 // If we have world manager, prefer safe directions
                 if (_worldManager != null)
                 {
-                    float aheadX = pos.X + newDir.X * _lookAheadDistance;
-                    float aheadY = pos.Y + newDir.Y * _lookAheadDistance;
-                    float aheadAversion = AversionAt(wanderSpeciesDef, aheadX, aheadY);
+                    float aheadAversion = WorstAversionAlong(wanderSpeciesDef, pos.X, pos.Y,
+                                                             newDir.X, newDir.Y, lookAhead);
 
                     // If new direction leads to bad terrain, try to pick a safer one
                     if (aheadAversion > 0.3f)
@@ -375,9 +385,8 @@ public sealed class WanderSystem : ISystem
                         for (int i = 0; i < 4; i++)
                         {
                             var testDir = MathUtils.RandomDirection(_rng);
-                            float testX = pos.X + testDir.X * _lookAheadDistance;
-                            float testY = pos.Y + testDir.Y * _lookAheadDistance;
-                            float avoidWeight = AversionAt(wanderSpeciesDef, testX, testY);
+                            float avoidWeight = WorstAversionAlong(wanderSpeciesDef, pos.X, pos.Y,
+                                                                  testDir.X, testDir.Y, lookAhead);
 
                             if (avoidWeight < bestAvoidance)
                             {
@@ -813,7 +822,7 @@ public sealed class WanderSystem : ISystem
     /// ray is walked outward, and the scan starts at a random compass point so genuine ties
     /// scatter instead of pointing the whole map the same way.
     /// </summary>
-    private Vector2 FindEscapeDirection(float x, float y, SpeciesDefinition? sp)
+    private Vector2 FindEscapeDirection(float x, float y, SpeciesDefinition? sp, float lookAhead)
     {
         if (_worldManager == null)
             return Vector2.Zero;
@@ -837,7 +846,12 @@ public sealed class WanderSystem : ISystem
             int samples = 0;
             float here = AversionAt(sp, x, y);
 
-            for (float d = _lookAheadDistance; d <= EscapeScanDistance; d += _lookAheadDistance)
+            // Stepped at the BASE look-ahead, not the LOD-scaled one: this ray is measuring how
+            // far the bad ground extends, so its resolution must stay fine even when a distant
+            // creature is planning ten tiles out. Only the first sample is pushed outward, so a
+            // fast creature doesn't rate a way out it will have overshot before it can take it.
+            for (float d = MathF.Max(_lookAheadDistance, lookAhead * 0.5f);
+                 d <= EscapeScanDistance; d += _lookAheadDistance)
             {
                 float testX = x + dx * d;
                 float testY = y + dy * d;
@@ -868,7 +882,8 @@ public sealed class WanderSystem : ISystem
     /// <summary>
     /// Calculate avoidance vector based on nearby terrain.
     /// </summary>
-    private Vector2 GetTerrainAvoidance(float x, float y, Vector2 currentDir, SpeciesDefinition? sp)
+    private Vector2 GetTerrainAvoidance(float x, float y, Vector2 currentDir, SpeciesDefinition? sp,
+                                        float lookAhead)
     {
         if (_worldManager == null)
             return Vector2.Zero;
@@ -876,11 +891,10 @@ public sealed class WanderSystem : ISystem
         float avoidX = 0f;
         float avoidY = 0f;
 
-        // Sample tiles in the direction of movement
-        float aheadX = x + currentDir.X * _lookAheadDistance;
-        float aheadY = y + currentDir.Y * _lookAheadDistance;
-
-        float aheadAvoidance = AversionAt(sp, aheadX, aheadY);
+        // Sample the whole path we're about to cover, not one point at a fixed distance: the
+        // question is "does anything bad lie between here and my next decision", and a single
+        // distant probe steps clean over a shoreline it should have refused.
+        float aheadAvoidance = WorstAversionAlong(sp, x, y, currentDir.X, currentDir.Y, lookAhead);
 
         if (aheadAvoidance > 0.2f)
         {
@@ -893,13 +907,8 @@ public sealed class WanderSystem : ISystem
         float perpX = -currentDir.Y;
         float perpY = currentDir.X;
 
-        float leftX = x + perpX * _lookAheadDistance;
-        float leftY = y + perpY * _lookAheadDistance;
-        float rightX = x - perpX * _lookAheadDistance;
-        float rightY = y - perpY * _lookAheadDistance;
-
-        float leftAvoidance = AversionAt(sp, leftX, leftY);
-        float rightAvoidance = AversionAt(sp, rightX, rightY);
+        float leftAvoidance = WorstAversionAlong(sp, x, y, perpX, perpY, lookAhead);
+        float rightAvoidance = WorstAversionAlong(sp, x, y, -perpX, -perpY, lookAhead);
 
         // Steer toward better side
         if (leftAvoidance < rightAvoidance)
@@ -936,6 +945,31 @@ public sealed class WanderSystem : ISystem
         float edge = _worldManager.EdgeAversion(x, y);
         if (edge >= 1f) return 1f;
         return MathF.Max(edge, Aversion(sp, _worldManager.GetTile(x, y)));
+    }
+
+    /// <summary>
+    /// Worst ground anywhere along the next `lookAhead` tiles of travel in a direction — a swept
+    /// test rather than a point probe.
+    ///
+    /// The distinction only matters once a creature moves further between decisions than it looks
+    /// ahead, which is exactly what LOD tiers create: a Minimal-tier shark covers ~5.7 tiles per
+    /// decision, so probing a single point 5.7 tiles out reports whatever happens to be there and
+    /// says nothing about the beach at 3. Stepping the ray at the base look-ahead keeps the
+    /// resolution a nearby creature has, and the sample count scales with the interval — so the
+    /// cost per unit of world time is unchanged, just spent in fewer, larger decisions.
+    /// </summary>
+    private float WorstAversionAlong(SpeciesDefinition? sp, float x, float y,
+                                     float dirX, float dirY, float lookAhead)
+    {
+        float worst = 0f;
+        for (float d = _lookAheadDistance; ; d += _lookAheadDistance)
+        {
+            if (d > lookAhead) d = lookAhead;
+            float a = AversionAt(sp, x + dirX * d, y + dirY * d);
+            if (a > worst) worst = a;
+            if (worst >= 1f || d >= lookAhead) break;
+        }
+        return worst;
     }
 
     // Siege standoff in tiles: just outside a full-grown Shroomer's max AoE reach (14), so a

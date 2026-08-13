@@ -81,8 +81,9 @@ public sealed class MovementSystem : ISystem
             // and none of it changes appreciably between one decision and the next. Between due
             // ticks the entity coasts on the cached value, so its SPEED stays exact while the
             // lookups stay LOD-gated. (Ungating the lookups too made Movement 37% of the tick.)
-            bool isFlying = em.HasComponents(entity, ComponentFlags.Species)
-                            && SpeciesRegistry.GetById(em.Species[entity].SpeciesId).IsFlying;
+            SpeciesDefinition? def = em.HasComponents(entity, ComponentFlags.Species)
+                ? SpeciesRegistry.GetById(em.Species[entity].SpeciesId) : null;
+            bool isFlying = def?.IsFlying ?? false;
             float speedMult;
             if (due || vel.CachedSpeedMult <= 0f)
             {
@@ -90,9 +91,9 @@ public sealed class MovementSystem : ISystem
                 speedMult = currentTile.GetSpeedMultiplier();
 
                 // Flying creatures ignore terrain speed penalties
-                if (em.HasComponents(entity, ComponentFlags.Species))
+                if (def != null)
                 {
-                    var speciesDef = SpeciesRegistry.GetById(em.Species[entity].SpeciesId);
+                    var speciesDef = def;
                     if (speciesDef.IsFlying)
                     {
                         speedMult = 1f;
@@ -165,7 +166,46 @@ public sealed class MovementSystem : ISystem
                 }
             }
 
+            // Element barrier. Steering keeps a creature in its element by preference; this keeps
+            // it there by inertia. The two are not the same thing once LOD thins decisions: a
+            // Minimal-tier shark commits to a heading for twenty ticks, and if that heading was
+            // chosen a hair before a sandbar came into reach, no amount of look-ahead helps —
+            // it is already travelling and has nothing left to decide with until it is ashore.
+            // Measured on a 40-shark coastline, extended look-ahead and LOD-compensated turning
+            // together cut suffocations from 29 to 15; only refusing the step removes them.
+            //
+            // Reflected rather than blocked, exactly as with the world edge, so the animal turns
+            // back to sea instead of grinding along the shore. Only a crossing OUT of the element
+            // is refused — a creature already stranded is free to move, which is how it flops
+            // back to water (or fails to, and dies there, which is still a thing that happens).
+            if (def != null && !isFlying && (def.IsAquatic || def.AvoidsWater)
+                && ((int)(pos.X + dx) != (int)pos.X || (int)(pos.Y + dy) != (int)pos.Y)
+                && !TerrainProfile.IsImpassable(def, _worldManager.GetTile(pos.X, pos.Y)))
+            {
+                if ((int)(pos.X + dx) != (int)pos.X
+                    && TerrainProfile.IsImpassable(def, _worldManager.GetTile(pos.X + dx, pos.Y)))
+                {
+                    dx = -dx;
+                    vel.Dx = -vel.Dx;
+                }
+                if ((int)(pos.Y + dy) != (int)pos.Y
+                    && TerrainProfile.IsImpassable(def, _worldManager.GetTile(pos.X, pos.Y + dy)))
+                {
+                    dy = -dy;
+                    vel.Dy = -vel.Dy;
+                }
+                // Diagonal corner: each axis is clear on its own but the combined step cuts the
+                // corner onto the wrong element. Turn back along both.
+                if (TerrainProfile.IsImpassable(def, _worldManager.GetTile(pos.X + dx, pos.Y + dy)))
+                {
+                    dx = -dx; dy = -dy;
+                    vel.Dx = -vel.Dx; vel.Dy = -vel.Dy;
+                }
+            }
+
             // Try to move
+            int prevTileX = (int)pos.X;
+            int prevTileY = (int)pos.Y;
             bool moved = TryMove(ref pos, dx, dy, isFlying);
 
             // If blocked and moving diagonally, try sliding along cliff edges
@@ -202,6 +242,18 @@ public sealed class MovementSystem : ISystem
                     }
                 }
             }
+
+            // Crossing into a new tile invalidates the cached terrain speed, so the next tick
+            // re-resolves it instead of coasting on the old tile's grip.
+            //
+            // This is what let a beached shark keep sliding: the wrong-element x0.05 penalty is
+            // part of the cached value, so an aquatic that washed ashore between decisions kept
+            // its full swimming speed for the rest of the interval and drove itself further up
+            // the beach — up to twenty ticks of open-water speed spent travelling inland. Two int
+            // casts, no world lookup; the re-resolve itself only happens on an actual crossing,
+            // which at ~0.05 tiles/tick is roughly once every twenty ticks anyway.
+            if ((int)pos.X != prevTileX || (int)pos.Y != prevTileY)
+                vel.CachedSpeedMult = 0f;
 
             // Update chunk position if entity has it
             if (em.HasComponents(entity, ComponentFlags.ChunkPosition))

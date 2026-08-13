@@ -1,4 +1,5 @@
 using System;
+using Mitosis.Utils;
 using Mitosis.World;
 
 namespace Mitosis.SpeciesData;
@@ -29,13 +30,67 @@ public static class TerrainProfile
     private const float WrongElementDiscomfort = 20f;
 
     /// <summary>
+    /// Body radius (tiles) that still slips through clutter untouched, and the radius at which
+    /// clutter bites in full. Sized off the actual roster: the small water species — Fish and Frog
+    /// at render size 4 — sit at or below the free radius, Penguin and Snake (6) barely feel it,
+    /// Otter (7) and Turtle (8) pay a modest toll, and Shark and Crocodile (14) are at the choke.
+    /// </summary>
+    private const float ClutterFreeRadius = 0.16f;
+    private const float ClutterChokeRadius = 0.44f;
+
+    /// <summary>
+    /// Speed a fully choked body keeps on fully cluttered ground. Deliberately not crippling: a
+    /// shark in a reef should be a worse hunter than a shark in open water, not a helpless one —
+    /// it still closes on prey there, just slowly enough that the reef is worth fleeing into.
+    /// </summary>
+    private const float ClutterMinSpeed = 0.55f;
+
+    /// <summary>
     /// Movement speed multiplier on a tile. REPLACE semantics: a species' own value for the tile
     /// overrides the tile's intrinsic grip; otherwise the tile base applies. Lets a specialist be
     /// fast where others crawl (or especially slow if badly suited to the terrain).
+    ///
+    /// On top of that, cluttered ground (GetClutter — currently Reef) is resolved against body
+    /// size, so the obstruction scales with what has to fit through it.
     /// </summary>
     public static float Speed(SpeciesDefinition s, TileType tile)
-        => s.TerrainSpeedModifiers != null && s.TerrainSpeedModifiers.TryGetValue(tile, out float m)
-            ? m : tile.GetSpeedMultiplier();
+    {
+        float speed = BaseSpeed(s, tile);
+
+        float clutter = tile.GetClutter();
+        if (clutter <= 0f || s.IsFlying)
+            return speed;
+
+        float radius = BodyMetrics.Radius(s.BaseSize);
+        float choke = Math.Clamp(
+            (radius - ClutterFreeRadius) / (ClutterChokeRadius - ClutterFreeRadius), 0f, 1f);
+        return speed * (1f - clutter * choke * (1f - ClutterMinSpeed));
+    }
+
+    /// <summary>
+    /// Tile speed before clutter. Species table first, then one substitution: Reef falls back to
+    /// the species' ShallowWater speed rather than the tile baseline.
+    ///
+    /// Reef IS shallow water — the same water column with coral in it — but no aquatic species
+    /// listed it, so every one of them dropped through to the tile's generic land-animal figure.
+    /// A shark swims shallows at 1.3 and deep water at 1.7, and hit 0.35 the moment it crossed a
+    /// reef; a penguin fell from 1.6 to the same 0.35. That is the reported "greatly slowed within
+    /// reef", and it applied just as hard to the fish that are supposed to live there. Inheriting
+    /// the shallow-water figure puts every swimmer back on its own scale, and leaves the coral
+    /// itself to be expressed by clutter, where it belongs.
+    /// </summary>
+    private static float BaseSpeed(SpeciesDefinition s, TileType tile)
+    {
+        if (s.TerrainSpeedModifiers != null)
+        {
+            if (s.TerrainSpeedModifiers.TryGetValue(tile, out float m))
+                return m;
+            if (tile == TileType.Reef && (s.IsAquatic || s.SemiAquatic)
+                && s.TerrainSpeedModifiers.TryGetValue(TileType.ShallowWater, out float shallow))
+                return shallow;
+        }
+        return tile.GetSpeedMultiplier();
+    }
 
     /// <summary>
     /// True when a tile is a hard barrier for this species — the wrong element, never entered

@@ -38,6 +38,12 @@ public sealed class FleeingSystem : ISystem
     /// <summary>How far a fleeing semi-aquatic animal will look for water to escape into.</summary>
     private const float RefugeSearchRadius = 10f;
 
+    /// <summary>
+    /// Minimum reach of the terrain checks that keep a fleeing animal off ground it cannot
+    /// survive. Extended at lower LOD tiers by DecisionCadence.Horizon.
+    /// </summary>
+    private const float FleeLookAhead = 2f;
+
     /// <summary>How strongly the refuge direction pulls on the flee vector (0 = ignored, 1 = only refuge).</summary>
     private const float RefugePull = 0.55f;
 
@@ -202,9 +208,18 @@ public sealed class FleeingSystem : ISystem
                 float staminaFactor = tiredFloor + (1f - tiredFloor) * prey.Stamina;
 
                 // Mass-based agility: smaller creatures change direction faster,
-                // allowing rabbits to juke while deer commit to a direction.
+                // allowing rabbits to juke while deer commit to a direction. Compensated for the
+                // LOD decision cadence — this is a per-tick approach rate, so applying it once
+                // per twenty ticks turned a distant animal a twentieth as hard as a nearby one.
                 float bodyMass = speciesDef?.BodyMass ?? 1f;
-                float agility = Math.Clamp(1.5f / bodyMass, 0.25f, 1f);
+                int decisionInterval = DecisionCadence.Interval(em, entity);
+                float agility = DecisionCadence.BlendRate(
+                    Math.Clamp(1.5f / bodyMass, 0.25f, 1f), decisionInterval);
+
+                // How far the terrain checks must reach: the ground this animal will cross before
+                // it steers again. Fleeing at speed under a slow decision cadence is exactly how
+                // a panicked aquatic ends up ashore.
+                float fleeLookAhead = DecisionCadence.Horizon(em, entity, FleeLookAhead);
 
                 // Apply fear response behavior
                 switch (fearResponse)
@@ -223,7 +238,7 @@ public sealed class FleeingSystem : ISystem
 
                     case FearResponse.Flee:
                     default:
-                        ApplyFleeResponse(ref pos, ref vel, ref wander, ref prey, fleeDir, fearRatio, discomfortRatio, agility, staminaFactor, speciesDef);
+                        ApplyFleeResponse(ref pos, ref vel, ref wander, ref prey, fleeDir, fearRatio, discomfortRatio, agility, staminaFactor, speciesDef, fleeLookAhead);
                         break;
                 }
 
@@ -422,7 +437,8 @@ public sealed class FleeingSystem : ISystem
     /// </summary>
     private void ApplyFleeResponse(ref Position pos, ref Velocity vel, ref Wander wander,
                                     ref Prey prey, Vector2 fleeDir, float fearRatio, float discomfortRatio,
-                                    float agility, float staminaFactor, SpeciesDefinition? speciesDef)
+                                    float agility, float staminaFactor, SpeciesDefinition? speciesDef,
+                                    float lookAhead)
     {
         // Species-aware terrain aversion: an aquatic fish must treat LAND as the thing to avoid
         // (not water), so it won't flee ashore and strand. Falls back to raw tile weight if the
@@ -469,8 +485,8 @@ public sealed class FleeingSystem : ISystem
         if (_worldManager != null && discomfortRatio > 0.3f && fearRatio < 0.8f)
         {
             // Check if fleeing would take us to worse terrain
-            float fleeAheadX = pos.X + fleeDir.X * 2f;
-            float fleeAheadY = pos.Y + fleeDir.Y * 2f;
+            float fleeAheadX = pos.X + fleeDir.X * lookAhead;
+            float fleeAheadY = pos.Y + fleeDir.Y * lookAhead;
             float aheadAvoid = Aversion(fleeAheadX, fleeAheadY);
 
             // If fleeing leads to worse terrain, try to find a compromise direction
@@ -480,8 +496,8 @@ public sealed class FleeingSystem : ISystem
                 float perpX = -fleeDir.Y;
                 float perpY = fleeDir.X;
 
-                float leftAvoid = Aversion(pos.X + perpX * 2f, pos.Y + perpY * 2f);
-                float rightAvoid = Aversion(pos.X - perpX * 2f, pos.Y - perpY * 2f);
+                float leftAvoid = Aversion(pos.X + perpX * lookAhead, pos.Y + perpY * lookAhead);
+                float rightAvoid = Aversion(pos.X - perpX * lookAhead, pos.Y - perpY * lookAhead);
 
                 // Blend flee direction with side-step based on discomfort (less adjustment when afraid)
                 float blendFactor = discomfortRatio * 0.5f * (1f - fearRatio);

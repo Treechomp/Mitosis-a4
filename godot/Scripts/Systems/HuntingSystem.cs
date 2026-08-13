@@ -50,6 +50,13 @@ public sealed class HuntingSystem : ISystem
     private const float HuntApproachMinGain = 0.5f;
 
     /// <summary>
+    /// Minimum reach of the habitat scan that keeps a pursuing predator in its element. Extended
+    /// at lower LOD tiers to cover the ground the predator will actually cross before it steers
+    /// again (DecisionCadence.Horizon).
+    /// </summary>
+    private const float HabitatLookAhead = 2f;
+
+    /// <summary>
     /// What fraction of a predator's stomach counts as a proper meal. Prey worth this much or more
     /// scores at full value; anything less is discounted in proportion to how far short it falls.
     /// </summary>
@@ -171,6 +178,12 @@ public sealed class HuntingSystem : ISystem
             // LOD tick multiplier: attack/phase cooldowns count down at correct rate
             int tickMult = em.HasComponents(entity, ComponentFlags.SimulationLOD)
                 ? em.SimulationLODs[entity].EffectiveInterval : 1;
+
+            // Ticks this predator will coast before it steers again. Distinct from tickMult
+            // above, which is the interval that just ELAPSED (used to catch cooldowns up); this
+            // one is the gap about to be traversed, and it governs how hard the predator must
+            // turn and how far ahead it must look to stay in its element. See DecisionCadence.
+            int decisionInterval = DecisionCadence.Interval(em, entity);
 
             ref var pos = ref em.Positions[entity];
             ref var predator = ref em.Predators[entity];
@@ -988,12 +1001,16 @@ public sealed class HuntingSystem : ISystem
                     float tdy = trackPreyPos.Y - pos.Y;
                     var trackDir = MathUtils.Normalize(tdx, tdy);
                     float trackSpeed = speciesDef.BaseHuntSpeed * 0.8f;
-                    // Blend toward tracking direction — heavier predators commit more
-                    float trackAgility = Math.Clamp(1.5f / speciesDef.BodyMass, 0.25f, 1f);
+                    // Blend toward tracking direction — heavier predators commit more.
+                    // LOD-compensated: this is a per-tick approach rate, and a distant predator
+                    // gets one application of it where a nearby one gets twenty.
+                    float trackAgility = DecisionCadence.BlendRate(
+                        Math.Clamp(1.5f / speciesDef.BodyMass, 0.25f, 1f), decisionInterval);
                     vel.Dx += (trackDir.X * trackSpeed - vel.Dx) * trackAgility;
                     vel.Dy += (trackDir.Y * trackSpeed - vel.Dy) * trackAgility;
 
-                    SteerForHabitat(ref vel, pos.X, pos.Y, speciesDef);
+                    SteerForHabitat(ref vel, pos.X, pos.Y, speciesDef,
+                                    DecisionCadence.Horizon(em, entity, HabitatLookAhead));
 
                     continue;  // Skip normal hunt movement — we're just tracking
                 }
@@ -1021,8 +1038,10 @@ public sealed class HuntingSystem : ISystem
                 float dist = MathF.Sqrt(dx * dx + dy * dy);
                 float distSq = dx * dx + dy * dy;
 
-                // Mass-based agility for direction blending during pursuit
-                float huntAgility = Math.Clamp(1.5f / speciesDef.BodyMass, 0.25f, 1f);
+                // Mass-based agility for direction blending during pursuit, compensated for how
+                // long this predator will coast before it steers again (see DecisionCadence).
+                float huntAgility = DecisionCadence.BlendRate(
+                    Math.Clamp(1.5f / speciesDef.BodyMass, 0.25f, 1f), decisionInterval);
 
                 // === AMBUSH STEALTH UPDATE ===
                 bool isAmbush = speciesDef.HuntingTactic == HuntingTactic.Ambush;
@@ -1274,7 +1293,12 @@ public sealed class HuntingSystem : ISystem
                     // Keep the predator in its element during pursuit: sharks off land, land
                     // waders out of DEEP water (they may still lunge through shallows on a pounce,
                     // but never dive into drowning depth chasing prey), insects out of all water.
-                    SteerForHabitat(ref vel, pos.X, pos.Y, speciesDef);
+                    // The scan reaches as far as the pursuit will actually carry it before the
+                    // next decision — a hunting shark at Minimal LOD covers several tiles per
+                    // decision, and a fixed two-tile check simply misses the beach it is about
+                    // to run onto.
+                    SteerForHabitat(ref vel, pos.X, pos.Y, speciesDef,
+                                    DecisionCadence.Horizon(em, entity, HabitatLookAhead));
                     }
                 }
             }
@@ -1875,17 +1899,19 @@ public sealed class HuntingSystem : ISystem
     /// waders (AvoidsOpenWater) → avoid DEEP water (they wade shallows, even mid-pounce, but never
     /// dive into drowning depth). Semi-aquatic (Croc/Polar Bear) steer around nothing.
     /// </summary>
-    private void SteerForHabitat(ref Velocity vel, float posX, float posY, SpeciesDefinition sp)
+    private void SteerForHabitat(ref Velocity vel, float posX, float posY, SpeciesDefinition sp,
+                                 float lookAhead)
     {
         if (sp.IsAquatic)
-            SteerAroundWater(ref vel, posX, posY, deepOnly: false, avoidLand: true);
+            SteerAroundWater(ref vel, posX, posY, lookAhead, deepOnly: false, avoidLand: true);
         else if (sp.AvoidsWater)
-            SteerAroundWater(ref vel, posX, posY, deepOnly: false);
+            SteerAroundWater(ref vel, posX, posY, lookAhead, deepOnly: false);
         else if (sp.AvoidsOpenWater)
-            SteerAroundWater(ref vel, posX, posY, deepOnly: true);
+            SteerAroundWater(ref vel, posX, posY, lookAhead, deepOnly: true);
     }
 
-    private void SteerAroundWater(ref Velocity vel, float posX, float posY, bool deepOnly, bool avoidLand = false)
+    private void SteerAroundWater(ref Velocity vel, float posX, float posY, float lookAhead,
+                                  bool deepOnly, bool avoidLand = false)
     {
         if (_worldManager == null || (vel.Dx == 0 && vel.Dy == 0)) return;
 
@@ -1893,9 +1919,12 @@ public sealed class HuntingSystem : ISystem
         float nx = vel.Dx / speed;
         float ny = vel.Dy / speed;
 
-        // Look ahead 2 tiles for water (deep-only for waders, any water for non-swimmers)
+        // Scan the ground we're about to cross (deep-only for waders, any water for non-swimmers).
+        // The reach is the LOD-scaled travel distance, stepped a tile at a time so nothing narrow
+        // is stepped over.
+        float scan = MathF.Max(HabitatLookAhead, lookAhead);
         bool waterAhead = false;
-        for (float d = 1f; d <= 2f; d += 1f)
+        for (float d = 1f; d <= scan; d += 1f)
         {
             if (IsBlockingTerrain(_worldManager.GetTile(posX + nx * d, posY + ny * d), avoidLand, deepOnly))
             {
@@ -1905,8 +1934,11 @@ public sealed class HuntingSystem : ISystem
         }
         if (!waterAhead) return;
 
-        // Try offset angles and pick the clearest path
-        int bestWater = 3;
+        // Try offset angles and pick the clearest path. Seeded above any possible count because
+        // the scan length is no longer fixed — the old seed of 3 was "worse than two samples can
+        // score", which silently became "better than most offsets" once the scan could run ten
+        // tiles and count ten blocked samples.
+        int bestWater = int.MaxValue;
         float bestAngle = 0f;
         ReadOnlySpan<float> offsets = stackalloc float[]
         {
@@ -1922,7 +1954,7 @@ public sealed class HuntingSystem : ISystem
             float rny = nx * sin + ny * cos;
 
             int waterCount = 0;
-            for (float d = 1f; d <= 2f; d += 1f)
+            for (float d = 1f; d <= scan; d += 1f)
             {
                 if (IsBlockingTerrain(_worldManager.GetTile(posX + rnx * d, posY + rny * d), avoidLand, deepOnly))
                     waterCount++;

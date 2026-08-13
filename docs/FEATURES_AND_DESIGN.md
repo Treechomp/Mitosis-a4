@@ -286,12 +286,16 @@ works with no predator present, which is what a landlocked pond needs.
 20 tile types (`World/TileType.cs`). Values below are exact from `TileTypeExtensions`. Every
 tile is traversable; "Water" tiles and Mountain/Lava are simply slow and uncomfortable.
 
+\* Reef is the one **cluttered** tile (`GetClutter` = 1.0): the listed speed is what a small body
+gets, and larger ones are slowed on top of it in proportion to their size — see *Reef clutter*
+under §6.6.
+
 | Tile | Speed | Discomfort | Avoidance | Cover | Grazeable | Spawnable | Terraformable |
 |------|-------|-----------|-----------|-------|-----------|-----------|---------------|
 | DeepWater | 0.25 | 12.0 | 0.95 | 0 | – | – | – |
 | ShallowWater | 0.40 | 5.0 | 0.75 | 0 | – | – | – |
 | River | 0.35 | 8.0 | 0.80 | 0 | – | – | – |
-| Reef | 0.35 | 6.0 | 0.70 | 0 | – | – | – |
+| Reef | 0.40\* | 6.0 | 0.70 | 0.25 | – | – | – |
 | Sand | 0.70 | 1.0 | 0.30 | 0 | – | yes | yes |
 | Dirt | 0.90 | 0.2 | 0.05 | 0 | – | yes | yes |
 | Shrubland | 0.95 | 0.0 | 0.02 | 0.10 | yes | yes | yes |
@@ -465,6 +469,37 @@ is whatever the old tier and the reset left behind. `LODSystem` publishes the ti
 elapsed since the last due tick, which is what a rate must be multiplied by — otherwise every
 boundary the player walks past over- or under-counts the entity's hunger, ageing and growth.
 
+**Steering rates are per-tick too** (`DecisionCadence`). Velocity blending is an exponential
+approach — "close the remaining angle by `rate` each tick" — and both the wander turn rate and the
+hunt/flee agility were being applied once per *decision*. A Shark's 0.06 turns it 71% of the way
+onto a new heading over 20 ticks in view (`1 − 0.94²⁰`) and 6% given one decision per 20 ticks: a
+twelvefold loss of steering authority, purely from distance. `DecisionCadence.BlendRate` converts
+the per-tick rate to the equivalent single-decision rate, so a creature turns the same amount per
+unit of world time at every tier.
+
+**So is look-ahead.** Terrain sampling used a fixed distance regardless of how far the creature
+would travel before deciding again. A hunting Shark covers ~5.7 tiles between Minimal-tier
+decisions against a 1.5-tile look-ahead — it checked the ground and then sailed four tiles past it.
+`DecisionCadence.Horizon` scales the reach to `speed × terrain multiplier × interval`, and the
+samplers sweep the whole path at the base resolution rather than probing one distant point (a
+single probe at 5.7 tiles steps clean over the beach at 3). Sample *count* scales with the
+interval, so cost per unit of world time is unchanged — just spent in fewer, larger decisions.
+
+**And steering alone is not enough at coarse tiers**, which is why `MovementSystem` also enforces a
+hard **element barrier**: a step that would carry a creature out of its element (aquatic onto land,
+`AvoidsWater` into water) is reflected, exactly as the world edge is. A Minimal-tier shark commits
+to a heading for 20 ticks, so if that heading was chosen a hair before a sandbar came into reach,
+no look-ahead helps — it is already travelling. Measured on a 40-shark coastline over 3,000 ticks,
+suffocations by tier went 0 / 3 / 2 / 20 / 29 before; extended look-ahead and compensated turning
+together brought that to 0 / 0 / 0 / 4 / 15, and the barrier to 0 everywhere. Only a crossing *out*
+of the element is refused — a creature already stranded moves freely, so it can flop back to water
+(or fail to, and die there). Cost: whole-tick mean 12.3 → 13.1 ms on 5,000 creatures.
+
+`Velocity.CachedSpeedMult` is also **invalidated whenever a creature crosses into a new tile**
+(two int casts, no world lookup). The wrong-element ×0.05 penalty lives inside that cached value,
+so a beached aquatic used to keep its full swimming speed until its next decision and drive itself
+further up the beach — up to twenty ticks of open-water speed spent travelling inland.
+
 **Known limits.** Tier boundaries are multiples of the camera's visible radius (`fullRange` =
 visible × 1.15, then ×2, ×3, ×5), so in a world only a few visible-radii across the far tiers
 never engage: in a 512-tile world with radius 60, Minimal held 0 entities until movement was
@@ -636,7 +671,9 @@ immature Shroomers are logged as kills (bloom control shows up in the events CSV
 
 Primary idle movement, with **angular interpolation** for smooth turning: turn rate
 `Clamp(0.4 / bodyMass, 0.06, 0.3)` (heavy = ponderous, light = nimble), speed held constant
-through turns. Random direction changes; **species-aware** terrain look-ahead (1.5 tiles) avoidance sampling 8
+through turns (both the turn rate and the look-ahead are LOD-compensated — see §6.1). Random
+direction changes; **species-aware** terrain look-ahead (1.5 tiles at Full LOD, scaled with travel
+per decision beyond it) avoidance sampling 8
 directions (via `TerrainProfile.SteerAversion`, so aquatics avoid *land* not water — fish no
 longer wander or forage toward shore); **roaming** (long-distance travel when hungry predators find no prey, when a
 hungry grazer has no food underfoot, or when herbivores are overcrowded) with hunger-scaled
@@ -734,6 +771,36 @@ ordinary walkable tile: no barrier, aversion 0.70, 6/tick discomfort. Swarms str
 after fish and the discomfort system was never at fault — the tile simply never registered as
 water. It is now impassable (aversion 1.0, 20/tick) for non-swimmers and free for aquatic and
 semi-aquatic species, while ordinary land animals still wade it.
+
+**Reef clutter is resolved against body size** (`TileTypeExtensions.GetClutter` +
+`TerrainProfile.Speed`). Two things were wrong with a flat 0.35. First, no swimmer listed Reef in
+its `TerrainSpeedModifiers`, so every one of them dropped through to the tile's generic
+land-animal figure — a Shark that swims shallows at 1.3 and deep water at 1.7 hit 0.35 the moment
+it crossed coral, and a Penguin fell from 1.6 to the same 0.35. Reef now inherits the species'
+**ShallowWater** speed when it lists no Reef of its own: reef *is* shallow water, the same water
+column with coral in it. Second, the obstruction itself was size-blind, slowing a minnow and a
+shark by the identical amount. Clutter is now scaled by body radius (`BodyMetrics.Radius`),
+linearly between a free radius of 0.16 tiles (render size ~5) and a choke radius of 0.44 (~14),
+down to a floor of 55% of open-water speed:
+
+| Species | Size | ShallowWater | Reef | vs shallow |
+|---------|------|--------------|------|-----------|
+| Fish | 4 | 1.10 | 1.10 | 100% |
+| Penguin | 6 | 1.60 | 1.53 | 96% |
+| Otter | 7 | 1.50 | 1.36 | 91% |
+| Turtle | 8 | 1.30 | 1.11 | 86% |
+| Crocodile | 14 | 1.40 | 0.78 | 55% |
+| Shark | 14 | 1.30 | 0.72 | 55% |
+
+The result is what a reef should be in play: a nursery and feeding ground the small species move
+through freely (and the richest water nutrition, cap 1.0), and **partial** refuge from the big
+ones. A shark closes on a fleeing penguin at 3.6× its speed in open water and 2.1× inside a reef —
+slower, so the reef is worth fleeing into, but still above 1.0, so it is cover and not a wall.
+Reef also carries a 0.25 **cover bonus**, which makes what hides there harder to detect.
+
+The floor is deliberately not crippling: a shark in a reef should be a worse hunter than a shark
+in open water, not a helpless one. `GetClutter` is a general tile property — Reef is simply the
+only tile that currently has any.
 
 **Collision splits overlap by inverse mass** (`CollisionSystem.PushWeight`), and **structures are
 immovable** (`Nest`/`Crystal` weight 0). A flat half-and-half meant `BodyMass` told the simulation
@@ -1266,6 +1333,7 @@ godot/
     ├── Systems/
     │   ├── ISystem.cs                              # Process(EntityManager em)
     │   ├── LODSystem.cs                            # cell-based LOD + DueThisTick
+    │   ├── DecisionCadence.cs                      # LOD-compensated turn rates + look-ahead
     │   ├── MovementSystem.cs                       # velocity, terrain speed, slope/cliff, damping
     │   ├── SpatialHashUpdateSystem.cs              # refresh spatial-hash positions
     │   ├── TerrainSystems.cs                       # TerrainDiscomfort + Terraform + TileRegeneration
