@@ -75,6 +75,7 @@ tps = 20
 max_population = 4000
 disabled_species = Shroomer, Hawk   # optional; also honoured by systems
 no_factions = false                 # disable Shroomer+Sectid+Faeling in one flag
+lod_override = none                 # none (default) | Full | High | Medium | Low | Minimal
 
 [terrain]              # shape ops painted over the base fill, in order
 rect   ShallowWater 0 0 128 20     # tile, x, y, w, h
@@ -119,6 +120,70 @@ space = keep underlying tile.
 Spawns are placed **exactly where you say** — a warning is printed if the centre tile isn't
 normally spawnable for the species, but the spawn still happens (stranding a creature on
 hostile terrain may be the point of the test).
+
+### `lod_override` — testing the tiers a small world can't reach
+
+`lod_override` pins **every** entity to one LOD tier for the whole run, ignoring distance from
+the player. Values are `Full`, `High`, `Medium`, `Low`, `Minimal`, or `none` (the default,
+meaning normal distance-based tiering). An unrecognised value warns and falls back to `none`.
+
+It exists because a test scene otherwise cannot observe most of the simulation. Tier boundaries
+are multiples of the camera's visible radius — `fullRange = visibleRadius × 1.15`, then ×2, ×3,
+×5, so 69 / 138 / 207 / 345 tiles at the default radius of 60. The largest scenario world is 128
+tiles across, whose greatest possible distance from a centred player is about 181 tiles: **`Low`
+and `Minimal` are unreachable in every scenario in this directory**, while a profiled 36-chunk
+game world runs 69% of its entities at `Minimal` and 16% at `Low`. Without the override the
+harness is structurally blind to the tiers most of the world actually lives in.
+
+The override changes only *which* tier is chosen. Tick interval, the phase stagger and the
+`EffectiveInterval` bookkeeping are the tier's own and are untouched, so a forced tier behaves
+exactly like an earned one — both paths run the same code in `LODSystem.ApplyTier`. (Dropping the
+stagger would have made cost-spike bugs invisible while hunting rate bugs.)
+
+```ini
+[world]
+lod_override = Minimal   # every creature decides once per 20 ticks, wherever the player stands
+```
+
+## The LOD differential test
+
+`Scripts/Testing/LodDifferentialRunner.cs` runs a scenario twice from one seed — once pinned to
+`Full`, once to `Minimal` — and compares end-state metrics. It is the executable form of the rule
+in `FEATURES_AND_DESIGN.md` §6.1: **LOD may coarsen the timing of a decision, never the amount of
+anything that happens.** A gated system that advances a per-tick quantity has to multiply it by
+`SimulationLOD.EffectiveInterval`; when it doesn't, the quantity quietly runs up to 20× slow for
+most of the world, and which part of the world depends on where the player is standing.
+
+```
+godot --headless --path godot res://Scenes/LodDifferential.tscn -- --ticks=3000
+    --scenario=predator_prey,shroomer_bloom   # default: every scenario in TestScenarios/
+    --tolerance=0.15 --min-count=5 --control-runs=2
+```
+
+Exit code 0 when every scenario passes. Per-scenario CSVs land in
+`logs/lod_differential_<scenario>.csv`, with `logs/lod_differential_summary.csv` across all of
+them, and each individual simulation keeps its full log set under
+`logs/lod_differential/<scenario>_<full|minimal|controlN>/`.
+
+Metrics compared: per-species population, births and deaths by cause, kills, terraform nudges and
+class shifts, nutrition consumed / regenerated / corpse-enriched, mean Shroomer growth scale, and
+mean nearest-same-species-neighbour distance (which is what Separation and Herding actually
+produce).
+
+**Read the noise floor before believing a number.** These scenarios are small and chaotic: running
+`predator_prey` at Full tier on seed 42 and again on seed 43 moves the kill count from 17 to 40. A
+bare 15% test would therefore fail nearly every ecological metric however correct the LOD code is.
+So each scenario also runs `--control-runs` extra **Full-tier** simulations on shifted seeds, and
+the worst Full-vs-Full divergence a metric shows there becomes its noise floor. A metric is only
+reported as `FAIL` when LOD moved it further than the dice did — over the tolerance *and* over the
+floor. The raw tolerance verdict is kept in the CSV (`exceeds_tolerance`, and the `within_noise`
+verdict) so nothing is hidden.
+
+The floor is a sample, not a proof. A metric can pass because the scenario is too noisy to measure
+it, which is a statement about the scenario rather than a clean bill of health — mechanical rates
+(terraform nudges, mean growth scale) have floors of a few percent and are where this test has
+teeth. Findings and the standing exceptions are recorded in
+[lod-differential-baseline.md](lod-differential-baseline.md).
 
 ## The extended logs
 
@@ -166,7 +231,11 @@ or might be the dice. Leave `WorldSeed` at 0 for a fresh nondeterministic run.
 ## Where the code lives
 
 - `godot/Scripts/Testing/` — `TestSceneManager` (harness node), `TestScenario` (parser),
-  `ScenarioTerrainGenerator` (authored terrain), `ScenarioSpawner` (exact spawns).
+  `ScenarioTerrainGenerator` (authored terrain), `ScenarioSpawner` (exact spawns),
+  `LodDifferentialRunner` (headless Full-vs-Minimal comparison, `Scenes/LodDifferential.tscn`).
+- `godot/Scripts/Systems/SimulationStack.cs` — the one definition of which systems run and in
+  what order. `GameManager` and the differential runner both build from it, so the harness
+  cannot end up testing a different stack from the one the game ships.
 - `godot/Scripts/World/IChunkGenerator.cs` — the seam that lets a scenario replace noise
   worldgen; `ScenarioTileParams.cs` — canonical params per tile type (keeps classification,
   terraform, and palette consistent on authored terrain).

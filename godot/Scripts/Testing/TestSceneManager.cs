@@ -78,6 +78,18 @@ public partial class TestSceneManager : GameManager
 
         base._Ready();
 
+        // LOD tier override — applied after the stack is built, since LODSystem is constructed
+        // in base._Ready(). It has to be an override rather than a camera trick: tier boundaries
+        // are multiples of the visible radius, so a scenario world (96-128 tiles) cannot put an
+        // entity further than Medium away from a centred player. See LODSystem.SetLevelOverride.
+        if (_scenario.LodOverride.HasValue)
+        {
+            _lodSystem?.SetLevelOverride(_scenario.LodOverride.Value);
+            GD.Print($"[TestScene] lod_override = {_scenario.LodOverride.Value} " +
+                     $"(every entity forced to that tier, interval " +
+                     $"{Components.SimulationLOD.GetTickInterval(_scenario.LodOverride.Value)})");
+        }
+
         GD.Print("[TestScene] Controls: Space=pause  .=step  ,=speed  P=paint  O=export map");
     }
 

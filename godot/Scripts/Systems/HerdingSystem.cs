@@ -186,8 +186,12 @@ public sealed class HerdingSystem : ISystem
                 }
                 else
                 {
-                    // Leader out of range
-                    social.LeaderLostTicks++;
+                    // RATE-LIKE — compensate. LeaderLostTicks is a stopwatch in ticks measured
+                    // against LeaderLostThreshold, so it has to advance by the ticks that really
+                    // passed; incrementing by one per due tick stretched the default 40-tick
+                    // patience to 800 ticks at Minimal, and a distant herd kept following a leader
+                    // it had long since lost sight of instead of electing a new one.
+                    social.LeaderLostTicks += DecisionCadence.Elapsed(em, entity);
                 }
             }
             else if (recognizedLeader >= 0)
@@ -373,9 +377,25 @@ public sealed class HerdingSystem : ISystem
                 if (isPackHunting) packBoost *= 2f;
 
                 float effectiveCohesion = social.CohesionStrength * social.GroupAffinity * distanceFactor * sizeFactor * packBoost;
-                float effectiveAlignment = social.AlignmentStrength * social.GroupAffinity * 1.5f * packBoost;
 
-                // Cohesion: move toward leader (but maintain minimum distance)
+                // RATE-LIKE — compensate. Alignment is an exponential approach to the leader's
+                // heading ("close the remaining velocity gap by this fraction"), applied once per
+                // DECISION but written as a per-TICK rate. In view it fires twenty times per
+                // twenty ticks and all but locks a follower onto the leader's course; at Minimal
+                // it fired once and the follower kept most of its own heading, so a pack that
+                // holds formation on screen sprayed apart off it — measured on predator_prey as a
+                // mean wolf-to-wolf distance of 1.2 tiles at Full against 6.3 at Minimal.
+                // BlendRate converts the per-tick rate to the single-decision equivalent (it
+                // clamps at 1, so the pack-boosted gains above just saturate into a full snap).
+                float effectiveAlignment = DecisionCadence.BlendRate(
+                    social.AlignmentStrength * social.GroupAffinity * 1.5f * packBoost,
+                    DecisionCadence.Interval(em, entity));
+
+                // Cohesion: move toward leader (but maintain minimum distance).
+                // STATE-LIKE — do NOT multiply. This is a pull proportional to the CURRENT gap,
+                // feeding a velocity that MovementSystem damps on the same decision cadence, so
+                // its steady state (pull / (1 - damping)) is the same at every tier. Scaling it by
+                // the tick gap would fire a distant follower past its own leader.
                 float cohesionX = 0f, cohesionY = 0f;
                 if (distToLeader > idealFollowDist)
                 {
@@ -406,6 +426,8 @@ public sealed class HerdingSystem : ISystem
                                                       (social.PreferredGroupSize * 0.5f));
                 }
 
+                // STATE-LIKE, as above: a gap-proportional pull on a velocity damped at the same
+                // cadence, not a quantity accrued per tick.
                 float effectiveCohesion = social.CohesionStrength * social.GroupAffinity * distanceFactor * sizeFactor * 0.5f;
 
                 float cohesionX = (localCenterX - pos.X) * effectiveCohesion;

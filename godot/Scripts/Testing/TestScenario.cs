@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using Mitosis.Components;
 using Mitosis.SpeciesData;
 using Mitosis.World;
 
@@ -14,7 +15,7 @@ namespace Mitosis.Testing;
 /// File format — INI-style sections, '#'/';' comments, all keys optional:
 ///
 ///   [world]     size_chunks, seed, base_tile, elevation, tps, max_population,
-///               disabled_species, no_factions, name
+///               disabled_species, no_factions, lod_override, name
 ///   [terrain]   shape ops painted over the base fill, one per line:
 ///                 rect   &lt;Tile&gt; &lt;x&gt; &lt;y&gt; &lt;w&gt; &lt;h&gt;
 ///                 circle &lt;Tile&gt; &lt;cx&gt; &lt;cy&gt; &lt;r&gt;
@@ -44,6 +45,19 @@ public sealed class TestScenario
     public int MaxPopulation = 4000;
     public string DisabledSpecies = "";
     public bool NoFactions;
+
+    /// <summary>
+    /// Force every entity onto one LOD tier regardless of its distance from the player, or
+    /// null (the 'none' default) for the normal distance-based assignment.
+    ///
+    /// Tier boundaries are multiples of the camera's visible radius (69 tiles at the default
+    /// radius of 60), and the largest scenario world is 128 tiles across — so its greatest
+    /// possible distance-to-player is ~181 tiles and the Low and Minimal tiers are simply
+    /// unreachable here. Without this key the harness cannot observe the tiers that hold most
+    /// of a real world's population (69% Minimal / 16% Low on a profiled 36-chunk run), which
+    /// is exactly where LOD rate-compensation bugs live. See LODSystem.SetLevelOverride.
+    /// </summary>
+    public LODLevel? LodOverride;
 
     // ── [terrain] / [map] ─────────────────────────────────────────────────────
     public readonly List<TerrainOp> TerrainOps = new();
@@ -175,6 +189,7 @@ public sealed class TestScenario
             case "max_population":   MaxPopulation = ParseInt(value, MaxPopulation, key); break;
             case "disabled_species": DisabledSpecies = value; break;
             case "no_factions":      NoFactions = ParseBool(value); break;
+            case "lod_override":     LodOverride = ParseLodOverride(value); break;
             default: Warnings.Add($"[world] unknown key '{key}'"); break;
         }
     }
@@ -359,6 +374,28 @@ public sealed class TestScenario
         => value.Equals("true", StringComparison.OrdinalIgnoreCase)
            || value.Equals("yes", StringComparison.OrdinalIgnoreCase)
            || value == "1" || value.Equals("on", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Parse a [world] lod_override value: a tier name (Full/High/Medium/Low/Minimal), or
+    /// 'none' (equivalently 'off'/empty) for the normal distance-based assignment. Anything
+    /// else warns and falls back to 'none' rather than silently testing a tier nobody asked for.
+    /// </summary>
+    private LODLevel? ParseLodOverride(string value)
+    {
+        if (value.Length == 0
+            || value.Equals("none", StringComparison.OrdinalIgnoreCase)
+            || value.Equals("off", StringComparison.OrdinalIgnoreCase))
+            return null;
+
+        // Enum.TryParse also accepts raw numbers ("3") and undefined values, so the
+        // IsDefined check is what actually restricts this to the five named tiers.
+        if (Enum.TryParse<LODLevel>(value, ignoreCase: true, out var level) && Enum.IsDefined(level))
+            return level;
+
+        Warnings.Add($"[world] lod_override: unknown tier '{value}' " +
+                     "(expected Full, High, Medium, Low, Minimal or none) — using none");
+        return null;
+    }
 
     private TileType? ParseTile(string name)
     {

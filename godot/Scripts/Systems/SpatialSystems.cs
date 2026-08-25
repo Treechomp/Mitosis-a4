@@ -78,7 +78,17 @@ public sealed class SeparationSystem : ISystem
                 }
             }
 
-            // Apply separation force
+            // Apply separation force.
+            // STATE-LIKE — do NOT multiply by EffectiveInterval. The impulse is not a per-tick
+            // quantity that accumulates; it feeds a velocity that MovementSystem damps on the very
+            // same decision cadence (0.85 per due tick, gated identically). Impulse and decay
+            // therefore share a clock, and the steady state v = strength/(1-damping) comes out the
+            // same at every tier, while movement integrates that velocity every tick regardless.
+            // Multiplying here would not compensate for anything — it would put twenty times the
+            // separation force on a distant creature and fire it out of its own herd. What LOD
+            // does cost is RESPONSIVENESS: the push builds over ~10 decisions, so at Minimal a
+            // crowd takes 200 ticks to loosen rather than 10. That is coarser timing, which is
+            // what LOD is allowed to buy, not a different amount of spacing.
             if (neighborCount > 0)
             {
                 separationX /= neighborCount;
@@ -172,7 +182,14 @@ public sealed class CollisionSystem : ISystem
                     float minDist = radius + otherRadius;
                     float minDistSq = minDist * minDist;
 
-                    // Check for overlap
+                    // Check for overlap.
+                    // STATE-LIKE — do NOT multiply by EffectiveInterval. This resolves a
+                    // condition that exists right now (two bodies overlapping by `overlap`), not a
+                    // quantity accrued since the last visit: the correction is complete the moment
+                    // it is applied, and scaling it by the tick gap would hurl the pair apart by
+                    // twenty times the overlap. LOD costs latency here — a distant pair can stay
+                    // interpenetrated for up to a full interval before anyone looks — which is a
+                    // rendering artifact at a distance nobody is watching, not a rate.
                     if (distSq < minDistSq && distSq > 0.0001f)
                     {
                         float dist = MathF.Sqrt(distSq);

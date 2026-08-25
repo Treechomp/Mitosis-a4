@@ -213,37 +213,17 @@ public partial class GameManager : Node3D
         _renderingManager = new RenderingManager(_entityManager, _worldManager,
             ChunkSize, WorldSizeChunks, TileSize, ElevationHeightScale);
 
-        // Initialize systems — LODSystem must run FIRST to set tick gating
-        var spatialHash = _worldManager.SpatialHash;
-        _lodSystem = new LODSystem(spatialHash);
-        _systems.Add(_lodSystem);
-        _systems.Add(new MovementSystem(ChunkSize, WorldSizeChunks, _worldManager));
-        _systems.Add(new SpatialHashUpdateSystem(spatialHash, _worldManager.PredatorHash));
-        _systems.Add(new TerrainDiscomfortSystem(_worldManager));
-        _systems.Add(new HungerSystem());
-        _systems.Add(new GrazingSystem(_worldManager, spatialHash));
-        _systems.Add(new WanderSystem(_worldManager, spatialHash: spatialHash));
-        _systems.Add(new HerdingSystem(spatialHash));
-        _systems.Add(new SeparationSystem(spatialHash));
-        _systems.Add(new CollisionSystem(spatialHash, collisionRadiusScale: 0.5f, tileSize: TileSize));
-        _systems.Add(new HuntingSystem(spatialHash, _worldManager));
-        _systems.Add(new FleeingSystem(spatialHash, _worldManager));
-        // Carrion: corpses persist and are scavenged over time. Runs after hunting/fleeing so it
-        // can steer idle hungry predators to carcasses, and before NestSystem so a chopping Sectid
-        // is fed/held at the corpse before NestSystem decides whether to ferry the load home.
-        _systems.Add(new CarrionSystem(spatialHash, _worldManager));
-        _systems.Add(new AgingSystem());
-        _systems.Add(new ReproductionSystem(_worldManager, MaxPopulation, spatialHash, _entityFactory));
-        _systems.Add(new TerraformSystem(_worldManager));
-        _systems.Add(new TileRegenerationSystem(_worldManager));
+        // Initialize systems. Order lives in SimulationStack, which the headless LOD
+        // differential harness builds from too — one list, so the harness cannot be testing a
+        // different stack from the one the game runs.
+        var stack = SimulationStack.Build(_systems, _worldManager, _entityFactory,
+            ChunkSize, WorldSizeChunks, TileSize, MaxPopulation);
+        _lodSystem     = stack.Lod;
+        _nestSystem    = stack.Nest;
+        _sporeSystem   = stack.Spore;
+        _crystalSystem = stack.Crystal;
 
-        _nestSystem = new NestSystem(_worldManager, spatialHash, MaxPopulation);
-        _systems.Add(_nestSystem);
-        _sporeSystem = new SporeSystem(_worldManager, spatialHash, MaxPopulation);
-        _systems.Add(_sporeSystem);
-        _crystalSystem = new CrystalSystem(_worldManager, spatialHash, MaxPopulation);
-        _systems.Add(_crystalSystem);
-
+        // The logger is per-run configuration rather than simulation, and runs last.
         _ecosystemLogger = new EcosystemLogger(_worldManager);
         if (!string.IsNullOrWhiteSpace(TrackSpecies))
         {

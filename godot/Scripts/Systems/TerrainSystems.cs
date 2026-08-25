@@ -263,50 +263,72 @@ public sealed class TerraformSystem : ISystem
 
             ref var terraform = ref em.Terraforms[entity];
 
-            // Cooldown
+            // RATE-LIKE — compensate. The terraform cooldown measures out a NUMBER OF ACTS per
+            // unit of world time, so a due tick that stands for 20 ticks owes 20 ticks' worth of
+            // acts. The old code consumed the whole window in one countdown and then rolled once
+            // regardless: at Cooldown 4 a Full-tier terraformer rolls five times per 20 ticks and
+            // a Minimal-tier one rolled once, so how fast the world was reshaped depended on
+            // where the player was standing. Measured on shroomer_bloom: 872 nudges at Full
+            // against 157 at Minimal over 3,000 ticks.
+            //
+            // Spend the elapsed ticks as credit against the roll period and carry the remainder,
+            // so the long-run rate is exact rather than merely closer. The period is Cooldown + 1,
+            // not Cooldown: a roll costs its own tick on top of the countdown, which is what the
+            // Full-tier path has always done. Using Cooldown here would quietly speed Full-tier
+            // terraforming up by a fifth — the point is to bring Minimal up to Full, not to
+            // retune the game.
+            terraform.CurrentCooldown -= tickMult;
             if (terraform.CurrentCooldown > 0)
-            {
-                terraform.CurrentCooldown -= tickMult;
                 continue;
-            }
 
-            terraform.CurrentCooldown = terraform.Cooldown;
-
-            // Roll against strength probability
-            if ((float)_rng.NextDouble() > terraform.Strength)
-                continue;
+            int period = Math.Max(1, terraform.Cooldown + 1);
+            int overshoot = -terraform.CurrentCooldown;
+            int rolls = 1 + overshoot / period;
+            terraform.CurrentCooldown = period - overshoot % period;
 
             ref var pos = ref em.Positions[entity];
 
-            // Half the time, work the ground directly underfoot; otherwise a random tile in
-            // radius. Purely random placement meant a terraformer could not reliably maintain or
-            // convert the tile it was actually standing on: with radius 2 that is ~1 chance in 20
-            // per attempt, so a Shroomer at the edge of its swamp starved for substrate long
-            // before it could turn the neighbouring grass into ground it could live on. Working
-            // underfoot is what lets a slow frontier advance exist at all — the bloom converts
-            // where it stands, then steps forward — while the random half still spreads the
-            // influence outward into a patch rather than a single tile.
-            float targetX, targetY;
-            if (_rng.NextDouble() < 0.5)
-            {
-                targetX = pos.X;
-                targetY = pos.Y;
-            }
-            else
-            {
-                float offsetX = ((float)_rng.NextDouble() * 2f - 1f) * terraform.Radius;
-                float offsetY = ((float)_rng.NextDouble() * 2f - 1f) * terraform.Radius;
-                targetX = pos.X + offsetX;
-                targetY = pos.Y + offsetY;
-            }
-
-            // Terraform nudges the moisture parameter; the tile's classification and its
-            // continuous colour follow from the new params (docs/3d-terrain-plan.md Phase 2b).
             // Larger individuals shift more ground per act, so a mature bloom actually opens new
             // habitat ahead of itself instead of only maintaining the tile it stands on.
             float sizeScale = em.HasComponents(entity, ComponentFlags.Growth)
                 ? em.Growths[entity].CurrentScale : 1f;
-            _worldManager.Terraform(targetX, targetY, terraform.Direction, MoistureStep * sizeScale);
+
+            // Each owed act is rolled separately — its own strength check and its own target
+            // choice. Batching them into one roll with a scaled probability would put the whole
+            // window's worth of moisture on a single tile, and the 50/50 split below is what
+            // spreads a bloom into a patch instead of a stripe.
+            for (int roll = 0; roll < rolls; roll++)
+            {
+                // Roll against strength probability
+                if ((float)_rng.NextDouble() > terraform.Strength)
+                    continue;
+
+                // Half the time, work the ground directly underfoot; otherwise a random tile in
+                // radius. Purely random placement meant a terraformer could not reliably maintain
+                // or convert the tile it was actually standing on: with radius 2 that is ~1 chance
+                // in 20 per attempt, so a Shroomer at the edge of its swamp starved for substrate
+                // long before it could turn the neighbouring grass into ground it could live on.
+                // Working underfoot is what lets a slow frontier advance exist at all — the bloom
+                // converts where it stands, then steps forward — while the random half still
+                // spreads the influence outward into a patch rather than a single tile.
+                float targetX, targetY;
+                if (_rng.NextDouble() < 0.5)
+                {
+                    targetX = pos.X;
+                    targetY = pos.Y;
+                }
+                else
+                {
+                    float offsetX = ((float)_rng.NextDouble() * 2f - 1f) * terraform.Radius;
+                    float offsetY = ((float)_rng.NextDouble() * 2f - 1f) * terraform.Radius;
+                    targetX = pos.X + offsetX;
+                    targetY = pos.Y + offsetY;
+                }
+
+                // Terraform nudges the moisture parameter; the tile's classification and its
+                // continuous colour follow from the new params (docs/3d-terrain-plan.md Phase 2b).
+                _worldManager.Terraform(targetX, targetY, terraform.Direction, MoistureStep * sizeScale);
+            }
         }
     }
 }

@@ -112,6 +112,16 @@ public sealed class CarrionSystem : ISystem
         FeedScavengers(em);
     }
 
+    /// <summary>
+    /// Rot and decomposition. Deliberately NOT LOD-gated, and correct as it stands: a corpse is
+    /// spawned without a SimulationLOD component, so it has no tier and no interval — LODSystem
+    /// marks it due every tick and this loop advances grace and decay once per tick everywhere in
+    /// the world. Adding a gate here without a matching EffectiveInterval multiplier would make a
+    /// carcass out of the player's sight take twenty times as long to rot; adding a multiplier
+    /// without a gate would multiply rather than compensate. Leaving both out is the third
+    /// correct option, and it is the one in force. (docs/FEATURES_AND_DESIGN.md 6.1 previously
+    /// listed corpse decay as an uncompensated LOD quantity; it is not one.)
+    /// </summary>
     private void DecayCorpses(EntityManager em)
     {
         _toRemove.Clear();
@@ -220,9 +230,27 @@ public sealed class CarrionSystem : ISystem
             if (distSq <= EatRange * EatRange)
             {
                 // At the carcass — feed.
+                // RATE-LIKE — compensate. CarrionChopRate is nutrition per TICK, exactly like the
+                // graze and fertility-feed rates in GrazingSystem, so a due tick standing for
+                // twenty owes twenty ticks' worth of meat. Uncompensated, a scavenger out of sight
+                // stripped a carcass twenty times slower than one in view — and since rot runs at
+                // full speed everywhere (DecayCorpses above), a distant kill mostly rotted away
+                // before its own killer could eat it.
                 ref var carrion = ref em.Carrions[corpse];
                 float rate = def.CarrionChopRate >= 0f ? def.CarrionChopRate : MathF.Max(2f, def.MaxHunger * 0.02f);
-                float taken = MathF.Min(rate, carrion.Nutrition);
+                rate *= DecisionCadence.Elapsed(em, entity);
+
+                // A compensated batch must behave like the run of Full-tier bites it stands in
+                // for, and that run STOPS when the eater is full (the sated check above). Without
+                // this cap a nearly-full scavenger at Minimal tier tears twenty bites out of a
+                // carcass in one go and wastes all but the first — nutrition destroyed by the tick
+                // rate rather than eaten. Sectids fill a sack instead of a stomach, so theirs is
+                // capped by what the sack can still hold.
+                bool carries = isSectid && em.HasComponents(entity, ComponentFlags.FoodCarrier);
+                float headroom = carries
+                    ? MathF.Max(0f, em.FoodCarriers[entity].MaxCarry - em.FoodCarriers[entity].FoodCarried)
+                    : MathF.Max(0f, hunger.Max - hunger.Current);
+                float taken = MathF.Min(MathF.Min(rate, carrion.Nutrition), headroom);
                 carrion.Nutrition -= taken;
 
                 if (isSectid && em.HasComponents(entity, ComponentFlags.FoodCarrier))

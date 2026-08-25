@@ -100,8 +100,15 @@ public sealed class WanderSystem : ISystem
             }
 
             // === Roaming logic ===
+            // RATE-LIKE — compensate. RoamCooldown is a countdown in ticks ("how long before this
+            // creature may pick a new destination"), so it must count the ticks that actually
+            // passed. One decrement per due tick turned a 500-tick cooldown into 10,000 ticks at
+            // Minimal: a distant herd that grazed its patch bare simply stood on it, because the
+            // seek_food roam it was waiting on was twenty times further away than intended.
+            // Clamped at 0 rather than allowed to overshoot negative — see the same guard in
+            // HuntingSystem, where a stuck negative cooldown made prey unhittable.
             if (wander.RoamCooldown > 0)
-                wander.RoamCooldown--;
+                wander.RoamCooldown = Math.Max(0, wander.RoamCooldown - DecisionCadence.Elapsed(em, entity));
 
             // Determine hunger urgency for roaming behavior
             float hungerUrgency = 0f;

@@ -53,6 +53,24 @@ public static class DecisionCadence
     }
 
     /// <summary>
+    /// Ticks that ACTUALLY elapsed since this entity's previous due tick — the number a quantity
+    /// measured in ticks (a cooldown, a stopwatch, an amount consumed per tick) must advance by.
+    ///
+    /// The counterpart to <see cref="Interval"/>, and not interchangeable with it: Interval is the
+    /// nominal interval of the tier the entity is on NOW and describes the gap about to be
+    /// traversed, while this is the gap just ended. They differ every time an entity changes tier,
+    /// because the change resets the countdown — so compensating by the nominal interval over- or
+    /// under-counts at every boundary the player walks past. LODSystem publishes the real value.
+    /// </summary>
+    public static int Elapsed(EntityManager em, int entity)
+    {
+        if (!em.HasComponents(entity, ComponentFlags.SimulationLOD))
+            return 1;
+        int elapsed = em.SimulationLODs[entity].EffectiveInterval;
+        return elapsed > 0 ? elapsed : 1;
+    }
+
+    /// <summary>
     /// Convert a per-tick exponential approach rate into the equivalent rate for one decision
     /// covering `interval` ticks: applying the result once leaves the same fraction of the gap
     /// as applying the per-tick rate `interval` times.

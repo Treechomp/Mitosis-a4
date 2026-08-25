@@ -500,12 +500,35 @@ of the element is refused — a creature already stranded moves freely, so it ca
 so a beached aquatic used to keep its full swimming speed until its next decision and drive itself
 further up the beach — up to twenty ticks of open-water speed spent travelling inland.
 
+**The rule is now enforced by a test, not only by this paragraph.**
+`Scripts/Testing/LodDifferentialRunner.cs` runs a scenario twice from one seed — every entity
+pinned to Full, then every entity pinned to Minimal, via the scenario key `lod_override` — and
+compares end-state outcomes: populations, births and deaths by cause, kills, terraform nudges,
+nutrition flows, mean growth scale, mean nearest-neighbour spacing. It found `TerraformSystem`
+running 4-7× slow at Minimal (872 nudges vs 157 on shroomer_bloom) and pack spacing 5× loose
+(wolf-to-wolf 1.2 tiles vs 6.3). Results, standing exceptions and the two defects still open are
+in [lod-differential-baseline.md](lod-differential-baseline.md); the harness and its noise-floor
+methodology are in [test-scenes.md](test-scenes.md).
+
+**Rate-like or state-like — the question to answer at every gated site.** A quantity that
+accrues per tick (a cooldown, a stopwatch, an amount consumed per tick, a number of acts per unit
+of world time) is *rate-like* and must be multiplied by `EffectiveInterval`. A quantity that is a
+force or a correction against the CURRENT state (a separation impulse, a herd-cohesion pull, an
+overlap resolution) is *state-like* and must NOT be: `MovementSystem` damps velocity on the same
+decision cadence, so impulse and decay share a clock and the steady state is already
+tier-independent — multiplying would apply twenty times the force, not compensate for anything.
+Every gated site now carries that decision as a comment. A compensated batch should also **spread
+the way the sequence of Full-tier acts it stands in for would**: `TerraformSystem` rolls each owed
+act separately with its own target, rather than dropping one large nudge on one tile.
+
 **Known limits.** Tier boundaries are multiples of the camera's visible radius (`fullRange` =
 visible × 1.15, then ×2, ×3, ×5), so in a world only a few visible-radii across the far tiers
 never engage: in a 512-tile world with radius 60, Minimal held 0 entities until movement was
-fixed. Rate compensation is also still uneven — `Carrion`, `Herding`, `Separation`/`Collision` and
-`Wander` are gated but never multiply at all, so quantities they advance per due tick (roam
-cooldowns, corpse decay, separation impulses) still run slower for distant entities.
+fixed. The same arithmetic is why every test scenario (96-128 tiles) tops out at Medium and needs
+`lod_override` to reach the tiers where 85% of a real world lives. Two rate defects remain open,
+both outside the systems fixed above: `HuntingSystem` lands at most one attack per due tick
+(predation runs 2-30× slow at Minimal), and `GrazingSystem` spends its whole compensated batch on
+a single tile, so on depleted ground a distant grazer draws less than a walking one would.
 
 **Population cap vs. entity count.** `MaxPopulation` limits `CreatureCount` (= `EntityCount` −
 `CarrionCount`); corpses deliberately do not consume the population budget. The debug overlay
@@ -528,7 +551,10 @@ Five tiers (distance relative to visible radius `v`):
 Downgrades require crossing the boundary by 10% (hysteresis) to avoid oscillation. Countdown
 is decrement-first (`TicksUntilUpdate--`, due when ≤ 0), so newly spawned / re-tiered entities
 process immediately at any tier. Rate-sensitive systems multiply per-tick deltas by
-`SimulationLOD.TickInterval` so a throttled entity ages/starves at the correct rate.
+`SimulationLOD.EffectiveInterval` (`DecisionCadence.Elapsed`) so a throttled entity ages/starves
+at the correct rate — never by `TickInterval`, for the reason two paragraphs above.
+`lod_override` (a test-scenario key) forces every entity onto one tier while leaving interval,
+stagger and `EffectiveInterval` untouched; both paths run the same `LODSystem.ApplyTier`.
 **Invariant**: a resource producer (Grazing) and its consumer (Hunger) must share a gate
 level, or distant entities starve unfairly. Every spawn site constructs `SimulationLOD` with an
 explicit level (so `TickInterval` starts at 1, never 0), and `LODSystem` repairs any
