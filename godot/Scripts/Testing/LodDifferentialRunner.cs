@@ -193,15 +193,26 @@ public partial class LodDifferentialRunner : Node
         var em = new EntityManager();
         em.OnEntityDying = id => CarrionSystem.SpawnCorpse(em, id);
 
+        // Same per-class ceilings the game builds, at the scenario's own MaxPopulation. Without
+        // this the harness would be comparing tiers inside a world the game no longer runs — and
+        // the budget's refusal path is itself LOD-adjacent, since a refused spawn is a spawn that
+        // did not happen at whichever tier asked for it.
+        var budget = new PopulationBudget(scenario.MaxPopulation,
+            PopulationBudget.DefaultHerbivoreShare,
+            PopulationBudget.DefaultPredatorShare,
+            PopulationBudget.DefaultFactionShare);
+        em.Budget = budget;
+
         var world = new WorldManager(ChunkSize, sizeChunks, seed,
             new ScenarioTerrainGenerator(scenario, ChunkSize));
 
         var factory = new EntityFactory(em, rng);
         factory.SetPopulationCap(scenario.MaxPopulation);
+        factory.SetBudget(budget);
 
         var systems = new List<ISystem>();
         var stack = SimulationStack.Build(systems, world, factory,
-            ChunkSize, sizeChunks, TileSize, scenario.MaxPopulation);
+            ChunkSize, sizeChunks, TileSize, scenario.MaxPopulation, budget);
 
         // Logging: the run totals the comparison reads are maintained regardless of these, but
         // the per-run CSVs are what you actually open when a metric diverges, so each run gets
@@ -213,7 +224,8 @@ public partial class LodDifferentialRunner : Node
         EcosystemLogger.TerrainLogInterval = Math.Max(0, scenario.TerrainLogInterval);
         EcosystemLogger.NutritionLogInterval = Math.Max(0, scenario.NutritionLogInterval);
         EcosystemLogger.ClearTrackedSpecies();
-        var logger = new EcosystemLogger(world, $"{LogRoot}/lod_differential/{scenario.Name}_{label}");
+        var logger = new EcosystemLogger(world, $"{LogRoot}/lod_differential/{scenario.Name}_{label}",
+            budget);
         systems.Add(logger);
 
         // The whole point of the harness: pin the tier instead of deriving it from a distance

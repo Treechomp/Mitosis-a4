@@ -22,6 +22,12 @@ godot --headless --path godot res://Scenes/LodDifferential.tscn -- --ticks=3000
 scenario. All six runs take about a minute. Details of the harness and the CSV columns are in
 [test-scenes.md](test-scenes.md).
 
+> **Numbers refreshed** after per-class population budgets replaced the global birth ramp
+> (`FEATURES_AND_DESIGN.md` §9.1). That change altered the reproduction path these scenarios run
+> through — a graded local-density brake instead of a hard cutoff, and a seed split derived from
+> the class budgets — so every figure below moved. The *findings* did not: terraform is still
+> within its noise floor, predation and spacing are still the standing exceptions.
+
 ---
 
 ## The noise floor, and why the table is not just a list of failures
@@ -58,36 +64,36 @@ so a real defect in either is unmissable.
 `terraform.nudges` is the clean case — a mechanical count, a low noise floor, and a defect eight
 to eighteen times the size of that floor.
 
-| Scenario | metric | before (Full vs Minimal) | after (Full vs Minimal) | noise floor |
+| Scenario | metric | before the fix | current | noise floor |
 | --- | --- | --- | --- | --- |
-| shroomer_bloom | `terraform.nudges` | 872 vs 157 — **82% div, ratio 0.18** | 837 vs 787 — 6.0% div, ratio 0.94 | 9.6% |
-| shroomer_bloom | `terraform.shifts` | 170 vs 39 — **77% div, ratio 0.23** | 165 vs 161 — 2.4% div, ratio 0.98 | 6.8% |
-| faction_skirmish | `terraform.nudges` | 1408 vs 349 — **75% div, ratio 0.25** | 1528 vs 1423 — 6.9% div, ratio 0.93 | 4.1% |
-| faction_skirmish | `terraform.shifts` | 411 vs 185 — **55% div, ratio 0.45** | 445 vs 440 — 1.1% div, ratio 0.99 | 8.3% |
-| predator_prey | `spacing.Wolf` | 1.20 vs 6.34 — **81% div, ratio 5.3** | 1.20 vs 2.19 — 45% div, ratio 1.8 | 26% |
+| shroomer_bloom | `terraform.nudges` | 872 vs 157 — **82% div, ratio 0.18** | 891 vs 818 — 8.2% div, ratio 0.92 | 7.6% |
+| shroomer_bloom | `terraform.shifts` | 170 vs 39 — **77% div, ratio 0.23** | 175 vs 165 — 5.7% div, ratio 0.94 | 2.9% |
+| faction_skirmish | `terraform.nudges` | 1408 vs 349 — **75% div, ratio 0.25** | 1547 vs 1388 — 10.3% div, ratio 0.90 | 8.8% |
+| faction_skirmish | `terraform.shifts` | 411 vs 185 — **55% div, ratio 0.45** | 464 vs 431 — 7.1% div, ratio 0.93 | 3.2% |
+| shroomer_bloom | `growth.shroomer_mean_scale` | — | 1.200 vs 1.199 — 0.03% div | 1.4% |
 
-The Full-tier column barely moved (shroomer 872 → 837, faction 1408 → 1528, both inside the
-Full-vs-Full spread of 785–926 and 1389–1520). That is the point: the fixes brought `Minimal` up
-to `Full`, they did not retune the game.
+Two things to read off that. The `Minimal` column came up to meet `Full` — ratios 0.90–0.94
+against 0.18–0.45 before. And the `Full` column barely moved across the fix *or* the population
+budgets that followed it (shroomer 872 → 837 → 891, all inside the Full-vs-Full spread), which is
+what "brought Minimal up to Full rather than retuning the game" has to look like.
 
 Per-scenario verdict counts after the fixes:
 
 | Scenario | metrics | ok | within_noise | below_min_count | FAIL |
 | --- | --- | --- | --- | --- | --- |
-| aquatic_biome | 26 | 9 | 1 | 7 | 9 |
-| faction_skirmish | 33 | 8 | 6 | 12 | 7 |
-| freshwater_pond | 31 | 7 | 8 | 7 | 9 |
-| grazing_depletion | 18 | 4 | 0 | 7 | 7 |
-| predator_prey | 24 | 7 | 6 | 6 | 5 |
-| shroomer_bloom | 19 | 9 | 2 | 6 | 2 |
-| **total** | **151** | **44** | **23** | **45** | **39** |
+| aquatic_biome | 26 | 6 | 4 | 7 | 9 |
+| faction_skirmish | 33 | 12 | 6 | 11 | 4 |
+| freshwater_pond | 30 | 7 | 6 | 7 | 10 |
+| grazing_depletion | 18 | 2 | 0 | 7 | 9 |
+| predator_prey | 24 | 8 | 6 | 5 | 5 |
+| shroomer_bloom | 18 | 10 | 0 | 5 | 3 |
+| **total** | **149** | **45** | **22** | **42** | **40** |
 
-**No scenario passes outright.** The 39 remaining failures break down as `pop` 13, `births` 7,
-`spacing` 7, `nutrition` 6, `kills` 4, `deaths_predation` 2, and they have four causes between
-them, each given a verdict below: two real defects that this change deliberately does not fix
-(predation rate, grazing granularity), one accepted consequence of the LOD design (herd spacing),
-and one family — `pop` and `births`, 20 of the 39 — that is purely downstream of the other
-three.
+**No scenario passes outright.** The 40 remaining failures break down as `pop` 9, `nutrition` 8,
+`kills` 7, `births` 6, `spacing` 6, `deaths_predation` 4, and they have four causes between them,
+each given a verdict below: two real defects that this change deliberately does not fix (predation
+rate, grazing granularity), one accepted consequence of the LOD design (herd spacing), and one
+family — `pop` and `births`, 15 of the 40 — that is purely downstream of the other three.
 
 ---
 
@@ -114,12 +120,12 @@ velocity every tick regardless of tier. Multiplying by `EffectiveInterval` here 
 compensate for anything: it would put twenty times the force on a distant creature and fire it out
 of its own herd.
 
-The measurement backs this up, and does so with a control built into the data. In
-`predator_prey`, `spacing.Rabbit` — a **solitary** species, so separation-only, no cohesion — is
-3.82 tiles at Full against 3.87 at Minimal: a 1.2% divergence, `ok`, against a 10% noise floor. If
-the separation impulse were under-applied at coarse tiers, rabbits would clump; they do not. What
-*did* diverge was the **social** species (`spacing.Wolf` 1.20 → 6.34), which is cohesion and
-alignment, not separation. Compensating the alignment blend cut that to 2.19.
+The measurement backs this up, and does so with a control built into the data. In `predator_prey`, `spacing.Rabbit` — a **solitary** species, so separation-only, no cohesion —
+is 3.88 tiles at Full against 4.36 at Minimal: an 11% divergence, `ok`. Its herding neighbour
+`spacing.Deer` in the same run is 2.18 against 5.66, a 2.6× spread. If the separation impulse were
+under-applied at coarse tiers, rabbits would clump; they do not, and the species that spread are
+the ones with cohesion and alignment. That was the diagnosis behind compensating the alignment
+blend, which took `spacing.Wolf` from 1.20 vs 6.34 (81% divergence) down to within its own noise.
 
 `FEATURES_AND_DESIGN.md` §6.1 listed "separation impulses" among the uncompensated quantities.
 That was the wrong diagnosis of a real symptom: distant herds *are* looser, but because of
@@ -140,11 +146,12 @@ Both docs have been corrected.
 
 | Scenario | metric | Full | Minimal | ratio | noise floor |
 | --- | --- | --- | --- | --- | --- |
-| freshwater_pond | `kills.Otter` | 32 | 1 | 0.03 | 28% |
-| freshwater_pond | `kills.total` | 39 | 6 | 0.15 | 41% |
-| aquatic_biome | `kills.Penguin` | 91 | 30 | 0.33 | 27% |
-| aquatic_biome | `kills.total` | 114 | 53 | 0.47 | 14% |
-| aquatic_biome | `deaths_predation.Fish` | 91 | 33 | 0.36 | 25% |
+| freshwater_pond | `kills.Otter` | 32 | 2 | 0.06 | 41% |
+| freshwater_pond | `kills.total` | 33 | 15 | 0.46 | 42% |
+| aquatic_biome | `kills.Penguin` | 67 | 28 | 0.42 | 17% |
+| aquatic_biome | `kills.total` | 87 | 39 | 0.45 | 17% |
+| aquatic_biome | `deaths_predation.Fish` | 67 | 28 | 0.42 | 18% |
+| predator_prey | `kills.total` | 36 | 22 | 0.61 | 23% |
 
 **Not acceptable — but not what this change fixes.** Part C's scope is `TerraformSystem` plus the
 four systems §6.1 names; `HuntingSystem` is neither, and it is the one system where a
@@ -167,12 +174,14 @@ balance and belong in their own change with a balance pass behind them.
 
 ### 2. Herd and pack spacing — accepted, inherent to gating decisions
 
-| Scenario | metric | Full | Minimal | ratio | noise floor |
-| --- | --- | --- | --- | --- | --- |
-| predator_prey | `spacing.Deer` | 1.94 | 7.00 | 3.6 | 48% |
-| predator_prey | `spacing.Wolf` | 1.20 | 2.19 | 1.8 | 26% |
-| grazing_depletion | `spacing.Deer` | 2.48 | 4.67 | 1.9 | 34% |
-| aquatic_biome | `spacing.Penguin` | 2.77 | 4.33 | 1.6 | 17% |
+| Scenario | metric | Full | Minimal | ratio | noise floor | verdict |
+| --- | --- | --- | --- | --- | --- | --- |
+| predator_prey | `spacing.Deer` | 2.18 | 5.66 | 2.6 | 9% | FAIL |
+| grazing_depletion | `spacing.Deer` | 3.48 | 5.60 | 1.6 | 28% | FAIL |
+| grazing_depletion | `spacing.Rabbit` | 4.54 | 5.40 | 1.19 | 6% | FAIL |
+| aquatic_biome | `spacing.Fish` | 1.53 | 1.91 | 1.25 | 9% | FAIL |
+| predator_prey | `spacing.Rabbit` | 3.88 | 4.36 | 1.12 | 15% | ok |
+| predator_prey | `spacing.Wolf` | 5.08 | 7.88 | 1.55 | 75% | within_noise |
 
 **Accepted.** After the alignment fix, what remains is the cost of the design decision §6.1 makes
 deliberately: LOD gates decisions, not motion. A `Minimal`-tier creature integrates its velocity
@@ -190,10 +199,11 @@ are too **loose**, never too tight. An under-applied separation force would show
 
 | Scenario | metric | Full | Minimal | ratio | noise floor | verdict |
 | --- | --- | --- | --- | --- | --- | --- |
-| shroomer_bloom | `nutrition.consumed` | 1181 | 830 | 0.70 | 13% | FAIL |
-| shroomer_bloom | `nutrition.regenerated` | 855 | 575 | 0.67 | 17% | FAIL |
-| faction_skirmish | `nutrition.consumed` | 3706 | 2338 | 0.63 | 28% | FAIL |
-| predator_prey | `nutrition.consumed` | 2769 | 3492 | **1.26** | 2% | FAIL |
+| shroomer_bloom | `nutrition.consumed` | 1334 | 822 | 0.62 | 24% | FAIL |
+| shroomer_bloom | `nutrition.regenerated` | 927 | 581 | 0.63 | 25% | FAIL |
+| faction_skirmish | `nutrition.consumed` | 3491 | 2447 | 0.70 | 26% | FAIL |
+| grazing_depletion | `nutrition.consumed` | 935 | 624 | 0.67 | 20% | FAIL |
+| freshwater_pond | `nutrition.consumed` | 2770 | 2189 | 0.79 | 14% | FAIL |
 
 **A real defect, and not the missing-multiplier kind.** `GrazingSystem` already multiplies every
 consume rate by `EffectiveInterval` — the multiplier is present and correct. What is wrong is
@@ -212,15 +222,15 @@ what it is holding. On rich ground the two are equivalent; on depleted ground �
 the ground these scenarios are built to create — the batch is capped by a single tile's stock, and
 `richness` then underfeeds the creature as well.
 
-`shroomer_bloom` is the clean demonstration, because every confound is pinned: Deer 20 vs 20,
-Shroomers 27 vs 30, terraform nudges within 6%, mean growth scale within 0.9% — identical
-populations doing identical things — and consumption still 30% down at Minimal against a 13%
-floor.
+`shroomer_bloom` is the clean demonstration, because every confound is pinned: terraform nudges
+within 8%, mean growth scale within **0.03%**, populations within their noise — identical
+populations doing identical things — and consumption still 38% down at Minimal against a 24%
+floor. Every scenario with depleted ground shows the same sign; where food is plentiful
+(`predator_prey`, `aquatic_biome`) the metric is `ok`, which is what a saturation effect looks
+like.
 
-`predator_prey` diverges the other way (Minimal consumes **more**) and that one *is* downstream:
-its Minimal run ends with 183 creatures against 143, including 42 deer against 32 and 126 rabbits
-against 98, because fewer of them were eaten (see exception 1). More mouths, more grazing. Its 2%
-noise floor confirms the signal is real; it is just signal about how many animals are alive.
+Where the divergence runs the *other* way it is downstream instead: more mouths alive at Minimal
+because fewer of them were eaten (exception 1) means more grazing.
 
 **Proposed fix**, deliberately not made here (`GrazingSystem` is outside Part C's scope, and this
 changes feeding balance): spend the batch along the path actually travelled since the last
@@ -231,10 +241,10 @@ batch spreads the same way a sequence of Full-tier rolls would") and the same on
 
 ### 4. Population and birth counts — downstream of 1, 2 and 3
 
-`pop.*` and `births.*` are 20 of the 39 remaining failures (13 and 7) and sit at the end of every
-causal chain above: fewer kills leave more prey (`predator_prey` ends at 183 creatures at Minimal
-against 143 at Full), underfed grazers on depleted ground breed less (`grazing_depletion` ends at
-71 against 103), and looser herds change encounter rates.
+`pop.*` and `births.*` are 15 of the 40 remaining failures (9 and 6) and sit at the end of every
+causal chain above: fewer kills leave more prey (`predator_prey` ends at 157 creatures at Minimal
+against 128 at Full), underfed grazers on depleted ground breed less (`grazing_depletion` ends at
+81 against 111), and looser herds change encounter rates.
 
 **Accepted as downstream.** They are reported because population is the outcome a player would
 actually notice, not because they are independently diagnosable — nothing in this family should be

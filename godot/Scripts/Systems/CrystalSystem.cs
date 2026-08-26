@@ -43,11 +43,16 @@ public sealed class CrystalSystem : ISystem
     private int _globalSectids;
     private int _censusCooldown;
 
-    public CrystalSystem(WorldManager worldManager, SpatialHash spatialHash, int maxPopulation)
+    /// <summary>Per-class ceiling; Faelings are charged to the Faction budget.</summary>
+    private readonly PopulationBudget? _budget;
+
+    public CrystalSystem(WorldManager worldManager, SpatialHash spatialHash, int maxPopulation,
+                          PopulationBudget? budget = null)
     {
         _worldManager = worldManager;
         _spatialHash = spatialHash;
         _maxPopulation = maxPopulation;
+        _budget = budget;
     }
 
     public void Process(EntityManager em)
@@ -161,11 +166,21 @@ public sealed class CrystalSystem : ISystem
         // === RANGED ATTACK PROCESSING ===
         ProcessRangedAttacks(em);
 
-        // === SPAWN PENDING FAELINGS (respect population cap) ===
+        // === SPAWN PENDING FAELINGS (respect population cap AND the faction budget) ===
+        // Like NestSystem, this path had only the hard cap and no throttle, so it was on the
+        // winning side of the ratchet — it just never had the numbers to exploit it (8 Faelings in
+        // a profiled 12k world). Gating it anyway is what makes "no path is privileged" true
+        // rather than true-for-now.
         var faelingSpeciesId = SpeciesRegistry.GetId("Faeling");
+        var faelingDefBudget = SpeciesRegistry.Get("Faeling");
         foreach (var (x, y, crystalEntity, inheritedPower) in _pendingFaelings)
         {
             if (em.CreatureCount >= _maxPopulation) break;
+            if (_budget != null && !_budget.CanSpawn(faelingDefBudget))
+            {
+                _budget.LogRefusal(faelingDefBudget);
+                continue;
+            }
             int faeling = SpawnFaeling(em, x, y, crystalEntity, inheritedPower);
             if (faeling >= 0)
             {

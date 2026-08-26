@@ -110,6 +110,14 @@ public sealed class EntityManager
     /// </summary>
     public Action<int>? OnEntityDying;
 
+    /// <summary>
+    /// Per-class population ceilings. Charged and released here, alongside CreatureCount, because
+    /// this is the one place every entity is created and destroyed — a service that maintained its
+    /// counts anywhere else would drift the moment a new spawn path appeared, which is exactly the
+    /// failure the budget exists to end. Null in contexts that don't budget (worldgen previewer).
+    /// </summary>
+    public PopulationBudget? Budget;
+
     public EntityManager()
     {
         _alive = new bool[MaxEntities];
@@ -223,6 +231,7 @@ public sealed class EntityManager
         OnEntityDying?.Invoke(entityId);
 
         if ((_componentFlags[entityId] & ComponentFlags.Carrion) != 0) _carrionCount--;
+        Budget?.Untrack(entityId);
         _alive[entityId] = false;
         _componentFlags[entityId] = ComponentFlags.None;
         _freeIds.Enqueue(entityId);
@@ -242,6 +251,7 @@ public sealed class EntityManager
             {
                 OnEntityDying?.Invoke(entityId);
                 if ((_componentFlags[entityId] & ComponentFlags.Carrion) != 0) _carrionCount--;
+                Budget?.Untrack(entityId);
                 _alive[entityId] = false;
                 _componentFlags[entityId] = ComponentFlags.None;
                 _freeIds.Enqueue(entityId);
@@ -280,6 +290,24 @@ public sealed class EntityManager
             && (_componentFlags[entityId] & ComponentFlags.Carrion) == 0)
             _carrionCount++;
         _componentFlags[entityId] |= flag;
+
+        // Per-class budget bookkeeping, order-independent in BOTH directions — which it has to
+        // be, because both orders occur. A creature gains Species and is charged to its class; a
+        // spore gains its own marker FIRST and only then Species (it carries Species(Shroomer) for
+        // type checks), so for a spore the charge has to be SUPPRESSED, not merely undone
+        // afterwards. Testing the accumulated flags rather than the incoming one covers both
+        // orders: this runs after the |= above, so a marker attached earlier in the assembly is
+        // already visible. Getting this wrong charged every spore to the faction budget.
+        if (Budget != null)
+        {
+            const ComponentFlags notACreature = ComponentFlags.Spore | ComponentFlags.Nest
+                                              | ComponentFlags.Crystal | ComponentFlags.Carrion;
+            if ((flag & ComponentFlags.Species) != 0
+                && (_componentFlags[entityId] & notACreature) == 0)
+                Budget.Track(entityId, Species[entityId].SpeciesId);
+            if ((flag & notACreature) != 0)
+                Budget.Untrack(entityId);
+        }
     }
 
     /// <summary>
@@ -291,6 +319,8 @@ public sealed class EntityManager
         if ((flag & ComponentFlags.Carrion) != 0
             && (_componentFlags[entityId] & ComponentFlags.Carrion) != 0)
             _carrionCount--;
+        if ((flag & ComponentFlags.Species) != 0)
+            Budget?.Untrack(entityId);
         _componentFlags[entityId] &= ~flag;
     }
 

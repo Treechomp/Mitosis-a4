@@ -38,11 +38,16 @@ public sealed class NestSystem : ISystem
     private int _nextColonyId = 1;
     private readonly int _maxPopulation;
 
-    public NestSystem(WorldManager worldManager, SpatialHash spatialHash, int maxPopulation)
+    /// <summary>Per-class ceiling; Sectids are charged to the Faction budget.</summary>
+    private readonly PopulationBudget? _budget;
+
+    public NestSystem(WorldManager worldManager, SpatialHash spatialHash, int maxPopulation,
+                       PopulationBudget? budget = null)
     {
         _worldManager = worldManager;
         _spatialHash = spatialHash;
         _maxPopulation = maxPopulation;
+        _budget = budget;
     }
 
     /// <summary>Surplus (in larvae-equivalents) a nest must bank before founding another.</summary>
@@ -106,7 +111,14 @@ public sealed class NestSystem : ISystem
             // that had eaten recently expanded, which is what made colony growth purely
             // exponential: there was no state in which a fed nest declined to build.
             float foundingCost = nest.FoodPerSpawn * NestFoundingCostLarvae;
-            if (nest.IsMaxStage && nest.FoodStored >= foundingCost)
+            // Don't even attempt to expand while the faction budget is full. TryFoundNest QUEUES
+            // the nest and the colony pays foundingCost for it a few lines below, so a nest
+            // refused later at spawn time would cost a colony its whole surplus and leave nothing
+            // standing — a hidden tax that would suppress Sectids far harder than the ceiling
+            // itself. No refusal is logged here: a colony declining to expand is not a spawn being
+            // turned away, and this branch would fire for every nest on every tick while full.
+            bool factionHasRoom = _budget == null || _budget.CanSpawn(sectidDef);
+            if (nest.IsMaxStage && nest.FoodStored >= foundingCost && factionHasRoom)
             {
                 // Count nearby nests for colony check
                 int nearbyNests = CountNearbyNests(em, pos.X, pos.Y, sectidDef.NestColonyRadius, entity);
@@ -140,19 +152,41 @@ public sealed class NestSystem : ISystem
         // === SECTID LIFE (food delivery + hibernation/waking) ===
         ProcessSectids(em);
 
-        // === SPAWN PENDING SECTIDS (respect population cap) ===
+        // === SPAWN PENDING SECTIDS (respect population cap AND the faction budget) ===
+        // The faction check is the whole point of this change. NestSystem was the ONE creature
+        // spawn path with no global throttle at all — ReproductionSystem and SporeSystem each had
+        // the pressure ramp, this had only the hard cap. At the cap every death frees a slot, and
+        // an unthrottled claimant takes it immediately while a throttled one needs hundreds of
+        // attempts, so the Sectid share could only ever rise. Adding the old ramp here would have
+        // moved the monoculture a third time; a per-class ceiling ends it, because now no path is
+        // privileged over another.
         var sectidSpeciesId = SpeciesRegistry.GetId("Sectid");
+        var sectidDefBudget = SpeciesRegistry.Get("Sectid");
         foreach (var (x, y, colonyId) in _pendingSpawns)
         {
             if (em.CreatureCount >= _maxPopulation) break;
+            if (_budget != null && !_budget.CanSpawn(sectidDefBudget))
+            {
+                _budget.LogRefusal(sectidDefBudget);
+                continue;
+            }
             SpawnSectid(em, x, y, colonyId);
             EcosystemLogger.Instance?.LogReproduction(sectidSpeciesId, -1, x, y, 1);
         }
 
         // === SPAWN PENDING NESTS (respect population cap) ===
+        // A nest is a structure, not a creature, so it is charged to no class — but founding one
+        // is a bid to grow the colony, and a colony whose budget is full has nowhere to put the
+        // brood it would hatch. Refusing the nest keeps the faction's footprint honest instead of
+        // covering the map with structures that can never fill.
         foreach (var (x, y, colonyId) in _pendingNests)
         {
             if (em.CreatureCount >= _maxPopulation) break;
+            if (_budget != null && !_budget.CanSpawn(sectidDefBudget))
+            {
+                _budget.LogRefusal(sectidDefBudget);
+                continue;
+            }
             SpawnNest(em, x, y, colonyId);
         }
     }

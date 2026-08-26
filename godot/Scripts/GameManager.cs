@@ -62,8 +62,18 @@ public partial class GameManager : Node3D
     public float TerrainRiverDensity = 0.2f;                  // river-source budget scale (1 = the old dense look)
     [Export] public int TargetTPS = 20;
     [Export] public int MaxPopulation = 12000;   // standard test ceiling (36-chunk world)
+
+    // Per-class shares of MaxPopulation. MaxPopulation is an ENGINEERING number — tick + render
+    // cost saturates a thread above ~12k creatures — and splitting it per class is what stops it
+    // being spent as an ecological force. One shared pool meant every species' births were
+    // throttled by one number, which selects for fast breeders and lets the winner hold everyone
+    // else at zero; see PopulationBudget for the measurement. The shares deliberately sum to 0.88:
+    // the remaining 12% is headroom for spores, structures and transients, and is not allocated to
+    // any class.
+    [Export] public float HerbivoreBudgetShare = PopulationBudget.DefaultHerbivoreShare;   // ~5000 of 12000
+    [Export] public float PredatorBudgetShare  = PopulationBudget.DefaultPredatorShare;    // ~1500
+    [Export] public float FactionBudgetShare   = PopulationBudget.DefaultFactionShare;     // ~4000
     [Export] public int InitialPopulation = 2000; // standard test seed population
-    [Export] public float HerbivoreRatio = 0.85f;
     [Export] public float CreaturesPerChunk = 2f;
 
     // Spectator settings
@@ -85,9 +95,13 @@ public partial class GameManager : Node3D
     // the ecosystem is viable with no factions present. Combines with DisabledSpecies above.
     [Export] public bool DisableFactionSpecies = false;
 
-    // Faction spawning — proportions of InitialPopulation
-    [Export] public float FaelingShare = 0.04f;
-    [Export] public float SectidShare  = 0.10f;  // Need denser starting swarms to reach kill-mass
+    // HerbivoreRatio (0.85), FaelingShare (0.04) and SectidShare (0.10) used to set the starting
+    // composition here. They are gone: the seed is now split in the same proportions as the class
+    // BUDGETS (PopulationBudget.SplitSeed), so a world starts in the shape its ceilings will let
+    // it hold instead of starting at 85% herbivores and spending its first thousands of ticks
+    // being filtered toward something else. Faeling numbers are no longer a share at all — see
+    // WorldSpawner.SpawnCrystals, where crystal count is derived from map coverage because one
+    // crystal sustains exactly one Faeling.
 
     // Core systems — protected so the test-scene subclass (TestSceneManager) can spawn into
     // and inspect the running simulation.
@@ -101,6 +115,7 @@ public partial class GameManager : Node3D
     protected CrystalSystem?   _crystalSystem;
     protected SporeSystem?     _sporeSystem;
     protected EcosystemLogger? _ecosystemLogger;
+    protected PopulationBudget? _populationBudget;
 
     // Extracted managers
     protected EntityFactory    _entityFactory    = null!;
@@ -197,9 +212,17 @@ public partial class GameManager : Node3D
         _worldManager = CreateWorld(seed, terrainSettings);
         _simulationDt = 1.0 / TargetTPS;
 
+        // Per-class population ceilings. Built before anything spawns, and attached to the
+        // EntityManager so the live counts are maintained in the same place as CreatureCount —
+        // there is no second bookkeeping path to fall out of step.
+        _populationBudget = new PopulationBudget(MaxPopulation,
+            HerbivoreBudgetShare, PredatorBudgetShare, FactionBudgetShare);
+        _entityManager.Budget = _populationBudget;
+
         // Create extracted managers
         _entityFactory = new EntityFactory(_entityManager, _rng);
         _entityFactory.SetPopulationCap(MaxPopulation);
+        _entityFactory.SetBudget(_populationBudget);
         _worldSpawner = new WorldSpawner(_worldManager, _entityFactory, _rng);
         _playerController = new PlayerController(_entityManager)
         {
@@ -217,14 +240,14 @@ public partial class GameManager : Node3D
         // differential harness builds from too — one list, so the harness cannot be testing a
         // different stack from the one the game runs.
         var stack = SimulationStack.Build(_systems, _worldManager, _entityFactory,
-            ChunkSize, WorldSizeChunks, TileSize, MaxPopulation);
+            ChunkSize, WorldSizeChunks, TileSize, MaxPopulation, _populationBudget);
         _lodSystem     = stack.Lod;
         _nestSystem    = stack.Nest;
         _sporeSystem   = stack.Spore;
         _crystalSystem = stack.Crystal;
 
         // The logger is per-run configuration rather than simulation, and runs last.
-        _ecosystemLogger = new EcosystemLogger(_worldManager);
+        _ecosystemLogger = new EcosystemLogger(_worldManager, budget: _populationBudget);
         if (!string.IsNullOrWhiteSpace(TrackSpecies))
         {
             EcosystemLogger.TrackedSpeciesId = SpeciesRegistry.GetId(TrackSpecies);
@@ -340,21 +363,55 @@ public partial class GameManager : Node3D
     /// </summary>
     protected virtual void PopulateWorld()
     {
-        // Spawn faction structures. A disabled faction's budget folds back into the creature
-        // budget so a "no-faction" run still spawns a full InitialPopulation of other species.
+        // Seed each class in proportion to its CEILING, not to a separate set of ratios. The two
+        // used to disagree — 85% herbivores seeded against a shared pool — and the reconciliation
+        // was done by the global birth ramp, i.e. by the exclusion filter this change removed.
+        _populationBudget!.SplitSeed(InitialPopulation,
+            out int herbivoreSeed, out int predatorSeed, out int factionSeed);
+
         bool faelingEnabled = SpeciesToggle.IsEnabled(SpeciesRegistry.GetId("Faeling"));
         bool sectidEnabled  = SpeciesToggle.IsEnabled(SpeciesRegistry.GetId("Sectid"));
-        int faelingBudget  = faelingEnabled ? (int)(InitialPopulation * FaelingShare) : 0;
-        int sectidBudget   = sectidEnabled  ? (int)(InitialPopulation * SectidShare)  : 0;
-        int creatureBudget = InitialPopulation - faelingBudget - sectidBudget;
+        bool shroomerEnabled = SpeciesToggle.IsEnabled(SpeciesRegistry.GetId("Shroomer"));
+
+        // Sectids and Shroomers split the faction seed; Faelings take no part of it, because a
+        // Faeling exists only while a crystal holds it (CrystalSystem links exactly one to each)
+        // and crystals are placed for coverage, not from a population share.
+        int factionClaimants = (sectidEnabled ? 1 : 0) + (shroomerEnabled ? 1 : 0);
+        int sectidSeed   = sectidEnabled   && factionClaimants > 0 ? factionSeed / factionClaimants : 0;
+        int shroomerSeed = shroomerEnabled && factionClaimants > 0 ? factionSeed - sectidSeed : 0;
+
+        // A disabled faction's seed folds back into the prey base, so a "no-faction" run still
+        // starts with a full InitialPopulation of everything else.
+        if (factionClaimants == 0)
+            herbivoreSeed += factionSeed;
 
         GD.Print("Spawning faction structures...");
-        _worldSpawner.SpawnCrystals(_crystalSystem!, _entityManager, faelingBudget);
-        _worldSpawner.SpawnInitialNests(_nestSystem!, _entityManager, sectidBudget);
+        _worldSpawner.SpawnCrystals(_crystalSystem!, _entityManager, faelingEnabled, _populationBudget);
+        _worldSpawner.SpawnInitialNests(_nestSystem!, _entityManager, sectidSeed);
 
         GD.Print("Spawning creatures...");
-        int spawnedCount = _worldSpawner.SpawnCreatures(creatureBudget, HerbivoreRatio);
-        GD.Print($"Spawned {spawnedCount} creatures (+ faction structures from {faelingBudget} Faeling + {sectidBudget} Sectid budget)");
+        int spawnedCount = _worldSpawner.SpawnCreatures(herbivoreSeed, predatorSeed, shroomerSeed);
+        GD.Print($"Spawned {spawnedCount} creatures — seed split from class budgets: " +
+                 $"{herbivoreSeed} herbivore, {predatorSeed} predator, " +
+                 $"{shroomerSeed} Shroomer + {sectidSeed} Sectid (Faelings come from crystals)");
+    }
+
+    /// <summary>
+    /// One overlay line per budget class: live count against its ceiling, and how many spawns that
+    /// class has been refused so far. The refusal counter is the point — a class sitting on its
+    /// ceiling is the engine, not the ecology, deciding what the world contains, and that should be
+    /// visible at a glance rather than inferred from a composition that looks wrong.
+    /// </summary>
+    private string BudgetOverlayText()
+    {
+        if (_populationBudget == null) return "";
+        return "Budget:  " +
+               $"herb {_populationBudget.CountFor(PopClass.Herbivore)}/{_populationBudget.BudgetFor(PopClass.Herbivore)}" +
+               $" (refused {_populationBudget.RefusalsFor(PopClass.Herbivore)})   " +
+               $"pred {_populationBudget.CountFor(PopClass.Predator)}/{_populationBudget.BudgetFor(PopClass.Predator)}" +
+               $" (refused {_populationBudget.RefusalsFor(PopClass.Predator)})   " +
+               $"faction {_populationBudget.CountFor(PopClass.Faction)}/{_populationBudget.BudgetFor(PopClass.Faction)}" +
+               $" (refused {_populationBudget.RefusalsFor(PopClass.Faction)})";
     }
 
     private void SetupDebugUI()
@@ -596,7 +653,8 @@ public partial class GameManager : Node3D
                 $"Min={_lodSystem?.CountMinimal ?? 0}\n" +
                 $"Herbivores: {_herbivoreCount}  Predators: {_predatorCount}  " +
                 $"Shroomers: {_shroomerCount}  Sectids: {_sectidCount}  " +
-                $"Faelings: {_faelingCount}";
+                $"Faelings: {_faelingCount}\n" +
+                BudgetOverlayText();
 
             if (_showProfiling)
             {

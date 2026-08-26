@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using Mitosis.ECS;
 using Mitosis.World;
 
 namespace Mitosis.Systems;
@@ -47,7 +48,8 @@ public sealed class SimulationStack
         int chunkSize,
         int worldSizeChunks,
         float tileSize,
-        int maxPopulation)
+        int maxPopulation,
+        PopulationBudget? budget = null)
     {
         var spatialHash = world.SpatialHash;
 
@@ -70,15 +72,17 @@ public sealed class SimulationStack
         // is fed/held at the corpse before NestSystem decides whether to ferry the load home.
         systems.Add(new CarrionSystem(spatialHash, world));
         systems.Add(new AgingSystem());
-        systems.Add(new ReproductionSystem(world, maxPopulation, spatialHash, entityFactory));
+        systems.Add(new ReproductionSystem(world, maxPopulation, spatialHash, entityFactory, budget));
         systems.Add(new TerraformSystem(world));
         systems.Add(new TileRegenerationSystem(world));
 
-        var nest = new NestSystem(world, spatialHash, maxPopulation);
+        // All four reproduction paths take the same budget. Handing it to only some of them is
+        // precisely the defect being fixed — see PopulationBudget's "monoculture ratchet".
+        var nest = new NestSystem(world, spatialHash, maxPopulation, budget);
         systems.Add(nest);
-        var spore = new SporeSystem(world, spatialHash, maxPopulation);
+        var spore = new SporeSystem(world, spatialHash, maxPopulation, budget);
         systems.Add(spore);
-        var crystal = new CrystalSystem(world, spatialHash, maxPopulation);
+        var crystal = new CrystalSystem(world, spatialHash, maxPopulation, budget);
         systems.Add(crystal);
 
         return new SimulationStack(lod, nest, spore, crystal);

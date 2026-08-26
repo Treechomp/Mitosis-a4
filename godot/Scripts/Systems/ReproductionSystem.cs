@@ -23,14 +23,24 @@ public sealed class ReproductionSystem : ISystem
     private readonly List<int> _nearbyBuffer = new(64);
 
     private readonly EntityFactory _entityFactory;
+    private readonly PopulationBudget? _budget;
+
+    /// <summary>
+    /// Fraction of the local density limit a species may fill before crowding starts costing it
+    /// births. Below this, neighbours are free; above it the chance falls linearly to zero at the
+    /// limit. Kept generous so a herd still forms — the point is a soft shoulder, not a smaller cap.
+    /// </summary>
+    private const float DensityFreeFraction = 0.5f;
 
     public ReproductionSystem(World.WorldManager worldManager, int maxPopulation,
-                               SpatialHash spatialHash, EntityFactory entityFactory)
+                               SpatialHash spatialHash, EntityFactory entityFactory,
+                               PopulationBudget? budget = null)
     {
         _worldManager = worldManager;
         _maxPopulation = maxPopulation;
         _spatialHash = spatialHash;
         _entityFactory = entityFactory;
+        _budget = budget;
     }
 
     public void Process(EntityManager em)
@@ -41,16 +51,21 @@ public sealed class ReproductionSystem : ISystem
         if (em.CreatureCount >= _maxPopulation)
             return;
 
-        // Global population pressure: as population approaches cap, reproduction becomes
-        // increasingly unlikely. This prevents local pockets from ignoring the global limit.
-        float populationRatio = (float)em.CreatureCount / _maxPopulation;
-        float globalPressure = 1f; // 1.0 = no suppression
-        if (populationRatio > 0.5f)
-        {
-            // Linear ramp from 1.0 at 50% to 0.0 at 100%
-            globalPressure = MathF.Max(0f, 2f * (1f - populationRatio));
-        }
-
+        // GUARD ORDER IS PART OF THE DESIGN: every pure array read and every cheap dice roll runs
+        // ABOVE the spatial query below. The rule was violated here and cost real time — the
+        // QueryRadius neighbour scan ran before a global dice roll that was rejecting 99.77% of
+        // candidates, so the system spent 3.27 ms of a 25.5 ms tick (12.8%) building neighbour
+        // lists for creatures that were about to be refused anyway. Anything cheap that can say
+        // "no" belongs before anything expensive that can.
+        //
+        // The global pressure ramp that used to live here is GONE. It multiplied every species'
+        // birth chance by one shared number p that fell to zero as the shared cap filled, which
+        // is a competitive-exclusion filter, not a population brake: a species holds equilibrium
+        // at b*p = d, so it survives only while b/d >= 1/p, and the fastest breeder keeps p pinned
+        // near zero for everyone else. Measured at 99.88% of cap: p = 0.0023, and a composition of
+        // 10,746 herbivores to 492 predators. Per-class budgets (PopulationBudget) replace it as
+        // the ceiling, and the LOCAL density check below is now the primary brake — it is
+        // per-species and diegetic, so a crowded rabbit warren cannot suppress wolf births.
         const ComponentFlags required = ComponentFlags.Position | ComponentFlags.Species |
                                          ComponentFlags.Hunger | ComponentFlags.Energy |
                                          ComponentFlags.Age | ComponentFlags.Reproduction;
@@ -97,6 +112,15 @@ public sealed class ReproductionSystem : ISystem
             if (em.CreatureCount + _toSpawn.Count >= _maxPopulation)
                 break;
 
+            // Per-class ceiling — a pure array read, so it sits above every world lookup and the
+            // spatial query. EntityFactory checks it again at the moment of creation; this one is
+            // here to avoid paying for a candidate whose class is already full.
+            if (_budget != null && !_budget.CanSpawn(speciesDef))
+            {
+                _budget.LogRefusal(speciesDef);
+                continue;
+            }
+
             ref var pos = ref em.Positions[entity];
 
             var parentTile = _worldManager.GetTile(pos.X, pos.Y);
@@ -120,8 +144,25 @@ public sealed class ReproductionSystem : ISystem
                     continue;
             }
 
-            // Local density suppression — skip if too many same-species nearby
-            // Prevents exponential population explosions in well-fed areas
+            // Find spawn position. Moved ABOVE the neighbour scan: it is two dice rolls and one
+            // tile lookup, and it rejects outright (a landlocked spot for a fish, a lake for a
+            // deer), so paying for a radius query first was pure waste.
+            float spawnX = pos.X + ((float)_rng.NextDouble() * 2 - 1) * reproduction.SpawnRadius;
+            float spawnY = pos.Y + ((float)_rng.NextDouble() * 2 - 1) * reproduction.SpawnRadius;
+
+            // Only spawn on tiles valid for this species (aquatic spawn in water, etc.)
+            if (!speciesDef.CanSpawnOnTile(_worldManager.GetTile(spawnX, spawnY)))
+                continue;
+
+            // === LOCAL DENSITY — the primary brake, and the last thing checked ===
+            // Per-species and per-place, which is what the deleted global ramp was not: crowding
+            // among rabbits says nothing about whether a wolf may breed, so this cannot select for
+            // fast breeders the way one shared multiplier did. It is also diegetic — a creature
+            // ringed by its own kind has no room or forage for young — where a number derived from
+            // the engine's thread budget is not.
+            //
+            // Deliberately the most expensive guard and therefore the last: everything above can
+            // reject a candidate without touching the spatial hash.
             if (_spatialHash != null)
             {
                 float densityRadius = speciesDef.SocialRadius > 0 ? speciesDef.SocialRadius * 1.5f : 15f;
@@ -135,23 +176,24 @@ public sealed class ReproductionSystem : ISystem
                     if (em.Species[other].SpeciesId == species.SpeciesId)
                         sameSpeciesCount++;
                 }
-                // Suppress reproduction when local density exceeds 2× preferred group size
+
+                // Graded, not a cliff. The old test was a hard cutoff at 2x preferred group size:
+                // below it crowding cost nothing at all, and one animal over it stopped breeding
+                // outright. With the global ramp gone this check carries the load the ramp used to,
+                // so it needs to bite before the world is full rather than only at the edge —
+                // otherwise every population runs flat out until it slams into its class budget.
+                // Free below half the limit, then falling linearly to zero at the limit.
                 float maxLocal = MathF.Max(6f, speciesDef.PreferredGroupSize * 2f);
-                if (sameSpeciesCount >= (int)maxLocal)
+                if (sameSpeciesCount >= maxLocal)
                     continue;
+                float crowding = sameSpeciesCount / maxLocal;          // 0 = alone, 1 = at the limit
+                if (crowding > DensityFreeFraction)
+                {
+                    float pass = 1f - (crowding - DensityFreeFraction) / (1f - DensityFreeFraction);
+                    if (_rng.NextDouble() > pass)
+                        continue;
+                }
             }
-
-            // Global population pressure: randomly skip reproduction based on global fullness
-            if (globalPressure < 1f && (float)_rng.NextDouble() > globalPressure)
-                continue;
-
-            // Find spawn position
-            float spawnX = pos.X + ((float)_rng.NextDouble() * 2 - 1) * reproduction.SpawnRadius;
-            float spawnY = pos.Y + ((float)_rng.NextDouble() * 2 - 1) * reproduction.SpawnRadius;
-
-            // Only spawn on tiles valid for this species (aquatic spawn in water, etc.)
-            if (!speciesDef.CanSpawnOnTile(_worldManager.GetTile(spawnX, spawnY)))
-                continue;
 
             // Pay reproduction cost
             hunger.Current -= reproduction.HungerCost;

@@ -27,7 +27,21 @@ public sealed class WorldSpawner
         _rng = rng;
     }
 
-    public int SpawnCreatures(int initialPopulation, float herbivoreRatio)
+    /// <summary>
+    /// Seed the world with explicit per-class targets.
+    ///
+    /// The caller derives these from the class BUDGETS (see PopulationBudget.SplitSeed) rather
+    /// than from a separate composition ratio. This used to take one `herbivoreRatio` of 0.85 and
+    /// carve a terraformer share out of what was left, which put the starting composition and the
+    /// composition the world could actually sustain in disagreement — a disagreement that the
+    /// global birth ramp then resolved by selecting for whichever species bred fastest.
+    ///
+    /// Classification here (herbivore / predator / terraformer) is the SpeciesRegistry's diet
+    /// split, which is not quite PopulationBudget's: the budget charges Boar and Penguin to the
+    /// prey base and only Otter to the hunters. The seed being slightly off the budget's own line
+    /// is harmless — it is a starting point, and the budget is what holds thereafter.
+    /// </summary>
+    public int SpawnCreatures(int herbivoreTarget, int predatorTarget, int terraformerTarget)
     {
         int spawned = 0;
 
@@ -46,14 +60,10 @@ public sealed class WorldSpawner
                 terraformerSpecies.Add(tf); // Only Shroomers
         }
 
-        // Budget all categories from InitialPopulation (not additive)
-        float terraformerShare = terraformerSpecies.Count > 0 ? 0.12f : 0f;
-        float predatorShare = predatorSpecies.Count > 0 ? (1f - herbivoreRatio) * (1f - terraformerShare) : 0f;
-        float herbivoreShare = 1f - predatorShare - terraformerShare;
-
-        int targetHerbivores = (int)(initialPopulation * herbivoreShare);
-        int targetPredators = (int)(initialPopulation * predatorShare);
-        int targetTerraformers = initialPopulation - targetHerbivores - targetPredators;
+        int targetHerbivores = Math.Max(0, herbivoreTarget);
+        int targetPredators = predatorSpecies.Count > 0 ? Math.Max(0, predatorTarget) : 0;
+        int targetTerraformers = terraformerSpecies.Count > 0 ? Math.Max(0, terraformerTarget) : 0;
+        int initialPopulation = targetHerbivores + targetPredators + targetTerraformers;
 
         GD.Print($"Spawn targets: {targetHerbivores} herbivores, {targetPredators} predators, {targetTerraformers} terraformers (total {initialPopulation})");
 
@@ -62,7 +72,7 @@ public sealed class WorldSpawner
         ShuffleList(allChunks);
 
         // Scale position sampling based on target size
-        int baseSamples = Math.Max(6, initialPopulation / allChunks.Count + 2);
+        int baseSamples = Math.Max(6, initialPopulation / Math.Max(1, allChunks.Count) + 2);
 
         // Track which chunks have prey spawned in them (for predator placement)
         var preyChunks = new List<Chunk>();
@@ -341,20 +351,47 @@ public sealed class WorldSpawner
 
     /// <summary>
     /// Spawns Faeling crystals spread across the world on grass tiles.
-    /// Crystal count is derived from population budget: each crystal eventually
-    /// sustains ~8-12 Faelings, so crystalCount = budget / 10.
+    ///
+    /// Crystal count is derived from MAP COVERAGE, not from a population share, because a crystal
+    /// holds exactly ONE Faeling: <c>CrystalSystem</c> links one to each and respawns it when it
+    /// dies, so the crystal count IS the Faeling ceiling. The old formula assumed the opposite —
+    /// "each crystal sustains ~8-12 Faelings, so crystalCount = budget / 10" — and divided by ten
+    /// a number that should have been multiplied by one. With a 0.04 share of a 2,000 seed that
+    /// produced EIGHT crystals for a 1152x1152 world, and therefore a hard ceiling of eight
+    /// Faelings; a profiled 12k-creature run duly reported exactly 8. That is the whole reason the
+    /// faction has never functioned as a faction, and no amount of budget would have fixed it.
+    ///
+    /// What a keeper needs to act as a keeper is to be within KeeperSenseRadius of contested
+    /// ground often enough to notice it. One crystal senses pi*r^2 tiles, so covering a fraction
+    /// f of a world of A tiles takes f*A/(pi*r^2) crystals: at r = 40 and A = 1152^2 that is 132
+    /// for half the map, against the 8 it used to place (3% coverage). Coverage is capped by the
+    /// faction budget so a small world or a tight budget cannot be over-allocated.
     /// </summary>
-    public void SpawnCrystals(CrystalSystem crystalSystem, EntityManager entityManager, int populationBudget)
+    public void SpawnCrystals(CrystalSystem crystalSystem, EntityManager entityManager,
+                               bool faelingEnabled, PopulationBudget? budget = null)
     {
         if (crystalSystem == null) return;
-        if (!SpeciesToggle.IsEnabled(SpeciesRegistry.GetId("Faeling")))
+        if (!faelingEnabled || !SpeciesToggle.IsEnabled(SpeciesRegistry.GetId("Faeling")))
         {
             GD.Print("  Faeling crystals: disabled (species toggle)");
             return;
         }
 
-        // Each crystal sustains a small group of Faelings
-        int crystalCount = Math.Max(1, populationBudget / 10);
+        // Fraction of the map a keeper should be able to sense into. Half: high enough that a
+        // Shroomer bloom or a Sectid colony is usually inside somebody's range, low enough that
+        // crystals stay landmarks rather than scenery.
+        const float CoverageTarget = 0.5f;
+
+        var faelingDef = SpeciesRegistry.Get("Faeling");
+        float senseRadius = faelingDef.KeeperSenseRadius > 0f ? faelingDef.KeeperSenseRadius : 40f;
+        double worldTiles = (double)_worldManager.WorldSizeTiles * _worldManager.WorldSizeTiles;
+        double perCrystal = Math.PI * senseRadius * senseRadius;
+        int crystalCount = Math.Max(1, (int)(CoverageTarget * worldTiles / perCrystal));
+
+        // Never allocate more Faeling slots than the faction class can hold — a crystal whose
+        // Faeling can never spawn is a structure that does nothing.
+        if (budget != null)
+            crystalCount = Math.Min(crystalCount, Math.Max(1, budget.BudgetFor(PopClass.Faction)));
 
         var allChunks = new List<Chunk>(_worldManager.GetLoadedChunks());
         ShuffleList(allChunks);
@@ -374,7 +411,9 @@ public sealed class WorldSpawner
             spawned++;
         }
 
-        GD.Print($"  Faeling crystals: {spawned}/{crystalCount} (from budget {populationBudget})");
+        double coverage = spawned * perCrystal / worldTiles;
+        GD.Print($"  Faeling crystals: {spawned}/{crystalCount} " +
+                 $"(sense coverage {coverage:P0} of the map at r={senseRadius:F0})");
     }
 
     /// <summary>

@@ -111,6 +111,10 @@ public sealed class EcosystemLogger : ISystem
     // World reference for the terrain/nutrition chunk scans (null in worldless contexts).
     private readonly WorldManager? _world;
 
+    // Per-class ceilings, so the population CSV can report what the world was allowed alongside
+    // what it actually holds. Null where no budget is in force.
+    private readonly PopulationBudget? _budget;
+
     private readonly Dictionary<int, int> _speciesCounts = new();
     private int _tick;
 
@@ -121,6 +125,16 @@ public sealed class EcosystemLogger : ISystem
     private readonly Dictionary<int, int> _intervalDeathsPred      = new();
     private readonly Dictionary<int, int> _intervalDeathsEnv       = new();
     private readonly Dictionary<int, int> _intervalKillsMade       = new();
+
+    // Per-class population-budget refusals: per snapshot interval (cleared on write) and for the
+    // whole run. Keyed by PopClass name so the logger needs no dependency on the ECS enum.
+    private readonly Dictionary<string, int> _intervalBudgetRefusals = new();
+    private readonly Dictionary<string, int> _runBudgetRefusalsByClass = new();
+    // Species that have already written a refusal row this interval. A full class refuses every
+    // eligible candidate on every due tick — thousands of rows per tick, each one AutoFlushed to
+    // disk — so the ROW is throttled to one per species per interval while the COUNTS above stay
+    // exact. Which species is being squeezed is the signal; how many times per tick is volume.
+    private readonly HashSet<string> _refusalRowWritten = new();
 
     // Per-terrain-interval terraform counters (all directions, and class-crossing shifts).
     private int _intervalTerraformNudges;
@@ -165,15 +179,23 @@ public sealed class EcosystemLogger : ISystem
     public float RunNutritionRegen    { get; private set; }
     public float RunNutritionEnriched { get; private set; }
 
+    /// <summary>Spawns the per-class population budget refused over the whole run.</summary>
+    public long RunBudgetRefusals { get; private set; }
+
+    /// <summary>Whole-run budget refusals by class name.</summary>
+    public IReadOnlyDictionary<string, int> RunBudgetRefusalsByClass => _runBudgetRefusalsByClass;
+
     /// <summary>Total kills over the run, all predators.</summary>
     public int RunTotalKills
     {
         get { int t = 0; foreach (var v in _runKillsMade.Values) t += v; return t; }
     }
 
-    public EcosystemLogger(WorldManager? world = null, string logDir = "res://logs")
+    public EcosystemLogger(WorldManager? world = null, string logDir = "res://logs",
+                            PopulationBudget? budget = null)
     {
         _world = world;
+        _budget = budget;
         string resolvedDir = ProjectSettings.GlobalizePath(logDir);
         Directory.CreateDirectory(resolvedDir);
         LogDirectory = resolvedDir;
@@ -431,6 +453,30 @@ public sealed class EcosystemLogger : ISystem
         WriteEvent($"{_tick},kill,{preyName},{preyId},{x:F1},{y:F1},killed_by:{predName}:{predatorId}");
     }
 
+    /// <summary>
+    /// Record a spawn the per-class population budget turned away.
+    ///
+    /// This is deliberately loud. The budget is a PERFORMANCE ceiling that decides, when it
+    /// fires, which species gets to exist — and it used to do that in silence. A run where this
+    /// event is rare is one where food, predation and space are doing the limiting; a run where
+    /// it fires constantly is telling you the budget is mis-shared, or that ecology is not
+    /// binding where it should be. That is exactly the thing worth being able to read off a CSV
+    /// instead of inferring from a composition that merely looks odd.
+    /// </summary>
+    public void LogPopulationBudgetRefused(string speciesName, string popClass,
+                                            int classCount, int classBudget)
+    {
+        RunBudgetRefusals++;
+        Increment(_intervalBudgetRefusals, popClass);
+        Increment(_runBudgetRefusalsByClass, popClass);
+        if (_refusalRowWritten.Add(speciesName))
+            WriteEvent($"{_tick},population_budget_refused,{speciesName},-1,0,0,class={popClass};count={classCount};budget={classBudget}");
+    }
+
+    /// <summary>Budget refusals for one class since the last population snapshot.</summary>
+    private int IntervalRefusals(string popClass)
+        => _intervalBudgetRefusals.TryGetValue(popClass, out int v) ? v : 0;
+
     /// <summary>Log a reproduction event (offspring born).</summary>
     public void LogReproduction(int speciesId, int parentId, float x, float y, int offspringCount)
     {
@@ -556,6 +602,12 @@ public sealed class EcosystemLogger : ISystem
             var header = "tick,total";
             foreach (var n in _speciesNames) header += $",{n}";
             header += ",spores,nests,crystals"; // structures/spores tracked apart from creatures
+            // Per-class budget state. The composition columns above say what the world HAS; these
+            // say what it was ALLOWED, and how often it was told no since the last row — which is
+            // the difference between reading a population and reading a ceiling.
+            header += ",herbivore_count,herbivore_budget,predator_count,predator_budget," +
+                      "faction_count,faction_budget," +
+                      "refused_herbivore,refused_predator,refused_faction";
             _popLog.WriteLine(header);
             _latestPopLog.WriteLine(header);
             _headerWritten = true;
@@ -571,6 +623,21 @@ public sealed class EcosystemLogger : ISystem
             popLine += $",{count}";
         }
         popLine += $",{spores},{nests},{crystals}";
+        if (_budget != null)
+        {
+            popLine += $",{_budget.CountFor(PopClass.Herbivore)},{_budget.BudgetFor(PopClass.Herbivore)}" +
+                       $",{_budget.CountFor(PopClass.Predator)},{_budget.BudgetFor(PopClass.Predator)}" +
+                       $",{_budget.CountFor(PopClass.Faction)},{_budget.BudgetFor(PopClass.Faction)}";
+        }
+        else
+        {
+            popLine += ",0,0,0,0,0,0";
+        }
+        popLine += $",{IntervalRefusals(nameof(PopClass.Herbivore))}" +
+                   $",{IntervalRefusals(nameof(PopClass.Predator))}" +
+                   $",{IntervalRefusals(nameof(PopClass.Faction))}";
+        _intervalBudgetRefusals.Clear();
+        _refusalRowWritten.Clear();
         _popLog.WriteLine(popLine);
         _latestPopLog.WriteLine(popLine);
 
@@ -662,6 +729,12 @@ public sealed class EcosystemLogger : ISystem
     }
 
     private static void Increment(Dictionary<int, int> d, int key, int by = 1)
+    {
+        d.TryGetValue(key, out int v);
+        d[key] = v + by;
+    }
+
+    private static void Increment(Dictionary<string, int> d, string key, int by = 1)
     {
         d.TryGetValue(key, out int v);
         d[key] = v + by;

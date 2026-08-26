@@ -37,11 +37,18 @@ public sealed class SporeSystem : ISystem
     private readonly List<int> _crowdBuffer = new(32);
     private readonly int _maxPopulation;
 
-    public SporeSystem(WorldManager worldManager, SpatialHash spatialHash, int maxPopulation)
+    // Per-class ceiling for the Faction budget. Spores themselves are charged to nothing (they
+    // are not creatures until they transform) and live in the headroom the class shares leave
+    // unallocated; the Shroomer they become is charged like any other faction creature.
+    private readonly PopulationBudget? _budget;
+
+    public SporeSystem(WorldManager worldManager, SpatialHash spatialHash, int maxPopulation,
+                        PopulationBudget? budget = null)
     {
         _worldManager = worldManager;
         _spatialHash = spatialHash;
         _maxPopulation = maxPopulation;
+        _budget = budget;
     }
 
     public void Process(EntityManager em)
@@ -181,13 +188,15 @@ public sealed class SporeSystem : ISystem
                 int span = Math.Max(1, shroomDef.CrowdingSaturation - shroomDef.CrowdingLimit);
                 localFactor = Math.Clamp(1f - (neighbours - shroomDef.CrowdingLimit) / (float)span, 0f, 1f);
             }
-            // Global population pressure — a safety ceiling mirroring ReproductionSystem's ramp,
-            // so Shroomers can never convert the whole shared cap even if the biological levers
-            // above are mistuned. 1.0 until 50% of cap, linear to 0 at 100%.
-            float popRatio = (float)em.EntityCount / _maxPopulation;
-            float globalFactor = popRatio > 0.5f ? MathF.Max(0f, 2f * (1f - popRatio)) : 1f;
-
-            float effChance = shroomDef.SporeSpreadChance * localFactor * globalFactor;
+            // The global population ramp that used to be mirrored here is GONE, with the one in
+            // ReproductionSystem. It was the same competitive-exclusion filter, and having it on
+            // some spawn paths and not others is what built the monoculture ratchet: at the cap a
+            // throttled species needed ~430 attempts to claim a freed slot while an unthrottled
+            // one claimed it immediately, so whichever faction lacked the ramp rose monotonically
+            // and could not fall back. Shroomers are now held by the faction budget
+            // (PopulationBudget) at the point of transformation, and by crowding here — which is
+            // local, per-species, and about actual ground rather than the engine's thread budget.
+            float effChance = shroomDef.SporeSpreadChance * localFactor;
             if (effChance <= 0f) continue;
 
             // Random chance to spread — compensate for skipped ticks:
@@ -266,6 +275,15 @@ public sealed class SporeSystem : ISystem
         foreach (var (x, y, speciesId) in _pendingTransforms)
         {
             if (em.CreatureCount >= _maxPopulation) break;
+            // Per-class ceiling: a maturing spore is a new faction creature and is charged like
+            // one. The spore itself has already been destroyed above, so a refusal here means it
+            // matured into a world with no room for it — which is what a ceiling means.
+            var shroomDef = SpeciesRegistry.GetById(speciesId);
+            if (_budget != null && !_budget.CanSpawn(shroomDef))
+            {
+                _budget.LogRefusal(shroomDef);
+                continue;
+            }
             SpawnShroomer(em, x, y, speciesId);
             EcosystemLogger.Instance?.LogSporeMatured(x, y);
             EcosystemLogger.Instance?.LogReproduction(speciesId, -1, x, y, 1);

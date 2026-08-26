@@ -4,6 +4,46 @@ Workstream to turn the three terraformer factions into a genuine three-way war i
 Shroomer monoculture. Opened after the first full run on the new terrain (run
 `20260710_031029`, 36ch, seed 124154536).
 
+## STATUS (2026-08-26): the shared-pool mechanism behind the monoculture is gone
+
+The recurring "monoculture relocates rather than resolving" pattern in this document had a
+mechanical cause outside the faction systems, now fixed — see `FEATURES_AND_DESIGN.md` §9.1.
+
+`MaxPopulation` was one shared pool with a global birth ramp applied to **some** spawn paths and
+not others: `ReproductionSystem` and `SporeSystem` obeyed it, `NestSystem` and `CrystalSystem`
+did not. At the cap every death frees one slot, a throttled claimant needs ~430 attempts to take
+it and an unthrottled one takes it immediately — so the unthrottled faction's share could only
+rise. This document already had both halves of the diagnosis without joining them: the note at
+"`SporeSystem` spread is gated only by the hard population cap, not the ramp every other species
+obeys" is the same observation from the Shroomer side, and adding the ramp there is what moved
+the monoculture to the Sectids rather than ending it.
+
+The pool is now split into per-class ceilings (prey base 42% / hunters 13% / factions 33% of
+`MaxPopulation`, 12% headroom) and **all five** spawn paths check them, so no path is privileged.
+Measured on a 20,000-tick headless run of the standard 36-chunk world
+(`Scenes/PopulationSoak.tscn`, seed 1234):
+
+- **No class ever exceeds its ceiling** (peaks land exactly on 5040 / 1560 / 3960).
+- **The ratchet is gone.** The faction class filled at t=14,800; over the 27 samples after that,
+  Shroomers rose 14×/fell 11×, Sectids rose 13×/**fell 13×**, Faelings rose 1×/fell 16×. A
+  monotonic rise would be falls = 0. The three now trade places inside a shared ceiling, which is
+  the three-way war this workstream wanted.
+- **Predator guild recovered without touching predator stats:** 14.1% of creatures against the
+  4.1% the global ramp produced, and a 3.2:1 herbivore:predator ratio against 21.8:1. This
+  supports the earlier reading that the predator collapse was largely structural rather than a
+  hunting-mechanic failure — though here the structure was the population gate, not the Shroomers.
+- **Faelings can finally act as a faction.** Their ceiling was never the budget: a crystal holds
+  exactly one Faeling, and crystal count was computed as `budget / 10` on the assumption that one
+  crystal sustains 8–12 — so a 1152² world got **eight** crystals and therefore eight Faelings,
+  the "8 keepers × 40-tile sense" coverage problem noted below. Crystal count is now derived from
+  sense coverage (`f·A/(π·r²)`, f = 0.5), giving 132 crystals at ~50% coverage.
+
+**Still open, and not addressed here:** food does not bind (grazing regen 0.0005/tick against
+consume 0.02–0.035), so herbivores sit on their class ceiling from t≈4,000 and the ceiling — not
+ecology — is what limits them. That is now *visible* (`population_budget_refused` events and
+per-class CSV columns) rather than hidden inside a birth-probability multiplier, but making food
+the binding constraint is its own change.
+
 ## STATUS (2026-07-13): #1–#4 implemented; workstream PAUSED pending the focused-testing branch
 
 All four parts landed (fungivores, Sectid retargeting, Shroomer self-limits + fertility reliance,

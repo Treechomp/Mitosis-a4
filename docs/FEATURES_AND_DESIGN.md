@@ -1023,12 +1023,27 @@ trips, often the whole colony, to clear.
 ### 6.13 Reproduction — `ReproductionSystem.cs` (gated)
 
 Standard reproduction for non-faction species. Requires: under population cap, off cooldown,
-mature, hunger ≥ threshold, energy ≥ threshold, local same-species density below
-`2× PreferredGroupSize` (within `1.5× SocialRadius`), and a global population-pressure roll
-(linear ramp: 100% pass at ≤50% of cap → 0% at cap). Deducts hunger/energy, resets cooldown,
-spawns `OffspringCount` offspring on a valid tile near the parent (offspring start at 60%
-hunger, 100% energy, age 0). Both the spawn loop and `EntityFactory.SpawnCreature` re-check the
-hard cap, and offspring of a species disabled via the species toggle (§9) are refused here too.
+mature, hunger ≥ threshold, energy ≥ threshold, **class budget not full** (§9.1), a valid spawn
+tile, and a **local density** roll. Deducts hunger/energy, resets cooldown, spawns
+`OffspringCount` offspring on a valid tile near the parent (offspring start at 60% hunger, 100%
+energy, age 0). Both the spawn loop and `EntityFactory.SpawnCreature` re-check the hard cap and
+the class budget, and offspring of a species disabled via the species toggle (§9) are refused
+here too.
+
+**Local density is the primary brake**, and is graded rather than a cliff: free below half the
+limit (`max(6, 2× PreferredGroupSize)` same-species neighbours within `1.5× SocialRadius`), then
+falling linearly to zero at the limit. Per-species and per-place, which is what makes it usable as
+the main throttle — crowding among rabbits says nothing about whether a wolf may breed.
+
+**The global population-pressure ramp is gone** (§9.1). It multiplied every species' birth chance
+by one shared number that fell to zero as the shared cap filled, which is a competitive-exclusion
+filter rather than a brake.
+
+**Guard order is part of the design.** Every pure array read and cheap dice roll runs above the
+spatial density query, which is the most expensive guard and therefore the last. This was
+violated: the neighbour scan ran *before* the global roll that was rejecting 99.77% of candidates,
+and the system spent 3.27 ms of a 25.5 ms tick (12.8%) building neighbour lists for creatures
+about to be refused anyway.
 
 **Breeding grounds.** A species with `BreedingTiles` may only breed while the **parent** stands on
 one of them, and `WanderSystem` gives a fed, mature adult that is off them a roam target on the
@@ -1281,6 +1296,89 @@ the preview can never drift from what the game generates.
 
 ## 9. Configuration Reference
 
+### 9.1 Population budgets — `PopulationBudget.cs`
+
+`MaxPopulation` is an **engineering** number: tick + render cost saturates a thread above roughly
+12,000 creatures. It used to be spent as an ecological force, and did two things it was never
+meant to do.
+
+**Competitive exclusion.** `ReproductionSystem` multiplied *every* species' birth probability by
+one global ramp `p` that fell to zero as the shared cap filled. A species holds equilibrium when
+`b·p = d`, so it survives only while `b/d ≥ 1/p` — as `p` falls, only the fastest breeders
+persist, and the winner keeps `p` pinned near zero for everyone else. A profiled run at 99.88% of
+cap: `p = 0.0023` (99.77% of births refused), composition 10,746 herbivores : 492 predators :
+234 Shroomers : 172 Sectids : 8 Faelings. A 21.8:1 herbivore:predator ratio is the signature of an
+r/K selection filter, not an ecology — and prey spacing at that density was ~5.6 tiles, inside
+every predator's 8–15 tile `HuntRange`, so the predators were not search-limited. They were
+birth-limited by a mechanism their prey wins by construction.
+
+**The monoculture ratchet.** The ramp was applied in `ReproductionSystem` and `SporeSystem` but
+not in `NestSystem` or `CrystalSystem`. At the cap every death frees one slot; a throttled species
+needs ~430 attempts to claim it, an unthrottled one claims it immediately — so the unthrottled
+faction's share rises monotonically and cannot fall back. This is the same defect that produced
+the documented Shroomer monoculture (`faction-balance-plan.md`): the ramp was added to
+`SporeSystem` and never to `NestSystem`, so the monoculture *relocated* to the Sectids instead of
+resolving. Adding the ramp to the remaining paths would have moved it a third time.
+
+**What replaces it.** Three hard per-class ceilings, taken as shares of `MaxPopulation`:
+
+| Class | Share | ~Count | Membership |
+|-------|-------|--------|------------|
+| Herbivore | 0.42 | 5040 | the prey base — everything that is not a hunter or a faction |
+| Predator | 0.13 | 1560 | hunters (`IsPredator`, non-faction) |
+| Faction | 0.33 | 3960 | Shroomer + Sectid + Faeling |
+| *(headroom)* | 0.12 | 1440 | spores, structures, transients — allocated to no class |
+
+Classification is by `SpeciesDefinition`: faction first (`NestBreeder ‖ SporeReproducer ‖
+CrystalSpawned` — a Sectid carries `ComponentFlags.Predator` and would otherwise read as a
+hunter), then hunters, then the prey base. The three **omnivores** are resolved explicitly,
+because the class decides which ceiling a population competes for: **Otter → Predator** (a fish
+specialist that hunts for everything it eats, and is deliberately sparse); **Penguin → Herbivore**
+(staple is passive water-column foraging, it is itself shark/bear/fox prey, and it breeds in
+colonies — charging it to the small hunter budget would let one seabird colony crowd out the
+world's actual predators); **Boar → Herbivore** (grazes for a living, numerous, wolf prey).
+
+Live counts are maintained in `EntityManager` alongside `CreatureCount`, on the same
+create/destroy/component paths, so there is no second bookkeeping path to fall out of step. **All
+five spawn paths consult it** — `EntityFactory.SpawnCreature`, `ReproductionSystem`, `NestSystem`
+(larva hatch and nest founding), `SporeSystem` (spore transform), `CrystalSystem` (Faeling
+respawn) — because a single unbudgeted path recreates the ratchet.
+
+**It is a wall, not a brake.** The ecological limiters are local density (§6.13), Shroomer
+crowding (§7.1) and food. A refusal is the *engine* deciding what the world contains, so every one
+is counted and emitted as a `population_budget_refused` event (throttled to one row per species
+per snapshot interval; the exact counts are in the population CSV's `herbivore_count` /
+`_budget` / `refused_*` columns and on the F3 overlay). **Frequent refusals mean the budget is
+wrong, or ecology is not binding** — which is the thing worth being able to read off a CSV.
+
+Expect herbivores to sit on their ceiling for now: grazing regen (0.0005/tick) against consume
+(0.02–0.035) means one grazer needs 40–70 tiles and at current densities has ~100+, so food does
+not bind. Making it bind is a separate change (habitable-fraction reduction plus regen/consume
+tuning). The budget makes that limiter **explicit and visible** rather than smooth and hidden.
+
+`Scripts/Testing/PopulationSoakRunner.cs` (`Scenes/PopulationSoak.tscn`, headless) is the way to
+observe this — it runs the real world for tens of thousands of ticks and reports composition,
+per-class budget state and whether any faction's share only ever rises:
+
+```
+godot --headless --path godot res://Scenes/PopulationSoak.tscn -- --ticks=20000
+```
+
+**Measured**, 20,000 ticks on the standard 36-chunk world, seed 1234 (~11 minutes headless):
+
+| | global ramp | per-class budgets |
+|---|---|---|
+| composition | 89.7% herbivore / 4.1% predator | 45.4% herbivore / **14.1%** predator / 35.6% faction |
+| herbivore : predator | 21.8 : 1 | **3.2 : 1** |
+| Faelings | 8 | 99–128 |
+| faction share after its ceiling fills | Sectid share rises monotonically | Shroomer 14↑/11↓, Sectid 13↑/**13↓**, Faeling 1↑/16↓ |
+
+No class exceeded its ceiling at any sample (peaks land exactly on 5040 / 1560 / 3960). The
+factions now trade places inside a shared ceiling instead of one ratcheting upward. Herbivores
+reach their ceiling at t≈4,000 and stay there — 2.5 M refusals over the run — which is the
+expected, and now visible, consequence of food not yet binding.
+
+
 `GameManager` exported fields. Defaults in code are the **standard test configuration**
 (36-chunk world, 2000 initial, 12000 cap — the setup balance runs use); final production
 values TBD once all features are in and compute/render costs are known:
@@ -1308,12 +1406,12 @@ values TBD once all features are in and compute/render costs are known:
 | TerrainCliffStepHeight | 0.16 | Elevation per terrace step |
 | TerrainRiverDensity | 0.2 | River-source budget scale (1 = the original dense network) |
 | TargetTPS | 20 | Simulation ticks/second |
-| MaxPopulation | 12000 | Hard entity cap |
-| InitialPopulation | 2000 | Starting creatures (incl. faction budgets) |
-| HerbivoreRatio | 0.85 | Herbivore share of non-faction creatures |
+| MaxPopulation | 12000 | Hard creature cap — a PERFORMANCE ceiling (§9.1), not a design device |
+| HerbivoreBudgetShare | 0.42 | Prey-base ceiling as a share of MaxPopulation (~5000) |
+| PredatorBudgetShare | 0.13 | Hunter ceiling (~1500) |
+| FactionBudgetShare | 0.33 | Shroomer + Sectid + Faeling ceiling (~4000) |
+| InitialPopulation | 2000 | Starting creatures, split in the same proportions as the budgets |
 | CreaturesPerChunk | 2.0 | Spawn-density hint |
-| FaelingShare | 0.04 | Faeling (crystal) budget as share of initial pop |
-| SectidShare | 0.10 | Sectid (nest) budget as share of initial pop |
 | PlayerSpeed / Sprint | 1.0 / 3.0 | Player move speed and sprint multiplier |
 | ZoomMin / Max / Speed | 0.1 / 5.0 / 0.15 | Orthographic zoom range and step |
 | TrackSpecies | "" | Exact species name to deep-log (per-entity `TRACKED` snapshots + combat); empty = off |
@@ -1328,13 +1426,25 @@ spawns a full `InitialPopulation`. Unknown names are validated against the regis
 warnings; the active disable set is printed at startup. Use this for granular balance snapshots
 (e.g. ecosystem viability with no factions, or isolating why one species thrives/perishes).
 
-**Initial population split** (`WorldSpawner`): Faeling budget = `InitialPopulation ×
-FaelingShare` (spawned as **crystals**, ~1 per 10 Faelings); Sectid budget = `× SectidShare`
-(spawned as **nests** + starter Sectids, ~1 nest per 5); the remaining creature budget is split
-into terraformers (Shroomers, ~12%), then predators and herbivores by `HerbivoreRatio`, each
-species weighted by its `SpawnWeight`. Creatures spawn in groups (alpha at center with higher
-leadership), herbivores wide, predators near prey chunks. The player spawns near world center;
-`EntityFactory.SetPopulationCap(MaxPopulation)` enforces the hard cap.
+**Initial population split** (`PopulationBudget.SplitSeed` → `WorldSpawner`):
+`InitialPopulation` is divided between the three classes **in the same proportions as their
+ceilings**, so a world starts in the shape its budgets will let it hold. Sectids and Shroomers
+halve the faction seed (Sectids as **nests** + starter swarms). Within a class, species are
+weighted by `SpawnWeight`. Creatures spawn in groups (alpha at center with higher leadership),
+herbivores wide, predators near prey chunks. The player spawns near world center;
+`EntityFactory.SetPopulationCap(MaxPopulation)` enforces the hard cap and
+`EntityFactory.SetBudget` the class ceilings.
+
+**Faelings are not seeded by share at all.** A crystal holds exactly **one** Faeling
+(`CrystalSystem` links one to each and respawns it on death), so the crystal count *is* the
+Faeling ceiling. Crystals are therefore placed for **sense coverage**: covering a fraction `f` of
+a world of `A` tiles at `KeeperSenseRadius` `r` takes `f·A/(π·r²)` crystals — at `f = 0.5`,
+`r = 40` and a 1152² world, 132. The previous formula assumed the opposite ("~1 crystal per 10
+Faelings") and produced **eight** crystals for the whole map, hence eight Faelings and ~3%
+coverage: the reason the keeper faction never functioned as a faction.
+
+**Species toggles** still fold a disabled faction's seed back into the prey base, so a no-faction
+run starts with a full `InitialPopulation`.
 
 ---
 

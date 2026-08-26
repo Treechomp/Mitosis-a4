@@ -16,12 +16,20 @@ public sealed class EntityFactory
     private readonly EntityManager _entityManager;
     private readonly Random _rng;
     private int _populationCap = int.MaxValue;
+    private PopulationBudget? _budget;
 
     public EntityFactory(EntityManager entityManager, Random rng)
     {
         _entityManager = entityManager;
         _rng = rng;
     }
+
+    /// <summary>
+    /// Per-class ceilings. Checked here as well as at every caller's decision point, because this
+    /// is the last gate every creature passes through — a caller that forgets the check can still
+    /// not overspend its class.
+    /// </summary>
+    public void SetBudget(PopulationBudget? budget) => _budget = budget;
 
     /// <summary>Set the soft population cap. SpawnCreature will refuse to spawn beyond this.</summary>
     public void SetPopulationCap(int cap) => _populationCap = cap;
@@ -60,6 +68,15 @@ public sealed class EntityFactory
         // Hard population cap — refuse to spawn beyond the limit
         if (_entityManager.CreatureCount >= _populationCap)
             return -1;
+
+        // Per-class ceiling. Refusing here rather than deeper keeps the count exact: the entity is
+        // charged to its class the moment its Species component is attached, so a spawn that gets
+        // past this line is already spent.
+        if (_budget != null && !_budget.CanSpawn(species))
+        {
+            _budget.LogRefusal(species);
+            return -1;
+        }
 
         int entity = _entityManager.CreateEntity();
         float variation = species.StatVariation;
