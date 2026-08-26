@@ -217,8 +217,10 @@ public sealed class MyceliumSystem : ISystem
             ref var pos = ref em.Positions[entity];
             if (HeartNearby(em, pos.X, pos.Y, def.MyceliumRadius)) continue;
             if (ClaimedFraction(pos.X, pos.Y, def.MyceliumRadius) < FoundClaimFraction) continue;
-            if (CountFactionCreatures(em, pos.X, pos.Y, def.MyceliumRadius, speciesId)
-                <= def.MyceliumShroomerFloor) continue;
+            // The same test worldgen seeding uses — a heart founded onto ground that cannot hold
+            // it would start bleeding on its very first territory pass.
+            if (!TerritorySupportsHeart(_worldManager, _spatialHash, em, pos.X, pos.Y, def, speciesId))
+                continue;
 
             _pendingHearts.Add((pos.X, pos.Y, speciesId));
             break; // at most one founding per pass — the next pass re-tests against what exists
@@ -265,8 +267,29 @@ public sealed class MyceliumSystem : ISystem
     // Territory measurements
     // ══════════════════════════════════════════════════════════════════════════
 
+    /// <summary>
+    /// Would a heart placed here SURVIVE — i.e. does the territory already meet both floors?
+    ///
+    /// Shared between the founding path and worldgen seeding, and it has to be: seeding hearts
+    /// without it put 76 of 85 anchors on ground that could not hold them, and every one bled out
+    /// by t=819 with cause `environment`. From the outside that is indistinguishable from the
+    /// Shroomer faction being destroyed, which is exactly the kind of thing a whole-game invariant
+    /// is for. A heart is something a bloom EARNS by having already wet the ground around it.
+    /// </summary>
+    public static bool TerritorySupportsHeart(WorldManager world, SpatialHash spatialHash,
+        EntityManager em, float x, float y, SpeciesDefinition def, int speciesId)
+    {
+        if (def.MyceliumRadius <= 0f) return false;
+        if (MoistFraction(world, x, y, def) < def.MyceliumMoistureFloor) return false;
+        return CountFaction(em, spatialHash, x, y, def.MyceliumRadius, speciesId)
+               > def.MyceliumShroomerFloor;
+    }
+
     /// <summary>Fraction of tiles in the heart's disc still wet enough for fungus to hold.</summary>
     private float MoistTileFraction(float cx, float cy, SpeciesDefinition def)
+        => MoistFraction(_worldManager, cx, cy, def);
+
+    private static float MoistFraction(WorldManager world, float cx, float cy, SpeciesDefinition def)
     {
         int r = (int)MathF.Ceiling(def.MyceliumRadius);
         float rSq = def.MyceliumRadius * def.MyceliumRadius;
@@ -280,7 +303,7 @@ public sealed class MyceliumSystem : ISystem
                 total++;
                 // The same substrate wetness SporeSystem's drought check reads, so "dry enough to
                 // kill a Shroomer" and "dry enough to kill its heart" are one threshold.
-                var tile = _worldManager.GetTile(cx + dx, cy + dy);
+                var tile = world.GetTile(cx + dx, cy + dy);
                 if (tile.SubstrateMoisture() >= def.SporeMoistureThreshold) wet++;
             }
         }
@@ -308,9 +331,13 @@ public sealed class MyceliumSystem : ISystem
 
     /// <summary>Living creatures of one faction within a radius (structures and spores excluded).</summary>
     private int CountFactionCreatures(EntityManager em, float x, float y, float radius, int speciesId)
+        => CountFaction(em, _spatialHash, x, y, radius, speciesId);
+
+    private static int CountFaction(EntityManager em, SpatialHash spatialHash,
+        float x, float y, float radius, int speciesId)
     {
-        _nearby.Clear();
-        _spatialHash.QueryRadius(x, y, radius, _nearby);
+        var _nearby = new List<int>(64);
+        spatialHash.QueryRadius(x, y, radius, _nearby);
         float rSq = radius * radius;
         int count = 0;
         foreach (int other in _nearby)

@@ -3364,14 +3364,20 @@ public static class SpeciesRegistry
             // Swarm of 8: 0.5 × 8^0.8 × 2.5 = 6.6  → wolves comfortably
             // Swarm of 12: 0.5 × 12^0.8 × 2.5 = 9.2 → crocodiles (8.0)!
 
-            // Siege — a colony breaks enemy structures, but food comes first until its own is hit.
-            // 0.5 means a nest or crystal must be half the distance of the prey it would otherwise
-            // take: an opportunist, not a raider. The retaliation bias is where the character is —
-            // ×8 while one of its own nests is being broken turns 0.5 into 4.0, so a colony under
-            // siege stops foraging and goes to break something back. That asymmetry is the whole
-            // point of expressing aggression as a distance ratio: the same species reads as
-            // "busy eating" or "at war" depending only on whether it is being attacked.
-            StructureAggression = 0.5f,
+            // Siege — a colony breaks enemy structures, but ONLY when provoked. 0.15 means a
+            // structure must be practically underfoot to distract a swarm from a meal; the
+            // retaliation bias is where the character is — x8 while one of its own nests is being
+            // broken turns that into 1.2, and a colony under siege stops foraging and goes to
+            // break something back. That asymmetry is the whole point of expressing aggression as
+            // a distance ratio: the same species reads as "busy eating" or "at war" depending
+            // only on whether it has been attacked.
+            //
+            // It was 0.5, which was casual enough that swarms went crystal-breaking unprovoked:
+            // 7 of 12 crystals destroyed across a 20,000-tick run, permanently shrinking a faction
+            // whose population IS its crystal count. Combined with the keeper's own dominance
+            // gate, 0.15 means the opening minutes of a run are quiet because nobody has yet been
+            // given a reason to fight — which is the pacing the whole-game invariant asks for.
+            StructureAggression = 0.15f,
             StructureRetaliationBias = 8f,
             StructureSeekRadius = 45f,
             StructureAttackPower = 6f,     // one Sectid is a nuisance; a swarm is a siege engine
@@ -3480,7 +3486,7 @@ public static class SpeciesRegistry
             // keeper nudged one random tile every ~267 ticks — structurally invisible (observed:
             // restoration never left a mark). 0.25 ≈ one tile every ~32 ticks: a keeper parked on
             // a siege line visibly dries/restores its patch within a few minutes.
-            TerraformDir = TerraformDirection.Balanced,
+            TerraformDir = TerraformDirection.Restore,
             TerraformRadius = 4.0f,
             TerraformStrength = 0.25f,
             TerraformCooldown = 8,
@@ -3492,21 +3498,43 @@ public static class SpeciesRegistry
             KeeperMinPresence = 5,
 
             // Siege — the keeper is a RAIDER, and this is what makes a handful of them a faction.
-            // Eight Faelings that kill individual Sectids are a rounding error against a colony
-            // that hatches replacements; eight that break nests and mycelium hearts decide wars.
+            // A dozen Faelings that kill individual Sectids are a rounding error against a colony
+            // that hatches replacements; a dozen that break nests and mycelium hearts decide wars.
             // 4.0 says it will walk past a target four times nearer to reach a structure, which is
             // the behaviour "keeper of order" was always meant to describe — it suppresses whoever
             // is winning by taking their INFRASTRUCTURE, not by out-killing them.
             StructureAggression = 4f,
             StructureSeekRadius = 60f,     // paired with its 40-tile keeper sense
-            StructureAttackPower = 22f,    // few, elite, and heavy against buildings
-            StructureAttackCooldown = 40,
+            StructureTargetsDominantOnly = true,   // check the winner, never the nearest
+            // A RAID IS AN EVENT, NOT AN INSTANT. These were 22 damage on a 40-tick cooldown when
+            // the world held 132 keepers, and that combination destroyed 44 of 46 Sectid nests in
+            // 6,000 ticks — the first at t=951. Two things changed together: the faction is now 12
+            // (FaelingCrystalCount) rather than 132, and one keeper alone can no longer break
+            // anything on its own timescale. 7 damage on a 90-tick cooldown is 0.078 dps, so a
+            // 200-HP nest takes ~2,570 ticks — over two minutes of sustained work by a lone
+            // keeper, and the colony's own retaliation has that entire window to answer.
+            // Concentration is the intended counter to that slowness: three keepers travelling to
+            // the same region (CrystalTravelCooldown) take the same nest in ~860 ticks, so a RAID
+            // is a thing the keepers assemble for rather than something one of them does in
+            // passing. The numbers are derived from the invariant in
+            // docs/whole-game-invariants.md — no anchor lost before t=6,000 — not from taste.
+            StructureAttackPower = 7f,
+            StructureAttackCooldown = 90,
             StructureAttackRange = 8f,     // ranged: it dismantles from a standoff ring
             StructureDefenseRadius = 0f,   // a crystal is a lone outpost; nobody comes to help it
 
-            // Crystals are objectives now, not scenery. Tough enough that a lone Sectid cannot
-            // chip one down, soft enough that a committed swarm gets there in a few hundred ticks.
-            CrystalHealth = 400f,
+            // Reach without numbers. A keeper may relocate to the crystal nearest whatever region
+            // the world census flags, roughly every 600 ticks. This is the replacement for the
+            // fix that broke the game — being everywhere at once by being 132 strong.
+            CrystalTravelCooldown = 600,
+
+            // A crystal is the most permanent thing in the game. A nest is replaceable — a colony
+            // founds new ones — but nothing creates a crystal, so every one lost shrinks the
+            // Faeling faction forever, and the faction is twelve. At 400 HP a ten-Sectid swarm
+            // took one in ~170 ticks and the run ended with 5 of 12 standing. 1,600 puts that at
+            // ~670 ticks: still losable, and still lost to a determined siege, but a siege the
+            // keepers have time to answer and a player would see happening.
+            CrystalHealth = 1600f,
 
             // Trophic - medium plant creature, NOT huntable by predators
             BodyMass = 3.0f,

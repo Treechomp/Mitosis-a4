@@ -165,6 +165,13 @@ public sealed class EcosystemLogger : ISystem
     /// <summary>Ticks this logger has seen (it is the last system in the stack, so = run length).</summary>
     public int Tick => _tick;
 
+    /// <summary>
+    /// World deviation as of the most recent population snapshot. Exposed so a harness can assert
+    /// on it without recomputing the lattice — and so it reads exactly the number that went into
+    /// the CSV, rather than a second measurement taken a few ticks later.
+    /// </summary>
+    public WorldDeviation LastDeviation { get; private set; }
+
     public IReadOnlyDictionary<int, int> RunBirths       => _runBirths;
     public IReadOnlyDictionary<int, int> RunDeathsStarve => _runDeathsStarve;
     public IReadOnlyDictionary<int, int> RunDeathsAge    => _runDeathsAge;
@@ -654,6 +661,11 @@ public sealed class EcosystemLogger : ISystem
             header += ",herbivore_count,herbivore_budget,predator_count,predator_budget," +
                       "faction_count,faction_budget," +
                       "refused_herbivore,refused_predator,refused_faction";
+            // How far the world has been pushed from the one worldgen authored, and by whom.
+            // The composition columns say who is ALIVE; these say who holds the GROUND, which is
+            // the thing the three-way war is actually over and the only signal that catches a
+            // faction converting the map without ever outnumbering anyone.
+            header += ",world_deviation,deviation_wetter,deviation_drier";
             _popLog.WriteLine(header);
             _latestPopLog.WriteLine(header);
             _headerWritten = true;
@@ -682,6 +694,13 @@ public sealed class EcosystemLogger : ISystem
         popLine += $",{IntervalRefusals(nameof(PopClass.Herbivore))}" +
                    $",{IntervalRefusals(nameof(PopClass.Predator))}" +
                    $",{IntervalRefusals(nameof(PopClass.Faction))}";
+
+        // Computed here rather than per tick: this is the population snapshot's cadence (100
+        // ticks in the game, per-scenario in test scenes), which is a slow enough cadence for a
+        // quantity that moves at the speed of terraforming.
+        LastDeviation = _world?.DeviationFromPristine() ?? default;
+        popLine += FormattableString.Invariant(
+            $",{LastDeviation.Mean:0.#####},{LastDeviation.Wetter:0.#####},{LastDeviation.Drier:0.#####}");
         _intervalBudgetRefusals.Clear();
         _refusalRowWritten.Clear();
         _popLog.WriteLine(popLine);

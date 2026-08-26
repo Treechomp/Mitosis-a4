@@ -254,7 +254,21 @@ public struct Social
 public enum TerraformDirection : sbyte
 {
     Drier = -1,     // Sectids: push tiles toward Arid
-    Balanced = 0,   // Faelings: push tiles toward Grass
+    /// <summary>
+    /// Faelings: push each tile back toward the moisture WORLDGEN gave it.
+    ///
+    /// This replaced `Balanced`, which pulled every tile toward 0.4 — the grass band. That made
+    /// the keeper a third monoculture: it homogenised the world toward grass exactly as Shroomers
+    /// homogenise toward swamp and Sectids toward desert, destroying the arid and wetland
+    /// specialists on the way. The Faeling's own terraform was therefore the direct cause of the
+    /// Faeling's own fail state ("the world loses too many natural species") — a structural
+    /// contradiction, not a mistuned number.
+    ///
+    /// Restoring to PRISTINE has no such target. A natural desert is already correct and consumes
+    /// no effort; only ground somebody has actually moved reads as damage. It is also the only
+    /// direction that can reduce the world-deviation metric rather than adding to it.
+    /// </summary>
+    Restore = 0,
     Wetter = 1      // Shroomers: push tiles toward Wetland
 }
 
@@ -272,7 +286,7 @@ public struct Terraform
     public int CurrentCooldown;
 
     public Terraform(
-        TerraformDirection direction = TerraformDirection.Balanced,
+        TerraformDirection direction = TerraformDirection.Restore,
         float radius = 2f,
         float strength = 0.02f,
         int cooldown = 10)

@@ -96,6 +96,20 @@ public sealed class ScenarioTerrainGenerator : IChunkGenerator
             _tiles[x, y] = tile;
     }
 
+    /// <summary>
+    /// A scenario world's pristine moisture is the canonical value for the tile the scenario
+    /// AUTHORED at these coordinates — the map as written, before any terraforming moved it.
+    /// The authored tile map is kept for the life of the generator, so this is a lookup rather
+    /// than a re-derivation.
+    /// </summary>
+    public float PristineMoisture(int worldX, int worldY)
+    {
+        var tile = (worldX >= 0 && worldY >= 0 && worldX < _worldSizeTiles && worldY < _worldSizeTiles)
+            ? _tiles[worldX, worldY] : TileType.DeepWater;
+        var (_, moisture, _) = ScenarioTileParams.For(tile, _landElevation);
+        return moisture;
+    }
+
     public void GenerateChunk(Chunk chunk)
     {
         int worldOffsetX = chunk.ChunkX * chunk.Size;

@@ -4,6 +4,63 @@ Workstream to turn the three terraformer factions into a genuine three-way war i
 Shroomer monoculture. Opened after the first full run on the new terrain (run
 `20260710_031029`, 36ch, seed 124154536).
 
+## OPEN ITEM: the Sectid colony economy never ignites on the standard world
+
+Re-measured 2026-08-26 on a 20,000-tick run of the 36-chunk world (`PopulationSoak`), and it is
+worse than the earlier "re-collapsed 77 → 4" note suggests: **`kills_made` is ZERO for the entire
+run**, from t=200 with 300 Sectids alive through to t=20,000 with one. No kills means no food
+carried home, which means nests never hatch (births per 200-tick interval: 0-2), which means the
+founders are taken by predation and age with nothing replacing them. Average hunger falls 77% →
+12% on the way.
+
+This is not keeper pressure — gating the Faeling's ranged attacks on the same dominance mandate as
+its sieges changed nothing — and it is not the structure war. It is the documented dependency on
+prey density, now visible end to end. A swarm hunter needs local MASS to clear its mass gate, and
+300 Sectids scattered over 1.33 million tiles are 300 individuals, not a swarm.
+
+One hypothesis worth testing first, because it fell out of this change by accident: an earlier
+build in which Sectids besieged crystals freely ended with 375 of them rather than 1. Besieging
+CLUSTERS a colony at a fixed point, and clustering is exactly what a swarm hunter needs. If that is
+the mechanism, the fix is to give Sectids a reason to mass that is not "walk to an enemy building"
+— which is a colony-behaviour change, not a stat tweak.
+
+## OPEN ITEM: native recruitment — what keeps Faeling viable at low count
+
+**Not built. This is the intended long-term answer to low Faeling numbers, and it needs its own
+change with its own balance pass.**
+
+The keeper faction has now been wrong in both directions on the same axis, and both times the
+lever pulled was POPULATION:
+
+- 8 crystals → 8 Faelings. Too few to sense the world, too few to matter.
+- 132 crystals → 132 Faelings, derived from a target of 50% sense coverage. That solved perception
+  with presence, and presence is force: 132 immortal raiders destroyed 44 of 46 Sectid nests and
+  21 colonies inside 6,000 ticks, the first at t=951.
+- 12 crystals → 12 Faelings, a designed constant, with sensing solved by a world census
+  (`FactionCensus`) and reach solved by crystal-to-crystal travel.
+
+Twelve is the right shape but it is thin. A keeper that must suppress whichever faction is winning
+across a 1152x1152 world has, at any moment, one body per 110,000 tiles. Travel puts it in the
+right region; it does not give it enough force to change what is happening there. The current
+answer — heavy damage per keeper — is precisely the knob that produced the wipe, and it has been
+turned down hard (7 damage on a 90-tick cooldown, so a lone keeper needs ~2,570 ticks to break one
+nest).
+
+**Native recruitment** is the answer that adds force without adding keepers: a keeper rallies the
+DISPLACED NATIVES — the herbivores and predators whose habitat a bloom or a colony has converted —
+against whoever displaced them. It fits everything already built:
+
+- The world-deviation metric already knows which ground has been taken and by whom
+  (`deviation_wetter` / `deviation_drier`).
+- `FactionCensus` already knows which faction is winning and where.
+- The defensive rally in `HuntingSystem` already knows how to point creatures at an attacker
+  (`SiegeSystem.CallDefenders` uses it), so "point these deer at that bloom" is the same machinery.
+
+It also fixes the thematic hole: a "keeper of order" with no constituency is just a third faction
+with a different terraform direction. With natives, the keeper's strength is proportional to how
+much damage has been done — which is the self-correcting pressure the three-way war wants, and the
+opposite of a fixed army that is either too small to matter or large enough to end the game.
+
 ## STATUS (2026-08-26): the shared-pool mechanism behind the monoculture is gone
 
 The recurring "monoculture relocates rather than resolving" pattern in this document had a

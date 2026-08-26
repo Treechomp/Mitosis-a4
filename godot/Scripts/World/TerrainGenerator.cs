@@ -233,6 +233,21 @@ public sealed class TerrainGenerator : IChunkGenerator
     }
 
     /// <summary>
+    /// Re-run the worldgen pipeline for one tile and return only its moisture — the value this
+    /// tile had before anything terraformed it. See <see cref="IChunkGenerator.PristineMoisture"/>.
+    ///
+    /// Not free: this is the full per-tile pipeline (two warp samples, the moisture field, the
+    /// contrast stretch, the hydrology feedback). Callers that ask repeatedly for the same tiles
+    /// should cache — <c>WorldManager.DeviationFromPristine</c> does, since it asks about the
+    /// same fixed sample set forever.
+    /// </summary>
+    public float PristineMoisture(int worldX, int worldY)
+    {
+        SampleTile(worldX, worldY, out _, out _, out float moisture, out _);
+        return moisture;
+    }
+
+    /// <summary>
     /// World size for the latitude temperature gradient. <see cref="PrecomputeRivers"/> sets
     /// this too; call directly when generating WITHOUT a river pre-pass (the worldgen preview
     /// tool's live mode) so latitude still spans the intended world.

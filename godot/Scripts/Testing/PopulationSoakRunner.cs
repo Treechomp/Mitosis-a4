@@ -41,6 +41,35 @@ public partial class PopulationSoakRunner : Node
     [Export] public int SampleInterval = 200;
     [Export] public int WorldSeed = 1234;
 
+    /// <summary>Crystals, and therefore Faelings. Mirrors GameManager's export.</summary>
+    [Export] public int FaelingCrystalCount = 12;
+
+    // ── Whole-game invariant thresholds ───────────────────────────────────────
+    // Provisional by design — see docs/whole-game-invariants.md. They exist so that "a faction
+    // wipes the map in five minutes" is a FAILING BUILD rather than something a person has to
+    // notice. Unlike the LOD differential, which carries documented standing exceptions and
+    // therefore always exits 1, this gate is binary: if an assertion needs an exception, the
+    // threshold is wrong and should be changed deliberately, not excused.
+
+    /// <summary>No faction anchor may be lost before this tick — five minutes of game time.</summary>
+    [Export] public int GraceTicks = 6000;
+
+    /// <summary>
+    /// Below this the world is static: nobody is contesting any ground.
+    ///
+    /// Was 0.02, which no healthy run reached — see docs/whole-game-invariants.md. Deviation is a
+    /// whole-world MEAN over 1.33 million tiles, and the faction populations that exist at 20,000
+    /// ticks work perhaps 1-2% of the map, so 0.02 asked for something the game cannot produce.
+    /// Measured: 0.0044 while almost nothing is happening, 0.0139-0.0171 while visibly contested.
+    /// 0.005 separates those two states, which is what a floor is for.
+    /// </summary>
+    [Export] public float MinDeviation = 0.005f;
+
+    /// <summary>Above this the world has been converted rather than contested.</summary>
+    [Export] public float MaxDeviation = 0.35f;
+
+    private int _failures;
+
     private const int ChunkSize = 32;
     private const int TileSize = 16;
     private const string LogRoot = "res://logs";
@@ -49,7 +78,7 @@ public partial class PopulationSoakRunner : Node
     {
         ParseCommandLine();
         Run();
-        GetTree().Quit(0);
+        GetTree().Quit(_failures);
     }
 
     private void Run()
@@ -102,9 +131,12 @@ public partial class PopulationSoakRunner : Node
             out int herbivoreSeed, out int predatorSeed, out int factionSeed);
         int sectidSeed = factionSeed / 2;
         int shroomerSeed = factionSeed - sectidSeed;
-        spawner.SpawnCrystals(stack.Crystal, em, faelingEnabled: true, budget);
+        spawner.SpawnCrystals(stack.Crystal, em, faelingEnabled: true, budget, FaelingCrystalCount);
         spawner.SpawnInitialNests(stack.Nest, em, sectidSeed);
         spawner.SpawnCreatures(herbivoreSeed, predatorSeed, shroomerSeed);
+        // Hearts after the Shroomers, as GameManager does — a heart is placed on a bloom, not the
+        // other way round. Without this the soak has no Shroomer anchor to assert on.
+        spawner.SpawnMyceliumHearts(em);
 
         int player = factory.SpawnPlayer(WorldSizeChunks * ChunkSize / 2f,
                                           WorldSizeChunks * ChunkSize / 2f, world);
@@ -128,7 +160,7 @@ public partial class PopulationSoakRunner : Node
 
             if (t % SampleInterval == 0 || t == Ticks)
             {
-                samples.Add(Sample.Take(t, em, budget));
+                samples.Add(Sample.Take(t, em, budget, logger));
                 if (t % (SampleInterval * 10) == 0)
                 {
                     var s = samples[^1];
@@ -216,7 +248,13 @@ public partial class PopulationSoakRunner : Node
                  $"predator {budget.RefusalsFor(PopClass.Predator)}, " +
                  $"faction {budget.RefusalsFor(PopClass.Faction)} " +
                  $"(logger total {logger.RunBudgetRefusals})");
+        GD.Print($"  anchors: nests {last.Nests}, hearts {last.Hearts}, crystals {last.Crystals}; " +
+                 $"{last.StructuresDestroyed} destroyed over the run");
+        GD.Print($"  world deviation: {last.Deviation:F4} " +
+                 $"(wetter {last.DeviationWetter:F4}, drier {last.DeviationDrier:F4})");
         GD.Print("[Soak] ──────────────────────────");
+
+        CheckInvariants(samples, budget);
     }
 
     private static int PeakFactions(List<Sample> samples)
@@ -244,6 +282,92 @@ public partial class PopulationSoakRunner : Node
                  $"rose {rises}x, FELL {falls}x, deepest drawdown {deepest} from a peak of {peak}");
     }
 
+    // ══════════════════════════════════════════════════════════════════════════
+    // Whole-game invariants
+    // ══════════════════════════════════════════════════════════════════════════
+
+    /// <summary>
+    /// Assert the properties a HEALTHY WHOLE GAME has, and fail the build when it does not.
+    ///
+    /// This exists because three changes each passed their own acceptance criteria and together
+    /// produced a world where one faction wiped every rival anchor inside five minutes. Nothing
+    /// could have caught it: the LOD differential compares a build against itself, and the
+    /// population soak measured composition. Neither asserted anything about the game as a whole.
+    ///
+    /// The assertions are deliberately few and deliberately blunt. Each one is a sentence about
+    /// the game that ought to be true of every build, not a tuning target.
+    /// </summary>
+    private void CheckInvariants(List<Sample> samples, PopulationBudget budget)
+    {
+        if (samples.Count == 0)
+        {
+            Fail("no samples were taken — the run produced nothing to assert on");
+            return;
+        }
+        var last = samples[^1];
+        GD.Print("\n[Soak] ───────── invariants ─────────");
+
+        // 1. Nothing wipes anchors in the opening minutes. A raid should be an event a player can
+        //    see coming and answer, and a faction that loses its infrastructure before it has
+        //    built any has not been beaten, it has been deleted.
+        long destroyedInGrace = 0;
+        int graceTick = 0;
+        foreach (var s in samples)
+        {
+            if (s.Tick > GraceTicks) break;
+            destroyedInGrace = s.StructuresDestroyed;
+            graceTick = s.Tick;
+        }
+        Assert(destroyedInGrace == 0,
+            $"no anchor lost before t={GraceTicks}",
+            $"{destroyedInGrace} destroyed by t={graceTick}");
+
+        // 2. All three factions still hold ground at the end. This is the "is it still a
+        //    three-way war" test — a two-way war is a different game, and losing a faction
+        //    silently is exactly what happened.
+        Assert(last.Nests > 0, "Sectids still hold a nest", $"nests={last.Nests}");
+        Assert(last.Hearts > 0, "Shroomers still hold a heart", $"hearts={last.Hearts}");
+        Assert(last.Crystals > 0, "Faelings still hold a crystal", $"crystals={last.Crystals}");
+
+        // 3. The world is being CONTESTED — neither untouched nor converted. Below the floor
+        //    nobody is terraforming anything that matters; above the ceiling somebody has
+        //    homogenised the map, which is the failure mode every faction has in common.
+        Assert(last.Deviation > MinDeviation,
+            $"world deviation above {MinDeviation:F2} (the world is contested, not static)",
+            $"deviation={last.Deviation:F4}");
+        Assert(last.Deviation < MaxDeviation,
+            $"world deviation below {MaxDeviation:F2} (contested, not converted)",
+            $"deviation={last.Deviation:F4} (wetter {last.DeviationWetter:F4}, drier {last.DeviationDrier:F4})");
+
+        // 4. No population class exceeds its ceiling. Cheap, and it has caught a real bug before.
+        int overBudget = 0;
+        foreach (var s in samples)
+        {
+            if (s.Herbivores > budget.BudgetFor(PopClass.Herbivore)) overBudget++;
+            if (s.Predators > budget.BudgetFor(PopClass.Predator)) overBudget++;
+            if (s.Factions > budget.BudgetFor(PopClass.Faction)) overBudget++;
+        }
+        Assert(overBudget == 0, "no class exceeds its population ceiling",
+            $"{overBudget} samples over budget");
+
+        GD.Print(_failures == 0
+            ? "[Soak] ALL INVARIANTS HOLD"
+            : $"[Soak] {_failures} INVARIANT(S) FAILED");
+        GD.Print("[Soak] ────────────────────────────");
+    }
+
+    private void Assert(bool condition, string claim, string actual)
+    {
+        if (condition) GD.Print($"  PASS  {claim}  [{actual}]");
+        else Fail($"{claim}  [{actual}]");
+    }
+
+    private void Fail(string message)
+    {
+        _failures++;
+        GD.PrintErr($"  FAIL  {message}");
+    }
+
     private static string Pct(int part, int whole)
         => whole > 0 ? (part / (double)whole).ToString("P2", CultureInfo.InvariantCulture) : "n/a";
 
@@ -252,17 +376,22 @@ public partial class PopulationSoakRunner : Node
         var sb = new StringBuilder();
         sb.AppendLine("tick,total,herbivores,herbivore_budget,predators,predator_budget," +
                       "factions,faction_budget,shroomers,sectids,faelings,corpses," +
-                      "refused_herbivore,refused_predator,refused_faction");
+                      "refused_herbivore,refused_predator,refused_faction," +
+                      "nests,hearts,crystals,structures_destroyed," +
+                      "world_deviation,deviation_wetter,deviation_drier");
         foreach (var s in samples)
         {
             sb.AppendLine(string.Format(CultureInfo.InvariantCulture,
-                "{0},{1},{2},{3},{4},{5},{6},{7},{8},{9},{10},{11},{12},{13},{14}",
+                "{0},{1},{2},{3},{4},{5},{6},{7},{8},{9},{10},{11},{12},{13},{14}," +
+                "{15},{16},{17},{18},{19:0.#####},{20:0.#####},{21:0.#####}",
                 s.Tick, s.Total,
                 s.Herbivores, budget.BudgetFor(PopClass.Herbivore),
                 s.Predators, budget.BudgetFor(PopClass.Predator),
                 s.Factions, budget.BudgetFor(PopClass.Faction),
                 s.Shroomers, s.Sectids, s.Faelings, s.Corpses,
-                s.RefusedHerbivore, s.RefusedPredator, s.RefusedFaction));
+                s.RefusedHerbivore, s.RefusedPredator, s.RefusedFaction,
+                s.Nests, s.Hearts, s.Crystals, s.StructuresDestroyed,
+                s.Deviation, s.DeviationWetter, s.DeviationDrier));
         }
         string dir = ProjectSettings.GlobalizePath(LogRoot);
         Directory.CreateDirectory(dir);
@@ -278,25 +407,49 @@ public partial class PopulationSoakRunner : Node
         public readonly int Tick, Total, Herbivores, Predators, Factions;
         public readonly int Shroomers, Sectids, Faelings, Corpses;
         public readonly long RefusedHerbivore, RefusedPredator, RefusedFaction;
+        // Faction ANCHORS — the three things a faction dies without, and the subject of the
+        // "everyone still holds one" invariant.
+        public readonly int Nests, Hearts, Crystals;
+        public readonly long StructuresDestroyed;   // cumulative
+        public readonly float Deviation, DeviationWetter, DeviationDrier;
 
         private Sample(int tick, int total, int herb, int pred, int fac,
                        int shr, int sec, int fae, int corpses,
-                       long rh, long rp, long rf)
+                       long rh, long rp, long rf,
+                       int nests, int hearts, int crystals, long destroyed,
+                       WorldDeviation dev)
         {
             Tick = tick; Total = total; Herbivores = herb; Predators = pred; Factions = fac;
             Shroomers = shr; Sectids = sec; Faelings = fae; Corpses = corpses;
             RefusedHerbivore = rh; RefusedPredator = rp; RefusedFaction = rf;
+            Nests = nests; Hearts = hearts; Crystals = crystals; StructuresDestroyed = destroyed;
+            Deviation = dev.Mean; DeviationWetter = dev.Wetter; DeviationDrier = dev.Drier;
         }
 
         /// <summary>
         /// Class counts come from the budget (the live counts it maintains); the per-faction split
-        /// needs an entity pass, since the budget charges all three factions to one class.
+        /// and the anchor counts need an entity pass, since the budget charges all three factions
+        /// to one class and does not see structures at all.
         /// </summary>
-        public static Sample Take(int tick, EntityManager em, PopulationBudget budget)
+        public static Sample Take(int tick, EntityManager em, PopulationBudget budget,
+                                   EcosystemLogger logger)
         {
             int shr = 0, sec = 0, fae = 0;
+            int nests = 0, hearts = 0, crystals = 0;
             foreach (int e in em.AllEntities())
             {
+                if (em.HasComponents(e, ComponentFlags.Structure))
+                {
+                    ref var s = ref em.Structures[e];
+                    if (s.IsDestroyed) continue;
+                    switch (s.Kind)
+                    {
+                        case StructureKind.Nest: nests++; break;
+                        case StructureKind.Crystal: crystals++; break;
+                        case StructureKind.MyceliumHeart: hearts++; break;
+                    }
+                    continue;
+                }
                 if (budget.ClassOf(e) != PopClass.Faction) continue;
                 switch (em.Species[e].Type)
                 {
@@ -312,7 +465,11 @@ public partial class PopulationSoakRunner : Node
                 shr, sec, fae, em.CarrionCount,
                 budget.RefusalsFor(PopClass.Herbivore),
                 budget.RefusalsFor(PopClass.Predator),
-                budget.RefusalsFor(PopClass.Faction));
+                budget.RefusalsFor(PopClass.Faction),
+                nests, hearts, crystals, logger.RunStructuresDestroyed,
+                // Read the value the logger last wrote to the CSV rather than recomputing, so the
+                // assertion and the artefact can never disagree.
+                logger.LastDeviation);
         }
     }
 
@@ -331,6 +488,8 @@ public partial class PopulationSoakRunner : Node
                 case "initial" when int.TryParse(value, out int v): InitialPopulation = Math.Max(0, v); break;
                 case "sample" when int.TryParse(value, out int v): SampleInterval = Math.Max(1, v); break;
                 case "seed" when int.TryParse(value, out int v): WorldSeed = v; break;
+                case "crystals" when int.TryParse(value, out int v): FaelingCrystalCount = Math.Max(1, v); break;
+                case "grace" when int.TryParse(value, out int v): GraceTicks = Math.Max(0, v); break;
                 default: GD.PushWarning($"[Soak] ignored argument '{arg}'"); break;
             }
         }

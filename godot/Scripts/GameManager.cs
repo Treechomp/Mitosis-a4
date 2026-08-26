@@ -87,6 +87,14 @@ public partial class GameManager : Node3D
     /// continuations are three.
     /// </summary>
     [Export] public int FactionLivesPerRun = 3;
+
+    /// <summary>
+    /// Faelings in the world, exactly — a crystal holds one Faeling, so this IS the faction's
+    /// population. A designed constant on purpose: it was previously derived from keeper sense
+    /// coverage, and that derivation answered a PERCEPTION problem with PRESENCE, which is also
+    /// force. See WorldSpawner.SpawnCrystals for what 132 immortal raiders did to the map.
+    /// </summary>
+    [Export] public int FaelingCrystalCount = 12;
     [Export] public float CreaturesPerChunk = 2f;
 
     // Spectator settings
@@ -405,7 +413,8 @@ public partial class GameManager : Node3D
             herbivoreSeed += factionSeed;
 
         GD.Print("Spawning faction structures...");
-        _worldSpawner.SpawnCrystals(_crystalSystem!, _entityManager, faelingEnabled, _populationBudget);
+        _worldSpawner.SpawnCrystals(_crystalSystem!, _entityManager, faelingEnabled,
+            _populationBudget, FaelingCrystalCount);
         _worldSpawner.SpawnInitialNests(_nestSystem!, _entityManager, sectidSeed);
 
         GD.Print("Spawning creatures...");

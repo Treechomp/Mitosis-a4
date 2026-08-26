@@ -441,27 +441,4 @@ public static class TileTypeExtensions
         };
     }
 
-    /// <summary>
-    /// Shift a tile one step toward balance (Grass).
-    /// Returns null if already balanced or not terraformable.
-    /// </summary>
-    public static TileType? ShiftBalanced(this TileType tile)
-    {
-        return tile switch
-        {
-            TileType.Arid => TileType.Sand,
-            TileType.Sand => TileType.Dirt,
-            TileType.Dirt => TileType.Shrubland,
-            TileType.Shrubland => TileType.Grass,
-            TileType.Bog => TileType.Wetland,
-            TileType.Wetland => TileType.Forest,
-            TileType.Forest => TileType.Grass,
-            TileType.Tundra => TileType.Steppe,
-            TileType.Steppe => TileType.Grass,
-            TileType.Taiga => TileType.Forest,
-            TileType.Savanna => TileType.Grass,
-            TileType.Jungle => TileType.Forest,
-            _ => null
-        };
-    }
 }

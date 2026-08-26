@@ -370,55 +370,84 @@ public sealed class WorldSpawner
             return;
         }
 
-        var placed = new List<(float x, float y)>();
-        float spacingSq = shroomerDef.MyceliumRadius * shroomerDef.MyceliumRadius;
-        int hearts = 0;
-
+        // Collect the Shroomers once, then seed only where a heart could actually LIVE.
+        //
+        // Seeding one per cluster without checking was wrong, and the whole-game invariant is what
+        // caught it: a heart needs more than MyceliumShroomerFloor Shroomers inside its radius to
+        // survive, the initial spawn scatters Shroomers thinly, and 76 of 85 seeded hearts duly
+        // bled out by t=819 with cause `environment`. Seeding an anchor that dies on its own in
+        // 800 ticks is worse than seeding none: it looks like the faction is being destroyed.
+        var positions = new List<(float x, float y)>();
         foreach (int entity in entityManager.Query(ComponentFlags.Position | ComponentFlags.Species))
         {
             if (entityManager.HasComponents(entity, ComponentFlags.Spore)) continue;
             if (entityManager.HasComponents(entity, ComponentFlags.Structure)) continue;
             if (entityManager.Species[entity].SpeciesId != shroomerId) continue;
+            ref var p = ref entityManager.Positions[entity];
+            positions.Add((p.X, p.Y));
+        }
 
-            ref var pos = ref entityManager.Positions[entity];
+        var placed = new List<(float x, float y)>();
+        float spacingSq = shroomerDef.MyceliumRadius * shroomerDef.MyceliumRadius;
+        int hearts = 0;
+
+        foreach (var (x, y) in positions)
+        {
             bool tooClose = false;
             foreach (var (px, py) in placed)
             {
-                float dx = px - pos.X, dy = py - pos.Y;
+                float dx = px - x, dy = py - y;
                 if (dx * dx + dy * dy < spacingSq) { tooClose = true; break; }
             }
             if (tooClose) continue;
 
-            if (Systems.MyceliumSystem.SpawnHeart(entityManager, pos.X, pos.Y, shroomerId) >= 0)
+            // Both floors, via the same test MyceliumSystem applies when a bloom founds its own.
+            // The moisture floor is the binding one at worldgen: a heart needs 35% of its
+            // territory above the fungal threshold, and natural grassland is below it — so the
+            // faction starts anchored only in genuinely swampy country and earns the rest by
+            // converting ground, which is what a fungal faction should have to do.
+            if (!Systems.MyceliumSystem.TerritorySupportsHeart(
+                    _worldManager, _worldManager.SpatialHash, entityManager,
+                    x, y, shroomerDef, shroomerId))
+                continue;
+
+            if (Systems.MyceliumSystem.SpawnHeart(entityManager, x, y, shroomerId) >= 0)
             {
-                placed.Add((pos.X, pos.Y));
+                placed.Add((x, y));
                 hearts++;
             }
         }
 
-        GD.Print($"  Mycelium hearts: {hearts} (one per {shroomerDef.MyceliumRadius:F0}-tile territory)");
+        GD.Print($"  Mycelium hearts: {hearts} of {positions.Count} Shroomers " +
+                 $"(one per {shroomerDef.MyceliumRadius:F0}-tile territory holding " +
+                 $"more than {shroomerDef.MyceliumShroomerFloor})");
     }
 
     /// <summary>
     /// Spawns Faeling crystals spread across the world on grass tiles.
     ///
-    /// Crystal count is derived from MAP COVERAGE, not from a population share, because a crystal
-    /// holds exactly ONE Faeling: <c>CrystalSystem</c> links one to each and respawns it when it
-    /// dies, so the crystal count IS the Faeling ceiling. The old formula assumed the opposite —
-    /// "each crystal sustains ~8-12 Faelings, so crystalCount = budget / 10" — and divided by ten
-    /// a number that should have been multiplied by one. With a 0.04 share of a 2,000 seed that
-    /// produced EIGHT crystals for a 1152x1152 world, and therefore a hard ceiling of eight
-    /// Faelings; a profiled 12k-creature run duly reported exactly 8. That is the whole reason the
-    /// faction has never functioned as a faction, and no amount of budget would have fixed it.
+    /// Crystal count is an EXPLICIT DESIGNED CONSTANT, because a crystal holds exactly ONE
+    /// Faeling: <c>CrystalSystem</c> links one to each and respawns it when it dies, so the
+    /// crystal count IS the Faeling population.
     ///
-    /// What a keeper needs to act as a keeper is to be within KeeperSenseRadius of contested
-    /// ground often enough to notice it. One crystal senses pi*r^2 tiles, so covering a fraction
-    /// f of a world of A tiles takes f*A/(pi*r^2) crystals: at r = 40 and A = 1152^2 that is 132
-    /// for half the map, against the 8 it used to place (3% coverage). Coverage is capped by the
-    /// faction budget so a small world or a tight budget cannot be over-allocated.
+    /// It has been wrong in both directions. The original formula assumed one crystal sustained
+    /// 8-12 Faelings and divided by ten a number that should have been multiplied by one, giving
+    /// EIGHT crystals for a 1152x1152 world — the reason the faction never functioned. The fix
+    /// then derived it from SENSE COVERAGE (f*A/(pi*r^2), half the map at r=40 → 132 crystals),
+    /// which solved sensing by adding presence — and presence is also FORCE. Every
+    /// structure-combat term scaled 16x as a side effect: 132 immortal raiders with
+    /// StructureAttackPower 22 and StructureAggression 4.0 converged on far fewer than 132
+    /// structures from t=0, and a 6,000-tick run lost 44 of 46 Sectid nests and 21 colonies, the
+    /// first at t=951.
+    ///
+    /// The lesson is that a derived count silently converts a perception fix into an army. A
+    /// designed faction size is a number someone chose; a formula output is a number nobody owns.
+    /// Reach — getting a keeper to the problem — is now a MOBILITY question (CrystalSystem's
+    /// crystal-to-crystal travel) and awareness is a CENSUS question (FactionCensus), neither of
+    /// which needs more bodies.
     /// </summary>
     public void SpawnCrystals(CrystalSystem crystalSystem, EntityManager entityManager,
-                               bool faelingEnabled, PopulationBudget? budget = null)
+                               bool faelingEnabled, PopulationBudget? budget, int crystalCount)
     {
         if (crystalSystem == null) return;
         if (!faelingEnabled || !SpeciesToggle.IsEnabled(SpeciesRegistry.GetId("Faeling")))
@@ -427,16 +456,11 @@ public sealed class WorldSpawner
             return;
         }
 
-        // Fraction of the map a keeper should be able to sense into. Half: high enough that a
-        // Shroomer bloom or a Sectid colony is usually inside somebody's range, low enough that
-        // crystals stay landmarks rather than scenery.
-        const float CoverageTarget = 0.5f;
-
         var faelingDef = SpeciesRegistry.Get("Faeling");
         float senseRadius = faelingDef.KeeperSenseRadius > 0f ? faelingDef.KeeperSenseRadius : 40f;
         double worldTiles = (double)_worldManager.WorldSizeTiles * _worldManager.WorldSizeTiles;
         double perCrystal = Math.PI * senseRadius * senseRadius;
-        int crystalCount = Math.Max(1, (int)(CoverageTarget * worldTiles / perCrystal));
+        crystalCount = Math.Max(1, crystalCount);
 
         // Never allocate more Faeling slots than the faction class can hold — a crystal whose
         // Faeling can never spawn is a structure that does nothing.
@@ -461,9 +485,11 @@ public sealed class WorldSpawner
             spawned++;
         }
 
+        // Coverage is reported, not targeted: it is the number that says how much the keepers
+        // must cover by TRAVELLING rather than by standing there.
         double coverage = spawned * perCrystal / worldTiles;
         GD.Print($"  Faeling crystals: {spawned}/{crystalCount} " +
-                 $"(sense coverage {coverage:P0} of the map at r={senseRadius:F0})");
+                 $"(static sense coverage {coverage:P0} at r={senseRadius:F0}; the rest is travel)");
     }
 
     /// <summary>

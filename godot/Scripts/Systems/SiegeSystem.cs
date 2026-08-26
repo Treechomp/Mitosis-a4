@@ -179,12 +179,20 @@ public sealed class SiegeSystem : ISystem
     private readonly List<int> _nearby = new(64);
     private readonly List<int> _destroyed = new(8);
 
-    /// <summary>
-    /// Distance at which "no prey in sight" is scored for the aggression ratio. A structure is
-    /// preferred while dist(structure) ≤ dist(prey) × StructureAggression, and with no prey there
-    /// is nothing to lose by going, so the comparison must pass for anything in seek range.
-    /// </summary>
-    private const float NoPreyDistance = float.MaxValue / 4f;
+    // "No prey in sight" is scored as the creature's own SEEK RADIUS, not as infinity.
+    //
+    // Infinity was the obvious reading — nothing to lose by going — but it makes the aggression
+    // ratio meaningless in exactly the case where it should be most conservative: with no prey
+    // target, dist(structure) <= infinity x aggression is true for any aggression above zero, so
+    // an opportunist with StructureAggression 0.15 behaved identically to a dedicated raider. That
+    // is what put a Sectid swarm on a Faeling crystal at t=4,725 in a world where nobody had
+    // provoked anyone.
+    //
+    // The seek radius is the honest stand-in: "the food I might find is about as far as I can
+    // see". An unprovoked Sectid (0.15 x 45) is then distracted only by a structure within ~7
+    // tiles — genuinely underfoot — while retaliation (x8, so 1.2 x 45 = 54 tiles) still reaches
+    // across a whole neighbourhood, and a raider at 4.0 is unaffected because its ratio exceeds 1
+    // either way.
 
     /// <summary>
     /// How long a defender stays alerted by a call to arms. Matches HuntingSystem's own
@@ -192,10 +200,16 @@ public sealed class SiegeSystem : ISystem
     /// </summary>
     private const int DefenceAlertTicks = 150;
 
-    public SiegeSystem(SpatialHash spatialHash, WorldManager worldManager)
+    // The world census, shared with CrystalSystem. A keeper decides WHICH faction to move against
+    // from this, not from what happens to be nearest.
+    private readonly FactionCensus? _census;
+
+    public SiegeSystem(SpatialHash spatialHash, WorldManager worldManager,
+                        FactionCensus? census = null)
     {
         _spatialHash = spatialHash;
         _worldManager = worldManager;
+        _census = census;
     }
 
     public void Process(EntityManager em)
@@ -352,14 +366,42 @@ public sealed class SiegeSystem : ISystem
         int ownFaction = em.Species[entity].SpeciesId;
         float seekSq = seek * seek;
 
+        // A keeper besieges the WINNER or nobody. See StructureTargetsDominantOnly for what
+        // happened when this was "whatever is nearest".
+        int mandated = -1;
+        if (def.StructureTargetsDominantOnly)
+        {
+            if (_census == null) return -1;
+            mandated = _census.DominantFactionId(def.KeeperMinPresence, excludeSpeciesId: ownFaction);
+            if (mandated < 0) return -1;
+        }
+
         // Aggression rises while our own structures are being broken: answer a siege with a siege.
+        bool retaliating = def.StructureRetaliationBias != 1f && OwnStructureUnderAttack(em, ownFaction);
         float aggression = def.StructureAggression;
-        if (def.StructureRetaliationBias != 1f && OwnStructureUnderAttack(em, ownFaction))
-            aggression *= def.StructureRetaliationBias;
+        if (retaliating) aggression *= def.StructureRetaliationBias;
+
+        // A HUNGRY CREATURE FORAGES; IT DOES NOT LAY SIEGE. Unless its own home is being broken,
+        // in which case nothing else matters.
+        //
+        // This is not a flourish, it is a starvation bug found by the whole-game invariant. The
+        // aggression ratio compares the structure's distance against the CURRENT PREY TARGET's,
+        // and a creature with no prey target scores that distance as infinite — so "nothing to eat
+        // in sight" resolved as "definitely go break a building", at any aggression. Once crystals
+        // were toughened from 400 HP to 1,600, a hungry swarm with no prey nearby would commit
+        // 600+ ticks to hammering one instead of going to look for food. Across two seeds the
+        // Sectid faction went 223 -> 1 and 212 -> 0, holding 47 empty nests: the invariant's
+        // "still holds a nest" passed while the faction died.
+        if (!retaliating && em.HasComponents(entity, ComponentFlags.Hunger))
+        {
+            ref var hunger = ref em.Hungers[entity];
+            float ratio = hunger.Max > 0f ? hunger.Current / hunger.Max : 1f;
+            if (ratio < def.ForageHungerThreshold) return -1;
+        }
 
         // How far the nearest thing we'd otherwise be eating is. Distance to the current prey
         // target if we have one; otherwise the nearest structure wins by default.
-        float preyDist = NoPreyDistance;
+        float preyDist = seek;
         if (em.HasComponents(entity, ComponentFlags.Predator))
         {
             ref var predator = ref em.Predators[entity];
@@ -377,6 +419,7 @@ public sealed class SiegeSystem : ISystem
         {
             if (!IsValidTarget(em, entity, other)) continue;
             if (em.Structures[other].FactionSpeciesId == ownFaction) continue;
+            if (mandated >= 0 && em.Structures[other].FactionSpeciesId != mandated) continue;
 
             ref var op = ref em.Positions[other];
             float dSq = MathUtils.DistanceSquared(pos.X, pos.Y, op.X, op.Y);

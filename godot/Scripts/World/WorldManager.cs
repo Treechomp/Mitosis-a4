@@ -206,14 +206,29 @@ public sealed class WorldManager
         if (!tile.IsTerraformable()) return false;
 
         float m = chunk.GetMoisture(localX, localY);
-        float nm = direction switch
+        float nm;
+        if (direction == TerraformDirection.Restore)
         {
-            TerraformDirection.Wetter   => m + step,
-            TerraformDirection.Drier    => m - step,
-            TerraformDirection.Balanced => MoveToward(m, 0.4f, step), // 0.4 ≈ grass band
-            _ => m
-        };
+            // Target is the moisture worldgen gave THIS tile — see TerraformDirection.Restore.
+            // Snap when already within a step, so restoration converges exactly instead of
+            // oscillating across the target forever.
+            float pristine = _generator.PristineMoisture((int)worldX, (int)worldY);
+            nm = MathF.Abs(pristine - m) <= step ? pristine : MoveToward(m, pristine, step);
+        }
+        else
+        {
+            nm = direction switch
+            {
+                TerraformDirection.Wetter => m + step,
+                TerraformDirection.Drier  => m - step,
+                _ => m
+            };
+        }
         nm = Math.Clamp(nm, 0f, 1f);
+        // A tile already at its target consumes the act and changes nothing. Deliberately NOT a
+        // signal to go find a better tile: a keeper standing on healthy ground wasting its acts is
+        // exactly how effort CONCENTRATES where damage actually is, and searching for work would
+        // spread it evenly over a map that does not need it.
         if (nm == m) return false;
 
         chunk.SetMoisture(localX, localY, nm);
@@ -445,6 +460,97 @@ public sealed class WorldManager
         // Nutrition tracking (test scenes): corpse decomposition enriching the soil.
         if (added > 0f)
             Systems.EcosystemLogger.Instance?.CountNutritionEnriched(added);
+    }
+
+    // ── World deviation from pristine ─────────────────────────────────────────
+
+    /// <summary>
+    /// Stride of the deviation sample grid, in tiles. At chunk size 32 this is an 8x8 lattice per
+    /// chunk — 64 of 1,024 tiles, 6.25%.
+    ///
+    /// Enough because the quantity is a MEAN over the whole world, not a per-tile map. Terraform
+    /// works in discs several tiles across (Sectid nests radius 3, Shroomers radius 2, a keeper's
+    /// restoration likewise), so a converted region always covers many lattice points; and 6.25%
+    /// of a 1,296-chunk world is still 82,944 samples, whose sampling error on a mean is far below
+    /// the 0.02-0.35 band the invariant cares about. Sweeping every tile would cost 16x for a
+    /// third decimal place nobody reads.
+    /// </summary>
+    public const int DeviationSampleStride = 4;
+
+    // Pristine moisture for the sample lattice, filled once per chunk and never invalidated —
+    // pristine is by definition the value that does not change. This is also what makes the
+    // metric STABLE: the same tiles are compared on every call, so a movement in the number is
+    // always the world moving and never the sample set moving. Re-sampling the generator on every
+    // call would be correct but would put ~83,000 noise evaluations on a cadence tick.
+    private readonly Dictionary<(int, int), float[]> _pristineSamples = new();
+
+    /// <summary>
+    /// How far the world has been pushed from the world worldgen would have made: mean
+    /// |current moisture - pristine moisture| over a fixed sample lattice, in [0,1], split by
+    /// direction.
+    ///
+    /// The split is the scoreboard for the three-way war. One number saying "the world is 12%
+    /// altered" cannot distinguish a swamp advancing from a desert advancing from the two
+    /// cancelling out across the map; wetter-vs-drier says which faction is winning the ground.
+    /// A keeper restoring terrain pulls BOTH components down, which is the only way any faction
+    /// reduces this number.
+    /// </summary>
+    public WorldDeviation DeviationFromPristine()
+    {
+        double wetter = 0, drier = 0;
+        int samples = 0;
+
+        foreach (var ((cx, cy), chunk) in _chunks)
+        {
+            if (!_pristineSamples.TryGetValue((cx, cy), out var pristine))
+            {
+                pristine = BuildPristineSamples(chunk, cx, cy);
+                _pristineSamples[(cx, cy)] = pristine;
+            }
+
+            int i = 0;
+            for (int ly = 0; ly < chunk.Size; ly += DeviationSampleStride)
+            {
+                for (int lx = 0; lx < chunk.Size; lx += DeviationSampleStride, i++)
+                {
+                    float delta = chunk.GetMoisture(lx, ly) - pristine[i];
+                    if (delta > 0f) wetter += delta;
+                    else drier -= delta;
+                    samples++;
+                }
+            }
+        }
+
+        if (samples == 0) return default;
+        return new WorldDeviation(
+            (float)(wetter / samples), (float)(drier / samples), samples);
+    }
+
+    /// <summary>
+    /// |current - pristine| moisture at one tile. The per-tile form of
+    /// <see cref="DeviationFromPristine"/>, for callers deciding where the damage is rather than
+    /// how much there is in total. Uncached — callers sample a handful of points on a roam
+    /// decision, not the whole world.
+    /// </summary>
+    public float DeviationAt(float worldX, float worldY)
+    {
+        if (worldX < 0f || worldY < 0f) return 0f;
+        var chunk = GetChunk((int)(worldX / ChunkSize), (int)(worldY / ChunkSize));
+        if (chunk == null) return 0f;
+        float current = chunk.GetMoisture((int)worldX % ChunkSize, (int)worldY % ChunkSize);
+        return MathF.Abs(current - _generator.PristineMoisture((int)worldX, (int)worldY));
+    }
+
+    private float[] BuildPristineSamples(Chunk chunk, int chunkX, int chunkY)
+    {
+        int per = (chunk.Size + DeviationSampleStride - 1) / DeviationSampleStride;
+        var values = new float[per * per];
+        int ox = chunkX * chunk.Size, oy = chunkY * chunk.Size;
+        int i = 0;
+        for (int ly = 0; ly < chunk.Size; ly += DeviationSampleStride)
+            for (int lx = 0; lx < chunk.Size; lx += DeviationSampleStride, i++)
+                values[i] = _generator.PristineMoisture(ox + lx, oy + ly);
+        return values;
     }
 
     // ── Mycelium (Shroomer territory) ─────────────────────────────────────────
@@ -765,5 +871,32 @@ public sealed class WorldManager
     public BiomeType GetBiome(float worldX, float worldY)
     {
         return GetTile(worldX, worldY).GetTypicalBiome();
+    }
+}
+
+/// <summary>
+/// How far the live world has drifted from the one worldgen authored, split by direction.
+/// <c>Mean</c> is the headline number; <c>Wetter</c> + <c>Drier</c> sum to it exactly, since each
+/// sampled tile contributes to one side or neither.
+/// </summary>
+public readonly struct WorldDeviation
+{
+    /// <summary>Mean |current - pristine| moisture over the sample lattice, in [0,1].</summary>
+    public float Mean => Wetter + Drier;
+
+    /// <summary>The part of the deviation that is wetter than pristine (Shroomer ground).</summary>
+    public readonly float Wetter;
+
+    /// <summary>The part that is drier than pristine (Sectid ground).</summary>
+    public readonly float Drier;
+
+    /// <summary>Tiles compared. 0 means no chunks were loaded.</summary>
+    public readonly int Samples;
+
+    public WorldDeviation(float wetter, float drier, int samples)
+    {
+        Wetter = wetter;
+        Drier = drier;
+        Samples = samples;
     }
 }

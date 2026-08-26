@@ -1,0 +1,64 @@
+# Faeling restoration: repairing damage, and doing nothing where there is none.
+#
+# TerraformDirection.Restore targets the moisture WORLDGEN gave each tile, not a fixed "correct"
+# value, and this scenario measures both halves of what that buys.
+#
+# WHAT COUNTS AS DAMAGE. A scenario's authored terrain IS its pristine state —
+# ScenarioTerrainGenerator.PristineMoisture reports the canonical moisture of the tile the scenario
+# wrote — so damage in a scenario world can only be made at RUNTIME. Here it is made by two Sectid
+# nests with NO Sectids: a nest terraforms Drier on its own every 40 ticks
+# (NestSystem.AmbientTerraform) and never grows, and with no Sectid creatures alive the world
+# census names no dominant faction, so the keepers have no siege mandate and can only ever repair.
+#
+# MEASURED (16,000 ticks, from latest_events.csv):
+#
+#   311 terraform_shift rows with dir=Drier   — the nests taking Grass down to Shrubland
+#   105 terraform_shift rows with dir=Restore — the keepers putting it back, e.g.
+#       `Shrubland->Grass; dir=Restore; moisture=0.320->0.370`
+#
+# That is the mechanism working exactly as intended: every keeper act lands on ground a nest had
+# moved, and moves it back toward what worldgen wrote. On the surrounding pristine grassland the
+# keepers do nothing at all — an earlier draft of this file authored a Wetland block into a desert
+# scenario, which made it PRISTINE rather than damaged, and the keepers correctly ignored it for
+# 12,000 ticks: 71 roams, all reason=random, zero nudges. `Balanced` could not have done that; its
+# target was the grass band, so it worked forever on ground that was never wrong.
+#
+# WHAT THIS SCENARIO DOES NOT SHOW, and why. world_deviation does not FALL here, because the
+# damager never stops: the nests re-dry the tiles the keepers just repaired, so the two sides churn
+# the same ground while the drying edge creeps outward. Deviation falling requires damage that
+# ends. That was measured separately on a bloom the keepers could kill off — peak 0.00128 at
+# t=2,200, down to 0.00067 by t=24,000 with terraform_nudges dropping 43 -> 0-2 per interval — but
+# it is not reproducible on the current build, where a keeper suppresses a bloom without
+# eradicating it (below KeeperMinPresence it holds fire, so the bloom recovers). See
+# docs/whole-game-invariants.md.
+
+[world]
+name = restoration
+size_chunks = 3          # 96x96 tiles
+seed = 606
+base_tile = Grass        # the pristine world
+tps = 20
+max_population = 2000
+
+[spawn]
+# The damager: nests with NO Sectids. They terraform Drier ambiently on their own
+# (NestSystem.AmbientTerraform) and nothing else about them changes.
+nest @ 44,48 colony=1
+nest @ 52,48 colony=1
+
+# The keepers, ringing the patch. Crystals so a keeper that dies is replaced.
+crystal @ 44,50
+crystal @ 52,50
+crystal @ 44,46
+crystal @ 52,46
+crystal @ 48,48
+crystal @ 40,48
+crystal @ 56,48
+crystal @ 48,44
+
+[logging]
+decisions = true
+decision_species = Faeling
+terrain_interval = 200
+nutrition_interval = 0
+snapshot_interval = 200

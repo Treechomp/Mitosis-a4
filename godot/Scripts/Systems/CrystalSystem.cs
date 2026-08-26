@@ -39,21 +39,27 @@ public sealed class CrystalSystem : ISystem
     // Guards the dominance sense against its local-density blind spot: Sectid colonies are ALWAYS
     // locally dense (8+ per nest), so a purely local read had keepers besieging nests of a faction
     // that was globally collapsing (77→4) while Shroomers tripled elsewhere unopposed.
-    private int _globalShroomers;
-    private int _globalSectids;
+    // Where each faction is, worldwide — totals AND a per-chunk presence grid. Replaces the two
+    // bare global counters this system used to keep: a keeper now knows not just that a faction is
+    // winning but WHERE, which is what lets twelve of them matter across a 1152-tile world.
+    private readonly FactionCensus _census;
     private int _censusCooldown;
 
     /// <summary>Per-class ceiling; Faelings are charged to the Faction budget.</summary>
     private readonly PopulationBudget? _budget;
 
     public CrystalSystem(WorldManager worldManager, SpatialHash spatialHash, int maxPopulation,
-                          PopulationBudget? budget = null)
+                          PopulationBudget? budget = null, FactionCensus? census = null)
     {
         _worldManager = worldManager;
         _spatialHash = spatialHash;
         _maxPopulation = maxPopulation;
         _budget = budget;
+        _census = census ?? new FactionCensus(worldManager.ChunkSize, worldManager.WorldSizeChunks);
     }
+
+    /// <summary>The world census this system maintains, for anything else that needs it.</summary>
+    public FactionCensus Census => _census;
 
     public void Process(EntityManager em)
     {
@@ -64,17 +70,7 @@ public sealed class CrystalSystem : ISystem
         if (_censusCooldown <= 0)
         {
             _censusCooldown = KeeperSenseInterval;
-            _globalShroomers = 0;
-            _globalSectids = 0;
-            foreach (int e in em.Query(ComponentFlags.Species))
-            {
-                if (em.HasComponents(e, ComponentFlags.Spore) ||
-                    em.HasComponents(e, ComponentFlags.Nest) ||
-                    em.HasComponents(e, ComponentFlags.Crystal)) continue;
-                var t = em.Species[e].Type;
-                if (t == SpeciesType.Shroomer) _globalShroomers++;
-                else if (t == SpeciesType.Sectid) _globalSectids++;
-            }
+            _census.Refresh(em);
         }
 
         // === CRYSTAL PROCESSING ===
@@ -166,6 +162,9 @@ public sealed class CrystalSystem : ISystem
         // === RANGED ATTACK PROCESSING ===
         ProcessRangedAttacks(em);
 
+        // === CRYSTAL-TO-CRYSTAL TRAVEL ===
+        ProcessKeeperTravel(em);
+
         // === SPAWN PENDING FAELINGS (respect population cap AND the faction budget) ===
         // Like NestSystem, this path had only the hard cap and no throttle, so it was on the
         // winning side of the ratchet — it just never had the numbers to exploit it (8 Faelings in
@@ -235,6 +234,8 @@ public sealed class CrystalSystem : ISystem
 
         int lead = Math.Max(shroomers, sectids);
         int trail = Math.Min(shroomers, sectids);
+        int shroomerId = SpeciesRegistry.GetId("Shroomer");
+        int sectidId = SpeciesRegistry.GetId("Sectid");
         if (lead >= faeDef.KeeperMinPresence && lead * 2 >= trail * 3) // ≥1.5× margin
         {
             bool shroomerDominant = shroomers >= sectids;
@@ -242,8 +243,8 @@ public sealed class CrystalSystem : ISystem
             // Global-context guard: don't commit to suppressing a faction that is already
             // globally well behind its rival (≤ 2/3 of the rival's count) — a keeper's job is
             // checking the WINNER, and every colony/bloom looks locally dominant up close.
-            int leadGlobal = shroomerDominant ? _globalShroomers : _globalSectids;
-            int trailGlobal = shroomerDominant ? _globalSectids : _globalShroomers;
+            int leadGlobal = _census.GlobalCount(shroomerDominant ? shroomerId : sectidId);
+            int trailGlobal = _census.GlobalCount(shroomerDominant ? sectidId : shroomerId);
             if (leadGlobal * 3 < trailGlobal * 2)
             {
                 power.KeeperFaction = 0;
@@ -258,6 +259,105 @@ public sealed class CrystalSystem : ISystem
         {
             power.KeeperFaction = 0;
         }
+    }
+
+    /// <summary>
+    /// Move a keeper to the crystal nearest the region the census says is the problem.
+    ///
+    /// This is the answer to reach that does NOT involve more keepers. Twelve of them cannot stand
+    /// everywhere in a 1152-tile world, and the previous answer — 132 crystals, so that a keeper
+    /// was always already there — solved perception by fielding an army. Travel decouples the two:
+    /// the census says where, the crystal network says how.
+    ///
+    /// A traveller KEEPS ITS LINK to its home crystal. Re-linking to the destination would free
+    /// the origin to spawn a replacement, and Faeling population is exactly the crystal count by
+    /// construction — a mobility mechanic must not quietly become a breeding one. The visible
+    /// effect is concentration: crystals near the trouble hold several keepers, distant ones
+    /// stand empty until their own keeper walks home.
+    ///
+    /// A KEEPER IN A FIGHT CANNOT TRAVEL. Deliberate: letting one blink out of a siege it is
+    /// losing would make keepers unkillable, and massing on a single keeper is the counterplay the
+    /// other factions have against an elite unit. In combat (RegenCooldown, set whenever it takes
+    /// damage) or mid-siege, it stays and sees it through.
+    /// </summary>
+    private void ProcessKeeperTravel(EntityManager em)
+    {
+        const ComponentFlags required = ComponentFlags.Position | ComponentFlags.FaelingPower |
+                                        ComponentFlags.Species;
+
+        foreach (int entity in em.Query(required))
+        {
+            if (!em.DueThisTick[entity]) continue;
+
+            var def = SpeciesRegistry.GetById(em.Species[entity].SpeciesId);
+            if (def == null || def.CrystalTravelCooldown <= 0) continue;
+
+            ref var power = ref em.FaelingPowers[entity];
+            if (power.TravelCooldown > 0)
+            {
+                power.TravelCooldown = Math.Max(0,
+                    power.TravelCooldown - DecisionCadence.Elapsed(em, entity));
+                continue;
+            }
+
+            // In combat: stay and fight. See the class comment above.
+            if (em.HasComponents(entity, ComponentFlags.Energy)
+                && em.Energies[entity].RegenCooldown > 0)
+                continue;
+            // Mid-siege: finish the job rather than abandoning a half-broken structure.
+            if (em.HasComponents(entity, ComponentFlags.Siege) && em.Sieges[entity].HasTarget)
+                continue;
+
+            int dominant = _census.DominantFactionId(def.KeeperMinPresence,
+                excludeSpeciesId: em.Species[entity].SpeciesId);
+            if (dominant < 0) continue;                        // nobody is running away with it
+            if (!_census.TryHottestChunk(dominant, out float hotX, out float hotY, out _)) continue;
+
+            ref var pos = ref em.Positions[entity];
+            // Already in the right part of the world — nothing to travel to.
+            if (MathUtils.DistanceSquared(pos.X, pos.Y, hotX, hotY)
+                <= def.KeeperSenseRadius * def.KeeperSenseRadius)
+                continue;
+
+            int destination = FindCrystalNearest(em, hotX, hotY);
+            if (destination < 0) continue;
+
+            ref var dest = ref em.Positions[destination];
+            // No point relocating to a crystal no closer to the problem than we already are.
+            if (MathUtils.DistanceSquared(dest.X, dest.Y, hotX, hotY)
+                >= MathUtils.DistanceSquared(pos.X, pos.Y, hotX, hotY))
+            {
+                power.TravelCooldown = def.CrystalTravelCooldown;
+                continue;
+            }
+
+            pos.X = dest.X;
+            pos.Y = dest.Y;
+            power.TravelCooldown = def.CrystalTravelCooldown;
+            _spatialHash.Update(entity, pos.X, pos.Y);
+
+            if (EcosystemLogger.DecisionLoggingFor(em.Species[entity].SpeciesId))
+            {
+                EcosystemLogger.Instance!.LogDecision(em.Species[entity].SpeciesId, entity,
+                    pos.X, pos.Y, "crystal", "keeper_travel", FormattableString.Invariant(
+                        $"to={dest.X:F0}:{dest.Y:F0};toward={SpeciesRegistry.GetById(dominant)?.Name};hot={hotX:F0}:{hotY:F0}"));
+            }
+        }
+    }
+
+    private static int FindCrystalNearest(EntityManager em, float x, float y)
+    {
+        int best = -1;
+        float bestDistSq = float.MaxValue;
+        foreach (int e in em.Query(ComponentFlags.Crystal | ComponentFlags.Position))
+        {
+            if (em.HasComponents(e, ComponentFlags.Structure) && em.Structures[e].IsDestroyed)
+                continue;
+            ref var p = ref em.Positions[e];
+            float d = MathUtils.DistanceSquared(x, y, p.X, p.Y);
+            if (d < bestDistSq) { bestDistSq = d; best = e; }
+        }
+        return best;
     }
 
     private void ProcessRangedAttacks(EntityManager em)
@@ -287,6 +387,29 @@ public sealed class CrystalSystem : ISystem
             }
 
             // Find terraformer target (Sectids and Shroomers — NOT other Faelings).
+            // MANDATE. A species that only besieges the dominant faction only SHOOTS it either:
+            // "keeper of order" cannot mean "kills whichever faction is nearest". Without this the
+            // siege path checked the winner while the bolts went into whoever was underfoot, and
+            // near a colony that is always a Sectid. Twelve immortal keepers firing on the weakest
+            // faction ground it from 223 to 1 across a 20,000-tick run — and the only reason it
+            // survived at all in an earlier build was that it could break crystals and reduce the
+            // number of keepers shooting it. A faction should not have to kill its counterweight
+            // to exist.
+            //
+            // While no faction is clearly ahead, a keeper has no mandate and holds its fire.
+            int mandate = -1;
+            if (em.HasComponents(entity, ComponentFlags.Species))
+            {
+                int selfId = em.Species[entity].SpeciesId;
+                var shooterDef = SpeciesRegistry.GetById(selfId);
+                if (shooterDef != null && shooterDef.StructureTargetsDominantOnly)
+                {
+                    mandate = _census.DominantFactionId(shooterDef.KeeperMinPresence,
+                        excludeSpeciesId: selfId);
+                    if (mandate < 0) continue;
+                }
+            }
+
             // Keeper preference: if a rival faction is locally over-dominant (SenseDominance),
             // its members are preferred over the other faction's — the keeper suppresses
             // whoever is winning.
@@ -306,6 +429,7 @@ public sealed class CrystalSystem : ISystem
                 // Target only Sectids and Shroomers (not Faelings)
                 if (otherSpecies.Type != SpeciesType.Sectid && otherSpecies.Type != SpeciesType.Shroomer)
                     continue;
+                if (mandate >= 0 && otherSpecies.SpeciesId != mandate) continue;
 
                 // Don't target spores (they have low priority)
                 if (em.HasComponents(other, ComponentFlags.Spore)) continue;

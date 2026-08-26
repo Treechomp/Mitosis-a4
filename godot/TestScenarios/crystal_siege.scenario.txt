@@ -3,10 +3,16 @@
 # targeting, walked to, hit with the surface-to-surface reach, and destroyed — and the crystal's
 # linked Faeling never comes back.
 #
-# The colony is planted close to the crystals and given nothing else worth eating, so the
-# StructureAggression ratio (a structure must be at most 0.5x the distance of the prey it would
-# otherwise take) resolves in the crystal's favour immediately. Two crystals: the first proves a
-# siege completes, the second that the colony moves on to the next objective rather than idling.
+# The crystals are planted ON TOP OF the colony, and that is now load-bearing. Sectid
+# StructureAggression is 0.15 — a structure must be within 0.15x the distance of the prey the
+# swarm would otherwise take, and with no prey in sight that comparison uses the swarm's own seek
+# radius (45), so an UNPROVOKED Sectid is distracted only by a structure within about seven tiles.
+# That is deliberate: unprovoked structure-breaking in the opening minutes is what the whole-game
+# invariant forbids. Retaliation is the other path (x8 bias), and it needs someone to attack the
+# colony first, which nothing here does.
+#
+# Crystals are also 1,600 HP now, not 400 — a crystal is the most permanent thing in the game and
+# every one lost shrinks a twelve-member faction forever. Hence the longer budget.
 #
 # Watch latest_events.csv for structure_damaged -> structure_destroyed -> crystal_destroyed.
 
@@ -22,10 +28,10 @@ max_population = 2000
 rect Arid 0 0 96 40      # the colony's half
 
 [spawn]
-nest @ 24,20 colony=1 sectids=14
-nest @ 32,24 colony=1 sectids=14
-crystal @ 48,52
-crystal @ 60,60
+nest @ 24,20 colony=1 sectids=16
+nest @ 32,24 colony=1 sectids=16
+crystal @ 28,24
+crystal @ 36,20
 
 [logging]
 decisions = true

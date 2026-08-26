@@ -31,6 +31,19 @@ public sealed class WanderSystem : ISystem
     private const float TurnRateMin = 0.06f;
     private const float TurnRateMax = 0.3f;
 
+    // === Restoration search (TerraformDirection.Restore) ===
+    /// <summary>Nearest sample distance as a fraction of roam distance, and the sampling step.</summary>
+    private const float RestoreSeekNearFraction = 0.1f;
+    /// <summary>Farthest sample, as a fraction of roam distance. Deliberately short — a keeper
+    /// repairs what it can walk to; crossing the world is what crystal travel is for.</summary>
+    private const float RestoreSeekFarFraction = 0.6f;
+    /// <summary>
+    /// Minimum damage score worth walking to. GetTerrainDamageScore is |current - pristine| x 4,
+    /// so 0.2 is a moisture displacement of 0.05 — about a third of a biome band. Below that the
+    /// ground is essentially as worldgen left it and a keeper has nothing to do there.
+    /// </summary>
+    private const float RestoreSeekMinScore = 0.2f;
+
     public WanderSystem(WorldManager? worldManager = null, float lookAheadDistance = 1.5f,
                         float roamArrivalDist = 5f, SpatialHash? spatialHash = null)
     {
@@ -223,7 +236,7 @@ public sealed class WanderSystem : ISystem
                     // from which their balanced terraform dries/restores the substrate the
                     // winner depends on. Containment, not a suicide charge into elder AoE.
                     else if (wanderSpeciesDef != null
-                        && wanderSpeciesDef.TerraformDir == TerraformDirection.Balanced
+                        && wanderSpeciesDef.TerraformDir == TerraformDirection.Restore
                         && em.HasComponents(entity, ComponentFlags.FaelingPower)
                         && em.FaelingPowers[entity].KeeperFaction != 0
                         && TrySiegeTarget(ref em.FaelingPowers[entity], pos.X, pos.Y,
@@ -232,9 +245,9 @@ public sealed class WanderSystem : ISystem
                         // Target already set toward the siege line
                         roamReason = "keeper_siege";
                     }
-                    // Faelings: seek damaged terrain (non-balanced tiles) to restore
+                    // Restorers seek ground that has actually been moved off its pristine state
                     else if (wanderSpeciesDef != null
-                        && wanderSpeciesDef.TerraformDir == TerraformDirection.Balanced
+                        && wanderSpeciesDef.TerraformDir == TerraformDirection.Restore
                         && _worldManager != null
                         && TryFindDamagedTerrainTarget(pos.X, pos.Y, roamDistance, out targetX, out targetY))
                     {
@@ -1026,57 +1039,61 @@ public sealed class WanderSystem : ISystem
     {
         targetX = x;
         targetY = y;
-        float bestScore = 0;
+        float best = 0f;
 
+        // Aim at the most damaged POINT found, not at a random distance along the best direction.
+        // Direction scoring plus a random travel distance used to overshoot: a keeper would
+        // correctly identify the direction of a converted patch and then walk past it.
+        //
+        // The near field is what matters and is what the old sampling missed entirely. It sampled
+        // t = 0.2..1.0 of a 60-tile roam distance, so the first probe was already 12 tiles out and
+        // damage under the keeper's feet was invisible; a keeper five tiles from a fifteen-tile
+        // patch got at most one sample inside it and never cleared the threshold. Long-range
+        // redeployment is the crystal-travel mechanism's job (CrystalSystem), not this one's —
+        // here a keeper is looking for work within walking distance.
         for (int i = 0; i < 8; i++)
         {
             float angle = i * MathF.PI / 4f;
             float dx = MathF.Cos(angle);
             float dy = MathF.Sin(angle);
 
-            // Sample 5 points along this direction
-            float dirScore = 0;
-            for (float t = 0.2f; t <= 1.0f; t += 0.2f)
+            for (float t = RestoreSeekNearFraction; t <= RestoreSeekFarFraction; t += RestoreSeekNearFraction)
             {
                 float sampleX = x + dx * roamDistance * t;
                 float sampleY = y + dy * roamDistance * t;
-                dirScore += GetTerrainDamageScore(sampleX, sampleY);
-            }
-
-            if (dirScore > bestScore)
-            {
-                bestScore = dirScore;
-                float dist = roamDistance * (0.5f + (float)_rng.NextDouble() * 0.5f);
-                targetX = x + dx * dist;
-                targetY = y + dy * dist;
+                float score = GetTerrainDamageScore(sampleX, sampleY);
+                if (score > best)
+                {
+                    best = score;
+                    targetX = sampleX;
+                    targetY = sampleY;
+                }
             }
         }
 
-        return bestScore > 2f; // Only seek if significant damage found
+        return best >= RestoreSeekMinScore;
     }
 
     /// <summary>
-    /// Score a tile by how far it is from balanced (Grass). Higher = more damaged.
+    /// Score a tile by how far it has actually been MOVED from what worldgen made it. Higher =
+    /// more damaged.
+    ///
+    /// This was a hardcoded table scoring Arid 4, Bog 4, Wetland 3 … Grass 0 — that is, it
+    /// asserted that grass is the correct state of the world and sent keepers off to convert
+    /// natural deserts and jungles into it. It was the search half of the same monoculture the
+    /// `Balanced` terraform direction was the acting half of. Deviation from pristine has no such
+    /// opinion: an untouched desert scores zero and a swamped grassland scores high, so a keeper
+    /// walks toward damage rather than toward disagreement.
+    ///
+    /// Scaled to keep the caller's "significant damage" threshold meaningful: 0.25 of full-scale
+    /// moisture displacement — roughly one biome band — reads as 1.0.
     /// </summary>
     private float GetTerrainDamageScore(float x, float y)
     {
-        var tile = _worldManager!.GetTile(x, y);
-        return tile switch
-        {
-            TileType.Arid => 4f,
-            TileType.Bog => 4f,
-            TileType.Wetland => 3f,
-            TileType.Sand => 2.5f,
-            TileType.Tundra => 2f,
-            TileType.Jungle => 2f,
-            TileType.Taiga => 1.5f,
-            TileType.Dirt => 1.5f,
-            TileType.Forest => 1f,
-            TileType.Steppe => 1f,
-            TileType.Savanna => 1f,
-            TileType.Shrubland => 0.5f,
-            _ => 0f // Grass, water, mountain = balanced or untargetable
-        };
+        if (_worldManager == null) return 0f;
+        var tile = _worldManager.GetTile(x, y);
+        if (!tile.IsTerraformable()) return 0f;   // water, mountain: nothing to restore
+        return _worldManager.DeviationAt(x, y) * 4f;
     }
 
     /// <summary>

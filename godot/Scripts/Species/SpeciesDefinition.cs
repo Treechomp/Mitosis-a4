@@ -497,7 +497,7 @@ public sealed class SpeciesDefinition
     public float DroughtDamage { get; init; } = 0f;
 
     // === TERRAFORM (faction species) ===
-    public TerraformDirection TerraformDir { get; init; } = TerraformDirection.Balanced;
+    public TerraformDirection TerraformDir { get; init; } = TerraformDirection.Restore;
     public float TerraformRadius { get; init; } = 2f;
     public float TerraformStrength { get; init; } = 0.02f;
     public int TerraformCooldown { get; init; } = 10;
@@ -625,6 +625,15 @@ public sealed class SpeciesDefinition
     /// <summary>Health of a crystal. Finite: a crystal is an objective, not scenery.</summary>
     public float CrystalHealth { get; init; } = 400f;
 
+    /// <summary>
+    /// Ticks between crystal-to-crystal relocations. 0 disables travel.
+    ///
+    /// Long on purpose: this is how a small faction covers a large world, and it must read as a
+    /// deliberate redeployment rather than as teleportation. It is also the alternative to the
+    /// answer that broke the game — raising the faction's numbers until one was always nearby.
+    /// </summary>
+    public int CrystalTravelCooldown { get; init; } = 0;
+
     // === SIEGE — attacking enemy faction STRUCTURES (SiegeSystem) ===
     // A structure is an objective, not food, so none of the prey machinery applies to it: no mass
     // gate, no nutrition payoff, no carcass. What varies between factions is how much they care
@@ -653,6 +662,22 @@ public sealed class SpeciesDefinition
 
     /// <summary>How far this species looks for an enemy structure. 0 falls back to HuntRange.</summary>
     public float StructureSeekRadius { get; init; } = 0f;
+
+    /// <summary>
+    /// This species only besieges the faction the WORLD CENSUS says is winning — never simply the
+    /// nearest enemy structure.
+    ///
+    /// It is the difference between a keeper and a third belligerent, and getting it wrong is not
+    /// subtle. Without this, siege targeting picked the closest enemy structure, so twelve keepers
+    /// spent a 20,000-tick run dismantling SECTID nests while the Sectids were collapsing
+    /// (216 -> 142) and the Shroomers ran away with the map (376 -> 2,850). The faction whose
+    /// entire purpose is to check the winner was systematically finishing off the loser.
+    ///
+    /// While no faction is clearly ahead — the opening of every run — a species with this set has
+    /// no siege mandate at all and leaves every structure alone. That quiet start is a
+    /// consequence of the rule, not a special case bolted on to satisfy it.
+    /// </summary>
+    public bool StructureTargetsDominantOnly { get; init; } = false;
 
     /// <summary>
     /// Radius over which one of this species' structures calls its own kind to defend it. The call
