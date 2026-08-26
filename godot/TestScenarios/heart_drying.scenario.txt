@@ -1,0 +1,79 @@
+# A Shroomer mycelium heart killed by DRYING — no blow is ever struck at it.
+#
+# A heart survives on two floors measured across its MyceliumRadius (14 tiles): enough tiles above
+# the substrate-moisture threshold, and enough living Shroomers. This scenario attacks the first
+# and leaves the second untouched, which is the point — it is the attack a faction can win from
+# outside the bloom without trading a single hit, and it reads completely differently from
+# besieging a nest.
+#
+# ISOLATING IT. Sectids can also just walk up and hit the heart (StructureAggression 0.5, and an
+# earlier draft of this scenario proved it: 52 blows, heart down at t=123). So the colony here is
+# nests with NO Sectids. A nest terraforms Drier on its own every 40 ticks whether or not anything
+# hatches from it (NestSystem.AmbientTerraform), and with no bodies there is nothing that can
+# reach the heart. What kills it is the ground.
+#
+# THE MARGIN IS DELIBERATE. Base terrain is Grass, whose substrate moisture (0.4) is already below
+# the Shroomer threshold (0.6) — so most of the map does not count as wet. The Wetland disc (r9,
+# ~254 of the heart's ~615 tiles) puts the territory at ~41%, just over its 0.35 floor; the nests
+# then have to take ~40 tiles off it. A test that started at 100% wet would only be measuring how
+# long radius-3 nests take to chew through 600 tiles.
+#
+# WHERE THE DRYERS STAND MATTERS, and this is the interesting part. A first draft put the nests in
+# the middle of the bloom and they LOST: Shroomers terraform Wetter, and 14 of them converted
+# Wetland to Bog (also above the fungal threshold) faster than five nests could dry it — 254 wet
+# tiles fell to 18 while Bog rose to take their place, and the heart never lost a point of health.
+# A bloom genuinely defends the ground it stands on. So the nests ring the territory at r8, in the
+# band between the bloom's bodies (clustered at r5) and the edge of its claim, where there is
+# nothing to contest them. Attacking a territory where its owners are not is the shape of this
+# attack, and the scenario is built to show that rather than to route around it.
+#
+# MEASURED (8000 ticks): the wet fraction falls 0.46 -> 0.44 -> 0.38 -> 0.36 -> 0.33, crossing the
+# 0.35 floor at about t=4800, and the heart is destroyed at t=5280 with 43 hits all attributed to
+# `environment`. The Shroomer count floor is never the one that gives way — it goes 6 -> 15 against
+# a floor of 3 — so what killed this heart was unambiguously the ground.
+#
+# The bloom then FOUNDS A REPLACEMENT heart once it has regrown, which is why this scenario asserts
+# "at least one heart destroyed" rather than "no hearts left". A faction that rebuilds after losing
+# its centre is the intended behaviour, not a leak in the test.
+#
+# Watch latest_events.csv for structure_damaged with by=environment, then structure_destroyed and
+# heart_destroyed. latest_decisions.csv carries a mycelium/heart_holding or heart_failing row every
+# pass naming BOTH floors, so which one gave way is a matter of record rather than inference.
+
+[world]
+name = heart_drying
+size_chunks = 3          # 96x96 tiles
+seed = 5150
+base_tile = Grass        # 0.4 substrate moisture — below the 0.6 fungal threshold
+tps = 20
+max_population = 2000
+
+[terrain]
+circle Wetland 48 48 9   # the wet core: puts the territory at ~0.46, comfortably over its 0.35 floor
+
+[spawn]
+# The bloom. Well over MyceliumShroomerFloor (3) and nothing hunts it, so the count floor is not
+# what gives way — the Shroomers that do die, die of the same drought that kills their heart.
+Shroomer x6 @ 48,48 r3
+heart @ 48,48
+
+# The dryers: empty nests inside the wet core. No 'sectids=' token, so no Sectids exist at all —
+# nothing in this world is capable of attacking the heart.
+nest @ 55,48 colony=1
+nest @ 54,52 colony=1
+nest @ 52,55 colony=1
+nest @ 48,56 colony=1
+nest @ 44,55 colony=1
+nest @ 42,52 colony=1
+nest @ 41,48 colony=1
+nest @ 42,44 colony=1
+nest @ 44,41 colony=1
+nest @ 48,40 colony=1
+nest @ 52,41 colony=1
+nest @ 54,44 colony=1
+
+[logging]
+decisions = true
+terrain_interval = 200
+nutrition_interval = 0
+snapshot_interval = 100

@@ -622,6 +622,100 @@ public sealed class SpeciesDefinition
     public float RangedAttackRange { get; init; } = 8f;
     public float RangedAttackDamage { get; init; } = 10f;
     public int RangedAttackCooldown { get; init; } = 30;
+    /// <summary>Health of a crystal. Finite: a crystal is an objective, not scenery.</summary>
+    public float CrystalHealth { get; init; } = 400f;
+
+    // === SIEGE — attacking enemy faction STRUCTURES (SiegeSystem) ===
+    // A structure is an objective, not food, so none of the prey machinery applies to it: no mass
+    // gate, no nutrition payoff, no carcass. What varies between factions is how much they care
+    // about objectives relative to creatures, and that belongs here as data — a shared system must
+    // never test a concrete species (docs/behavior-constants-audit.md, antipattern 1).
+
+    /// <summary>
+    /// How far this species will divert from prey to attack an enemy structure, as a DISTANCE
+    /// RATIO: a structure is preferred over the current prey while
+    /// <c>dist(structure) &lt;= dist(prey) × StructureAggression</c>. 0 disables sieging entirely.
+    ///
+    /// So 3.0 is a raider that will walk past a meal three times nearer to reach a crystal, and
+    /// 0.5 is an opportunist that only stops for a structure practically underfoot. Expressing it
+    /// as a ratio rather than a score keeps it comparable against the prey the creature can
+    /// actually see, without the siege path having to reimplement prey scoring.
+    /// </summary>
+    public float StructureAggression { get; init; } = 0f;
+
+    /// <summary>
+    /// Multiplies <see cref="StructureAggression"/> while one of this species' OWN structures
+    /// within <see cref="StructureSeekRadius"/> is under attack. This is how a faction answers a
+    /// siege with a siege instead of mobbing whatever bit it: a colony whose nests are being
+    /// broken should go break something back, which a purely reactive rally can never express.
+    /// </summary>
+    public float StructureRetaliationBias { get; init; } = 1f;
+
+    /// <summary>How far this species looks for an enemy structure. 0 falls back to HuntRange.</summary>
+    public float StructureSeekRadius { get; init; } = 0f;
+
+    /// <summary>
+    /// Radius over which one of this species' structures calls its own kind to defend it. The call
+    /// names the ATTACKING CREATURE, never the structure — defenders mob the raider, which is what
+    /// the existing rally machinery in HuntingSystem already knows how to do. 0 = no call to arms
+    /// (a faction whose structures are on their own).
+    /// </summary>
+    public float StructureDefenseRadius { get; init; } = 0f;
+
+    /// <summary>Damage per blow against a structure. 0 falls back to the creature's own attack.</summary>
+    public float StructureAttackPower { get; init; } = 0f;
+
+    /// <summary>Ticks between blows against a structure. 0 falls back to the creature's own.</summary>
+    public int StructureAttackCooldown { get; init; } = 0;
+
+    /// <summary>
+    /// Reach when attacking a structure. 0 falls back to the creature's own attack range (melee)
+    /// or ranged range. Measured surface-to-surface like every other attack — structures are bulky,
+    /// so centre-to-centre would make the big ones unhittable (see Utils/BodyMetrics).
+    /// </summary>
+    public float StructureAttackRange { get; init; } = 0f;
+
+    // === MYCELIUM TERRITORY (Shroomers) ===
+    // A Shroomer heart is killable two ways — by DRYING the ground under its territory, or by
+    // killing enough of the Shroomers bound to it — and these two floors are what make both real.
+
+    /// <summary>Radius in tiles of the territory a heart draws its life from. 0 = no hearts.</summary>
+    public float MyceliumRadius { get; init; } = 0f;
+
+    /// <summary>
+    /// Fraction of tiles in that radius that must stay above <see cref="SporeMoistureThreshold"/>.
+    /// Fall below it and the heart bleeds — this is the drying attack, the one a Sectid or Faeling
+    /// terraformer can win without ever landing a blow.
+    /// </summary>
+    public float MyceliumMoistureFloor { get; init; } = 0.35f;
+
+    /// <summary>
+    /// Living Shroomers that must remain within the radius. The combat route: kill enough of the
+    /// bodies and the heart starves whatever the ground is doing. Deliberately the more expensive
+    /// of the two attacks.
+    /// </summary>
+    public int MyceliumShroomerFloor { get; init; } = 3;
+
+    /// <summary>Heart health lost per tick while either floor is unmet.</summary>
+    public float MyceliumHeartDrainRate { get; init; } = 0.5f;
+
+    /// <summary>Heart health regained per tick while both floors hold.</summary>
+    public float MyceliumHeartRegenRate { get; init; } = 0.15f;
+
+    /// <summary>Health of a mycelium heart.</summary>
+    public float MyceliumHeartHealth { get; init; } = 300f;
+
+    /// <summary>
+    /// Growth scale a Shroomer must reach before it can found a heart. A heart is what a mature
+    /// colony builds, not something a sprout declares.
+    /// </summary>
+    public float MyceliumFoundScale { get; init; } = 2f;
+
+    /// <summary>Mycelium a tile gains per growth tick from a Shroomer standing within its radius.</summary>
+    public float MyceliumGrowthRate { get; init; } = 0.02f;
+
+    /// <summary>Radius in tiles over which one Shroomer thickens the mycelium beneath it.</summary>
+    public float MyceliumSpreadRadius { get; init; } = 4f;
 
     // === VISUALS ===
     public Color BaseColor { get; init; } = new(0.5f, 0.5f, 0.5f);

@@ -307,6 +307,14 @@ public sealed class ObservationController
                 $"colony  carrying={c.FoodCarried:F1}/{c.MaxCarry:F0} nest={c.TargetNest}"));
             sb.Append(c.IsHibernating ? " DORMANT\n" : "\n");
         }
+        if (_em.HasComponents(e, ComponentFlags.Structure))
+        {
+            ref var s = ref _em.Structures[e];
+            var owner = SpeciesData.SpeciesRegistry.GetById(s.FactionSpeciesId)?.Name ?? "?";
+            sb.Append(FormattableString.Invariant(
+                $"struct  {s.Kind} ({owner})  health {s.HealthFraction * 100f,5:F1}%  ({s.Health:F0}/{s.MaxHealth:F0})"));
+            sb.Append(s.IsUnderAttack ? "  [UNDER ATTACK]\n" : "\n");
+        }
         if (_em.HasComponents(e, ComponentFlags.Nest))
         {
             ref var n = ref _em.Nests[e];

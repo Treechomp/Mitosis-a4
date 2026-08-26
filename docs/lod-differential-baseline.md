@@ -22,6 +22,14 @@ godot --headless --path godot res://Scenes/LodDifferential.tscn -- --ticks=3000
 scenario. All six runs take about a minute. Details of the harness and the CSV columns are in
 [test-scenes.md](test-scenes.md).
 
+> **Scenario count has grown.** The harness globs `TestScenarios/*.scenario.txt`, so the three
+> faction-structure scenarios added with `SiegeSystem` (`crystal_siege`, `nest_raid`,
+> `heart_drying`) are now in the sweep — nine scenarios, not six, and the per-scenario table below
+> predates them. Siege damage was checked separately for LOD correctness and is sound: forcing
+> `crystal_siege` to Full and to Minimal gives 138 vs 154 structure hits (the damage rate is right)
+> with total destruction at t=801 vs t=1,154 — a 1.4× difference in *timing* from decision
+> granularity, the same legitimate coarsening documented under exception 2 below, not a rate bug.
+>
 > **Numbers refreshed** after per-class population budgets replaced the global birth ramp
 > (`FEATURES_AND_DESIGN.md` §9.1). That change altered the reproduction path these scenarios run
 > through — a graded local-density brake instead of a hard cutoff, and a seed split derived from

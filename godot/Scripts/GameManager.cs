@@ -74,6 +74,19 @@ public partial class GameManager : Node3D
     [Export] public float PredatorBudgetShare  = PopulationBudget.DefaultPredatorShare;    // ~1500
     [Export] public float FactionBudgetShare   = PopulationBudget.DefaultFactionShare;     // ~4000
     [Export] public int InitialPopulation = 2000; // standard test seed population
+
+    /// <summary>
+    /// How many times the player may die and come back in one run.
+    ///
+    /// DELIBERATELY NOT THE STRUCTURE COUNT. Death anchors to a faction structure — nearest nest,
+    /// mycelium heart, home crystal — and it is tempting to let "how many anchors exist" be the
+    /// answer to "how many continuations do I get". It must not be: crystal count is derived from
+    /// map sense-coverage (WorldSpawner.SpawnCrystals) and just rose from 8 to ~132, so tying
+    /// lives to anchors would have made the game an order of magnitude more forgiving as a side
+    /// effect of a rendering-adjacent fix nobody would think to re-test. Anchors are plentiful;
+    /// continuations are three.
+    /// </summary>
+    [Export] public int FactionLivesPerRun = 3;
     [Export] public float CreaturesPerChunk = 2f;
 
     // Spectator settings
@@ -116,6 +129,7 @@ public partial class GameManager : Node3D
     protected SporeSystem?     _sporeSystem;
     protected EcosystemLogger? _ecosystemLogger;
     protected PopulationBudget? _populationBudget;
+    protected FactionLives? _factionLives;
 
     // Extracted managers
     protected EntityFactory    _entityFactory    = null!;
@@ -218,6 +232,11 @@ public partial class GameManager : Node3D
         _populationBudget = new PopulationBudget(MaxPopulation,
             HerbivoreBudgetShare, PredatorBudgetShare, FactionBudgetShare);
         _entityManager.Budget = _populationBudget;
+
+        // Respawn allowance, tracked apart from the structures a respawn anchors to. Nothing
+        // consumes it yet — player control is a later change — but the count belongs to the run,
+        // not to the world, and this is where the run is set up.
+        _factionLives = new FactionLives(FactionLivesPerRun);
 
         // Create extracted managers
         _entityFactory = new EntityFactory(_entityManager, _rng);
@@ -391,6 +410,10 @@ public partial class GameManager : Node3D
 
         GD.Print("Spawning creatures...");
         int spawnedCount = _worldSpawner.SpawnCreatures(herbivoreSeed, predatorSeed, shroomerSeed);
+
+        // Hearts go in after the Shroomers, because a heart is placed on a bloom rather than the
+        // bloom being grown around a heart.
+        _worldSpawner.SpawnMyceliumHearts(_entityManager);
         GD.Print($"Spawned {spawnedCount} creatures — seed split from class budgets: " +
                  $"{herbivoreSeed} herbivore, {predatorSeed} predator, " +
                  $"{shroomerSeed} Shroomer + {sectidSeed} Sectid (Faelings come from crystals)");

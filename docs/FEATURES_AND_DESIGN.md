@@ -1164,7 +1164,89 @@ and structures don't count). While a dominance reading is active:
 With no dominance reading (balanced surroundings), keepers fall back to patrolling toward
 damaged (non-Grass) terrain and restoring it, as before.
 
-### 7.4 Terraform summary — `TerrainSystems.cs` (TerraformSystem)
+### 7.4 Structures & siege — `SiegeSystem.cs`, `MyceliumSystem.cs`
+
+**The problem this solves.** Faction structures used to be unattackable *by construction*.
+`HuntingSystem.IsEligiblePrey` requires `ComponentFlags.Prey` (swarm hunters get a widened
+`Energy | Species` test) and a nest carried neither; a crystal's health was the sentinel
+`Energy(999999, 999999)`. **No entity in the game could damage a nest or a crystal**, so the only
+thing the three factions could contest was individual creatures — which makes faction strength a
+function of population, the one contest an elite faction can never win. Eight Faelings that break
+nests and mycelium hearts are a faction; eight that kill individual Sectids are a rounding error.
+
+**`Structure` component** (`Health`, `MaxHealth`, `FactionSpeciesId`, `Kind`, `UnderAttackTicks`,
+`LastAttacker`). Health lives here, **not in `Energy`** — structures no longer carry an Energy
+component at all. Energy is a creature's stamina (regenerating, drained by starvation), and giving
+it to a building meant every system that touches Energy had to be taught to skip structures by
+flag. One authority, and the skip becomes structural rather than remembered. Crystals now have
+finite `CrystalHealth` (400).
+
+**Objective targeting is a separate path from prey targeting.** `SiegeSystem` runs *before*
+`HuntingSystem`; a creature it commits is skipped by hunting for that tick (one guard, the entire
+coupling). Structures deliberately do **not** satisfy `IsEligiblePrey`: a building has no body mass
+to gate against, no nutrition payoff to score, never flees, and must not drop a carcass, so routing
+it through the prey path would have meant an "is this actually a building" guard at roughly fifteen
+points inside a 1,200-line loop. Reach is surface-to-surface as everywhere else (`BodyMetrics`) —
+structures are bulky.
+
+**Weighting is `SpeciesDefinition` data, not branches.** `StructureAggression` is a *distance
+ratio*: a structure is preferred while `dist(structure) ≤ dist(prey) × aggression`. Expressing it
+that way lets the siege path weigh a building against whatever the creature can actually see
+without reimplementing prey scoring.
+
+| Species | Aggression | Retaliation × | Character |
+|---|---|---|---|
+| Faeling | 4.0 | 1 | raider — walks past a meal four times nearer to reach a structure |
+| Sectid | 0.5 | **8** | opportunist while fed; ×8 makes it 4.0 while its own nests are being broken |
+| Shroomer | 0 | — | does not siege; its attack on rivals is terraform (§7.4 below) |
+
+`StructureDefenseRadius` is the call to arms: a struck structure points its faction's nearby
+creatures at the **attacking creature**, never at the building, by setting the same
+`LastAttacker` pair a bitten creature gets — so the defence runs through HuntingSystem's existing
+rally rather than inventing a second one.
+
+**Destruction consequences** (`Structures.Damage`, shared so every attacker produces the same
+outcome): `structure_damaged` → `structure_destroyed`, plus `nest_destroyed` (with the brood lost
+in its larvae slots) and `colony_destroyed` when it was the colony's last nest; `crystal_destroyed`
+unlinks its Faeling, which keeps fighting but will never respawn; `heart_destroyed`.
+
+### 7.5 Mycelium territory & hearts — `MyceliumSystem.cs`
+
+A nest and a crystal are objects: walk up, hit them, they break. A Shroomer colony has no such
+object — it is a spread of bodies over ground it has made wet — so its anchor is modelled as
+**territory**, and all three factions are not the same puzzle.
+
+**The field.** Mycelium is a per-tile float in `Chunk` (`_mycelium`), modelled directly on the
+`_nutrition` field including its skip flag: it thickens under living Shroomers (scaled by growth,
+tapering with distance) and thins on its own. Entities per colonised tile would have been tens of
+thousands of entities carrying no behaviour.
+
+**The heart** is a `Structure` that survives while, within `MyceliumRadius` (14 tiles):
+
+- the fraction of tiles above `SporeMoistureThreshold` exceeds `MyceliumMoistureFloor` (0.35), **and**
+- living Shroomers inside the radius exceed `MyceliumShroomerFloor` (3)
+
+Fail either and it bleeds `MyceliumHeartDrainRate` per tick; hold both and it recovers. That gives
+the rival factions **two genuinely different attacks on one target**: dry the ground from outside
+the bloom and never trade a blow, or go in and kill the bodies. The survival test reads *moisture*
+rather than the mycelium field on purpose — moisture is what terraform attacks, so the drying route
+acts on the heart directly instead of through a derived quantity. The field is the visible
+territory and the founding requirement.
+
+A mature Shroomer (`MyceliumFoundScale` 2.0) on sufficiently claimed ground founds a heart, at most
+one per radius; `WorldSpawner.SpawnMyceliumHearts` seeds one per initial bloom so the faction does
+not spend the first several thousand ticks with nothing that can be taken from it. A bloom that
+loses its heart **founds another** once it has regrown.
+
+**Measured** (`heart_drying` scenario, 8,000 ticks): a ring of drying nests takes the wet fraction
+0.46 → 0.44 → 0.38 → 0.36 → 0.33, crossing the floor at ~t=4,800; the heart dies at t=5,280 with
+every hit attributed to `environment`, while the Shroomer count floor is never the one that gives
+way (6 → 15 against a floor of 3). An earlier draft with the dryers *inside* the bloom lost
+outright: 14 Shroomers converted Wetland to Bog (also above the fungal threshold) faster than five
+nests could dry it. **A bloom genuinely defends the ground it stands on**, and attacking a
+territory where its owners are not is the shape of the drying attack.
+
+### 7.6 Terraform summary — `TerrainSystems.cs` (TerraformSystem)
 
 | Faction | Direction | Effect | Radius | Strength | Cooldown | Applied by |
 |---------|-----------|--------|--------|----------|----------|------------|
@@ -1296,6 +1378,21 @@ the preview can never drift from what the game generates.
 
 ## 9. Configuration Reference
 
+### 9.2 Respawn lives — `FactionLives.cs`
+
+Death and respawn anchor to a faction structure: the nearest Sectid nest, the heart of a Shroomer
+territory, a Faeling's own crystal. The obvious shortcut is to let the number of surviving anchors
+be the number of continuations — and it must not be. Faeling crystal count is derived from map
+sense-coverage (§9, initial population split) and recently went from 8 to ~132, which under that
+shortcut would have silently turned a three-life run into a hundred-life one. **A coverage fix must
+not be a difficulty change.**
+
+So anchors decide *where* you come back; `FactionLivesPerRun` decides *how many times*. The fail
+state has two independent conditions — running out of lives, or losing the last structure that
+could anchor one — which is the other reason they cannot be the same number. Nothing consumes lives
+yet (player control is a later change); the counter is created with the run so that flow has a home
+to consume from rather than inventing one.
+
 ### 9.1 Population budgets — `PopulationBudget.cs`
 
 `MaxPopulation` is an **engineering** number: tick + render cost saturates a thread above roughly
@@ -1411,6 +1508,7 @@ values TBD once all features are in and compute/render costs are known:
 | PredatorBudgetShare | 0.13 | Hunter ceiling (~1500) |
 | FactionBudgetShare | 0.33 | Shroomer + Sectid + Faeling ceiling (~4000) |
 | InitialPopulation | 2000 | Starting creatures, split in the same proportions as the budgets |
+| FactionLivesPerRun | 3 | Player continuations per run — deliberately NOT the structure count (§9.2) |
 | CreaturesPerChunk | 2.0 | Spawn-density hint |
 | PlayerSpeed / Sprint | 1.0 / 3.0 | Player move speed and sprint multiplier |
 | ZoomMin / Max / Speed | 0.1 / 5.0 / 0.15 | Orthographic zoom range and step |

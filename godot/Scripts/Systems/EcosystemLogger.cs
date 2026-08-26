@@ -136,6 +136,9 @@ public sealed class EcosystemLogger : ISystem
     // exact. Which species is being squeezed is the signal; how many times per tick is volume.
     private readonly HashSet<string> _refusalRowWritten = new();
 
+    // Structures destroyed this run, by StructureKind name.
+    private readonly Dictionary<string, int> _runStructuresDestroyedByKind = new();
+
     // Per-terrain-interval terraform counters (all directions, and class-crossing shifts).
     private int _intervalTerraformNudges;
     private int _intervalTerraformShifts;
@@ -184,6 +187,15 @@ public sealed class EcosystemLogger : ISystem
 
     /// <summary>Whole-run budget refusals by class name.</summary>
     public IReadOnlyDictionary<string, int> RunBudgetRefusalsByClass => _runBudgetRefusalsByClass;
+
+    /// <summary>Blows landed on faction structures over the whole run.</summary>
+    public long RunStructureDamageEvents { get; private set; }
+
+    /// <summary>Faction structures destroyed over the whole run.</summary>
+    public long RunStructuresDestroyed { get; private set; }
+
+    /// <summary>Structures destroyed by kind (Nest / Crystal / MyceliumHeart).</summary>
+    public IReadOnlyDictionary<string, int> RunStructuresDestroyedByKind => _runStructuresDestroyedByKind;
 
     /// <summary>Total kills over the run, all predators.</summary>
     public int RunTotalKills
@@ -476,6 +488,40 @@ public sealed class EcosystemLogger : ISystem
     /// <summary>Budget refusals for one class since the last population snapshot.</summary>
     private int IntervalRefusals(string popClass)
         => _intervalBudgetRefusals.TryGetValue(popClass, out int v) ? v : 0;
+
+    // ── Faction structures (SiegeSystem / MyceliumSystem) ─────────────────────
+
+    /// <summary>
+    /// One blow landed on a faction structure. Counted for the whole run as well as written out,
+    /// because "how much of this siege actually connected" is the question a balance pass asks and
+    /// the per-hit rows are far too many to add up by hand.
+    /// </summary>
+    public void LogStructureDamaged(string kind, string owner, string attacker, int entityId,
+                                     float x, float y, float damage, float health, float maxHealth)
+    {
+        RunStructureDamageEvents++;
+        WriteEvent($"{_tick},structure_damaged,{owner},{entityId},{x:F1},{y:F1},kind={kind};by={attacker};dmg={damage:F1};hp={health:F0}/{maxHealth:F0}");
+    }
+
+    /// <summary>A faction structure reached zero health. The kind-specific loss follows separately.</summary>
+    public void LogStructureDestroyed(string kind, string owner, string attacker, int entityId,
+                                       float x, float y)
+    {
+        RunStructuresDestroyed++;
+        Increment(_runStructuresDestroyedByKind, kind);
+        WriteEvent($"{_tick},structure_destroyed,{owner},{entityId},{x:F1},{y:F1},kind={kind};by={attacker}");
+    }
+
+    /// <summary>
+    /// A consequence of losing a structure — nest_destroyed, colony_destroyed, crystal_destroyed,
+    /// heart_destroyed. Separate from structure_destroyed so the generic "a building fell" row and
+    /// the specific "that faction can no longer breed" row can both be searched for on their own.
+    /// </summary>
+    public void LogStructureEvent(string eventName, string owner, int entityId,
+                                   float x, float y, string detail)
+    {
+        WriteEvent($"{_tick},{eventName},{owner},{entityId},{x:F1},{y:F1},{detail}");
+    }
 
     /// <summary>Log a reproduction event (offspring born).</summary>
     public void LogReproduction(int speciesId, int parentId, float x, float y, int offspringCount)

@@ -27,6 +27,7 @@ namespace Mitosis.Testing;
 ///                 &lt;Species&gt; x&lt;count&gt; @ &lt;x&gt;,&lt;y&gt; [r&lt;radius&gt;] [group | groups=&lt;n&gt;]
 ///                 nest @ &lt;x&gt;,&lt;y&gt; [colony=&lt;id&gt;] [sectids=&lt;n&gt;]
 ///                 crystal @ &lt;x&gt;,&lt;y&gt;
+///                 heart   @ &lt;x&gt;,&lt;y&gt;   (Shroomer mycelium heart)
 ///                 spore @ &lt;x&gt;,&lt;y&gt; [x&lt;count&gt;] [r&lt;radius&gt;] [parent=&lt;Species&gt;]
 ///   [logging]   decisions, decision_species, terrain_interval, nutrition_interval,
 ///               snapshot_interval, track
@@ -269,6 +270,8 @@ public sealed class TestScenario
             op.Kind = SpawnKind.Crystal;
         else if (head.Equals("spore", StringComparison.OrdinalIgnoreCase))
             op.Kind = SpawnKind.Spore;
+        else if (head.Equals("heart", StringComparison.OrdinalIgnoreCase))
+            op.Kind = SpawnKind.MyceliumHeart;
         else
         {
             op.Kind = SpawnKind.Creature;
@@ -440,7 +443,7 @@ public readonly struct TerrainOp
         => new(Shape.Band, t, xAxis ? 0 : 1, from, to, 0);
 }
 
-public enum SpawnKind { Creature, Nest, Crystal, Spore }
+public enum SpawnKind { Creature, Nest, Crystal, Spore, MyceliumHeart }
 
 /// <summary>A spawn operation from a scenario's [spawn] section.</summary>
 public sealed class SpawnOp

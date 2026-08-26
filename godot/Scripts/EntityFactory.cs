@@ -213,6 +213,15 @@ public sealed class EntityFactory
             _entityManager.AddComponent(entity, ComponentFlags.Predator);
         }
 
+        // Siege slot for anything that attacks enemy structures. Driven off species data, so a
+        // future faction gains the objective path by setting a number rather than by being named
+        // in a system.
+        if (species.StructureAggression > 0f)
+        {
+            _entityManager.Sieges[entity] = new Siege();
+            _entityManager.AddComponent(entity, ComponentFlags.Siege);
+        }
+
         // Social behavior based on species default and group assignment
         SocialType socialType = species.DefaultSocialType;
         if (forceSolitary)

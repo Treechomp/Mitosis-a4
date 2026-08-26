@@ -175,6 +175,14 @@ public sealed class HuntingSystem : ISystem
             if (em.HasComponents(entity, ComponentFlags.FoodCarrier) && em.FoodCarriers[entity].IsHibernating)
                 continue;
 
+            // Committed to a siege: SiegeSystem is driving this creature toward an objective and
+            // owns its velocity for the duration. This one guard is the ENTIRE coupling between
+            // hunting and the objective path — SiegeSystem ran earlier this tick and has already
+            // weighed the structure against whatever prey we could see (see its class comment for
+            // why a building does not belong in the prey path).
+            if (em.HasComponents(entity, ComponentFlags.Siege) && em.Sieges[entity].HasTarget)
+                continue;
+
             // LOD tick multiplier: attack/phase cooldowns count down at correct rate
             int tickMult = em.HasComponents(entity, ComponentFlags.SimulationLOD)
                 ? em.SimulationLODs[entity].EffectiveInterval : 1;

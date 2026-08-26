@@ -1,0 +1,35 @@
+# A Sectid colony besieging a Faeling crystal.
+# Tests the objective path end to end: a structure is acquired without going through prey
+# targeting, walked to, hit with the surface-to-surface reach, and destroyed — and the crystal's
+# linked Faeling never comes back.
+#
+# The colony is planted close to the crystals and given nothing else worth eating, so the
+# StructureAggression ratio (a structure must be at most 0.5x the distance of the prey it would
+# otherwise take) resolves in the crystal's favour immediately. Two crystals: the first proves a
+# siege completes, the second that the colony moves on to the next objective rather than idling.
+#
+# Watch latest_events.csv for structure_damaged -> structure_destroyed -> crystal_destroyed.
+
+[world]
+name = crystal_siege
+size_chunks = 3          # 96x96 tiles
+seed = 8080
+base_tile = Shrubland    # dry ground: Sectid-comfortable, no grazing to distract anyone
+tps = 20
+max_population = 2000
+
+[terrain]
+rect Arid 0 0 96 40      # the colony's half
+
+[spawn]
+nest @ 24,20 colony=1 sectids=14
+nest @ 32,24 colony=1 sectids=14
+crystal @ 48,52
+crystal @ 60,60
+
+[logging]
+decisions = true
+decision_species = Sectid, Faeling
+terrain_interval = 0
+nutrition_interval = 0
+snapshot_interval = 50

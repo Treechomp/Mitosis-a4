@@ -220,3 +220,94 @@ public struct RangedAttack
 
     public readonly bool HasTarget => TargetEntity >= 0;
 }
+
+/// <summary>What kind of faction structure this is. Each has its own destruction consequence.</summary>
+public enum StructureKind : byte
+{
+    /// <summary>Sectid nest — a colony's spawn point.</summary>
+    Nest = 0,
+    /// <summary>Faeling crystal — the anchor exactly one Faeling is bound to.</summary>
+    Crystal = 1,
+    /// <summary>Shroomer mycelium heart — the centre of a fungal territory.</summary>
+    MyceliumHeart = 2,
+}
+
+/// <summary>
+/// A faction structure: a fixed, destructible objective rather than a creature.
+///
+/// Structures used to be unattackable by construction. <c>HuntingSystem.IsEligiblePrey</c> requires
+/// <c>ComponentFlags.Prey</c> (swarm hunters get a widened <c>Energy | Species</c> test), and a nest
+/// carried neither; a crystal's health was the sentinel <c>Energy(999999, 999999)</c>. So no entity
+/// in the game could damage either one, and the three-way faction war had nothing to contest except
+/// individual creatures — which makes a faction's strength a function of its population, exactly
+/// what elite factions like the Faelings can never win.
+///
+/// HEALTH LIVES HERE, NOT IN <c>Energy</c>. Structures no longer carry an Energy component at all.
+/// Energy is a creature's stamina — regenerating, drained by starvation, restored by rest — and
+/// giving that to a building meant every system that touches Energy had to be taught to skip
+/// structures by flag. One authority, and the skip is structural rather than remembered.
+/// </summary>
+[StructLayout(LayoutKind.Sequential)]
+public struct Structure
+{
+    public float Health;
+    public float MaxHealth;
+
+    /// <summary>Species id of the faction that owns it — what makes a structure "enemy" or not.</summary>
+    public int FactionSpeciesId;
+
+    public StructureKind Kind;
+
+    /// <summary>
+    /// Ticks remaining on the "we are under attack" signal, refreshed on every hit. This is what a
+    /// defender reads to know its colony is threatened — see
+    /// <c>SpeciesDefinition.StructureRetaliationBias</c>, which lets a species answer a siege by
+    /// besieging back rather than by mobbing whatever is closest.
+    /// </summary>
+    public int UnderAttackTicks;
+
+    /// <summary>
+    /// Who last hit it (-1 = none / environmental). A structure cannot defend itself, so this is
+    /// what lets its faction's creatures be pointed at the ATTACKER — never at the building, which
+    /// is the whole reason it is recorded rather than inferred.
+    /// </summary>
+    public int LastAttacker;
+
+    public Structure(StructureKind kind, float maxHealth, int factionSpeciesId)
+    {
+        Kind = kind;
+        Health = maxHealth;
+        MaxHealth = maxHealth;
+        FactionSpeciesId = factionSpeciesId;
+        UnderAttackTicks = 0;
+        LastAttacker = -1;
+    }
+
+    public readonly bool IsDestroyed => Health <= 0f;
+    public readonly float HealthFraction => MaxHealth > 0f ? Health / MaxHealth : 0f;
+    public readonly bool IsUnderAttack => UnderAttackTicks > 0;
+}
+
+/// <summary>
+/// A creature's current siege objective — the enemy structure it is attacking, if any.
+///
+/// Separate from <c>Predator.TargetEntity</c> on purpose: a structure is not food. It has no body
+/// mass to gate against, no nutrition payoff to score, it never flees, and killing it must not
+/// drop a carcass. Routing it through the prey path would have meant threading "is this actually a
+/// building" through mass gates, payoff scoring, pack roles, stealth and the carrion hook — see
+/// SiegeSystem for the full argument.
+/// </summary>
+[StructLayout(LayoutKind.Sequential)]
+public struct Siege
+{
+    public int TargetStructure;   // Entity id of the structure under attack (-1 = none)
+    public int CurrentCooldown;   // Ticks until the next blow lands
+
+    public Siege(int target = -1)
+    {
+        TargetStructure = target;
+        CurrentCooldown = 0;
+    }
+
+    public readonly bool HasTarget => TargetStructure >= 0;
+}

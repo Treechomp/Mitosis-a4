@@ -55,12 +55,35 @@ public sealed class ScenarioSpawner
                     GD.Print($"  [spawn] crystal @ {op.X:F0},{op.Y:F0}");
                     break;
 
+                case SpawnKind.MyceliumHeart:
+                    SpawnHeart(op);
+                    break;
+
                 case SpawnKind.Spore:
                     SpawnSpores(op, spores);
                     break;
             }
         }
         return creatures;
+    }
+
+    /// <summary>
+    /// Seed a mycelium heart directly, so a scenario can put a Shroomer territory under siege
+    /// without first waiting the thousands of ticks it takes a Shroomer to grow into founding
+    /// scale. The parent species defaults to Shroomer, matching the spore op.
+    /// </summary>
+    private void SpawnHeart(SpawnOp op)
+    {
+        string speciesName = op.Species ?? "Shroomer";
+        int speciesId = SpeciesRegistry.GetId(speciesName);
+        int heart = Systems.MyceliumSystem.SpawnHeart(_entities, op.X, op.Y, speciesId);
+        if (heart < 0)
+        {
+            GD.PushWarning($"[Scenario] heart @ {op.X:F0},{op.Y:F0} skipped: " +
+                           $"{speciesName} has no MyceliumRadius");
+            return;
+        }
+        GD.Print($"  [spawn] {speciesName} mycelium heart @ {op.X:F0},{op.Y:F0}");
     }
 
     private int SpawnCreatures(SpawnOp op)

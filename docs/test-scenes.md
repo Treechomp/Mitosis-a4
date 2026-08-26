@@ -100,6 +100,7 @@ Rabbit x16 @ 60,80 r14             # scattered individuals (species default soci
 polar_bear x2 @ 20,20              # names are case-insensitive; '_' = space
 nest @ 90,30 colony=1 sectids=8    # Sectid nest + 8 starter sectids around it
 crystal @ 30,30                    # Faeling crystal
+heart @ 48,48                      # Shroomer mycelium heart (parent=<Species> to override)
 spore @ 25,25 x6 r4                # 6 Shroomer spores (parent=<Species> to override)
 
 [logging]
@@ -227,6 +228,29 @@ or might be the dice. Leave `WorldSeed` at 0 for a fresh nondeterministic run.
 | `faction_skirmish.scenario.txt` | three-way faction terraform tug-of-war, nests/crystals/spores |
 | `aquatic_biome.scenario.txt` | element-aware discomfort, shark/fish habitat preference, penguin haul-out breeding, world-edge steering |
 | `freshwater_pond.scenario.txt` | inland fish regulation with no marine predators: plankton depletion + fertility-coupled breeding, otters and crocodiles |
+| `crystal_siege.scenario.txt` | Sectids besieging Faeling crystals — the objective path end to end (both crystals down by t≈800) |
+| `nest_raid.scenario.txt` | Faeling keepers breaking a Sectid outpost — `nest_destroyed` + `colony_destroyed`, and the two-way counter-siege |
+| `heart_drying.scenario.txt` | drying terraform collapsing a Shroomer mycelium heart with no blow ever struck at it (t≈5,280) |
+
+## Running one scenario to an outcome (headless)
+
+The test scene runs a scenario forever in front of a person, which answers *does this look right*
+but not *does this finish, and by when* — a siege that completes at tick 900 and one that never
+completes look identical for the first thirty seconds of watching. `ScenarioRunner`
+(`Scenes/ScenarioRun.tscn`) is the second question:
+
+```
+godot --headless --path godot res://Scenes/ScenarioRun.tscn --
+    --scenario=crystal_siege --ticks=4000 --expect-all=Crystal
+```
+
+It builds the scenario world from the same `SimulationStack` the game uses, ticks a fixed budget,
+and reports for every `StructureKind` how many existed, how many survived, and the ticks of first
+loss and total loss. `--expect` requires at least one of a kind to be destroyed within the budget;
+`--expect-all` requires the kind to be wiped out. The distinction matters because factions
+**rebuild** — a Shroomer bloom that loses its heart founds another once it is large enough — so
+"the mechanism fired" and "the faction was erased" are different claims. Exit code is 0 when every
+expectation held.
 
 ## Where the code lives
 

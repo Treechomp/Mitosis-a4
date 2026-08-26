@@ -3045,6 +3045,21 @@ public static class SpeciesRegistry
             // real local density and cycle (grow → feed Sectids → pushed back), while drought (the
             // faction weapon, kept strong-ish) + fungivores + Sectid predation still cap the total.
             // If Shroomers boom again, tighten Limit/Saturation; if Sectids still starve, relax more.
+            // Mycelium territory. A heart is not a point to be poked but a claim on ground, and
+            // it fails in the two ways that claim can fail: the substrate dries out, or the bodies
+            // holding it die. Drying is the cheap attack a terraformer wins from range; killing
+            // the Shroomers is the expensive one that needs bodies in the bloom.
+            MyceliumRadius = 14f,
+            MyceliumMoistureFloor = 0.35f,
+            MyceliumShroomerFloor = 3,
+            MyceliumHeartDrainRate = 0.35f,
+            MyceliumHeartRegenRate = 0.1f,
+            MyceliumHeartHealth = 300f,
+            MyceliumFoundScale = 2f,
+            MyceliumGrowthRate = 0.02f,
+            MyceliumSpreadRadius = 4f,
+            StructureDefenseRadius = 20f,  // the bloom closes on whatever is cutting at its heart
+
             CrowdingRadius = 6f,
             CrowdingLimit = 20,      // blooms may reach ~20 same-radius neighbours before self-thinning
             CrowdingSaturation = 40, // spread only fully stops in a very dense core
@@ -3349,6 +3364,21 @@ public static class SpeciesRegistry
             // Swarm of 8: 0.5 × 8^0.8 × 2.5 = 6.6  → wolves comfortably
             // Swarm of 12: 0.5 × 12^0.8 × 2.5 = 9.2 → crocodiles (8.0)!
 
+            // Siege — a colony breaks enemy structures, but food comes first until its own is hit.
+            // 0.5 means a nest or crystal must be half the distance of the prey it would otherwise
+            // take: an opportunist, not a raider. The retaliation bias is where the character is —
+            // ×8 while one of its own nests is being broken turns 0.5 into 4.0, so a colony under
+            // siege stops foraging and goes to break something back. That asymmetry is the whole
+            // point of expressing aggression as a distance ratio: the same species reads as
+            // "busy eating" or "at war" depending only on whether it is being attacked.
+            StructureAggression = 0.5f,
+            StructureRetaliationBias = 8f,
+            StructureSeekRadius = 45f,
+            StructureAttackPower = 6f,     // one Sectid is a nuisance; a swarm is a siege engine
+            StructureAttackCooldown = 25,
+            StructureAttackRange = 1.3f,   // long reach on a tiny body — it climbs the thing
+            StructureDefenseRadius = 30f,  // nests call the colony home when struck
+
             // Visuals - orange insects
             BaseColor = new Color(0.86f, 0.55f, 0.16f),
             BaseSize = 5f,   // Smaller — numerous
@@ -3460,6 +3490,23 @@ public static class SpeciesRegistry
             // hotspot from a standoff ring, drying/restoring the substrate the winner needs.
             KeeperSenseRadius = 40f,
             KeeperMinPresence = 5,
+
+            // Siege — the keeper is a RAIDER, and this is what makes a handful of them a faction.
+            // Eight Faelings that kill individual Sectids are a rounding error against a colony
+            // that hatches replacements; eight that break nests and mycelium hearts decide wars.
+            // 4.0 says it will walk past a target four times nearer to reach a structure, which is
+            // the behaviour "keeper of order" was always meant to describe — it suppresses whoever
+            // is winning by taking their INFRASTRUCTURE, not by out-killing them.
+            StructureAggression = 4f,
+            StructureSeekRadius = 60f,     // paired with its 40-tile keeper sense
+            StructureAttackPower = 22f,    // few, elite, and heavy against buildings
+            StructureAttackCooldown = 40,
+            StructureAttackRange = 8f,     // ranged: it dismantles from a standoff ring
+            StructureDefenseRadius = 0f,   // a crystal is a lone outpost; nobody comes to help it
+
+            // Crystals are objectives now, not scenery. Tough enough that a lone Sectid cannot
+            // chip one down, soft enough that a committed swarm gets there in a few hundred ticks.
+            CrystalHealth = 400f,
 
             // Trophic - medium plant creature, NOT huntable by predators
             BodyMass = 3.0f,

@@ -1,0 +1,50 @@
+# Faelings raiding a Sectid colony — the case the whole objective path exists for.
+#
+# Eight Faelings that kill individual Sectids are a rounding error: the colony hatches
+# replacements faster than they can shoot. Eight that break NESTS end the colony. This scenario is
+# the difference, and it exercises the two consequences a lost nest carries — the brood in its
+# larvae slots dies with it (nest_destroyed), and losing the last nest of a colony ends that colony
+# outright (colony_destroyed).
+#
+# It is also the two-way war: Sectids answer a siege with a siege (StructureRetaliationBias 8 turns
+# their casual 0.5 aggression into 4.0 while their own nests are being broken), so the colony stops
+# foraging and marches on the crystals. Which side wins is a genuine contest and it is NOT rigged
+# in the raiders' favour — a first draft of this scenario gave the colony two nests and twelve
+# Sectids, and the colony won decisively: all three crystals down by t=853 against a single nest
+# lost. Twelve Sectids put out ~2.9 damage a tick against a crystal's 400; three Faelings put out
+# ~1.65 against a nest's 200, and once their crystals fall there is nothing to respawn them. Elite
+# raiders beat an OUTPOST, which is what this scenario is — six keepers against one nest and four
+# workers.
+#
+# Watch latest_events.csv for structure_damaged by=Faeling, then nest_destroyed with a larvae_lost
+# count, then colony_destroyed.
+
+[world]
+name = nest_raid
+size_chunks = 3          # 96x96 tiles
+seed = 3131
+base_tile = Shrubland
+tps = 20
+max_population = 2000
+
+[terrain]
+rect Arid 0 0 96 36      # dry ground the colony likes
+
+[spawn]
+nest @ 30,18 colony=1 sectids=4
+crystal @ 30,40
+crystal @ 38,44
+crystal @ 22,44
+crystal @ 34,50
+crystal @ 26,50
+crystal @ 44,38
+# A little prey, so the colony is fed rather than starving — the nests must be lost to the raid,
+# not to a colony that quietly died of hunger.
+Rabbit x12 @ 35,30 r10
+
+[logging]
+decisions = true
+decision_species = Faeling, Sectid
+terrain_interval = 0
+nutrition_interval = 0
+snapshot_interval = 100

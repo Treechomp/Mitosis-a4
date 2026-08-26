@@ -1,0 +1,6 @@
+[gd_scene load_steps=2 format=3 uid="uid://cscenrun4a7m4"]
+
+[ext_resource type="Script" path="res://Scripts/Testing/ScenarioRunner.cs" id="1_scenrun"]
+
+[node name="ScenarioRun" type="Node"]
+script = ExtResource("1_scenrun")

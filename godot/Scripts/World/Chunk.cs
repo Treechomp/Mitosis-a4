@@ -22,6 +22,16 @@ public sealed class Chunk
     private readonly float[,] _moisture;
     private readonly float[,] _temperature;
 
+    // Mycelium density per tile (0-1): how thoroughly Shroomer growth has colonised the ground.
+    // A field rather than entities, exactly like _nutrition above, and for the same reason — a
+    // territory is a property of ground, and one entity per colonised tile would be tens of
+    // thousands of entities carrying no behaviour. Thickens under living Shroomers, thins on its
+    // own, and is what a mycelium heart is anchored in.
+    private readonly float[,] _mycelium;
+    // Mirrors _hasDepleted: lets the decay pass skip the (vast majority of) chunks no Shroomer has
+    // ever touched, instead of scanning every tile in the world every interval.
+    private bool _hasMycelium;
+
     /// <summary>
     /// Maximum nutrition a tile can hold (1.0 = fully nourished).
     /// </summary>
@@ -42,6 +52,7 @@ public sealed class Chunk
         _elevation = new float[size, size];
         _moisture = new float[size, size];
         _temperature = new float[size, size];
+        _mycelium = new float[size, size];
     }
 
     /// <summary>
@@ -200,6 +211,69 @@ public sealed class Chunk
         }
         _hasDepleted = anyStillDepleted;
         return totalAdded;
+    }
+
+    // ── Mycelium ──────────────────────────────────────────────────────────────
+
+    /// <summary>Maximum mycelium density a tile can hold.</summary>
+    public const float MaxMycelium = 1.0f;
+
+    /// <summary>Mycelium lost per tick on a tile no Shroomer is currently thickening.</summary>
+    public const float MyceliumDecayRate = 0.0008f;
+
+    /// <summary>True if any tile in this chunk carries mycelium (lets the decay pass skip it).</summary>
+    public bool HasMycelium => _hasMycelium;
+
+    /// <summary>Mycelium density (0-1) at a local tile position.</summary>
+    public float GetMycelium(int localX, int localY)
+    {
+        if (localX < 0 || localX >= Size || localY < 0 || localY >= Size)
+            return 0f;
+        return _mycelium[localX, localY];
+    }
+
+    /// <summary>
+    /// Thicken the mycelium on a tile, clamped to <see cref="MaxMycelium"/>. Refused on tiles a
+    /// fungus cannot colonise at all (open water), so a bloom's territory reads as ground it could
+    /// actually hold. Returns the amount actually added.
+    /// </summary>
+    public float AddMycelium(int localX, int localY, float amount)
+    {
+        if (localX < 0 || localX >= Size || localY < 0 || localY >= Size || amount <= 0f)
+            return 0f;
+        if (_tiles[localX, localY].IsSubmerged())
+            return 0f;
+        float before = _mycelium[localX, localY];
+        float after = MathF.Min(MaxMycelium, before + amount);
+        _mycelium[localX, localY] = after;
+        if (after > 0f) _hasMycelium = true;
+        return after - before;
+    }
+
+    /// <summary>
+    /// Thin the mycelium across this chunk. Called on an interval by MyceliumSystem, mirroring
+    /// <see cref="RegenerateNutrition"/> — including the skip flag, because most chunks in a large
+    /// world have never seen a Shroomer.
+    /// <param name="tickMultiplier">Ticks since the last decay pass (rate scaled accordingly).</param>
+    /// </summary>
+    public void DecayMycelium(int tickMultiplier = 1)
+    {
+        if (!_hasMycelium) return;
+
+        float rate = MyceliumDecayRate * tickMultiplier;
+        bool anyLeft = false;
+        for (int y = 0; y < Size; y++)
+        {
+            for (int x = 0; x < Size; x++)
+            {
+                float v = _mycelium[x, y];
+                if (v <= 0f) continue;
+                v = MathF.Max(0f, v - rate);
+                _mycelium[x, y] = v;
+                if (v > 0f) anyLeft = true;
+            }
+        }
+        _hasMycelium = anyLeft;
     }
 
     /// <summary>

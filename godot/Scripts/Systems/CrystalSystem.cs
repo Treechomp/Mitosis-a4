@@ -474,6 +474,14 @@ public sealed class CrystalSystem : ISystem
             speciesDef.DiscomfortThreshold, speciesDef.DiscomfortDecayRate);
         em.AddComponent(entity, ComponentFlags.TerrainDiscomfort);
 
+        // Siege slot — a keeper is a raider, and breaking the rival faction's structures is the
+        // only way eight of them amount to a faction at all.
+        if (speciesDef.StructureAggression > 0f)
+        {
+            em.Sieges[entity] = new Siege();
+            em.AddComponent(entity, ComponentFlags.Siege);
+        }
+
         return entity;
     }
 
@@ -494,9 +502,12 @@ public sealed class CrystalSystem : ISystem
         em.Crystals[entity] = new Crystal(spawnDelay: faelingDef.CrystalSpawnDelay);
         em.AddComponent(entity, ComponentFlags.Crystal);
 
-        // Indestructible — very high energy, no aging
-        em.Energies[entity] = new Energy(999999f, 999999f);
-        em.AddComponent(entity, ComponentFlags.Energy);
+        // Finite health. It used to be Energy(999999, 999999) — a sentinel infinity that made the
+        // Faeling faction's only anchor literally indestructible, so there was nothing to take
+        // from them and nothing for them to defend.
+        em.Structures[entity] = new Structure(StructureKind.Crystal, faelingDef.CrystalHealth,
+            SpeciesRegistry.GetId("Faeling"));
+        em.AddComponent(entity, ComponentFlags.Structure);
 
         // Teal diamond visual
         em.Renderables[entity] = new Renderable(

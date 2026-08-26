@@ -126,8 +126,10 @@ public sealed class CollisionSystem : ISystem
     /// </summary>
     private static float PushWeight(EntityManager em, int entity)
     {
-        // Structures are built into the ground.
-        if (em.HasComponents(entity, ComponentFlags.Nest) || em.HasComponents(entity, ComponentFlags.Crystal))
+        // Structures are built into the ground — nests, crystals and mycelium hearts alike.
+        if (em.HasComponents(entity, ComponentFlags.Structure)
+            || em.HasComponents(entity, ComponentFlags.Nest)
+            || em.HasComponents(entity, ComponentFlags.Crystal))
             return 0f;
 
         float mass = 1f;

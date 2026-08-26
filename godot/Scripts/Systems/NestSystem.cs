@@ -71,12 +71,11 @@ public sealed class NestSystem : ISystem
         var sectidDef = SpeciesRegistry.Get("Sectid");
 
         const ComponentFlags nestRequired = ComponentFlags.Position | ComponentFlags.Nest |
-                                            ComponentFlags.Energy | ComponentFlags.Renderable;
+                                            ComponentFlags.Renderable;
 
         foreach (int entity in em.Query(nestRequired))
         {
             ref var nest = ref em.Nests[entity];
-            ref var energy = ref em.Energies[entity];
             ref var pos = ref em.Positions[entity];
 
             // === LARVAE PROCESSING ===
@@ -608,6 +607,16 @@ public sealed class NestSystem : ISystem
         em.FoodCarriers[entity] = new FoodCarrier(speciesDef.MaxCarryFood);
         em.AddComponent(entity, ComponentFlags.FoodCarrier);
 
+        // Siege slot (SiegeSystem gates on StructureAggression, so this is inert for a species
+        // that doesn't besiege). Kept in step with EntityFactory, which assembles the same species
+        // on its own path — a Sectid hatched from a nest must be able to do what one spawned at
+        // worldgen can.
+        if (speciesDef.StructureAggression > 0f)
+        {
+            em.Sieges[entity] = new Siege();
+            em.AddComponent(entity, ComponentFlags.Siege);
+        }
+
         // Social — pack behavior for group hunting
         var social = new Social(SocialType.Pack, speciesDef.GroupAffinity,
             speciesDef.PreferredGroupSize, speciesDef.CohesionStrength, speciesDef.AlignmentStrength);
@@ -644,9 +653,13 @@ public sealed class NestSystem : ISystem
             spawnDuration: nestDef.NestSpawnDuration);
         em.AddComponent(entity, ComponentFlags.Nest);
 
-        // Nests have energy (health) — can be destroyed if unattended
-        em.Energies[entity] = new Energy(nestDef.NestEnergy, nestDef.NestEnergy);
-        em.AddComponent(entity, ComponentFlags.Energy);
+        // A nest is a destructible objective. Health lives on Structure, not Energy: Energy is a
+        // creature's stamina and dragged the nest into every system that regenerates or drains it,
+        // each of which then needed teaching to skip structures. It also carried no owner, so
+        // nothing could tell whose nest it was.
+        em.Structures[entity] = new Structure(StructureKind.Nest, nestDef.NestEnergy,
+            SpeciesRegistry.GetId("Sectid"));
+        em.AddComponent(entity, ComponentFlags.Structure);
 
         // Visual: small brown square that grows with stage
         em.Renderables[entity] = new Renderable(

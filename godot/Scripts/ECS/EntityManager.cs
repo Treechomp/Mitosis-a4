@@ -51,6 +51,8 @@ public sealed class EntityManager
         RangedAttack = 1 << 23,
         VenomEffect = 1 << 24,
         Carrion = 1 << 25,
+        Structure = 1 << 26,
+        Siege = 1 << 27,
     }
 
     private readonly ComponentFlags[] _componentFlags;
@@ -82,6 +84,8 @@ public sealed class EntityManager
     public readonly RangedAttack[] RangedAttacks;
     public readonly VenomEffect[] VenomEffects;
     public readonly Carrion[] Carrions;
+    public readonly Structure[] Structures;
+    public readonly Siege[] Sieges;
 
     /// <summary>
     /// Per-entity LOD gate flag. True = entity is due for processing this tick.
@@ -153,6 +157,8 @@ public sealed class EntityManager
         RangedAttacks = new RangedAttack[MaxEntities];
         VenomEffects = new VenomEffect[MaxEntities];
         Carrions = new Carrion[MaxEntities];
+        Structures = new Structure[MaxEntities];
+        Sieges = new Siege[MaxEntities];
         DueThisTick = new bool[MaxEntities];
         PrevPositions = new Position[MaxEntities];
     }
@@ -301,7 +307,8 @@ public sealed class EntityManager
         if (Budget != null)
         {
             const ComponentFlags notACreature = ComponentFlags.Spore | ComponentFlags.Nest
-                                              | ComponentFlags.Crystal | ComponentFlags.Carrion;
+                                              | ComponentFlags.Crystal | ComponentFlags.Carrion
+                                              | ComponentFlags.Structure;
             if ((flag & ComponentFlags.Species) != 0
                 && (_componentFlags[entityId] & notACreature) == 0)
                 Budget.Track(entityId, Species[entityId].SpeciesId);

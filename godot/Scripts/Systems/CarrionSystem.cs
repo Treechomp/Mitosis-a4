@@ -54,8 +54,12 @@ public sealed class CarrionSystem : ISystem
     {
         if (!em.HasComponents(source, ComponentFlags.Position | ComponentFlags.Species))
             return;
-        // No corpse for structures, spores, existing corpses, or Faelings (they return to a crystal)
-        if (em.HasComponents(source, ComponentFlags.Nest) ||
+        // No corpse for structures, spores, existing corpses, or Faelings (they return to a crystal).
+        // A destroyed nest, crystal or mycelium heart leaves rubble, not meat — and a carcass would
+        // put a building into the scavenging economy, where its "nutrition" would be read off a
+        // species definition it only nominally has.
+        if (em.HasComponents(source, ComponentFlags.Structure) ||
+            em.HasComponents(source, ComponentFlags.Nest) ||
             em.HasComponents(source, ComponentFlags.Crystal) ||
             em.HasComponents(source, ComponentFlags.Spore) ||
             em.HasComponents(source, ComponentFlags.Carrion) ||

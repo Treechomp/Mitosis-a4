@@ -447,6 +447,36 @@ public sealed class WorldManager
             Systems.EcosystemLogger.Instance?.CountNutritionEnriched(added);
     }
 
+    // ── Mycelium (Shroomer territory) ─────────────────────────────────────────
+
+    /// <summary>Mycelium density (0-1) at world coordinates.</summary>
+    public float GetMycelium(float worldX, float worldY)
+    {
+        if (worldX < 0f || worldY < 0f) return 0f;
+        var chunk = GetChunk((int)(worldX / ChunkSize), (int)(worldY / ChunkSize));
+        if (chunk == null) return 0f;
+        return chunk.GetMycelium((int)worldX % ChunkSize, (int)worldY % ChunkSize);
+    }
+
+    /// <summary>Thicken the mycelium at world coordinates. Returns the amount actually added.</summary>
+    public float AddMycelium(float worldX, float worldY, float amount)
+    {
+        if (worldX < 0f || worldY < 0f || amount <= 0f) return 0f;
+        var chunk = GetChunk((int)(worldX / ChunkSize), (int)(worldY / ChunkSize));
+        if (chunk == null) return 0f;
+        return chunk.AddMycelium((int)worldX % ChunkSize, (int)worldY % ChunkSize, amount);
+    }
+
+    /// <summary>
+    /// Thin the mycelium across every loaded chunk that carries any. The per-chunk skip flag makes
+    /// this cheap in a large world where only a few chunks have ever held a bloom.
+    /// </summary>
+    public void DecayMycelium(int tickMultiplier = 1)
+    {
+        foreach (var chunk in _chunks.Values)
+            chunk.DecayMycelium(tickMultiplier);
+    }
+
     /// <summary>
     /// Check if any water tiles exist within the given radius of a position.
     /// </summary>

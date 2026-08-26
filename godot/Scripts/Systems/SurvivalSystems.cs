@@ -30,8 +30,12 @@ public sealed class HungerSystem : ISystem
 
         foreach (int entity in em.Query(required))
         {
-            // Skip structures (nests, crystals) — they don't eat
-            if (em.HasComponents(entity, ComponentFlags.Nest) ||
+            // Skip structures — nests, crystals and mycelium hearts are buildings, not bodies.
+            // They now carry no Energy at all (health lives on Structure), so this query could
+            // never reach them anyway; the flag test stays as the explicit statement of intent,
+            // and catches any future structure that does grow an Energy component.
+            if (em.HasComponents(entity, ComponentFlags.Structure) ||
+                em.HasComponents(entity, ComponentFlags.Nest) ||
                 em.HasComponents(entity, ComponentFlags.Crystal))
                 continue;
 
@@ -139,8 +143,12 @@ public sealed class AgingSystem : ISystem
 
         foreach (int entity in em.Query(required))
         {
-            // Skip structures (nests, crystals don't age)
-            if (em.HasComponents(entity, ComponentFlags.Nest) ||
+            // Skip structures — nests, crystals and mycelium hearts are buildings, not bodies.
+            // They now carry no Energy at all (health lives on Structure), so this query could
+            // never reach them anyway; the flag test stays as the explicit statement of intent,
+            // and catches any future structure that does grow an Energy component.
+            if (em.HasComponents(entity, ComponentFlags.Structure) ||
+                em.HasComponents(entity, ComponentFlags.Nest) ||
                 em.HasComponents(entity, ComponentFlags.Crystal))
                 continue;
 

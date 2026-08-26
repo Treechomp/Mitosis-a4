@@ -65,6 +65,10 @@ public sealed class SimulationStack
         systems.Add(new HerdingSystem(spatialHash));
         systems.Add(new SeparationSystem(spatialHash));
         systems.Add(new CollisionSystem(spatialHash, collisionRadiusScale: 0.5f, tileSize: tileSize));
+        // Siege runs BEFORE hunting: it decides whether this creature is going after an objective
+        // instead of a meal, and hunting then skips anyone it committed. Two systems steering one
+        // creature on the same tick is the bug that ordering prevents.
+        systems.Add(new SiegeSystem(spatialHash, world));
         systems.Add(new HuntingSystem(spatialHash, world));
         systems.Add(new FleeingSystem(spatialHash, world));
         // Carrion: corpses persist and are scavenged over time. Runs after hunting/fleeing so it
@@ -84,6 +88,9 @@ public sealed class SimulationStack
         systems.Add(spore);
         var crystal = new CrystalSystem(world, spatialHash, maxPopulation, budget);
         systems.Add(crystal);
+        // Mycelium last among the faction systems: it reads the world the others just changed —
+        // the terraform that dried a bloom's ground and the Shroomers that died in it this tick.
+        systems.Add(new MyceliumSystem(world, spatialHash));
 
         return new SimulationStack(lod, nest, spore, crystal);
     }

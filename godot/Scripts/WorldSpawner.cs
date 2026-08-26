@@ -350,6 +350,56 @@ public sealed class WorldSpawner
     }
 
     /// <summary>
+    /// Seed one mycelium heart per initial Shroomer cluster, so the faction starts a run with
+    /// territory to defend rather than waiting for a Shroomer to reach founding scale — which,
+    /// at a growth rate of 8e-5 per tick, is several thousand ticks of a world where one faction
+    /// has nothing that can be taken from it.
+    ///
+    /// Placement follows the Shroomers that were actually spawned: a heart is the centre of a
+    /// bloom, so it goes where the bodies are. Spacing is the heart's own MyceliumRadius, matching
+    /// the one-per-radius rule MyceliumSystem enforces when a bloom founds its own.
+    /// </summary>
+    public void SpawnMyceliumHearts(EntityManager entityManager)
+    {
+        var shroomerDef = SpeciesRegistry.Get("Shroomer");
+        if (shroomerDef == null || shroomerDef.MyceliumRadius <= 0f) return;
+        int shroomerId = SpeciesRegistry.GetId("Shroomer");
+        if (!SpeciesToggle.IsEnabled(shroomerId))
+        {
+            GD.Print("  Mycelium hearts: disabled (species toggle)");
+            return;
+        }
+
+        var placed = new List<(float x, float y)>();
+        float spacingSq = shroomerDef.MyceliumRadius * shroomerDef.MyceliumRadius;
+        int hearts = 0;
+
+        foreach (int entity in entityManager.Query(ComponentFlags.Position | ComponentFlags.Species))
+        {
+            if (entityManager.HasComponents(entity, ComponentFlags.Spore)) continue;
+            if (entityManager.HasComponents(entity, ComponentFlags.Structure)) continue;
+            if (entityManager.Species[entity].SpeciesId != shroomerId) continue;
+
+            ref var pos = ref entityManager.Positions[entity];
+            bool tooClose = false;
+            foreach (var (px, py) in placed)
+            {
+                float dx = px - pos.X, dy = py - pos.Y;
+                if (dx * dx + dy * dy < spacingSq) { tooClose = true; break; }
+            }
+            if (tooClose) continue;
+
+            if (Systems.MyceliumSystem.SpawnHeart(entityManager, pos.X, pos.Y, shroomerId) >= 0)
+            {
+                placed.Add((pos.X, pos.Y));
+                hearts++;
+            }
+        }
+
+        GD.Print($"  Mycelium hearts: {hearts} (one per {shroomerDef.MyceliumRadius:F0}-tile territory)");
+    }
+
+    /// <summary>
     /// Spawns Faeling crystals spread across the world on grass tiles.
     ///
     /// Crystal count is derived from MAP COVERAGE, not from a population share, because a crystal
