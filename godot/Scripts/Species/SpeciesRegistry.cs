@@ -3379,6 +3379,10 @@ public static class SpeciesRegistry
             // given a reason to fight — which is the pacing the whole-game invariant asks for.
             StructureAggression = 0.15f,
             StructureRetaliationBias = 8f,
+            // StructureIdleSeekRadius stays at the 0 default: a swarm with nothing to hunt goes
+            // looking for food, not for a building. It sieges only when a structure is genuinely
+            // nearer than the meal it had already picked — which is what the ratio above says.
+            StructureIdleSeekRadius = 0f,
             StructureSeekRadius = 45f,
             StructureAttackPower = 6f,     // one Sectid is a nuisance; a swarm is a siege engine
             StructureAttackCooldown = 25,
@@ -3505,6 +3509,10 @@ public static class SpeciesRegistry
             // is winning by taking their INFRASTRUCTURE, not by out-killing them.
             StructureAggression = 4f,
             StructureSeekRadius = 60f,     // paired with its 40-tile keeper sense
+            // A keeper never holds a prey target — it does not eat — so without this it could
+            // never acquire a siege at all once idle sieging became opt-in. Raiding IS its purpose,
+            // so it looks just as far idle as it does otherwise.
+            StructureIdleSeekRadius = 60f,
             StructureTargetsDominantOnly = true,   // check the winner, never the nearest
             // A RAID IS AN EVENT, NOT AN INSTANT. These were 22 damage on a 40-tick cooldown when
             // the world held 132 keepers, and that combination destroyed 44 of 46 Sectid nests in

@@ -664,6 +664,19 @@ public sealed class SpeciesDefinition
     public float StructureSeekRadius { get; init; } = 0f;
 
     /// <summary>
+    /// Seek radius used when the creature holds no prey target. 0 (default) means a species only
+    /// diverts to a structure when it has something it is otherwise eating, so the
+    /// <see cref="StructureAggression"/> ratio is always a real comparison rather than a walkover.
+    ///
+    /// The ratio measures a structure's distance against the MEAL BEING PASSED UP. With no meal
+    /// there is nothing to measure, and any stand-in distance chosen for the missing prey silently
+    /// becomes the real siege rule — which is how the one knob meant to govern siege priority
+    /// stopped governing anything for the common case of a creature with nothing to hunt. Opting
+    /// in is for a species that has no prey to pass up: a Faeling does not eat.
+    /// </summary>
+    public float StructureIdleSeekRadius { get; init; } = 0f;
+
+    /// <summary>
     /// This species only besieges the faction the WORLD CENSUS says is winning — never simply the
     /// nearest enemy structure.
     ///

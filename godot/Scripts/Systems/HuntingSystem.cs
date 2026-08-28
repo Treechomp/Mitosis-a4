@@ -1049,7 +1049,7 @@ public sealed class HuntingSystem : ISystem
                 // Mass-based agility for direction blending during pursuit, compensated for how
                 // long this predator will coast before it steers again (see DecisionCadence).
                 float huntAgility = DecisionCadence.BlendRate(
-                    Math.Clamp(1.5f / speciesDef.BodyMass, 0.25f, 1f), decisionInterval);
+                    DecisionCadence.TurnAgility(speciesDef), decisionInterval);
 
                 // === AMBUSH STEALTH UPDATE ===
                 bool isAmbush = speciesDef.HuntingTactic == HuntingTactic.Ambush;
@@ -1275,7 +1275,7 @@ public sealed class HuntingSystem : ISystem
                             // Direct swarm chase — all rush together, no retreat
                             var dir = MathUtils.Normalize(dx, dy);
                             float swarmSpeed = huntSpeed * 1.2f;
-                            BlendVelocity(ref vel, dir.X * swarmSpeed, dir.Y * swarmSpeed, huntAgility);
+                            DecisionCadence.BlendVelocity(ref vel, dir.X * swarmSpeed, dir.Y * swarmSpeed, huntAgility);
                             break;
                         }
 
@@ -1293,7 +1293,7 @@ public sealed class HuntingSystem : ISystem
                         {
                             // Solo / PackCoordinated without pack — direct chase
                             var dir = MathUtils.Normalize(dx, dy);
-                            BlendVelocity(ref vel, dir.X * huntSpeed, dir.Y * huntSpeed, huntAgility);
+                            DecisionCadence.BlendVelocity(ref vel, dir.X * huntSpeed, dir.Y * huntSpeed, huntAgility);
                             break;
                         }
                     }
@@ -1451,7 +1451,7 @@ public sealed class HuntingSystem : ISystem
         {
             predator.Phase = PackPhase.Converging;
             var chaseDir = MathUtils.Normalize(dx, dy);
-            BlendVelocity(ref vel, chaseDir.X * effectiveSpeed * 1.3f, chaseDir.Y * effectiveSpeed * 1.3f, agility);
+            DecisionCadence.BlendVelocity(ref vel, chaseDir.X * effectiveSpeed * 1.3f, chaseDir.Y * effectiveSpeed * 1.3f, agility);
             return;
         }
 
@@ -1472,7 +1472,7 @@ public sealed class HuntingSystem : ISystem
 
             default:
                 var dir = MathUtils.Normalize(dx, dy);
-                BlendVelocity(ref vel, dir.X * effectiveSpeed, dir.Y * effectiveSpeed, agility);
+                DecisionCadence.BlendVelocity(ref vel, dir.X * effectiveSpeed, dir.Y * effectiveSpeed, agility);
                 break;
         }
     }
@@ -1491,14 +1491,14 @@ public sealed class HuntingSystem : ISystem
         {
             // Approach to observation distance
             var dir = MathUtils.Normalize(dx, dy);
-            BlendVelocity(ref vel, dir.X * speed * 0.7f, dir.Y * speed * 0.7f, agility);
+            DecisionCadence.BlendVelocity(ref vel, dir.X * speed * 0.7f, dir.Y * speed * 0.7f, agility);
         }
         else
         {
             // Hold position, circle slowly to maintain pressure
             float normDist = MathF.Sqrt(dx * dx + dy * dy);
             if (normDist > 0.01f)
-                BlendVelocity(ref vel, -dy / normDist * 0.02f, dx / normDist * 0.02f, agility);
+                DecisionCadence.BlendVelocity(ref vel, -dy / normDist * 0.02f, dx / normDist * 0.02f, agility);
         }
 
         // Decrement convergence timer
@@ -1538,7 +1538,7 @@ public sealed class HuntingSystem : ISystem
             float fdx = preyX - pos.X;
             float fdy = preyY - pos.Y;
             var dir = MathUtils.Normalize(fdx, fdy);
-            BlendVelocity(ref vel, dir.X * speed, dir.Y * speed, agility);
+            DecisionCadence.BlendVelocity(ref vel, dir.X * speed, dir.Y * speed, agility);
             return;
         }
 
@@ -1548,7 +1548,7 @@ public sealed class HuntingSystem : ISystem
         float frontLen = MathF.Sqrt(frontDx * frontDx + frontDy * frontDy);
         if (frontLen < 0.01f)
         {
-            BlendVelocity(ref vel, 0, 0, agility);
+            DecisionCadence.BlendVelocity(ref vel, 0, 0, agility);
             return;
         }
         frontDx /= frontLen;
@@ -1577,7 +1577,7 @@ public sealed class HuntingSystem : ISystem
         float toIdealDx = idealX - pos.X;
         float toIdealDy = idealY - pos.Y;
         var flankerDir = MathUtils.Normalize(toIdealDx, toIdealDy);
-        BlendVelocity(ref vel, flankerDir.X * speed, flankerDir.Y * speed, agility);
+        DecisionCadence.BlendVelocity(ref vel, flankerDir.X * speed, flankerDir.Y * speed, agility);
     }
 
     /// <summary>
@@ -1596,7 +1596,7 @@ public sealed class HuntingSystem : ISystem
                 if (dist > 5f)
                 {
                     var dir = MathUtils.Normalize(dx, dy);
-                    BlendVelocity(ref vel, dir.X * speed * 0.8f, dir.Y * speed * 0.8f, agility);
+                    DecisionCadence.BlendVelocity(ref vel, dir.X * speed * 0.8f, dir.Y * speed * 0.8f, agility);
                 }
                 predator.PhaseTimer--;
                 if (predator.PhaseTimer <= 0)
@@ -1609,7 +1609,7 @@ public sealed class HuntingSystem : ISystem
             case PackPhase.Disrupting:
                 // Rush toward prey to scatter herd
                 var rushDir = MathUtils.Normalize(dx, dy);
-                BlendVelocity(ref vel, rushDir.X * speed * 1.3f, rushDir.Y * speed * 1.3f, agility);
+                DecisionCadence.BlendVelocity(ref vel, rushDir.X * speed * 1.3f, rushDir.Y * speed * 1.3f, agility);
                 predator.PhaseTimer--;
                 if (predator.PhaseTimer <= 0)
                 {
@@ -1623,7 +1623,7 @@ public sealed class HuntingSystem : ISystem
                 if (dist < 5f)
                 {
                     var retreatDir = MathUtils.Normalize(-dx, -dy);
-                    BlendVelocity(ref vel, retreatDir.X * speed * 0.8f, retreatDir.Y * speed * 0.8f, agility);
+                    DecisionCadence.BlendVelocity(ref vel, retreatDir.X * speed * 0.8f, retreatDir.Y * speed * 0.8f, agility);
                 }
                 predator.PhaseTimer--;
                 if (predator.PhaseTimer <= 0)
@@ -1637,7 +1637,7 @@ public sealed class HuntingSystem : ISystem
             default:
                 // Fallback: approach
                 var defDir = MathUtils.Normalize(dx, dy);
-                BlendVelocity(ref vel, defDir.X * speed, defDir.Y * speed, agility);
+                DecisionCadence.BlendVelocity(ref vel, defDir.X * speed, defDir.Y * speed, agility);
                 break;
         }
     }
@@ -1658,7 +1658,7 @@ public sealed class HuntingSystem : ISystem
             // POUNCING: explosive burst toward prey
             var dir = MathUtils.Normalize(dx, dy);
             float pounceSpeed = speciesDef.BaseHuntSpeed * speciesDef.PounceSpeedMult * speedMultiplier;
-            BlendVelocity(ref vel, dir.X * pounceSpeed, dir.Y * pounceSpeed, 0.8f);
+            DecisionCadence.BlendVelocity(ref vel, dir.X * pounceSpeed, dir.Y * pounceSpeed, 0.8f);
         }
         else if (predator.Stealth >= speciesDef.PounceStealthThreshold && distSq <= pounceRangeSq)
         {
@@ -1668,7 +1668,7 @@ public sealed class HuntingSystem : ISystem
 
             var dir = MathUtils.Normalize(dx, dy);
             float pounceSpeed = speciesDef.BaseHuntSpeed * speciesDef.PounceSpeedMult * speedMultiplier;
-            BlendVelocity(ref vel, dir.X * pounceSpeed, dir.Y * pounceSpeed, 0.8f);
+            DecisionCadence.BlendVelocity(ref vel, dir.X * pounceSpeed, dir.Y * pounceSpeed, 0.8f);
         }
         else if (predator.Stealth > 0.1f)
         {
@@ -1686,14 +1686,14 @@ public sealed class HuntingSystem : ISystem
                 // STALKING: approach slowly to maintain/build stealth
                 var dir = MathUtils.Normalize(dx, dy);
                 float stalkSpeed = speciesDef.BaseHuntSpeed * speciesDef.AmbushSpeedThreshold * 0.9f;
-                BlendVelocity(ref vel, dir.X * stalkSpeed, dir.Y * stalkSpeed, huntAgility * 0.5f);
+                DecisionCadence.BlendVelocity(ref vel, dir.X * stalkSpeed, dir.Y * stalkSpeed, huntAgility * 0.5f);
             }
         }
         else
         {
             // NO STEALTH: chase openly (post-pounce or stealth broke)
             var dir = MathUtils.Normalize(dx, dy);
-            BlendVelocity(ref vel, dir.X * huntSpeed, dir.Y * huntSpeed, huntAgility);
+            DecisionCadence.BlendVelocity(ref vel, dir.X * huntSpeed, dir.Y * huntSpeed, huntAgility);
         }
     }
 
@@ -1742,12 +1742,6 @@ public sealed class HuntingSystem : ISystem
     /// Blend velocity toward a target using mass-based agility.
     /// Smaller creatures (high agility) snap quickly; heavier ones turn gradually.
     /// </summary>
-    private static void BlendVelocity(ref Velocity vel, float targetDx, float targetDy, float agility)
-    {
-        vel.Dx += (targetDx - vel.Dx) * agility;
-        vel.Dy += (targetDy - vel.Dy) * agility;
-    }
-
     /// <summary>
     /// Proactive threat detection for the defensive rally: find the nearest predator of another
     /// species that is either hunting us / a groupmate, or intruding close into our space. Returns

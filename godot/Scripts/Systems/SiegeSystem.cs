@@ -281,14 +281,28 @@ public sealed class SiegeSystem : ISystem
             }
             else if (em.HasComponents(entity, ComponentFlags.Velocity))
             {
-                // Walk in. Structures don't move, so there is nothing to intercept or pace.
+                // Walk in. Structures don't move, so there is nothing to intercept or pace — but
+                // the approach is still STEERING, and must be blended like every other steering
+                // decision in the project rather than assigned.
+                //
+                // This used to write velocity outright (v.Dx = dir * speed). Three things followed
+                // from that. The creature turned instantly regardless of its mass. The turn was not
+                // LOD-compensated, so it behaved differently at distance from the player than in
+                // front of it. And because SiegeSystem runs after WanderSystem and before
+                // FleeingSystem, overwriting velocity discarded wander, herding and habitat
+                // steering entirely for that tick — a besieging Sectid drifted in a straight line
+                // and reacted to nothing but a predator. Blending leaves those forces in the mix
+                // and merely pulls the result toward the objective.
                 float dist = MathF.Sqrt(distSq);
                 if (dist > 0.001f)
                 {
                     float speed = def.BaseHuntSpeed > 0f ? def.BaseHuntSpeed : def.BaseWanderSpeed;
+                    float agility = DecisionCadence.BlendRate(
+                        DecisionCadence.TurnAgility(def), DecisionCadence.Interval(em, entity));
                     ref var v = ref em.Velocities[entity];
-                    v.Dx = (targetPos.X - pos.X) / dist * speed;
-                    v.Dy = (targetPos.Y - pos.Y) / dist * speed;
+                    DecisionCadence.BlendVelocity(ref v,
+                        (targetPos.X - pos.X) / dist * speed,
+                        (targetPos.Y - pos.Y) / dist * speed, agility);
                 }
             }
         }
@@ -357,7 +371,31 @@ public sealed class SiegeSystem : ISystem
     /// </summary>
     private int Acquire(EntityManager em, int entity, SpeciesDefinition def, ref Position pos)
     {
-        float seek = def.StructureSeekRadius > 0f ? def.StructureSeekRadius : def.HuntRange;
+        // Is there something we are otherwise going to eat? The answer decides BOTH how far we
+        // look and whether the aggression ratio means anything, so it has to be settled first.
+        float preyDist = -1f;
+        if (em.HasComponents(entity, ComponentFlags.Predator))
+        {
+            ref var predator = ref em.Predators[entity];
+            if (predator.HasTarget && em.IsAlive(predator.TargetEntity)
+                && em.HasComponents(predator.TargetEntity, ComponentFlags.Position))
+            {
+                ref var pp = ref em.Positions[predator.TargetEntity];
+                preyDist = MathF.Sqrt(MathUtils.DistanceSquared(pos.X, pos.Y, pp.X, pp.Y));
+            }
+        }
+        bool hasPrey = preyDist >= 0f;
+
+        // With no prey, StructureAggression has nothing to compare against — it is a RATIO against
+        // the meal being passed up, and there is no meal. Substituting some stand-in distance for
+        // the missing prey makes the one knob that governs siege priority a formality: whatever
+        // stand-in is chosen, an idle creature sieges on a rule nobody wrote. So an idle creature
+        // uses a separate, explicit radius instead, and the default of 0 means it does not divert
+        // at all. Opting in is for a species with no prey to pass up — a Faeling does not eat, and
+        // raiding is the whole of its purpose.
+        float seek = hasPrey
+            ? (def.StructureSeekRadius > 0f ? def.StructureSeekRadius : def.HuntRange)
+            : def.StructureIdleSeekRadius;
         if (seek <= 0f) return -1;
 
         _nearby.Clear();
@@ -399,20 +437,6 @@ public sealed class SiegeSystem : ISystem
             if (ratio < def.ForageHungerThreshold) return -1;
         }
 
-        // How far the nearest thing we'd otherwise be eating is. Distance to the current prey
-        // target if we have one; otherwise the nearest structure wins by default.
-        float preyDist = seek;
-        if (em.HasComponents(entity, ComponentFlags.Predator))
-        {
-            ref var predator = ref em.Predators[entity];
-            if (predator.HasTarget && em.IsAlive(predator.TargetEntity)
-                && em.HasComponents(predator.TargetEntity, ComponentFlags.Position))
-            {
-                ref var pp = ref em.Positions[predator.TargetEntity];
-                preyDist = MathF.Sqrt(MathUtils.DistanceSquared(pos.X, pos.Y, pp.X, pp.Y));
-            }
-        }
-
         int best = -1;
         float bestDistSq = float.MaxValue;
         foreach (int other in _nearby)
@@ -430,6 +454,9 @@ public sealed class SiegeSystem : ISystem
         }
 
         if (best < 0) return -1;
+        // Idle: nothing was passed up, so there is no ratio to satisfy. Being inside
+        // StructureIdleSeekRadius at all is the whole test.
+        if (!hasPrey) return best;
 
         // The aggression ratio, evaluated against the winner only.
         float structureDist = MathF.Sqrt(bestDistSq);

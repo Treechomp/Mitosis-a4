@@ -1194,6 +1194,23 @@ ratio*: a structure is preferred while `dist(structure) ≤ dist(prey) × aggres
 that way lets the siege path weigh a building against whatever the creature can actually see
 without reimplementing prey scoring.
 
+**Sieging with no prey is opt-in** (`StructureIdleSeekRadius`, default 0). The ratio measures a
+structure against the *meal being passed up*; with no meal there is nothing to measure, and any
+stand-in distance substituted for the missing prey silently becomes the real siege rule — which is
+how the knob meant to govern siege priority stopped governing the common case of a creature with
+nothing to hunt. An idle creature now uses its own explicit radius, and 0 means it does not divert
+at all. Faeling opts in at 60 (it does not eat, so it is *always* idle by this test, and raiding is
+its purpose); Sectid stays at 0, so it sieges only when provoked or when a structure genuinely
+undercuts the meal it had already picked.
+
+**The approach is steering, not assignment.** SiegeSystem blends velocity through
+`DecisionCadence.BlendVelocity` at the species' mass-derived turn rate, LOD-compensated by
+`BlendRate`, exactly as the hunt path does — one shared helper, so the convention is a function
+rather than a habit. Writing velocity outright turned a besieger instantly, ignored its mass, was
+not LOD-compensated, and (because siege runs after Wander and before Fleeing) discarded wander,
+herding and habitat steering for that tick, leaving a besieging Sectid drifting in a straight line
+past terrain it should have avoided.
+
 | Species | Aggression | Retaliation × | Character |
 |---|---|---|---|
 | Faeling | 4.0 | 1 | raider — walks past a meal four times nearer to reach a structure |

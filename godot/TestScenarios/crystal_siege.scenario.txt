@@ -3,16 +3,35 @@
 # targeting, walked to, hit with the surface-to-surface reach, and destroyed — and the crystal's
 # linked Faeling never comes back.
 #
-# The crystals are planted ON TOP OF the colony, and that is now load-bearing. Sectid
-# StructureAggression is 0.15 — a structure must be within 0.15x the distance of the prey the
-# swarm would otherwise take, and with no prey in sight that comparison uses the swarm's own seek
-# radius (45), so an UNPROVOKED Sectid is distracted only by a structure within about seven tiles.
-# That is deliberate: unprovoked structure-breaking in the opening minutes is what the whole-game
-# invariant forbids. Retaliation is the other path (x8 bias), and it needs someone to attack the
-# colony first, which nothing here does.
+# The crystals are planted ON TOP OF the colony, and there is prey in the colony's midst. Both
+# are load-bearing now.
+#
+# Sectid StructureAggression is 0.15 — a structure must be within 0.15x the distance of the prey
+# the swarm would otherwise take — and with a HuntRange of 12 that is under two tiles, which no
+# sane placement reaches. So opportunistic sieging is not the path here. RETALIATION is: the x8
+# bias turns 0.15 into 1.2 while the colony's own nests are being broken, which at a 12-tile prey
+# distance reaches about fourteen tiles, and the crystals sit inside six.
+#
+# The provocation is supplied by the crystals themselves. They hatch Faelings, the world census
+# reads Sectids as the dominant faction (32 against 2), so the keepers besiege the NESTS — and the
+# colony answers by breaking the crystals. That is the intended shape of the war rather than a
+# scenario contrivance: nobody here attacks anything until they are attacked.
+#
+# THE PREY IS NOT SET DRESSING. A Sectid with no prey target does not siege at all
+# (StructureIdleSeekRadius = 0): the aggression ratio measures a structure against the meal being
+# passed up, and with no meal there is nothing to measure. Remove the rabbits and this scenario
+# resolves the other way — the keepers take both nests and the crystals are never touched, which
+# is exactly what it did before they were added.
+#
 #
 # Crystals are also 1,600 HP now, not 400 — a crystal is the most permanent thing in the game and
 # every one lost shrinks a twelve-member faction forever. Hence the longer budget.
+#
+# MEASURED. First crystal down at t=631 (`kind=Crystal;by=Sectid`), and the keepers take a nest
+# back at t=4483. The SECOND crystal survives the 8,000-tick budget, which is why this scenario
+# asserts "at least one Crystal destroyed" rather than "all": under the provoked-only rule a
+# Sectid siege is episodic, and once the colony stops being attacked it goes back to hunting.
+# Before sieging became provoked-only it took both crystals by t=2,408.
 #
 # Watch latest_events.csv for structure_damaged -> structure_destroyed -> crystal_destroyed.
 
@@ -32,6 +51,9 @@ nest @ 24,20 colony=1 sectids=16
 nest @ 32,24 colony=1 sectids=16
 crystal @ 28,24
 crystal @ 36,20
+# Prey in the colony's midst, so the swarm holds hunt targets and the aggression ratio is a real
+# comparison rather than a no-op. Rabbits breed, so the supply does not simply run out.
+Rabbit x24 @ 28,22 r10
 
 [logging]
 decisions = true

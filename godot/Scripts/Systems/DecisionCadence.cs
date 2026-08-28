@@ -83,6 +83,30 @@ public static class DecisionCadence
     }
 
     /// <summary>
+    /// Turn a velocity toward a target velocity by <paramref name="agility"/> of the remaining
+    /// gap — the project's steering convention, and the reason a creature curves onto a new
+    /// heading instead of snapping onto it.
+    ///
+    /// Pair it with <see cref="BlendRate"/>: the rate is per TICK, so a creature that steers once
+    /// per twenty ticks must be given the single-decision equivalent or it loses most of its
+    /// turning authority at distance. Assigning velocity outright (v.Dx = dir * speed) is the same
+    /// bug with the rate set to 1 — an instant turn, unaffected by mass, and immune to every other
+    /// steering force applied earlier in the tick.
+    /// </summary>
+    public static void BlendVelocity(ref Velocity vel, float targetDx, float targetDy, float agility)
+    {
+        vel.Dx += (targetDx - vel.Dx) * agility;
+        vel.Dy += (targetDy - vel.Dy) * agility;
+    }
+
+    /// <summary>
+    /// The agility a creature steers with: light bodies turn quickly, heavy ones slowly. Shared so
+    /// that "how fast does this species turn" has one answer wherever it is asked.
+    /// </summary>
+    public static float TurnAgility(SpeciesData.SpeciesDefinition def)
+        => System.Math.Clamp(1.5f / def.BodyMass, 0.25f, 1f);
+
+    /// <summary>
     /// How far ahead this entity must look to react to terrain in time: the distance it will
     /// actually travel before its next decision, never less than the system's base look-ahead.
     /// Uses the cached terrain speed multiplier, so a creature that is fast in its element plans
