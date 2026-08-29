@@ -173,7 +173,12 @@ public sealed class HuntingSystem : ISystem
 
             // Hibernating Sectids are dormant — NestSystem wakes them when prey strays near
             if (em.HasComponents(entity, ComponentFlags.FoodCarrier) && em.FoodCarriers[entity].IsHibernating)
+            {
+                if (HuntFunnelProbe.Enabled && em.HasComponents(entity, ComponentFlags.Species)
+                    && HuntFunnelProbe.Watching(em.Species[entity].SpeciesId))
+                    HuntFunnelProbe.HibernatingSkips++;
                 continue;
+            }
 
             // Committed to a siege: SiegeSystem is driving this creature toward an objective and
             // owns its velocity for the duration. This one guard is the ENTIRE coupling between
@@ -181,7 +186,12 @@ public sealed class HuntingSystem : ISystem
             // weighed the structure against whatever prey we could see (see its class comment for
             // why a building does not belong in the prey path).
             if (em.HasComponents(entity, ComponentFlags.Siege) && em.Sieges[entity].HasTarget)
+            {
+                if (HuntFunnelProbe.Enabled && em.HasComponents(entity, ComponentFlags.Species)
+                    && HuntFunnelProbe.Watching(em.Species[entity].SpeciesId))
+                    HuntFunnelProbe.SiegeSkips++;
                 continue;
+            }
 
             // LOD tick multiplier: attack/phase cooldowns count down at correct rate
             int tickMult = em.HasComponents(entity, ComponentFlags.SimulationLOD)
@@ -211,6 +221,17 @@ public sealed class HuntingSystem : ISystem
             else
             {
                 speciesDef = SpeciesRegistry.Get("Wolf"); // fallback
+            }
+
+            // Diagnostic funnel. False on every shipping path (HuntFunnelProbe.Enabled is only
+            // set by a diagnostic run), so the guards below compile to one bool test.
+            bool probing = HuntFunnelProbe.Enabled
+                && em.HasComponents(entity, ComponentFlags.Species)
+                && HuntFunnelProbe.Watching(em.Species[entity].SpeciesId);
+            if (probing)
+            {
+                HuntFunnelProbe.DueTicks++;
+                if (predator.HasTarget) HuntFunnelProbe.HadTargetAlready++;
             }
 
             // Reduce cooldowns (compensated for LOD tick rate). Clamp at 0 — at any LOD below
@@ -595,7 +616,8 @@ public sealed class HuntingSystem : ISystem
                 // checks dropped it.
                 if (isPack && _groupTargets.TryGetValue(groupId, out int packTarget) && em.IsAlive(packTarget)
                     && packTarget != predator.AvoidTarget
-                    && IsEligiblePrey(em, entity, packTarget, speciesDef, maxPreyMass, hungerRatio, isSwarm))
+                    && Eligibility(em, entity, packTarget, speciesDef, maxPreyMass, hungerRatio,
+                           isSwarm) == PreyReject.Eligible)
                 {
                     if (!predator.HasTarget || predator.TargetEntity != packTarget)
                     {
@@ -710,6 +732,9 @@ public sealed class HuntingSystem : ISystem
                 // Calculate effective hunting mass (solo or pack)
                 float effectiveMass = speciesDef.BodyMass;
                 float maxHuntRatio = speciesDef.SoloHuntMaxRatio;
+                // A swarm hunter standing alone gets the SOLO allowance even though isPack is
+                // true; the funnel has to tell those apart or "the mass gate" means nothing.
+                bool probeSolo = true;
                 if (isPack)
                 {
                     // Count nearby pack/swarm members for effective mass
@@ -738,32 +763,62 @@ public sealed class HuntingSystem : ISystem
                     }
                     float exponent = speciesDef.PackHuntMassExponent;
                     effectiveMass *= MathF.Pow(packSize, exponent);
+                    probeSolo = packSize <= 1;
                 }
                 maxPreyMass = effectiveMass * maxHuntRatio;
 
                 float bestScore = float.MaxValue;
                 int bestPrey = -1;
                 int evaluated = 0;
+                // Funnel bookkeeping only — see HuntFunnelProbe. Inert unless a diagnostic run
+                // armed it, and it never affects which prey is chosen.
+                float probeNearest = float.MaxValue;
+                bool probeSawLive = false;
+                if (probing)
+                {
+                    HuntFunnelProbe.Searches++;
+                    HuntFunnelProbe.Candidates += _nearbyEntities.Count;
+                }
 
                 foreach (int preyEntity in _nearbyEntities)
                 {
                     // Skip a target we recently gave up on as non-viable
                     if (preyEntity == predator.AvoidTarget)
+                    {
+                        if (probing) HuntFunnelProbe.RejectAvoid++;
                         continue;
+                    }
 
-                    if (!IsEligiblePrey(em, entity, preyEntity, speciesDef, maxPreyMass,
-                            hungerRatio, isSwarm))
+                    var verdict = Eligibility(em, entity, preyEntity, speciesDef, maxPreyMass,
+                        hungerRatio, isSwarm);
+                    if (verdict != PreyReject.Eligible)
+                    {
+                        if (probing) CountReject(verdict, probeSolo);
                         continue;
+                    }
 
                     ref var preyPos = ref em.Positions[preyEntity];
                     float distSq = MathUtils.DistanceSquared(pos.X, pos.Y, preyPos.X, preyPos.Y);
 
                     if (distSq >= huntRangeSq)
+                    {
+                        if (probing) HuntFunnelProbe.RejectOutOfRange++;
                         continue;
+                    }
 
                     // Bound expensive scoring/path work in dense clusters.
                     if (++evaluated > MaxHuntCandidates)
+                    {
+                        if (probing) HuntFunnelProbe.CapHits++;
                         break;
+                    }
+
+                    if (probing)
+                    {
+                        HuntFunnelProbe.Scored++;
+                        if (distSq < probeNearest) probeNearest = distSq;
+                        if (!IsSporeLike(em, preyEntity)) probeSawLive = true;
+                    }
 
                     float score = distSq;
 
@@ -861,10 +916,29 @@ public sealed class HuntingSystem : ISystem
                         if (speciesDef.AvoidsOpenWater && _worldManager != null
                             && _worldManager.GetWaterFractionOnPath(pos.X, pos.Y, preyPos.X, preyPos.Y,
                                    deepOnly: !speciesDef.AvoidsWater) > 0.15f)
+                        {
+                            if (probing) HuntFunnelProbe.RejectWaterPath++;
                             continue; // Too much water between us and prey
+                        }
 
                         bestScore = score;
                         bestPrey = preyEntity;
+                    }
+                }
+
+                if (probing)
+                {
+                    HuntFunnelProbe.RecordNearestEligible(
+                        probeNearest < float.MaxValue ? MathF.Sqrt(probeNearest) : 0f,
+                        probeNearest < float.MaxValue);
+                    if (bestPrey >= 0)
+                    {
+                        HuntFunnelProbe.Acquired++;
+                        if (IsSporeLike(em, bestPrey))
+                        {
+                            HuntFunnelProbe.AcquiredSpore++;
+                            if (probeSawLive) HuntFunnelProbe.AcquiredSporeOverLive++;
+                        }
                     }
                 }
 
@@ -921,15 +995,16 @@ public sealed class HuntingSystem : ISystem
                 float bestTrackDistSq = float.MaxValue;
                 int bestTrackTarget = -1;
                 int trackEvaluated = 0;
+                if (probing) HuntFunnelProbe.TrackSearches++;
 
                 foreach (int preyEntity in _nearbyEntities)
                 {
                     // Only walk toward prey we could actually attack on arrival. Tracking used to
-                    // run its own, much laxer test — see IsEligiblePrey for what that cost.
+                    // run its own, much laxer test — see Eligibility for what that cost.
                     if (preyEntity == predator.AvoidTarget)
                         continue;
-                    if (!IsEligiblePrey(em, entity, preyEntity, speciesDef, maxPreyMass,
-                            hungerRatio, isSwarm))
+                    if (Eligibility(em, entity, preyEntity, speciesDef, maxPreyMass,
+                            hungerRatio, isSwarm) != PreyReject.Eligible)
                         continue;
 
                     ref var preyPos2 = ref em.Positions[preyEntity];
@@ -959,6 +1034,7 @@ public sealed class HuntingSystem : ISystem
                 // keeps a fox from lingering at the shoreline over a fish it can't reach.
                 if (bestTrackTarget >= 0)
                 {
+                    if (probing) HuntFunnelProbe.TrackAcquired++;
                     if (bestTrackTarget != predator.TrackedEntity)
                     {
                         predator.TrackedEntity = bestTrackTarget;
@@ -1107,10 +1183,19 @@ public sealed class HuntingSystem : ISystem
                 // <= 0 (not == 0): self-heals any cooldown that may already be sitting at a
                 // stuck negative value from a prior LOD overshoot, so the attack always fires
                 // the moment a predator is in range and off cooldown.
+                if (probing && distSq < attackRangeSq)
+                {
+                    HuntFunnelProbe.EngageInRange++;
+                    if (IsSporeLike(em, predator.TargetEntity))
+                        HuntFunnelProbe.EngageInRangeSpore++;
+                }
+
                 if (distSq < attackRangeSq && predator.CurrentCooldown <= 0)
                 {
+                    if (probing) HuntFunnelProbe.AttacksAttempted++;
                     if (em.HasComponents(predator.TargetEntity, ComponentFlags.Energy))
                     {
+                        if (probing) HuntFunnelProbe.AttacksLanded++;
                         ref var preyEnergy = ref em.Energies[predator.TargetEntity];
                         float actualDamage = predator.AttackPower * attackMult;
                         preyEnergy.Current -= actualDamage;
@@ -1188,6 +1273,7 @@ public sealed class HuntingSystem : ISystem
 
                         if (preyEnergy.IsDead)
                         {
+                            if (probing) HuntFunnelProbe.Kills++;
                             _entitiesToKill.Add(predator.TargetEntity);
 
                             // Log the kill
@@ -1810,11 +1896,16 @@ public sealed class HuntingSystem : ISystem
     /// No target is ever assigned on that path, so none of the abandon logic could rescue it
     /// either; the only real fix is to never start walking.
     /// </summary>
-    private bool IsEligiblePrey(EntityManager em, int self, int prey, SpeciesDefinition selfDef,
+    /// <summary>
+    /// Whether this candidate can be hunted, and if not, which gate stopped it. The hunt path
+    /// only ever compares against <see cref="PreyReject.Eligible"/>; the reason exists so
+    /// <see cref="HuntFunnelProbe"/> can attribute a dropped candidate to a stage.
+    /// </summary>
+    private PreyReject Eligibility(EntityManager em, int self, int prey, SpeciesDefinition selfDef,
         float maxPreyMass, float hungerRatio, bool isSwarm)
     {
         if (prey == self || !em.IsAlive(prey))
-            return false;
+            return PreyReject.SelfOrDead;
 
         // Never target something standing in our wrong element. A hard element barrier means the
         // predator cannot follow at all, so the hunt can only ever end in drowning or a shoving
@@ -1826,7 +1917,7 @@ public sealed class HuntingSystem : ISystem
         {
             ref var pp = ref em.Positions[prey];
             if (TerrainProfile.IsImpassable(selfDef, _worldManager.GetTile(pp.X, pp.Y)))
-                return false;
+                return PreyReject.Terrain;
         }
 
         // Swarm hunters can target any living creature (including predators); normal hunters
@@ -1835,14 +1926,14 @@ public sealed class HuntingSystem : ISystem
         if (!valid && isSwarm)
             valid = em.HasComponents(prey, ComponentFlags.Energy | ComponentFlags.Species);
         if (!valid)
-            return false;
+            return PreyReject.Species;
 
         // Size-based eligibility: prey must not be too large.
         if (GetPreyBodyMass(prey, em) > maxPreyMass)
-            return false;
+            return PreyReject.Mass;
 
         if (!em.HasComponents(prey, ComponentFlags.Species))
-            return true;
+            return PreyReject.Eligible;
 
         ref var preySpecies = ref em.Species[prey];
         var preyDef = SpeciesRegistry.GetById(preySpecies.SpeciesId);
@@ -1850,21 +1941,46 @@ public sealed class HuntingSystem : ISystem
         // Don't hunt your own kind.
         if (em.HasComponents(self, ComponentFlags.Species)
             && em.Species[self].SpeciesId == preySpecies.SpeciesId)
-            return false;
+            return PreyReject.Species;
 
         // Faelings can't be hunted by carnivores.
         if (preyDef.UnhuntableByPredators && selfDef.Diet == DietType.Carnivore)
-            return false;
+            return PreyReject.Species;
 
         // Specialist diet: a predator with an ExclusivePrey list ignores everything not on it
         // (e.g. Penguins only ever hunt Fish).
         if (selfDef.ExclusivePrey != null && !selfDef.ExclusivePrey.Contains(preyDef.Name))
-            return false;
+            return PreyReject.Species;
 
         // Fallback tier: small fry a well-fed predator won't waste effort on (a Shark passes
         // over fish until it is genuinely hungry, so the shoal is thinned rather than cropped).
-        return selfDef.WillHunt(preyDef.Name, hungerRatio);
+        return selfDef.WillHunt(preyDef.Name, hungerRatio)
+            ? PreyReject.Eligible : PreyReject.Species;
     }
+
+    /// <summary>Attribute a dropped candidate to a funnel stage. Diagnostic only.</summary>
+    private static void CountReject(PreyReject verdict, bool solo)
+    {
+        switch (verdict)
+        {
+            case PreyReject.SelfOrDead: HuntFunnelProbe.RejectSelfOrDead++; break;
+            case PreyReject.Terrain:    HuntFunnelProbe.RejectTerrain++;    break;
+            case PreyReject.Species:    HuntFunnelProbe.RejectSpecies++;    break;
+            case PreyReject.Mass:
+                if (solo) HuntFunnelProbe.RejectMassSolo++;
+                else HuntFunnelProbe.RejectMassSwarm++;
+                break;
+        }
+    }
+
+    /// <summary>
+    /// The set SporeHuntBias steers toward: a spore, or a Shroomer still small enough to pass the
+    /// mass gate. Diagnostic only — the bias itself is applied by the scoring block.
+    /// </summary>
+    private static bool IsSporeLike(EntityManager em, int entity)
+        => em.HasComponents(entity, ComponentFlags.Spore)
+           || (em.HasComponents(entity, ComponentFlags.Species)
+               && em.Species[entity].Type == SpeciesType.Shroomer);
 
     /// <summary>
     /// Record the baselines used by target-viability re-evaluation when a hunt begins:

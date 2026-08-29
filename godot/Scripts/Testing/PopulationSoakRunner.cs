@@ -82,6 +82,16 @@ public partial class PopulationSoakRunner : Node
     /// <summary>Faelings alive at the end of the run — keepers are few by design (12 crystals).</summary>
     [Export] public int MinFaelingPopulation = 6;
 
+    /// <summary>
+    /// Diagnostic hunt funnel for one species (--funnel=Sectid), written to
+    /// logs/population_soak/hunt_funnel.csv every FunnelWindow ticks. Off unless asked for: it
+    /// only counts, but a gate should not carry instrumentation it is not using.
+    /// </summary>
+    [Export] public string FunnelSpecies = "";
+
+    /// <summary>Ticks per funnel row.</summary>
+    [Export] public int FunnelWindow = 1000;
+
     private int _failures;
 
     private const int ChunkSize = 32;
@@ -152,6 +162,15 @@ public partial class PopulationSoakRunner : Node
         // other way round. Without this the soak has no Shroomer anchor to assert on.
         spawner.SpawnMyceliumHearts(em);
 
+        if (!string.IsNullOrEmpty(FunnelSpecies))
+        {
+            string funnelPath = Path.Combine(
+                ProjectSettings.GlobalizePath($"{LogRoot}/population_soak"), "hunt_funnel.csv");
+            HuntFunnelProbe.Begin(SpeciesRegistry.GetId(FunnelSpecies), funnelPath);
+            GD.Print($"[Soak] hunt funnel for {FunnelSpecies} every {FunnelWindow} ticks " +
+                     $"-> {funnelPath}");
+        }
+
         int player = factory.SpawnPlayer(WorldSizeChunks * ChunkSize / 2f,
                                           WorldSizeChunks * ChunkSize / 2f, world);
         stack.Lod.SetPlayerEntity(player);
@@ -172,6 +191,12 @@ public partial class PopulationSoakRunner : Node
                 systems[i].Process(em);
             em.FinalizeNewborns();
 
+            if (HuntFunnelProbe.Enabled && (t % FunnelWindow == 0 || t == Ticks))
+            {
+                TakeFunnelCensus(em, world);
+                HuntFunnelProbe.Flush(t);
+            }
+
             if (t % SampleInterval == 0 || t == Ticks)
             {
                 samples.Add(Sample.Take(t, em, budget, logger));
@@ -191,6 +216,7 @@ public partial class PopulationSoakRunner : Node
 
         WriteCsv(samples, budget);
         Report(samples, budget, logger);
+        HuntFunnelProbe.End();
         logger.Close();
         GD.Print($"[Soak] {Ticks} ticks in {clock.Elapsed.TotalSeconds:F0}s");
     }
@@ -269,6 +295,60 @@ public partial class PopulationSoakRunner : Node
         GD.Print("[Soak] ──────────────────────────");
 
         CheckInvariants(samples, budget, logger);
+    }
+
+    /// <summary>
+    /// The three funnel figures that need a world pass rather than a hunt-path hook: how many of
+    /// the watched species are asleep, how far each stands from the nearest nest, and how hungry
+    /// they are. Runs once per funnel window, over at most a few hundred entities.
+    /// </summary>
+    private static void TakeFunnelCensus(EntityManager em, WorldManager world)
+    {
+        var nests = new List<(float x, float y)>(64);
+        foreach (int e in em.AllEntities())
+        {
+            if (!em.HasComponents(e, ComponentFlags.Structure)) continue;
+            ref var s = ref em.Structures[e];
+            if (s.IsDestroyed || s.Kind != StructureKind.Nest) continue;
+            ref var p = ref em.Positions[e];
+            nests.Add((p.X, p.Y));
+        }
+
+        int pop = 0, hibernating = 0;
+        double distSum = 0, hungerSum = 0;
+        int distCount = 0;
+        foreach (int e in em.AllEntities())
+        {
+            if (em.HasComponents(e, ComponentFlags.Structure)) continue;
+            if (!em.HasComponents(e, ComponentFlags.Species)) continue;
+            if (!HuntFunnelProbe.Watching(em.Species[e].SpeciesId)) continue;
+            pop++;
+
+            if (em.HasComponents(e, ComponentFlags.FoodCarrier)
+                && em.FoodCarriers[e].IsHibernating) hibernating++;
+
+            if (em.HasComponents(e, ComponentFlags.Hunger))
+            {
+                ref var h = ref em.Hungers[e];
+                if (h.Max > 0f) hungerSum += h.Current / h.Max * 100f;
+            }
+
+            if (nests.Count == 0) continue;
+            ref var pos = ref em.Positions[e];
+            float best = float.MaxValue;
+            foreach (var (nx, ny) in nests)
+            {
+                float d = MathUtils.DistanceSquared(pos.X, pos.Y, nx, ny);
+                if (d < best) best = d;
+            }
+            distSum += MathF.Sqrt(best);
+            distCount++;
+        }
+
+        HuntFunnelProbe.CensusPopulation = pop;
+        HuntFunnelProbe.CensusHibernating = hibernating;
+        HuntFunnelProbe.CensusMeanDistToNest = distCount > 0 ? (float)(distSum / distCount) : -1f;
+        HuntFunnelProbe.CensusMeanHungerPct = pop > 0 ? (float)(hungerSum / pop) : -1f;
     }
 
     private static int PeakFactions(List<Sample> samples)
@@ -538,6 +618,8 @@ public partial class PopulationSoakRunner : Node
                 case "min-sectid" when int.TryParse(value, out int v): MinSectidPopulation = Math.Max(0, v); break;
                 case "min-shroomer" when int.TryParse(value, out int v): MinShroomerPopulation = Math.Max(0, v); break;
                 case "min-faeling" when int.TryParse(value, out int v): MinFaelingPopulation = Math.Max(0, v); break;
+                case "funnel": FunnelSpecies = value; break;
+                case "funnel-window" when int.TryParse(value, out int v): FunnelWindow = Math.Max(1, v); break;
                 default: GD.PushWarning($"[Soak] ignored argument '{arg}'"); break;
             }
         }

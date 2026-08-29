@@ -208,6 +208,25 @@ All are opt-in per scenario and cost nothing in the main game (static toggles, o
   plus flows: `consumed` (grazing + faction fertility feeding), `regenerated`
   (TileRegenerationSystem), `corpse_enriched` (carrion decomposition).
 
+- **`hunt_funnel.csv`** (`PopulationSoak` only, `--funnel=<Species>`) — one row per 1,000 ticks
+  for ONE species, counting every stage between a neighbour query and a corpse: ticks that never
+  reached the hunt path (hibernating, or committed to a siege), candidates returned, candidates
+  dropped by eligibility / the mass gate (solo and swarm separately) / range / terrain / water on
+  the path, targets acquired, attacks attempted, attacks landed, kills. Plus a per-window census:
+  population, hibernating count, mean distance to the nearest nest, mean hunger.
+
+  It answers "the hunt produces nothing, but WHERE does it produce nothing" — a funnel where one
+  column falls off a cliff names the stage. `HuntFunnelProbe` is off unless `--funnel` is passed
+  and only counts; an instrumented run reproduces its uninstrumented baseline byte-for-byte, which
+  is the check to repeat if the probe ever grows a new call site.
+
+  ```
+  godot --headless --path godot res://Scenes/PopulationSoak.tscn -- \
+      --ticks=20000 --seed=1234 --funnel=Sectid
+  ```
+
+  Its first use is written up in `faction-balance-plan.md` (the Sectid zero-kills diagnosis).
+
 `latest_*.csv` copies are always the most recent run, same as the existing logs.
 
 ## Reproducibility

@@ -6,6 +6,12 @@ Shroomer monoculture. Opened after the first full run on the new terrain (run
 
 ## OPEN ITEM: the Sectid colony economy never ignites on the standard world
 
+> **Cause found 2026-08-29 — see the DIAGNOSED subsection below.** It is a struct-initialisation
+> bug, not a balance problem: the Sectid hunt path never runs at all. The prey-density reading
+> recorded in the two paragraphs immediately below was the honest conclusion from the data
+> available at the time, and it is **wrong**. It is kept, struck through in effect, because
+> "measured symptoms, inferred a balance cause, was wrong" is the part of this worth remembering.
+
 Re-measured 2026-08-26 on a 20,000-tick run of the 36-chunk world (`PopulationSoak`), and it is
 worse than the earlier "re-collapsed 77 → 4" note suggests: **`kills_made` is ZERO for the entire
 run**, from t=200 with 300 Sectids alive through to t=20,000 with one. No kills means no food
@@ -13,16 +19,155 @@ carried home, which means nests never hatch (births per 200-tick interval: 0-2),
 founders are taken by predation and age with nothing replacing them. Average hunger falls 77% →
 12% on the way.
 
-This is not keeper pressure — gating the Faeling's ranged attacks on the same dominance mandate as
-its sieges changed nothing — and it is not the structure war. It is the documented dependency on
+~~This is not keeper pressure — gating the Faeling's ranged attacks on the same dominance mandate
+as its sieges changed nothing — and it is not the structure war. It is the documented dependency on
 prey density, now visible end to end. A swarm hunter needs local MASS to clear its mass gate, and
-300 Sectids scattered over 1.33 million tiles are 300 individuals, not a swarm.
+300 Sectids scattered over 1.33 million tiles are 300 individuals, not a swarm.~~
 
-One hypothesis worth testing first, because it fell out of this change by accident: an earlier
-build in which Sectids besieged crystals freely ended with 375 of them rather than 1. Besieging
-CLUSTERS a colony at a fixed point, and clustering is exactly what a swarm hunter needs. If that is
-the mechanism, the fix is to give Sectids a reason to mass that is not "walk to an enemy building"
-— which is a colony-behaviour change, not a stat tweak.
+**Superseded.** "Not the structure war" was exactly backwards: the structure war is the whole of
+it. The mass-gate reasoning was sound arithmetic applied to a gate that never executes.
+
+### Re-measured on HEAD, both seeds (2026-08-29)
+
+The zero-kills figure above was taken on `b10e992`, before the hungry-creatures-forage fix landed
+in `8ef94ce`. Re-measured on HEAD to rule that fix in or out — it is out, on both seeds:
+
+| | seed 1234 | seed 999 |
+|---|---|---|
+| Sectids at t=200 | 300 | 289 |
+| at t=8,000 | 46 | 70 |
+| at t=20,000 | **1** | **10** |
+| `kills_made`, whole run | **0** | **0** |
+| births per 200-tick interval | 0–1 | 0–4 |
+| avg hunger, t=200 → t=20,000 | 77.4% → 13.8% | 81.1% → 36.2% |
+| nests standing at t=20,000 | 46 | 55 |
+
+Seed 999 does record a handful of births, so a few nests do hatch; the food for them comes from
+carrion, not from kills (`CarrionChopRate = 6`). Neither run kills anything. The forage fix did not
+help because, as below, the code path it fixed is never reached.
+
+### DIAGNOSED 2026-08-29: `new Siege()` births every Sectid already besieging entity 0
+
+**`Siege.TargetStructure` is zero-initialised, not −1, so `HasTarget` is true from birth and
+`HuntingSystem`'s siege guard skips the creature forever. The Sectid hunt path never executes at
+all.** Not "rarely" — over two 20,000-tick runs, zero times.
+
+`Siege` declares `Siege(int target = -1)`, and all three spawn paths (`EntityFactory`,
+`NestSystem`, `CrystalSystem`) initialise the slot with `new Siege()`. For a **struct**, `new S()`
+does not call a constructor whose parameters are all optional — it zero-initialises. Verified
+directly:
+
+```
+new Siege()    -> TargetStructure=0,  HasTarget=True
+new Siege(-1)  -> TargetStructure=-1, HasTarget=False
+```
+
+`HasTarget => TargetStructure >= 0`, so **0 reads as a valid entity id**. Entity 0 is the first
+crystal: the soak runner and `GameManager` both call `SpawnCrystals` before anything else, and
+`CrystalSystem.SpawnCrystal` opens with `em.CreateEntity()`, which hands out id 0. So every Sectid
+is born committed to besieging a **Faeling crystal**, and `SiegeSystem.IsValidTarget` — which
+checks alive, is-a-structure, not-destroyed, not-own-faction, and reachable terrain, but **never
+distance** — finds nothing wrong with it. The stale target is therefore never cleared, and
+`HuntingSystem`'s one-line guard
+
+```csharp
+if (em.HasComponents(entity, ComponentFlags.Siege) && em.Sieges[entity].HasTarget)
+    continue;
+```
+
+skips the creature on every tick it is ever due. `SiegeSystem` compounds it by clearing
+`Predators[entity].TargetEntity` each tick while committed, so no prey target can survive either.
+
+#### The funnel
+
+`--funnel=Sectid` on `PopulationSoak` writes `logs/population_soak/hunt_funnel.csv`, one row per
+1,000 ticks (`HuntFunnelProbe`). Totals over 20,000 ticks of the standard 36-chunk world:
+
+| funnel stage | seed 1234 | seed 999 |
+|---|---|---|
+| Sectid ticks processed | 187,094 | 270,997 |
+| ├ skipped: committed to a siege | **143,054 (76.5%)** | **163,682 (60.4%)** |
+| ├ skipped: hibernating | 44,040 (23.5%) | 107,315 (39.6%) |
+| └ **reached the hunt path** | **0** | **0** |
+| searches run | 0 | 0 |
+| candidates from the neighbour query | 0 | 0 |
+| rejected — species eligibility | 0 | 0 |
+| rejected — mass gate (solo / swarm) | 0 / 0 | 0 / 0 |
+| rejected — reachability / terrain | 0 | 0 |
+| rejected — water on the path | 0 | 0 |
+| targets acquired | 0 | 0 |
+| attacks attempted | 0 | 0 |
+| attacks landed | 0 | 0 |
+| kills | 0 | 0 |
+
+**One stage swallows everything, and it is upstream of the funnel.** The siege guard and
+hibernation together account for 100.0% of processed Sectid ticks on both seeds. Every stage the
+funnel was built to discriminate between reads zero because nothing ever arrives at it.
+
+Corroborated by the events log. Across a whole run, **every single Sectid structure attack lands
+on entity 0** and on nothing else:
+
+| | seed 1234 | seed 999 |
+|---|---|---|
+| Sectid `structure_damaged` events | 200 | 34 |
+| distinct structures hit | **1** (entity 0) | **1** (entity 0) |
+| what it was | Faeling Crystal @ 534.5, 519.5 | Faeling Crystal @ 991.5, 796.5 |
+| ticks spanned | 2,498 → 4,552 | 1,663 → 3,396 |
+| crystal HP driven to | 1600 → 400 | 1600 → 1396 |
+
+The crystal is at a different place on each seed, so it is not proximity — it is the id.
+
+#### Why only Sectids
+
+Only two species set `StructureAggression`, so only two get a `Siege` component at all:
+
+- **Sectid (0.15)** — entity 0 is a *Faeling* crystal, a foreign faction, so `IsValidTarget`
+  accepts it and the siege is held for the rest of the creature's life. Fatal.
+- **Faeling (4.0)** — entity 0 is *its own* crystal, so `IsValidTarget` rejects it as own-faction
+  on the first tick and the slot resets to −1. Unaffected, which is why keepers behave normally.
+- **Shroomer (unset)** — no `Siege` component, never touched. Unaffected, and it wins the map.
+
+The bug therefore reads from the outside exactly like a balance problem: one faction collapses,
+one is stable, one runs away with the world.
+
+#### Measurements requested alongside the funnel
+
+- **Mean distance to nearest nest**: 23–39 tiles throughout (`NestColonyRadius` is 26). Sectids are
+  not clustered at their nests, consistent with walking cross-map toward entity 0.
+- **Mean distance to nearest eligible prey**: **unmeasurable — no search ever ran.** The column is
+  −1 for every row of both runs.
+- **`SporeHuntBias` 0.85 effect**: **unmeasurable — zero targets acquired**, so no spore was ever
+  chosen over a live target and reachability of a chosen spore never arose. The bias is scoring
+  code inside a loop that never executes for this species.
+- **Hibernating**: 104 of 261 (40%) at t=1,000 on seed 1234, and 39.6% of all processed ticks on
+  seed 999. This is a real second-order drag and it is **not** the cause: even if hibernation were
+  zero, the siege guard would still take every remaining tick.
+
+#### What this does NOT show
+
+The standing hypothesis — a swarm hunter needs local mass, and 300 Sectids over 1.33M tiles are
+individuals rather than a swarm — is **untested, not refuted**. The mass gate cannot be evaluated
+from these runs because no candidate ever reaches it (`rej_mass_solo = rej_mass_swarm = 0`). It may
+well bite once the hunt path actually runs; the funnel is in place to answer that on the next run.
+
+The earlier note below about "an earlier build in which Sectids besieged crystals freely ended with
+375 of them" now has a mechanism, and it is the opposite of what that note guessed: in that build
+crystals were destructible enough that entity 0 died early, which *freed* every Sectid from the
+stale siege. Toughening crystals from 400 HP to 1,600 did not change Sectid behaviour — it removed
+the accidental escape hatch that had been hiding this bug.
+
+#### Fixing it (next change, not this one)
+
+Two independent defects, both worth closing:
+
+1. `Siege(int target = -1)` cannot be reached by `new Siege()`. Either give the struct a real
+   parameterless constructor, initialise the field explicitly at all three spawn sites, or make
+   `HasTarget` test `> 0` — the first is the honest fix, since id 0 is a legitimate entity.
+2. `IsValidTarget` has no distance or timeout check, so *any* siege target — however acquired — is
+   held indefinitely. A commitment that survives the creature walking across the world is a bug
+   independent of how it started.
+
+Both are behaviour changes and are deliberately out of scope for the diagnosis.
 
 ## OPEN ITEM: native recruitment — what keeps Faeling viable at low count
 
