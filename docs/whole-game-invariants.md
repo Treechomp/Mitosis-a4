@@ -24,6 +24,10 @@ exceptions and therefore always exits 1, this one has no exception list and must
 an assertion needs an exception, the threshold is wrong and should be changed deliberately, with
 the reasoning recorded here.
 
+> **Status: RED.** The gate currently exits 2 — the Sectid faction fails both its population floor
+> and its kill test. This is a real defect, recorded in full below, not a threshold that needs
+> loosening.
+
 ---
 
 ## The assertions
@@ -31,9 +35,45 @@ the reasoning recorded here.
 | # | Assertion | Threshold | What it is protecting |
 |---|---|---|---|
 | 1 | `structures_destroyed(t < 6000) == 0` | 6,000 ticks (5 min at 20 TPS) | A raid must be an **event a player can see coming and answer**. A faction that loses its infrastructure before it has built any has not been beaten, it has been deleted. |
-| 2 | `nests > 0 && hearts > 0 && crystals > 0` at t=20000 | all three | It is a **three-way** war. A two-way war is a different game, and losing a faction quietly is exactly what happened. |
+| 2 | each faction holds an anchor **and** clears a population floor at t=20000 | 1 anchor each; Sectid 50, Shroomer 50, Faeling 6 | It is a **three-way** war. A two-way war is a different game, and losing a faction quietly is exactly what happened. |
+| 2b | `sectid_kills_made > 0` over the run | 1 | The Sectid **colony economy has ignited at all**. Nests hatch on food carried home, so zero kills means zero births. |
 | 3 | `0.005 < world_deviation < 0.35` at t=20000 | see below | The world is being **contested** — neither untouched nor converted. |
 | 4 | no class exceeds its population ceiling | — | Kept from the previous change; cheap, and it has caught a real bug before. |
+
+### On assertion 2's two halves
+
+Assertion 2 was originally an anchor count alone, and it passed a run holding **46 nests and one
+living Sectid** (recorded below). Structures outlive the faction that built them, so counting
+buildings reports a dead faction as healthy. Each faction now has to clear both tests:
+
+| faction | anchor | population floor |
+|---|---|---|
+| Sectid | ≥ 1 nest | ≥ 50 |
+| Shroomer | ≥ 1 heart | ≥ 50 |
+| Faeling | ≥ 1 crystal | ≥ 6 |
+
+They are reported as two separate lines rather than one combined verdict, because *which* half
+failed is the diagnostic: no anchors with a live population is a faction that has been evicted, a
+population collapse with anchors standing is a faction that has starved.
+
+Faeling's floor is 6, not 50, because Faelings are **few by design** — `FaelingCrystalCount = 12`
+sets the whole faction's size, so 50 is unreachable and 6 is half the roster. Sectid and Shroomer
+are open-ended populations that reach the thousands; 50 for those is not "healthy", it is
+*"unambiguously still playing"*, which is what a floor is for. Sizing them as a share of the faction
+budget would be the better shape and is deliberately not done yet: a share needs a measured healthy
+distribution to be a share *of*, and the Sectid distribution is currently broken (below).
+
+### On assertion 2b: why kills are asserted separately
+
+Zero kills and a low population are not the same failure, and collapsing them into one assertion
+would lose the more useful one. A Sectid nest hatches on food carried home by the swarm, so
+`kills_made = 0` means `births = 0` and the colony dies of arithmetic — the population floor then
+fails too, but several thousand ticks later and much further from the cause. The kill count fails
+*at the cause*. Reading the two lines together separates "the Sectids were outfought" from "the
+Sectid economy never started".
+
+The counter is the run-cumulative `kills_made` for the Sectid species — the same quantity the
+species-stats CSV reports per interval, keyed on the *predator* species.
 
 ### On assertion 3 and the deviation metric
 
@@ -76,26 +116,55 @@ particular:
 - **0.005 / 0.35** are calibrated against one world size (36 chunks) and one seed. Deviation is a
   whole-world mean, so a smaller world will read higher for the same amount of fighting. If the
   standard world size changes, re-measure both.
-- **Assertion 2 is a floor of one.** "At least one anchor each" is survival, not health. A faction
-  reduced to a single crystal has effectively lost, and a future version of this file should
-  probably assert a share rather than existence.
+- **50 / 50 / 6 are a starting position, not a measurement.** They were chosen as numbers no
+  healthy faction could plausibly sit below, not read off a healthy run — because there is no
+  healthy Sectid run to read them off yet. Once the Sectid economy works, re-measure all three and
+  consider replacing them with a share of the faction budget, which would scale with world size and
+  cap instead of being pinned to one configuration.
+- **The anchor half is still a floor of one.** A faction reduced to a single crystal has
+  effectively lost. The population floor is what now carries the weight of assertion 2; the anchor
+  test remains because holding zero sites is a distinct failure from holding zero members.
 
-## Known blind spot: assertion 2 passes vacuously
+## The gate is currently RED, deliberately
 
-On the shipping build the gate exits 0 with this composition:
+Assertions 2 and 2b **fail on the shipping build**, and that is the correct reading of it. Run of
+2026-08-29, 20,000 ticks, seed 1234, exit code 2:
 
 ```
-Shroomer 3946, Sectid 1, Faeling 12
-anchors: nests 46, hearts 222, crystals 12
+  PASS  Sectid: holds at least one nest            [Sectid nests=46, floor=1]
+  FAIL  Sectid: population at or above 50          [Sectid population=1, floor=50]
+  PASS  Shroomer: holds at least one heart         [Shroomer hearts=293, floor=1]
+  PASS  Shroomer: population at or above 50        [Shroomer population=3947, floor=50]
+  PASS  Faeling: holds at least one crystal        [Faeling crystals=12, floor=1]
+  PASS  Faeling: population at or above 6          [Faeling population=12, floor=6]
+  FAIL  Sectid: kills_made above zero over the run [Sectid kills_made=0, floor=1]
 ```
 
-**The Sectid faction is one individual holding 46 empty nests, and assertion 2 reports it as
-healthy** — because the assertion asks whether a nest still stands, and 46 do. This is the
-floor-of-one weakness named above, caught in the wild on the first build it applies to.
+**The Sectid faction is one individual holding 46 empty nests.** Before the floors existed the gate
+exited 0 on this same composition, because the only question it asked was whether a nest still
+stood, and 46 do. A third of the game was missing and the gate was green.
 
-The cause is not the Faeling wipe this change was about, and it is not keeper fire — gating the
-keeper's ranged attacks on the same dominance mandate as its sieges changed nothing. From
-`latest_species_stats.csv`:
+The decline is monotonic from the first sample — this is not a late collapse, it is a faction that
+never starts:
+
+| t | Sectids | Shroomers | nests |
+|---|---|---|---|
+| 200 | 300 | 374 | 46 |
+| 2,000 | 223 | 495 | 46 |
+| 6,000 | 88 | 808 | 46 |
+| 8,000 | **46** — crosses the floor | 1,036 | 46 |
+| 10,000 | 31 | 1,427 | 46 |
+| 14,000 | 7 | 2,674 | 46 |
+| 20,000 | **1** | 3,947 | 46 |
+
+The nest count never moves. Structures are not the thing dying.
+
+The cause is not the Faeling wipe the gate was originally built for, and it is not keeper fire —
+gating the keeper's ranged attacks on the same dominance mandate as its sieges changed nothing.
+`kills_made` is **zero for the entire run**, including at t=200 when 300 Sectids are alive. A swarm
+that catches nothing carries no food home, so nests never hatch, so births stay at zero while
+predation and age take the founders. From `latest_species_stats.csv` on an earlier run of the same
+build:
 
 | t | population | births/interval | deaths_predation | kills_made | avg hunger |
 |---|---|---|---|---|---|
@@ -104,15 +173,27 @@ keeper's ranged attacks on the same dominance mandate as its sieges changed noth
 | 9,800 | 21 | 0 | 0 | **0** | 17% |
 | 17,000 | 2 | 0 | 0 | **0** | 22% |
 
-`kills_made` is zero for the entire run, including at t=200 when 300 Sectids are alive. A swarm
-that catches nothing carries no food home, so nests never hatch, so births stay at zero while
-predation and age take the founders. This is the fragility `faction-balance-plan.md` already
-records — "their colony economy only ignites when the herbivore base surges … hostage to prey
-density and needs its own scenario" — and it is species/prey balance, out of scope here.
+This is the fragility `faction-balance-plan.md` already records — "their colony economy only
+ignites when the herbivore base surges … hostage to prey density and needs its own scenario" — and
+it is species/prey balance, deliberately **not** fixed by the change that added these floors.
 
-**The recommended next tightening of this file** is therefore to replace assertion 2's existence
-test with a share or a population floor, at the same time as the Sectid economy is addressed. Doing
-it now would ship a red gate, which this file exists to prevent.
+### Why ship a red gate
+
+An earlier revision of this file argued the opposite: that tightening assertion 2 should wait for
+the Sectid fix, because "doing it now would ship a red gate, which this file exists to prevent."
+That was wrong, and the reasoning that replaces it is:
+
+- The gate does not exist to be green. It exists to make the state of the game legible. A green
+  gate over a run with one living Sectid is a **false negative**, and a false negative in a gate is
+  worse than a red one — it actively certifies the defect.
+- The two failures are as loud as the defect deserves, and no louder. They name a faction, a
+  metric, a value and a floor, and they point at a known, documented, scoped problem.
+- Waiting couples two changes that do not need to be coupled. The floors are correct whether or not
+  the Sectid economy is fixed today; holding them back only means the next regression in *another*
+  faction also goes uncaught.
+
+The rule this file states — no standing exception list — is unchanged and is what makes the red
+meaningful. **Nothing here may be excused; the failures close when the Sectid economy works.**
 
 A second, smaller blind spot: **worldgen currently seeds zero mycelium hearts** (`0 of 376
 Shroomers`), because no natural site meets the moisture floor at t=0 — a heart needs 35% of its

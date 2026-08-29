@@ -28,9 +28,9 @@ namespace Mitosis.Testing;
 ///   godot --headless --path godot res://Scenes/PopulationSoak.tscn -- --ticks=20000
 ///       --chunks=36 --max-pop=12000 --initial=2000 --sample=200 --seed=1234
 ///
-/// Writes logs/population_soak.csv (one row per sample) and prints a verdict on the two
-/// questions above. Exit code is 0 either way — this is a measurement, not a pass/fail gate;
-/// composition is a judgement call and the numbers belong in front of a person.
+/// Writes logs/population_soak.csv (one row per sample), prints a verdict on the two questions
+/// above, and then asserts the whole-game invariants: the exit code is the number of failed
+/// assertions, so this is a GATE as well as a measurement. See docs/whole-game-invariants.md.
 /// </summary>
 public partial class PopulationSoakRunner : Node
 {
@@ -67,6 +67,20 @@ public partial class PopulationSoakRunner : Node
 
     /// <summary>Above this the world has been converted rather than contested.</summary>
     [Export] public float MaxDeviation = 0.35f;
+
+    // Per-faction population floors. An anchor with no faction is not a faction: the anchor test
+    // alone passed a run holding 46 nests and ONE living Sectid. Each faction must clear BOTH its
+    // anchor count and its head count. Provisional like every threshold here — see
+    // docs/whole-game-invariants.md.
+
+    /// <summary>Sectids alive at the end of the run.</summary>
+    [Export] public int MinSectidPopulation = 50;
+
+    /// <summary>Shroomers alive at the end of the run.</summary>
+    [Export] public int MinShroomerPopulation = 50;
+
+    /// <summary>Faelings alive at the end of the run — keepers are few by design (12 crystals).</summary>
+    [Export] public int MinFaelingPopulation = 6;
 
     private int _failures;
 
@@ -254,7 +268,7 @@ public partial class PopulationSoakRunner : Node
                  $"(wetter {last.DeviationWetter:F4}, drier {last.DeviationDrier:F4})");
         GD.Print("[Soak] ──────────────────────────");
 
-        CheckInvariants(samples, budget);
+        CheckInvariants(samples, budget, logger);
     }
 
     private static int PeakFactions(List<Sample> samples)
@@ -297,7 +311,8 @@ public partial class PopulationSoakRunner : Node
     /// The assertions are deliberately few and deliberately blunt. Each one is a sentence about
     /// the game that ought to be true of every build, not a tuning target.
     /// </summary>
-    private void CheckInvariants(List<Sample> samples, PopulationBudget budget)
+    private void CheckInvariants(List<Sample> samples, PopulationBudget budget,
+                                  EcosystemLogger logger)
     {
         if (samples.Count == 0)
         {
@@ -322,12 +337,28 @@ public partial class PopulationSoakRunner : Node
             $"no anchor lost before t={GraceTicks}",
             $"{destroyedInGrace} destroyed by t={graceTick}");
 
-        // 2. All three factions still hold ground at the end. This is the "is it still a
-        //    three-way war" test — a two-way war is a different game, and losing a faction
-        //    silently is exactly what happened.
-        Assert(last.Nests > 0, "Sectids still hold a nest", $"nests={last.Nests}");
-        Assert(last.Hearts > 0, "Shroomers still hold a heart", $"hearts={last.Hearts}");
-        Assert(last.Crystals > 0, "Faelings still hold a crystal", $"crystals={last.Crystals}");
+        // 2. All three factions still hold ground at the end AND still exist to hold it. This is
+        //    the "is it still a three-way war" test — a two-way war is a different game, and
+        //    losing a faction silently is exactly what happened.
+        //
+        //    Both halves are needed. The anchor test alone passed a run with 46 nests standing
+        //    and one living Sectid: the buildings outlive the faction, so counting buildings
+        //    reports a dead faction as healthy. The population test alone would not catch a
+        //    faction that is alive but has been evicted from every site it holds.
+        AssertFaction("Sectid", "nest", last.Nests, last.Sectids, MinSectidPopulation);
+        AssertFaction("Shroomer", "heart", last.Hearts, last.Shroomers, MinShroomerPopulation);
+        AssertFaction("Faeling", "crystal", last.Crystals, last.Faelings, MinFaelingPopulation);
+
+        // 2b. Sectids caught something. Separated from the population floor because it is a
+        //     strictly more diagnostic failure: a low population says the faction is losing,
+        //     zero kills says its economy never started. Sectid nests hatch on food carried
+        //     home, so a swarm that catches nothing has no births at all — the population floor
+        //     then fails as a consequence, several thousand ticks later and further from the
+        //     cause. Reading both lines together separates "outfought" from "never ignited".
+        int sectidKills = logger.RunKillsMade.TryGetValue(SpeciesRegistry.GetId("Sectid"),
+                                                          out int k) ? k : 0;
+        Assert(sectidKills > 0, "Sectid: kills_made above zero over the run",
+            $"Sectid kills_made={sectidKills}, floor=1");
 
         // 3. The world is being CONTESTED — neither untouched nor converted. Below the floor
         //    nobody is terraforming anything that matters; above the ceiling somebody has
@@ -354,6 +385,20 @@ public partial class PopulationSoakRunner : Node
             ? "[Soak] ALL INVARIANTS HOLD"
             : $"[Soak] {_failures} INVARIANT(S) FAILED");
         GD.Print("[Soak] ────────────────────────────");
+    }
+
+    /// <summary>
+    /// One faction's two survival tests: it holds at least one anchor, and enough of it is alive
+    /// to be a faction. Reported as two lines, never one — "which of the two failed" is the whole
+    /// diagnostic value, and a combined verdict would hide it.
+    /// </summary>
+    private void AssertFaction(string faction, string anchor, int anchors,
+                                int population, int floor)
+    {
+        Assert(anchors > 0, $"{faction}: holds at least one {anchor}",
+            $"{faction} {anchor}s={anchors}, floor=1");
+        Assert(population >= floor, $"{faction}: population at or above {floor}",
+            $"{faction} population={population}, floor={floor}");
     }
 
     private void Assert(bool condition, string claim, string actual)
@@ -490,6 +535,9 @@ public partial class PopulationSoakRunner : Node
                 case "seed" when int.TryParse(value, out int v): WorldSeed = v; break;
                 case "crystals" when int.TryParse(value, out int v): FaelingCrystalCount = Math.Max(1, v); break;
                 case "grace" when int.TryParse(value, out int v): GraceTicks = Math.Max(0, v); break;
+                case "min-sectid" when int.TryParse(value, out int v): MinSectidPopulation = Math.Max(0, v); break;
+                case "min-shroomer" when int.TryParse(value, out int v): MinShroomerPopulation = Math.Max(0, v); break;
+                case "min-faeling" when int.TryParse(value, out int v): MinFaelingPopulation = Math.Max(0, v); break;
                 default: GD.PushWarning($"[Soak] ignored argument '{arg}'"); break;
             }
         }
