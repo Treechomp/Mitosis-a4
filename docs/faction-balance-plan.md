@@ -196,6 +196,74 @@ Two independent defects were identified. **The first is fixed; the second is sti
    fix above could be measured on its own; it is a reasonable second guard and should be its own
    change.
 
+## Heart count: from emergent to chosen (2026-08-29)
+
+Heart count used to be whatever fell out of `MyceliumRadius` (14 tiles) — the same "a number came
+out of a formula" shape that gave the Faelings 132 crystals. It is now set by
+`GameManager.MinHeartSpacing`, threaded identically into `MyceliumSystem.FoundHearts` and
+`WorldSpawner.SpawnMyceliumHearts`.
+
+**Spacing, not a cap.** A player who has let the Shroomers reach a high heart count has been
+outplayed and now has more work to do; a cap would hide that behind a constant. Spacing expresses
+it as territory and keeps the count proportional to how much ground the faction actually holds.
+`MyceliumRadius` still governs territory SIZE and is untouched.
+
+**Baseline correction.** The count at HEAD is **153** (seed 1234) and **131** (seed 999), not the
+~300 that was assumed. 293 was measured in `ff4248f`, before the Sectid siege fix; a Sectid faction
+that actually contests ground suppresses hearts on its own. Both figures are still far above the
+~30 target, so the change stands.
+
+### Two attempts, and the reasoning between them
+
+| `MinHeartSpacing` | seed 1234 | seed 999 | verdict |
+| --- | --- | --- | --- |
+| 14 (old, = `MyceliumRadius`) | 153 | 131 | the emergent count |
+| **120** (attempt 1) | **7** | **9** | far below the 20–45 band |
+| **50** (attempt 2) | **26** | **22** | **in band** |
+
+120 overshot by an order of magnitude, so the second value was derived rather than guessed. Fitting
+`count ∝ spacing^-k` through the two measured points:
+
+```
+k = ln(153/7) / ln(120/14) = 1.44   (seed 1234)
+k = ln(131/9) / ln(120/14) = 1.25   (seed 999)
+```
+
+k is well below 2, which is the useful part: pure packing would give exactly 2, so the shortfall is
+the qualifying-ground constraint (`TerritorySupportsHeart` plus `FoundClaimFraction`) still doing
+part of the limiting. Solving for 30 hearts gives 44–46 tiles. **50 was chosen over 44** to keep
+the result inside the band under both models — at k≈1.35 it predicts 25–27, and even at the
+pessimistic k=2 it predicts 40–52 rather than 52–67. Measured 26 and 22 against a prediction of
+24.6 and 26.8.
+
+### What else the measurement showed
+
+- **Shroomer population is unaffected**: 2,886 → 2,855 (seed 1234) and 2,238 → 2,246 (seed 999),
+  around 1% and in both directions. Cutting respawn anchors by 6x did not cost the faction its
+  population at 20,000 ticks — the anchors were redundant, which is the point.
+- **Worldgen still seeds ZERO hearts** on both seeds, unchanged by spacing: the moisture floor
+  binds at t=0 (natural grassland is below the fungal threshold) and no candidate ever reaches the
+  spacing test. The whole heart network is organic. The seeding path is wired to the same value
+  and shares `HeartWithinSpacing`, so the two cannot diverge when seeding does start firing.
+- **Hearts do not appear until t≈12,500–16,000** and are flat-to-falling by 20,000 (29 → 26, and
+  23 → 22). So 20,000 ticks reaches the plateau, but "fully expanded" is doing some work in the
+  target's phrasing.
+
+### NEW GATE FAILURE, not adjusted for
+
+Seed 999 at spacing 50 fails one assertion:
+
+```
+  FAIL  Faeling: population at or above 6  [Faeling population=5, floor=6]
+```
+
+Ten crystals stand, so five keepers are dead and awaiting respawn. This is the fragility recorded
+when the Sectid fix landed (`c553833`: "Faeling is now the fragile faction, 12 → 7 against a floor
+of 6") reaching the floor on the other seed. It is **not** a heart-spacing bug — the same build at
+spacing 120 gave 10 Faelings on this seed, and at HEAD 10 — the change simply reshuffled a run that
+was already sitting one death above the line. Nothing was tuned to make it pass; every balance
+value is out of scope here. It is the next thing to measure.
+
 ## OPEN ITEM: keepers are inert — they have never damaged a structure
 
 **Measured 2026-08-29 across four 20,000-tick runs** (seeds 1234 and 999, with and without keeper

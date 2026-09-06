@@ -359,7 +359,12 @@ public sealed class WorldSpawner
     /// bloom, so it goes where the bodies are. Spacing is the heart's own MyceliumRadius, matching
     /// the one-per-radius rule MyceliumSystem enforces when a bloom founds its own.
     /// </summary>
-    public void SpawnMyceliumHearts(EntityManager entityManager)
+    /// <param name="minHeartSpacing">
+    /// Minimum distance between two Shroomer hearts. MUST be the value MyceliumSystem is given —
+    /// seeding and organic founding place the same structure and a divergence would leave the
+    /// starting network at one density and everything grown after it at another.
+    /// </param>
+    public void SpawnMyceliumHearts(EntityManager entityManager, float minHeartSpacing)
     {
         var shroomerDef = SpeciesRegistry.Get("Shroomer");
         if (shroomerDef == null || shroomerDef.MyceliumRadius <= 0f) return;
@@ -387,19 +392,16 @@ public sealed class WorldSpawner
             positions.Add((p.X, p.Y));
         }
 
-        var placed = new List<(float x, float y)>();
-        float spacingSq = shroomerDef.MyceliumRadius * shroomerDef.MyceliumRadius;
+        // Max() mirrors MyceliumSystem.FoundHearts: spacing governs, but never below one radius.
+        float spacing = MathF.Max(minHeartSpacing, shroomerDef.MyceliumRadius);
+        var scratch = new List<int>(64);
         int hearts = 0;
 
         foreach (var (x, y) in positions)
         {
-            bool tooClose = false;
-            foreach (var (px, py) in placed)
-            {
-                float dx = px - x, dy = py - y;
-                if (dx * dx + dy * dy < spacingSq) { tooClose = true; break; }
-            }
-            if (tooClose) continue;
+            if (Systems.MyceliumSystem.HeartWithinSpacing(
+                    entityManager, _worldManager.SpatialHash, scratch, x, y, spacing, shroomerId))
+                continue;
 
             // Both floors, via the same test MyceliumSystem applies when a bloom founds its own.
             // The moisture floor is the binding one at worldgen: a heart needs 35% of its
@@ -411,15 +413,13 @@ public sealed class WorldSpawner
                     x, y, shroomerDef, shroomerId))
                 continue;
 
-            if (Systems.MyceliumSystem.SpawnHeart(entityManager, x, y, shroomerId) >= 0)
-            {
-                placed.Add((x, y));
+            if (Systems.MyceliumSystem.SpawnHeart(
+                    entityManager, x, y, shroomerId, _worldManager.SpatialHash) >= 0)
                 hearts++;
-            }
         }
 
         GD.Print($"  Mycelium hearts: {hearts} of {positions.Count} Shroomers " +
-                 $"(one per {shroomerDef.MyceliumRadius:F0}-tile territory holding " +
+                 $"(one per {spacing:F0} tiles, territory holding " +
                  $"more than {shroomerDef.MyceliumShroomerFloor})");
     }
 

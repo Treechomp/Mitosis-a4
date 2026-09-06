@@ -24,6 +24,12 @@ exceptions and therefore always exits 1, this one has no exception list and must
 an assertion needs an exception, the threshold is wrong and should be changed deliberately, with
 the reasoning recorded here.
 
+> **Status: RED again on seed 999 as of 2026-08-29** (`Faeling: population at or above 6` reads 5,
+> with ten crystals standing — five keepers dead awaiting respawn). Seed 1234 is green. This is the
+> Faeling fragility flagged when the Sectid siege fix landed, reaching the floor after the heart
+> spacing change reshuffled the run; see `faction-balance-plan.md`. Nothing has been tuned to clear
+> it. The note below describes the state at `c553833`.
+>
 > **Status: GREEN as of 2026-08-29.** All eleven assertions hold on seeds 1234 and 999. The gate
 > was red for exactly one commit — long enough to make the Sectid defect visible and get it fixed.
 > The history is kept below, because "the gate went red, named a faction, and the cause turned out

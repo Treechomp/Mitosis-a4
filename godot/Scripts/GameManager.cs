@@ -95,6 +95,23 @@ public partial class GameManager : Node3D
     /// force. See WorldSpawner.SpawnCrystals for what 132 immortal raiders did to the map.
     /// </summary>
     [Export] public int FaelingCrystalCount = 12;
+
+    /// <summary>
+    /// Minimum distance between two Shroomer hearts, in tiles. THE HEART COUNT CONTROL.
+    ///
+    /// A heart is both the Shroomer respawn anchor and its fail-state target, so how many exist
+    /// decides whether the faction can be beaten at all. The count used to be emergent from
+    /// MyceliumRadius (14 tiles) and reached ~300 on the standard world — nobody chose that, and
+    /// 300 fail-state targets is a faction that cannot practically be eliminated. Roughly 30 on a
+    /// fully expanded standard world is the target.
+    ///
+    /// Spacing rather than a cap, deliberately: a player who has let the Shroomers reach a high
+    /// heart count has been outplayed and now has more work to do, and a cap would hide that
+    /// behind a constant. Spacing expresses it as territory and keeps the count proportional to
+    /// how much of the map the faction actually holds. Threaded to BOTH the worldgen seeding and
+    /// MyceliumSystem's organic founding — they place the same structure and must not diverge.
+    /// </summary>
+    [Export] public float MinHeartSpacing = 50f;
     [Export] public float CreaturesPerChunk = 2f;
 
     // Spectator settings
@@ -272,6 +289,7 @@ public partial class GameManager : Node3D
         _nestSystem    = stack.Nest;
         _sporeSystem   = stack.Spore;
         _crystalSystem = stack.Crystal;
+        stack.Mycelium.MinHeartSpacing = MinHeartSpacing;
 
         // The logger is per-run configuration rather than simulation, and runs last.
         _ecosystemLogger = new EcosystemLogger(_worldManager, budget: _populationBudget);
@@ -422,7 +440,7 @@ public partial class GameManager : Node3D
 
         // Hearts go in after the Shroomers, because a heart is placed on a bloom rather than the
         // bloom being grown around a heart.
-        _worldSpawner.SpawnMyceliumHearts(_entityManager);
+        _worldSpawner.SpawnMyceliumHearts(_entityManager, MinHeartSpacing);
         GD.Print($"Spawned {spawnedCount} creatures — seed split from class budgets: " +
                  $"{herbivoreSeed} herbivore, {predatorSeed} predator, " +
                  $"{shroomerSeed} Shroomer + {sectidSeed} Sectid (Faelings come from crystals)");

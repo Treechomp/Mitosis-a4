@@ -27,13 +27,16 @@ public sealed class SimulationStack
     public NestSystem Nest { get; }
     public SporeSystem Spore { get; }
     public CrystalSystem Crystal { get; }
+    public MyceliumSystem Mycelium { get; }
 
-    private SimulationStack(LODSystem lod, NestSystem nest, SporeSystem spore, CrystalSystem crystal)
+    private SimulationStack(LODSystem lod, NestSystem nest, SporeSystem spore,
+                            CrystalSystem crystal, MyceliumSystem mycelium)
     {
         Lod = lod;
         Nest = nest;
         Spore = spore;
         Crystal = crystal;
+        Mycelium = mycelium;
     }
 
     /// <summary>
@@ -95,8 +98,9 @@ public sealed class SimulationStack
         systems.Add(crystal);
         // Mycelium last among the faction systems: it reads the world the others just changed —
         // the terraform that dried a bloom's ground and the Shroomers that died in it this tick.
-        systems.Add(new MyceliumSystem(world, spatialHash));
+        var mycelium = new MyceliumSystem(world, spatialHash);
+        systems.Add(mycelium);
 
-        return new SimulationStack(lod, nest, spore, crystal);
+        return new SimulationStack(lod, nest, spore, crystal, mycelium);
     }
 }

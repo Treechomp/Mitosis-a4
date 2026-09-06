@@ -44,6 +44,9 @@ public partial class PopulationSoakRunner : Node
     /// <summary>Crystals, and therefore Faelings. Mirrors GameManager's export.</summary>
     [Export] public int FaelingCrystalCount = 12;
 
+    /// <summary>Minimum distance between Shroomer hearts. Mirrors GameManager's export.</summary>
+    [Export] public float MinHeartSpacing = 50f;
+
     // ── Whole-game invariant thresholds ───────────────────────────────────────
     // Provisional by design — see docs/whole-game-invariants.md. They exist so that "a faction
     // wipes the map in five minutes" is a FAILING BUILD rather than something a person has to
@@ -133,6 +136,7 @@ public partial class PopulationSoakRunner : Node
         var systems = new List<ISystem>();
         var stack = SimulationStack.Build(systems, world, factory,
             ChunkSize, WorldSizeChunks, TileSize, MaxPopulation, budget);
+        stack.Mycelium.MinHeartSpacing = MinHeartSpacing;
 
         EcosystemLogger.SnapshotInterval = Math.Max(1, SampleInterval);
         EcosystemLogger.DecisionLoggingEnabled = false;
@@ -160,7 +164,7 @@ public partial class PopulationSoakRunner : Node
         spawner.SpawnCreatures(herbivoreSeed, predatorSeed, shroomerSeed);
         // Hearts after the Shroomers, as GameManager does — a heart is placed on a bloom, not the
         // other way round. Without this the soak has no Shroomer anchor to assert on.
-        spawner.SpawnMyceliumHearts(em);
+        spawner.SpawnMyceliumHearts(em, MinHeartSpacing);
 
         if (!string.IsNullOrEmpty(FunnelSpecies))
         {
@@ -614,6 +618,8 @@ public partial class PopulationSoakRunner : Node
                 case "sample" when int.TryParse(value, out int v): SampleInterval = Math.Max(1, v); break;
                 case "seed" when int.TryParse(value, out int v): WorldSeed = v; break;
                 case "crystals" when int.TryParse(value, out int v): FaelingCrystalCount = Math.Max(1, v); break;
+                case "heart-spacing" when float.TryParse(value, NumberStyles.Float,
+                        CultureInfo.InvariantCulture, out float hs): MinHeartSpacing = Math.Max(0f, hs); break;
                 case "grace" when int.TryParse(value, out int v): GraceTicks = Math.Max(0, v); break;
                 case "min-sectid" when int.TryParse(value, out int v): MinSectidPopulation = Math.Max(0, v); break;
                 case "min-shroomer" when int.TryParse(value, out int v): MinShroomerPopulation = Math.Max(0, v); break;

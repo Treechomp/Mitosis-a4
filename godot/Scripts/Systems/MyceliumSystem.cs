@@ -58,6 +58,20 @@ public sealed class MyceliumSystem : ISystem
     /// <summary>Mycelium a tile must carry to count as claimed ground when founding a heart.</summary>
     private const float ClaimedMycelium = 0.25f;
 
+    /// <summary>
+    /// Minimum distance between two hearts of the same faction. Set from GameManager's export of
+    /// the same name; the default matches it so an unwired caller behaves identically.
+    ///
+    /// THIS IS THE HEART COUNT CONTROL, and it is spacing rather than a cap on purpose. Heart
+    /// count used to be whatever fell out of MyceliumRadius (14 tiles), which produced ~300 on the
+    /// standard world — the same "a number came out of a formula" shape that gave the Faelings 132
+    /// crystals. A cap would hide a Shroomer faction that has run away with the map behind a
+    /// constant; spacing lets the count stay proportional to how much ground the faction actually
+    /// holds, so a player who has been outplayed sees more territory rather than the same number
+    /// of hearts. MyceliumRadius still governs the SIZE of a territory and is unchanged.
+    /// </summary>
+    public float MinHeartSpacing { get; set; } = 50f;
+
     /// <summary>Fraction of a would-be heart's radius that must already be claimed ground.</summary>
     private const float FoundClaimFraction = 0.15f;
 
@@ -215,7 +229,12 @@ public sealed class MyceliumSystem : ISystem
             if (em.Growths[entity].CurrentScale < def.MyceliumFoundScale) continue;
 
             ref var pos = ref em.Positions[entity];
-            if (HeartNearby(em, pos.X, pos.Y, def.MyceliumRadius)) continue;
+            // Spacing, not overlap: MinHeartSpacing is far wider than MyceliumRadius, so this
+            // subsumes the old "no two centres inside one radius" test. Max() keeps that older
+            // guarantee intact if the spacing is ever configured below the radius.
+            float spacing = MathF.Max(MinHeartSpacing, def.MyceliumRadius);
+            if (HeartWithinSpacing(em, _spatialHash, _nearby, pos.X, pos.Y, spacing, speciesId))
+                continue;
             if (ClaimedFraction(pos.X, pos.Y, def.MyceliumRadius) < FoundClaimFraction) continue;
             // The same test worldgen seeding uses — a heart founded onto ground that cannot hold
             // it would start bleeding on its very first territory pass.
@@ -227,14 +246,15 @@ public sealed class MyceliumSystem : ISystem
         }
 
         foreach (var (x, y, speciesId) in _pendingHearts)
-            SpawnHeart(em, x, y, speciesId);
+            SpawnHeart(em, x, y, speciesId, _spatialHash);
     }
 
     /// <summary>
     /// Create a mycelium heart. Public so worldgen can seed one under an established bloom rather
     /// than making every run wait for a Shroomer to grow into founding scale.
     /// </summary>
-    public static int SpawnHeart(EntityManager em, float x, float y, int speciesId)
+    public static int SpawnHeart(EntityManager em, float x, float y, int speciesId,
+                                  SpatialHash? spatialHash = null)
     {
         var def = SpeciesRegistry.GetById(speciesId);
         if (def == null || def.MyceliumRadius <= 0f) return -1;
@@ -256,6 +276,10 @@ public sealed class MyceliumSystem : ISystem
         // Pale fungal bulb, larger than a Shroomer so a territory's centre is findable.
         em.Renderables[entity] = new Renderable(new Color(0.75f, 0.55f, 0.85f), 14f, ShapeType.Square);
         em.AddComponent(entity, ComponentFlags.Renderable);
+
+        // Index it immediately rather than waiting for SpatialHashUpdateSystem's next pass, so
+        // the spacing test below can never miss a heart founded earlier in this same tick.
+        spatialHash?.Update(entity, x, y);
 
         EcosystemLogger.Instance?.LogStructureEvent("heart_founded",
             def.Name, entity, x, y, $"radius={def.MyceliumRadius:F0}");
@@ -353,15 +377,33 @@ public sealed class MyceliumSystem : ISystem
         return count;
     }
 
-    private static bool HeartNearby(EntityManager em, float x, float y, float radius)
+    /// <summary>
+    /// Is there already a living heart of this faction within <paramref name="spacing"/>?
+    ///
+    /// Shared by the founding path and worldgen seeding, which must apply the SAME spacing — two
+    /// different rules for placing the same structure is how the seeded and organic heart networks
+    /// would drift apart.
+    ///
+    /// Queried through the spatial hash rather than scanning the entity array: this runs once per
+    /// candidate bloom, and at a few thousand Shroomers a full-array scan per candidate is a
+    /// per-tick cost proportional to their product. Hearts are indexed like anything else with a
+    /// Position (LODSystem marks structures due every tick) and <see cref="SpawnHeart"/> also
+    /// registers one the moment it is created.
+    /// </summary>
+    public static bool HeartWithinSpacing(EntityManager em, SpatialHash spatialHash,
+        List<int> scratch, float x, float y, float spacing, int speciesId)
     {
-        float rSq = radius * radius;
-        foreach (int e in em.Query(ComponentFlags.Structure | ComponentFlags.Position))
+        scratch.Clear();
+        spatialHash.QueryRadius(x, y, spacing, scratch);
+        float sq = spacing * spacing;
+        foreach (int e in scratch)
         {
-            if (em.Structures[e].Kind != StructureKind.MyceliumHeart) continue;
-            if (em.Structures[e].IsDestroyed) continue;
+            if (!em.HasComponents(e, ComponentFlags.Structure | ComponentFlags.Position)) continue;
+            ref var s = ref em.Structures[e];
+            if (s.Kind != StructureKind.MyceliumHeart || s.IsDestroyed) continue;
+            if (s.FactionSpeciesId != speciesId) continue;
             ref var p = ref em.Positions[e];
-            if (MathUtils.DistanceSquared(x, y, p.X, p.Y) <= rSq) return true;
+            if (MathUtils.DistanceSquared(x, y, p.X, p.Y) <= sq) return true;
         }
         return false;
     }
