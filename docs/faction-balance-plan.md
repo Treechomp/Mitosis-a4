@@ -4,7 +4,31 @@ Workstream to turn the three terraformer factions into a genuine three-way war i
 Shroomer monoculture. Opened after the first full run on the new terrain (run
 `20260710_031029`, 36ch, seed 124154536).
 
-## OPEN ITEM: the Sectid colony economy never ignites on the standard world
+## CLOSED 2026-08-29: the Sectid colony economy never ignited on the standard world
+
+> **FIXED.** `Siege(int target = -1)` became `Siege(int target)` plus an explicit parameterless
+> constructor, and the three sites now pass -1. One field; four changed lines. Measured over
+> 20,000 ticks:
+>
+> | | before | after, seed 1234 | after, seed 999 |
+> | --- | --- | --- | --- |
+> | Sectid at t=20,000 | 1 / 10 | **1,067** | **1,712** |
+> | `kills_made` | **0** | **1,487** | **1,820** |
+> | nests | 46 → 46 | 46 → **186** | 46 → **264** |
+> | births per 200-tick interval | 0–4 | 6–23 | 8–39 |
+> | mean hunger at t=20,000 | 13.8% | 56.6% | 60.7% |
+> | whole-game invariant gate | 2 FAIL | **ALL HOLD** | **ALL HOLD** |
+>
+> The mass-gate hypothesis recorded below was never tested, because no candidate reached the gate.
+> It is now moot for this defect: the same swarm at the same `SoloHuntMaxRatio` kills 1,487 times
+> once the hunt path runs at all. Nothing in the funnel below was retuned — not
+> `SoloHuntMaxRatio`, not `SporeHuntBias`, not the class budgets.
+>
+> **What this opens.** Faelings are now besieged by a faction that can act: 12 → 7 on seed 1234
+> against an invariant floor of 6, with a crystal destroyed on both seeds. And on seed 999 the
+> Shroomer series after the faction ceiling is `rose 16x, FELL 0x`, the runner's own monoculture
+> signature, against Sectid's `fell 17x`. Whether this is a working three-way war or a new
+> monoculture with different winners needs its own measurement.
 
 > **Cause found 2026-08-29 — see the DIAGNOSED subsection below.** It is a struct-initialisation
 > bug, not a balance problem: the Sectid hunt path never runs at all. The prey-density reading
@@ -156,18 +180,21 @@ crystals were destructible enough that entity 0 died early, which *freed* every 
 stale siege. Toughening crystals from 400 HP to 1,600 did not change Sectid behaviour — it removed
 the accidental escape hatch that had been hiding this bug.
 
-#### Fixing it (next change, not this one)
+#### Fixing it
 
-Two independent defects, both worth closing:
+Two independent defects were identified. **The first is fixed; the second is still open.**
 
-1. `Siege(int target = -1)` cannot be reached by `new Siege()`. Either give the struct a real
-   parameterless constructor, initialise the field explicitly at all three spawn sites, or make
-   `HasTarget` test `> 0` — the first is the honest fix, since id 0 is a legitimate entity.
-2. `IsValidTarget` has no distance or timeout check, so *any* siege target — however acquired — is
-   held indefinitely. A commitment that survives the creature walking across the world is a bug
-   independent of how it started.
-
-Both are behaviour changes and are deliberately out of scope for the diagnosis.
+1. ~~`Siege(int target = -1)` cannot be reached by `new Siege()`.~~ **Done.** The argument is now
+   required *and* an explicit parameterless constructor was added, because removing the default
+   does not by itself make `new Siege()` a compile error — for a struct C# always supplies an
+   implicit zero-initialising parameterless constructor that no declared constructor can suppress.
+   Verified both ways before and after. Neither guard reaches `default(Siege)` or array
+   allocation, which is why the invariant is written at the struct as a rule about the flag.
+2. **Still open.** `IsValidTarget` has no distance or timeout check, so *any* siege target — however
+   acquired — is held indefinitely. A commitment that survives the creature walking across the
+   world is a bug independent of how it started. It was deliberately left alone here so that the
+   fix above could be measured on its own; it is a reasonable second guard and should be its own
+   change.
 
 ## OPEN ITEM: native recruitment — what keeps Faeling viable at low count
 

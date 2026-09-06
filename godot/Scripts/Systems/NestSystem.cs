@@ -613,7 +613,7 @@ public sealed class NestSystem : ISystem
         // worldgen can.
         if (speciesDef.StructureAggression > 0f)
         {
-            em.Sieges[entity] = new Siege();
+            em.Sieges[entity] = new Siege(target: -1);
             em.AddComponent(entity, ComponentFlags.Siege);
         }
 

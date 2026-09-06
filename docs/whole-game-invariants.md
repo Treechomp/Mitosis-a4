@@ -24,9 +24,10 @@ exceptions and therefore always exits 1, this one has no exception list and must
 an assertion needs an exception, the threshold is wrong and should be changed deliberately, with
 the reasoning recorded here.
 
-> **Status: RED.** The gate currently exits 2 — the Sectid faction fails both its population floor
-> and its kill test. This is a real defect, recorded in full below, not a threshold that needs
-> loosening.
+> **Status: GREEN as of 2026-08-29.** All eleven assertions hold on seeds 1234 and 999. The gate
+> was red for exactly one commit — long enough to make the Sectid defect visible and get it fixed.
+> The history is kept below, because "the gate went red, named a faction, and the cause turned out
+> to be one struct field" is the argument for having it.
 
 ---
 
@@ -125,7 +126,33 @@ particular:
   effectively lost. The population floor is what now carries the weight of assertion 2; the anchor
   test remains because holding zero sites is a distinct failure from holding zero members.
 
-## The gate is currently RED, deliberately
+## RESOLVED: the red gate found a struct-initialisation bug
+
+**The failures below are fixed.** `Siege.TargetStructure` was zero-initialised rather than -1, so
+every Sectid was born besieging entity 0 — the first Faeling crystal — and `HuntingSystem`'s siege
+guard skipped it forever; the hunt path never executed once. Diagnosed in `ff4248f`, fixed by
+making the constructor argument required and adding an explicit parameterless constructor.
+
+| | before | after (seed 1234) | after (seed 999) |
+| --- | --- | --- | --- |
+| Sectid population at t=20,000 | **1** / 10 | **1,067** | **1,712** |
+| Sectid `kills_made` over the run | **0** | **1,487** | **1,820** |
+| Sectid nests | 46 → 46 | 46 → **186** | 46 → **264** |
+| Shroomer | 3,947 | 2,886 | 2,238 |
+| Faeling | 12 | **7** | 10 |
+| crystals standing | 12 | **11** | **10** |
+| gate | 2 FAIL | **ALL HOLD** | **ALL HOLD** |
+
+Two things worth carrying forward. **Faeling is now the fragile faction**: 12 → 7 on seed 1234
+against a floor of 6, with a crystal lost, because Sectids can finally besiege something real. The
+next assertion likely to fire is the one that was never in danger before. And on seed 999 the
+ratchet test reports Shroomer `rose 16x, FELL 0x` after the faction class filled — the runner's own
+monoculture signature — while Sectid fell 17x. The ceiling is genuinely contested now; whether it
+stays that way is the next measurement's question, not this one's.
+
+The original red-gate record follows.
+
+## The gate was RED, deliberately
 
 Assertions 2 and 2b **fail on the shipping build**, and that is the correct reading of it. Run of
 2026-08-29, 20,000 ticks, seed 1234, exit code 2:

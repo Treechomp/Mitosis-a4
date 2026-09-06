@@ -301,13 +301,54 @@ public struct Structure
 /// building" through mass gates, payoff scoring, pack roles, stealth and the carrion hook — see
 /// SiegeSystem for the full argument.
 /// </summary>
+/// <para>
+/// INVARIANT: never set <c>ComponentFlags.Siege</c> without assigning <c>Sieges[entity]</c>
+/// explicitly in the same breath. The backing array zero-initialises, <b>0 is a valid entity id</b>,
+/// and <see cref="HasTarget"/> tests <c>>= 0</c> — so an unassigned slot reads as a live siege
+/// against entity 0. That is not hypothetical: the constructor below used to declare
+/// <c>Siege(int target = -1)</c> and all three sites called <c>new Siege()</c>, which for a STRUCT
+/// does not resolve to a constructor whose parameters are all optional — it zero-initialises. Every
+/// Sectid was therefore born besieging entity 0 (the first crystal, since SpawnCrystals runs first
+/// and CreateEntity hands out 0), SiegeSystem never cleared it because IsValidTarget does not check
+/// distance, and HuntingSystem's siege guard then skipped the creature forever: across 20,000
+/// ticks, 143,054 of 187,094 Sectid ticks were skipped as committed-to-siege and ZERO reached the
+/// hunt path. Faeling survived it only because entity 0 is its OWN crystal, rejected as own-faction
+/// on tick one. Diagnosed in ff4248f.
+/// </para>
+/// <para>
+/// Two guards, because neither alone is enough:
+/// </para>
+/// <list type="number">
+/// <item>The value constructor takes a <b>required</b> argument. <c>Siege(int target = -1)</c> read
+/// as though <c>new Siege()</c> would give -1, and that reading is what put the bug in three files
+/// at once. Removing the default removes the false promise. Note it does NOT make <c>new Siege()</c>
+/// a compile error — for a struct, C# always supplies an implicit zero-initialising parameterless
+/// constructor and no declared constructor can suppress it (verified: with only
+/// <c>Siege(int)</c> declared, <c>new Siege()</c> still compiles and still yields 0).</item>
+/// <item>So there is also an <b>explicit parameterless constructor</b> (C# 10+), which
+/// <c>new Siege()</c> does bind to, giving -1 instead of 0.</item>
+/// </list>
+/// <para>
+/// What neither guard can reach is <c>default(Siege)</c> and array allocation: <c>new Siege[n]</c>
+/// zero-initialises its elements and never calls any constructor. <c>EntityManager.Sieges</c> is
+/// exactly such an array, which is why the invariant above is a rule about the FLAG rather than
+/// about construction. The type cannot defend itself past this point; the call site must.
+/// </para>
 [StructLayout(LayoutKind.Sequential)]
 public struct Siege
 {
     public int TargetStructure;   // Entity id of the structure under attack (-1 = none)
     public int CurrentCooldown;   // Ticks until the next blow lands
 
-    public Siege(int target = -1)
+    /// <summary>No siege. Exists so that <c>new Siege()</c> means "none" rather than "entity 0".</summary>
+    public Siege()
+    {
+        TargetStructure = -1;
+        CurrentCooldown = 0;
+    }
+
+    /// <param name="target">Structure entity id, or -1 for none. Required — see the invariant.</param>
+    public Siege(int target)
     {
         TargetStructure = target;
         CurrentCooldown = 0;

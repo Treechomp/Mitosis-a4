@@ -218,7 +218,7 @@ public sealed class EntityFactory
         // in a system.
         if (species.StructureAggression > 0f)
         {
-            _entityManager.Sieges[entity] = new Siege();
+            _entityManager.Sieges[entity] = new Siege(target: -1);
             _entityManager.AddComponent(entity, ComponentFlags.Siege);
         }
 

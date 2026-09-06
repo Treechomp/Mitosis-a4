@@ -602,7 +602,7 @@ public sealed class CrystalSystem : ISystem
         // only way eight of them amount to a faction at all.
         if (speciesDef.StructureAggression > 0f)
         {
-            em.Sieges[entity] = new Siege();
+            em.Sieges[entity] = new Siege(target: -1);
             em.AddComponent(entity, ComponentFlags.Siege);
         }
 
