@@ -161,7 +161,14 @@ godot --headless --path godot res://Scenes/LodDifferential.tscn -- --ticks=3000
     --tolerance=0.15 --min-count=5 --control-runs=2
 ```
 
-Exit code 0 when every scenario passes. Per-scenario CSVs land in
+**The exit code is the difference from the recorded verdicts, not the failure count.** Dozens of
+metrics fail for accepted, written-down reasons, so gating on the failure count meant exiting 1 on
+every run forever. The accepted verdicts live in `docs/lod-differential-expected.csv`; a run exits
+non-zero only on a REGRESSION (a metric recorded as passing is now failing) or DRIFT (the metric
+set moved). `--record` rewrites that file and gates nothing. See
+[lod-differential-baseline.md](lod-differential-baseline.md).
+
+Per-scenario CSVs land in
 `logs/lod_differential_<scenario>.csv`, with `logs/lod_differential_summary.csv` across all of
 them, and each individual simulation keeps its full log set under
 `logs/lod_differential/<scenario>_<full|minimal|controlN>/`.

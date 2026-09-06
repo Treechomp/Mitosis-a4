@@ -50,7 +50,15 @@ namespace Mitosis.Testing;
 ///   godot --headless --path godot res://Scenes/LodDifferential.tscn -- --ticks=3000
 ///   ... --scenario=predator_prey,shroomer_bloom   (default: every scenario in TestScenarios/)
 ///   ... --tolerance=0.15 --min-count=5 --control-runs=2   (0 = strict tolerance, no floor)
-/// Exit code is 0 when every scenario passes, 1 otherwise.
+///   ... --record            (rewrite docs/lod-differential-expected.csv, gate nothing)
+///
+/// THE EXIT CODE IS THE DIFFERENCE FROM THE RECORDED VERDICTS, not the failure count. Forty
+/// metrics fail for accepted, written-down reasons, so a runner that exited on the failure count
+/// exited 1 on every run and had never once exited 0 — and a gate that is always red carries no
+/// signal, because a new regression looks exactly like the forty old ones. The accepted verdicts
+/// live in docs/lod-differential-expected.csv; this run exits non-zero only when a metric that
+/// was passing has started failing (REGRESSION) or the metric set itself moved (DRIFT). See
+/// <see cref="LodExpectedVerdicts"/>.
 /// </summary>
 public partial class LodDifferentialRunner : Node
 {
@@ -80,20 +88,32 @@ public partial class LodDifferentialRunner : Node
     /// </summary>
     [Export] public int ControlRuns = 2;
 
+    /// <summary>
+    /// Rewrite the expected-verdict file from this run and gate nothing.
+    ///
+    /// Recording is a DELIBERATE ACT and never a side effect of a normal run: a run that quietly
+    /// re-recorded its own failures would accept every regression it found, which is the one
+    /// thing this whole mechanism exists to prevent.
+    /// </summary>
+    [Export] public bool Record;
+
     private const string ScenarioDir = "res://TestScenarios";
     private const string LogRoot = "res://logs";
 
     public override void _Ready()
     {
         ParseCommandLine();
-        int failed = RunAll();
-        GetTree().Quit(failed == 0 ? 0 : 1);
+        GetTree().Quit(RunAll());
     }
 
     // ══════════════════════════════════════════════════════════════════════════
     // Driver
     // ══════════════════════════════════════════════════════════════════════════
 
+    /// <summary>
+    /// Run every scenario, then either RECORD the verdicts or GATE on how they differ from the
+    /// recorded ones. Returns the process exit code.
+    /// </summary>
     private int RunAll()
     {
         var files = CollectScenarioFiles();
@@ -105,9 +125,12 @@ public partial class LodDifferentialRunner : Node
 
         GD.Print($"[LodDiff] {files.Count} scenario(s), {Ticks} ticks per run, " +
                  $"tolerance {Tolerance:P0}, min-count {MinCount}, " +
-                 $"{ControlRuns} control run(s) per scenario");
+                 $"{ControlRuns} control run(s) per scenario" +
+                 (Record ? "  [RECORD MODE — gating nothing]" : ""));
 
         var summaryRows = new List<string>();
+        var verdicts = new List<LodExpectedVerdicts.Row>();
+        var scenariosRun = new HashSet<string>(StringComparer.Ordinal);
         int failedScenarios = 0;
 
         foreach (var file in files)
@@ -131,14 +154,116 @@ public partial class LodDifferentialRunner : Node
                 controls.Add(RunOnce(scenario, seed + k, LODLevel.Full, $"control{k}"));
 
             var comparisons = Compare(full, minimal, controls);
-            bool pass = Report(scenario.Name, seed, comparisons, summaryRows);
+            bool pass = Report(scenario.Name, seed, comparisons, summaryRows, verdicts);
+            scenariosRun.Add(scenario.Name);
             if (!pass) failedScenarios++;
         }
 
         WriteSummary(summaryRows);
-        GD.Print($"\n[LodDiff] {files.Count - failedScenarios}/{files.Count} scenarios passed" +
-                 $" at {Tolerance:P0} tolerance.");
-        return failedScenarios;
+        GD.Print($"\n[LodDiff] {files.Count - failedScenarios}/{files.Count} scenarios clean" +
+                 $" at {Tolerance:P0} tolerance ({verdicts.Count} metrics).");
+
+        // A filtered run only saw some scenarios, so it cannot tell "this metric is gone" from
+        // "this metric was not asked for"; an unfiltered run can, and should.
+        bool filtered = Scenarios.Trim().Length > 0;
+        return Record
+            ? RecordVerdicts(verdicts)
+            : GateAgainstExpected(verdicts, filtered ? scenariosRun : null);
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // The gate: recorded verdicts vs this run's
+    // ══════════════════════════════════════════════════════════════════════════
+
+    private static int RecordVerdicts(List<LodExpectedVerdicts.Row> verdicts)
+    {
+        string path = LodExpectedVerdicts.DefaultPath();
+        LodExpectedVerdicts.Save(path, verdicts);
+        int failing = 0;
+        foreach (var v in verdicts)
+            if (LodExpectedVerdicts.IsFail(v.Verdict)) failing++;
+        GD.Print($"\n[LodDiff] RECORDED {verdicts.Count} verdicts ({failing} FAIL) -> {path}");
+        GD.Print("[LodDiff] Commit it. An expected file that is not committed means nothing, and");
+        GD.Print("[LodDiff] every FAIL recorded here needs its reason in lod-differential-baseline.md.");
+        return 0;
+    }
+
+    /// <summary>
+    /// Compare this run's verdicts against the recorded contract and decide the exit code.
+    ///
+    /// Non-zero on REGRESSION (a metric that was passing has started failing) and on DRIFT (the
+    /// metric set moved, so the contract no longer describes this test). ZERO on IMPROVEMENT —
+    /// good news must not break the build — but loudly, because an exception that has been fixed
+    /// and left in the file will hide the next regression in that same metric.
+    /// </summary>
+    private static int GateAgainstExpected(List<LodExpectedVerdicts.Row> verdicts,
+                                            IReadOnlySet<string>? scenariosRun)
+    {
+        string path = LodExpectedVerdicts.DefaultPath();
+        if (!LodExpectedVerdicts.TryLoad(path, out var expected, out string error))
+        {
+            GD.PrintErr($"\n[LodDiff] {error}");
+            GD.PrintErr("[LodDiff] Nothing to compare against, so this run proves nothing. Record it:");
+            GD.PrintErr("[LodDiff]   godot --headless --path godot " +
+                        "res://Scenes/LodDifferential.tscn -- --ticks=3000 --record");
+            GD.PrintErr("[LodDiff] then commit the file, with each FAIL explained in " +
+                        "docs/lod-differential-baseline.md.");
+            return 1;
+        }
+
+        var differences = expected.CompareTo(verdicts, scenariosRun);
+        int regressions = 0, improvements = 0, drift = 0;
+        foreach (var d in differences)
+        {
+            switch (d.Kind)
+            {
+                case VerdictChange.Regression: regressions++; break;
+                case VerdictChange.Improvement: improvements++; break;
+                default: drift++; break;
+            }
+        }
+        int known = verdicts.Count - regressions - improvements;
+
+        if (regressions > 0)
+        {
+            GD.PrintErr($"\n[LodDiff] {regressions} REGRESSION(S) — these metrics were recorded as " +
+                        "passing and are now failing:");
+            foreach (var d in differences)
+                if (d.Kind == VerdictChange.Regression)
+                    GD.PrintErr($"      {d.Scenario,-18} {d.Metric,-32} {d.Expected} -> {d.Actual}");
+            GD.PrintErr("[LodDiff] A rate that LOD now moves further than the dice do. Fix it — do " +
+                        "NOT re-record.");
+        }
+
+        if (improvements > 0)
+        {
+            GD.Print($"\n[LodDiff] {improvements} IMPROVEMENT(S) — recorded as failing, now passing:");
+            foreach (var d in differences)
+                if (d.Kind == VerdictChange.Improvement)
+                    GD.Print($"      {d.Scenario,-18} {d.Metric,-32} {d.Expected} -> {d.Actual}");
+            GD.Print("[LodDiff] RE-RECORD (--record) and delete the exception's entry in " +
+                     "docs/lod-differential-baseline.md.");
+            GD.Print("[LodDiff] A fixed exception left in the file will hide the NEXT regression " +
+                     "in that metric.");
+        }
+
+        if (drift > 0)
+        {
+            GD.PrintErr($"\n[LodDiff] {drift} DRIFT — the metric set no longer matches the contract:");
+            foreach (var d in differences)
+            {
+                if (d.Kind == VerdictChange.DriftAdded)
+                    GD.PrintErr($"      ADDED    {d.Scenario,-18} {d.Metric,-32} (now {d.Actual})");
+                else if (d.Kind == VerdictChange.DriftRemoved)
+                    GD.PrintErr($"      REMOVED  {d.Scenario,-18} {d.Metric,-32} (was {d.Expected})");
+            }
+            GD.PrintErr("[LodDiff] The contract describes a different test than the one that ran. " +
+                        "Re-record deliberately.");
+        }
+
+        GD.Print($"\n[LodDiff] known {known}  regression {regressions}  " +
+                 $"improvement {improvements}  drift {drift}");
+        return regressions > 0 || drift > 0 ? 1 : 0;
     }
 
     private List<string> CollectScenarioFiles()
@@ -528,7 +653,8 @@ public partial class LodDifferentialRunner : Node
     // Reporting
     // ══════════════════════════════════════════════════════════════════════════
 
-    private bool Report(string scenarioName, int seed, List<MetricDiff> diffs, List<string> summaryRows)
+    private bool Report(string scenarioName, int seed, List<MetricDiff> diffs,
+                         List<string> summaryRows, List<LodExpectedVerdicts.Row> verdicts)
     {
         var csv = new StringBuilder();
         csv.AppendLine($"# scenario={scenarioName} seed={seed} ticks={Ticks} " +
@@ -559,6 +685,7 @@ public partial class LodDifferentialRunner : Node
             summaryRows.Add(string.Format(CultureInfo.InvariantCulture,
                 "{0},{1},{2:0.###},{3:0.###},{4:0.####},{5:0.####},{6}",
                 scenarioName, d.Name, d.Full, d.Other, d.Relative, d.NoiseFloor, verdict));
+            verdicts.Add(new LodExpectedVerdicts.Row(scenarioName, d.Name, verdict));
         }
 
         string dir = ProjectSettings.GlobalizePath(LogRoot);
@@ -626,6 +753,7 @@ public partial class LodDifferentialRunner : Node
                 case "scenario":
                 case "scenarios": Scenarios = value; break;
                 case "control-runs" when int.TryParse(value, out int cr): ControlRuns = Math.Max(0, cr); break;
+                case "record": Record = value.Length == 0 || value != "false"; break;
                 default: GD.PushWarning($"[LodDiff] ignored argument '{arg}'"); break;
             }
         }

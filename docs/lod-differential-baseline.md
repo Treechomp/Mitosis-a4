@@ -12,6 +12,58 @@ four systems §6.1 itself named. `Scripts/Testing/LodDifferentialRunner.cs` is t
 one scenario, one seed, run twice — every entity pinned to `Full`, then every entity pinned to
 `Minimal` — with end-state metrics compared.
 
+---
+
+## The contract is the CSV. This file is the commentary.
+
+`docs/lod-differential-expected.csv` records the verdict every (scenario, metric) pair currently
+produces. **It is what the exit code is computed from.** The tables in this file explain WHY each
+standing exception is accepted; they are prose for humans and are not read by anything.
+
+Before this split the runner exited on the failure count. Dozens of metrics fail for the accepted
+reasons documented below, so it exited 1 on every run and **had never once exited 0**. A gate that
+is always red carries no signal: a new regression was indistinguishable from the standing ones
+except by a human diffing a markdown table by eye — which is precisely the failure mode this test
+was built to replace, since §6.1 stated the LOD rate rule in prose and it was broken three times
+anyway.
+
+Now the run compares itself to the recorded file and gates on the **difference**:
+
+| | meaning | exit |
+| --- | --- | --- |
+| recorded FAIL, observed FAIL | a known, explained exception | silent, 0 |
+| recorded passing, observed FAIL | **REGRESSION** | **non-zero** |
+| recorded FAIL, observed passing | **IMPROVEMENT** — re-record | 0, printed loudly |
+| present in only one of the two | **DRIFT** — a metric was added or removed | **non-zero** |
+
+The comparison is binary: failing, or not. `ok`, `within_noise` and `below_min_count` are one
+class, because a metric moving between them is not information — the last two both mean "this
+metric had nothing to say", and which applies depends on where the dice fell. The exact verdict is
+still recorded, because it is worth reading; it is just not gated on.
+
+### Accepting an exception
+
+```
+godot --headless --path godot res://Scenes/LodDifferential.tscn -- --ticks=3000 --record
+```
+
+Recording is a deliberate act and never a side effect of a normal run — a run that quietly
+re-recorded its own failures would accept every regression it found.
+
+**Accepting an exception means writing down the reason.** Re-recording is half the act; the other
+half is a paragraph in this file saying why that metric is allowed to diverge. A row in the CSV
+with no matching explanation here is not an accepted exception, it is a bug that has been made
+invisible — which is the exact thing the old always-red gate was doing to all forty at once.
+
+The same applies in reverse. When an exception is FIXED the run prints an IMPROVEMENT and still
+exits 0, because good news must not break the build — but it must be re-recorded promptly, since a
+fixed exception left in the file will hide the next regression in that same metric.
+
+If the expected file is missing, the run exits non-zero and tells you to record it. It never
+silently passes.
+
+---
+
 **How to reproduce this table.**
 
 ```
@@ -282,7 +334,86 @@ rather than re-argued.
   divergence — `grazing_depletion`'s `spacing.Rabbit` (5.09 → 9.25) comes with `pop.Rabbit`
   (50 → 32) and is mostly that. The metric is only emitted where every run compared has at least
   `--min-count` individuals of the species, so it is never a statement about two crocodiles.
-- **Runs are exactly reproducible.** Two invocations of the command above produce identical
-  metrics for every scenario (`SimRandom` fixes each system's stream to the seed before the stack
-  is built). A number that moves between runs of the same build is a bug in the harness, not
-  variance.
+- **~~Runs are exactly reproducible.~~ THEY ARE NOT — see below.** This claim was here, and
+  testing it while building the expected-verdict gate showed it to be false for any scenario with
+  two or more factions in it.
+
+---
+
+## BLOCKING: the multi-faction scenarios are not reproducible across processes
+
+**Found 2026-08-29 while recording the expected verdicts.** Recording twice on the same build
+produced materially different verdicts, so the stability check that the gate depends on was run
+directly. Same seed, same binary, same single scenario, two separate processes:
+
+| `nest_raid`, 3,000 ticks | process A | process B |
+| --- | --- | --- |
+| `kills.Sectid` | 41 vs 12 (FAIL) | not emitted at all |
+| `deaths_predation.Rabbit` | 29 vs 7 (FAIL) | 11 vs 8 (within_noise) |
+| `deaths_predation.Sectid` | 0 vs 0 (below_min_count) | 7 vs 4 (FAIL) |
+| `births.Faeling` | 14 vs 11 (FAIL) | 13 vs 8 (within_noise) |
+
+At **800** ticks the same scenario is byte-identical across processes, so this is a tiny
+divergence amplifying chaotically, not gross randomness.
+
+**Which scenarios.** Every scenario that diverged has **two or more factions**
+(`crystal_siege`, `nest_raid`, `faction_skirmish`). Every single-faction and no-faction scenario
+(`shroomer_bloom`, `heart_drying`, `predator_prey`, `aquatic_biome`, `freshwater_pond`,
+`grazing_depletion`) was stable across every run compared.
+
+**The mechanism.** `SpeciesRegistry.GetId(name) => name.GetHashCode()`, and .NET randomises string
+hashing **per process**. Verified directly — the same string, two processes:
+
+```
+"Sectid".GetHashCode() = 1807738839
+"Sectid".GetHashCode() = -811547173
+```
+
+So every species id differs from run to run. `FactionCensus.DominantFactionId` then iterates
+`Dictionary<int, int> _global`, keyed by exactly those ids, and picks the leader with `n > lead` —
+**a tie is resolved by whichever species the dictionary happens to yield first**, which is a
+function of the process's hash seed. That answer drives `StructureTargetsDominantOnly`, the Faeling
+keeper's siege mandate: a tie falling the other way sends every keeper against a different faction,
+and the run diverges from there. A scenario with one faction never ties, which is exactly the
+observed split.
+
+This is the identified mechanism and it fits all the evidence; it has not been proven to be the
+*only* source of cross-process divergence.
+
+**Consequence for the gate.** On the multi-faction scenarios the recorded verdicts are not a
+contract — three successive recordings of the same build gave 45, then a different set, then 59
+FAIL. **The gate is trustworthy today only on the single-faction and no-faction scenarios**, and
+will raise spurious REGRESSION and IMPROVEMENT on the other three. That is a defect in the
+simulation, not in the gate, and the gate is what exposed it.
+
+The sharpest demonstration is a full run against a freshly recorded file, on an unchanged build:
+
+```
+[LodDiff] 4 REGRESSION(S)
+      faction_skirmish   deaths_predation.Rabbit          within_noise -> FAIL
+      faction_skirmish   kills.Sectid                     within_noise -> FAIL
+      faction_skirmish   kills.total                      within_noise -> FAIL
+      nest_raid          deaths_predation.Sectid          below_min_count -> FAIL
+[LodDiff] 16 IMPROVEMENT(S)      (crystal_siege 5, nest_raid 11)
+[LodDiff] known 203  regression 4  improvement 16  drift 0
+```
+
+**All twenty differences fall in `crystal_siege`, `nest_raid` and `faction_skirmish`. The other
+seven scenarios produce zero.** Nothing changed between recording and running but the process.
+
+Until this is fixed, a run filtered to the stable scenarios is the meaningful gate:
+
+```
+godot --headless --path godot res://Scenes/LodDifferential.tscn -- --ticks=3000 \
+    --scenario=shroomer_bloom,predator_prey,aquatic_biome,freshwater_pond,grazing_depletion,heart_drying
+```
+
+**Not fixed here** — this change was scoped to make the existing verdicts checkable and to touch no
+simulation code. The fix is to make species ids stable across processes (a deterministic hash, or
+an assigned ordinal at registration) and to give `DominantFactionId` an explicit, id-independent
+tie-break. Both are small; both change simulation behaviour and need their own change.
+
+Note the trap this fell into is the one the task anticipated in the other direction: the
+instruction was that unstable verdicts mean "more control runs, not a looser tolerance". More
+control runs would not help here. The instability is not in the noise floor — it is in the runs
+being different simulations.
