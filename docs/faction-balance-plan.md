@@ -264,6 +264,89 @@ spacing 120 gave 10 Faelings on this seed, and at HEAD 10 — the change simply 
 was already sitting one death above the line. Nothing was tuned to make it pass; every balance
 value is out of scope here. It is the next thing to measure.
 
+## Shroomers can now answer a raider (2026-08-29)
+
+On the structure axis the war was Faeling → others, Sectid → others, **Shroomer → nothing**: it had
+no `StructureAggression`, so `EntityFactory` never gave it a `Siege` component. It now has one.
+Pure data change; no new code path.
+
+```
+StructureAggression     = 0.3f    // present so the objective path exists; the RATIO never applies
+StructureSeekRadius     = 8f      // the has-prey radius; also never reached
+StructureIdleSeekRadius = 8f      // THE gate — the only one a Shroomer ever hits
+StructureAttackRange    = 8f      // equal to the seek radius, deliberately
+StructureAttackPower    = 2f
+StructureAttackCooldown = 150
+```
+
+**The trap, written at the entry too.** `StructureAggression` looks like the control and is inert
+for this species. It is a ratio of structure distance against the CURRENT PREY TARGET's distance,
+and a Shroomer is a `Terraformer` with no hunt range that never holds a prey target — so
+`SiegeSystem.Acquire` takes the no-prey branch every time and `StructureIdleSeekRadius` is the
+whole test. Anyone tuning Shroomer aggression by changing `StructureAggression` will change
+nothing.
+
+**Why reach equals the seek radius.** A Shroomer off its mycelium dries out, so the mechanic must
+not give it a reason to walk. With `StructureAttackRange == StructureIdleSeekRadius`, anything it
+can see it can hit: SiegeSystem zeroes velocity on the tick a target comes into reach, so the
+acquire tick is also the stop tick. Without it the walk-in would run at `BaseHuntSpeed` — unset on
+Shroomer, so the 0.10 default, **five times its wander speed**. The property is structural rather
+than tuned.
+
+**Why 2 damage / 150 ticks.** 0.013 dps. One Shroomer needs 15,000 ticks to break a 200-HP nest,
+i.e. it cannot. Ten in range take 1,500 ticks, thirty take 500; against a 1,600-HP crystal the same
+groups need 12,000 and 4,000. Per individual that is ~1/18 of a Sectid (6/25) and ~1/6 of a keeper
+(7/90) — a Shroomer counts only in numbers, which is the identity of the species. Confirmed in
+play: **no structure was destroyed by a Shroomer on either seed.** Crystal 8 on seed 999 took 272
+hits over 13,600 ticks and was at 1056/1600 — a grind, not a demolition.
+
+### Measurements, 20,000 ticks
+
+| | seed 1234 before → after | seed 999 before → after |
+| --- | --- | --- |
+| Shroomer → nearest own heart, **mean** | 27.58 → 28.77 (+4.3%) | 34.02 → 33.91 (−0.3%) |
+| Shroomer → nearest own heart, **MAX** | 996.07 → **983.02 (−1.3%)** | 1142.77 → **1116.65 (−2.3%)** |
+| deaths, environment | 135 → 150 | 316 → 328 |
+| deaths, predation | 3,563 → 3,265 | 1,903 → 2,128 |
+| deaths, starvation | 1 → 2 | 1 → 0 |
+| Shroomer structure-damage events | 0 → **48** | 0 → **359** |
+| Shroomer structures destroyed | 0 → **0** | 0 → **0** |
+
+**The maximum did not grow on either seed — it fell.** That is the number that mattered, and it is
+consistent with the reach-equals-seek design: blooms are not walking to their targets.
+
+The seed asymmetry (48 vs 359 events) is the mechanic working as intended rather than noise: on
+seed 999 two crystals happen to stand inside blooms, and a raider parked on Shroomer ground is
+exactly what this is meant to punish. Shroomer hits landed on four structures in total across both
+runs.
+
+**Environment deaths rose slightly on both seeds (+11% and +3.8%), and I cannot say whether that is
+signal.** With two seeds and no control run it is inside the run-to-run movement this build shows
+elsewhere. The mechanism the acceptance criterion was watching for — excursions off mycelium — is
+ruled out by the distance data. A different channel is plausible and untested: a besieging Shroomer
+has its velocity ZEROED, so a bloom that would have drifted toward wetter ground now stands still
+while it chips at a crystal. If drought deaths are ever shown to be real here, that is the thing to
+look at, not the radius.
+
+### Gate: seed 1234 fully green, seed 999 fails the grace period — NOT from this change
+
+```
+seed 1234: ALL INVARIANTS HOLD  (hearts=27, Shroomer=2833, Faeling=8, Sectid=1119)
+seed  999: FAIL  no anchor lost before t=6000  [2 destroyed by t=6000]
+```
+
+The two anchors are crystals 1 and 3, and they were destroyed **by Sectids**: 534 structure-damage
+events against them, every one `by=Sectid`, and **zero Shroomer hits on either** before or after
+they fell. The same two crystals died to the same faction in the before-run, only later — t=9,044
+and t=12,956 became t=3,674 and t=5,988. So a pre-existing Sectid siege moved forward by ~5,000
+ticks, which is the chaotic sensitivity this build keeps showing (last change it surfaced as the
+Faeling floor on this same seed; that assertion now passes at 8).
+
+Adding a participant to `SiegeSystem` reshuffles positions from tick 2 onward, so a timing shift of
+this size is expected; what is NOT expected, and did not happen, is Shroomer damage contributing to
+an early loss. Nothing was retuned — the proximate cause is not a Shroomer value, and every other
+species' structure values are out of scope.
+
 ## OPEN ITEM: keepers are inert — they have never damaged a structure
 
 **Measured 2026-08-29 across four 20,000-tick runs** (seeds 1234 and 999, with and without keeper

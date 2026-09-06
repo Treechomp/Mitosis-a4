@@ -3060,6 +3060,42 @@ public static class SpeciesRegistry
             MyceliumSpreadRadius = 4f,
             StructureDefenseRadius = 20f,  // the bloom closes on whatever is cutting at its heart
 
+            // === SIEGE — the bloom answers a raider that parks on its ground ===
+            //
+            // READ THIS BEFORE TUNING: for a Shroomer, StructureIdleSeekRadius is the ONLY gate.
+            // StructureAggression looks like the control and is INERT here. It is a ratio — the
+            // structure's distance against the CURRENT PREY TARGET's — and a Shroomer is a
+            // Terraformer with no hunt range that never holds a prey target, so SiegeSystem.Acquire
+            // takes the no-prey branch every time: seek = StructureIdleSeekRadius, and "inside that
+            // radius at all" is the whole test. StructureSeekRadius is likewise unreachable (it is
+            // the has-prey radius). Both are set to sane values so the numbers do not lie about
+            // what this species does, but 8 tiles is what actually decides anything.
+            //
+            // 8 is below MyceliumRadius (14) on purpose. A Shroomer away from its mycelium dries
+            // out and dies, so the objective path must never give it a reason to leave: anything it
+            // can reach is well inside the ground it depends on.
+            StructureAggression = 0.3f,
+            StructureSeekRadius = 8f,
+            StructureIdleSeekRadius = 8f,  // THE gate — see above
+
+            // Reach EQUALS the seek radius, which is the load-bearing choice. Anything a Shroomer
+            // can see, it can hit without taking a step: SiegeSystem zeroes velocity the moment a
+            // target is within reach, so the acquire tick is also the stop tick and the bloom never
+            // walks. Without this the walk-in would run at BaseHuntSpeed — unset on Shroomer, so
+            // the 0.10 default, FIVE TIMES its wander speed — and the mechanic would drag blooms
+            // off their own mycelium, which is the one thing it must not do.
+            StructureAttackRange = 8f,
+
+            // A NUISANCE, NOT A DEMOLITION TOOL. 2 damage per 150 ticks is 0.013 dps — a Shroomer
+            // alone needs 15,000 ticks to break a 200-HP nest, which is to say it cannot. Ten in
+            // range take 1,500 ticks and thirty take 500; against a 1,600-HP crystal the same
+            // groups need 12,000 and 4,000. So the threat scales with how far into a bloom the
+            // raider has planted itself, and nothing else. Per individual this is ~1/18 of a Sectid
+            // (6/25) and ~1/6 of a keeper (7/90): a Shroomer matters only in numbers, which is the
+            // whole identity of the species.
+            StructureAttackPower = 2f,
+            StructureAttackCooldown = 150,
+
             CrowdingRadius = 6f,
             CrowdingLimit = 20,      // blooms may reach ~20 same-radius neighbours before self-thinning
             CrowdingSaturation = 40, // spread only fully stops in a very dense core
