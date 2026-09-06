@@ -366,6 +366,8 @@ public partial class GameManager : Node3D
         float centerY = WorldSizeChunks * ChunkSize / 2f;
         int playerEntity = _entityFactory.SpawnPlayer(centerX, centerY, _worldManager);
         _playerController.SetPlayerEntity(playerEntity, TileSize, _camera);
+        // The player is the one entity the frustum cull never drops.
+        _renderingManager.PlayerEntity = playerEntity;
         _lodSystem?.SetPlayerEntity(_playerController.PlayerEntity);
 
         // Diagnostic: dump the initial-population map (species-coloured dots over a dimmed

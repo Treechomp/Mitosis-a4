@@ -58,6 +58,39 @@ public sealed class RenderingManager
     /// <summary>Species ids are hash codes and often negative, so highlighting needs its own flag.</summary>
     public bool HighlightActive { get; set; }
     public int SelectedEntity { get; set; } = -1;
+
+    /// <summary>
+    /// The player, which is drawn whatever the camera is doing. Everything else — selected and
+    /// highlighted entities included — takes its chances with the frustum: an off-screen
+    /// selection does not need drawing. -1 when there is no player.
+    /// </summary>
+    public int PlayerEntity { get; set; } = -1;
+
+    /// <summary>
+    /// Bounding-radius multiplier for the frustum cull. An entity is kept when its bounding
+    /// sphere, inflated by this, touches the frustum.
+    ///
+    /// It buys two things. An entity a little outside the view can still cast a shadow INTO it,
+    /// and a camera that pans hard would otherwise reveal a frame of bare ground at the screen
+    /// edge before the next update writes the instances. 1.25 is the smallest value that is
+    /// clearly more than "exactly the silhouette": it puts a quarter of the entity's own radius
+    /// of slack on every side, which covers the interpolated sub-tick motion the loop already
+    /// applies (see the alpha blend below) without keeping a meaningful number of extra entities.
+    ///
+    /// If pop-in ever appears the answer is to RAISE this, never to drop the cull. Note the honest
+    /// limit of the current form: a multiplier on the entity's own radius is a small absolute
+    /// distance, so it does not cover a long shadow cast by a caster far outside the view. If
+    /// shadow pop shows up specifically, this needs to become an absolute world-unit term.
+    /// </summary>
+    public float CullMargin { get; set; } = 1.25f;
+
+    /// <summary>Entities considered and entities actually written, last frame. Diagnostics.</summary>
+    public int LastEntitiesConsidered { get; private set; }
+    public int LastEntitiesDrawn { get; private set; }
+
+    // Frustum planes, re-extracted once per frame. Six is what Camera3D.GetFrustum returns
+    // (near, far, left, top, right, bottom).
+    private readonly Plane[] _frustum = new Plane[6];
     private static readonly Color HighlightColor = new(1f, 1f, 1f);
     private static readonly Color SelectionColor = new(1f, 0.2f, 0.9f);
 
@@ -431,16 +464,53 @@ public sealed class RenderingManager
             _shapeIndices[s] = 0;
         }
 
+        // ONE marshalled call per frame for the planes; every per-entity test after this is
+        // pure C#. That ratio is the whole change: the loop used to do two marshalled calls per
+        // entity per frame with no visibility test at all, so its cost tracked world population
+        // rather than what was on screen.
+        int planeCount = ExtractFrustum(camera);
+        int considered = 0, drawn = 0;
+
         foreach (int entity in _entityManager.Query(required))
         {
             ref var pos  = ref _entityManager.Positions[entity];
             ref var prev = ref _entityManager.PrevPositions[entity];
             ref var rend = ref _entityManager.Renderables[entity];
+            considered++;
 
             // Interpolate between the previous and current tick positions so fast movers
             // (e.g. the player at high exploration speed) glide instead of stepping at 20 TPS.
             float rx = prev.X + (pos.X - prev.X) * alpha;
             float ry = prev.Y + (pos.Y - prev.Y) * alpha;
+
+            // ── FRUSTUM CULL, before any real work ────────────────────────────────────────
+            // Placed ahead of GetElevation deliberately: that is four chunk lookups per entity
+            // and must not run for something off screen.
+            //
+            // Which creates an ordering problem, because the test wants a 3D point and the Y
+            // comes from the elevation we are trying not to fetch. Resolved by testing a
+            // VERTICAL INTERVAL instead of a point: the world's elevation range is bounded and
+            // known, so the entity's possible Y is a short, cheap-to-compute span.
+            //   lower  = SeaLevel * heightScale   — the render path clamps elevation up to sea
+            //            level, so nothing is ever drawn below it.
+            //   upper  = 1.0 * heightScale + lift — TerrainGenerator clamps stored elevation to
+            //            [0,1] (see SampleTile), and the loop lifts a mesh by at most
+            //            Size * 0.5 so its base sits on the ground.
+            // Signed distance to a plane is linear in the point, so over that segment the extreme
+            // is at one of its two ends; testing both is exact for the interval, not approximate.
+            if (planeCount > 0 && entity != PlayerEntity)
+            {
+                float wx = rx * _tileSize + GridCoordinates.SmoothRowOffset(ry, _tileSize);
+                float wz = -ry * _tileSize;
+                float yLo = SeaLevel * _heightScale;
+                float yHi = _heightScale + rend.Size * 0.5f;
+                // Unit primitives centred at origin scaled by Size: the bounding sphere that
+                // holds a box is half its diagonal, 0.5 * sqrt(3) ≈ 0.87.
+                float radius = rend.Size * 0.87f * CullMargin;
+                if (!TouchesFrustum(planeCount, wx, wz, yLo, yHi, radius))
+                    continue;
+            }
+            drawn++;
 
             // 3D world position: XZ from abstract grid, Y from terrain elevation.
             // Clamp to sea level so entities over water sit on the (flat) surface, not the
@@ -508,8 +578,64 @@ public sealed class RenderingManager
             mm.SetInstanceColor(i, color);
         }
 
-        // Set visible counts
+        // Set visible counts. The loop already compacted indices as it wrote, so a culled entity
+        // simply never claimed one and these stay exactly the number written — which is what
+        // stops last frame's instances rendering at last frame's positions.
         for (int s = 0; s < ShapeCount; s++)
             _shapeMMIs[s].Multimesh.VisibleInstanceCount = _shapeIndices[s];
+
+        LastEntitiesConsidered = considered;
+        LastEntitiesDrawn = drawn;
+    }
+
+    /// <summary>
+    /// Copy the camera's six frustum planes into <see cref="_frustum"/>, oriented so that inside
+    /// is the POSITIVE side of every one. Returns the plane count, or 0 when there is no camera
+    /// (in which case nothing is culled — drawing too much is a performance bug, drawing nothing
+    /// is a black screen).
+    ///
+    /// The re-orientation is not defensive padding. Godot documents the frustum normals as
+    /// pointing "into inversed frustum space", which is read both ways in practice, and getting
+    /// it wrong does not degrade gracefully: one sign culls every entity in the world, the other
+    /// culls none. So the convention is derived rather than assumed, from a point that is
+    /// guaranteed inside — on the camera's forward axis, midway between the near and far planes.
+    /// Six comparisons once a frame, and the test below is then unambiguous.
+    /// </summary>
+    private int ExtractFrustum(Camera3D camera)
+    {
+        if (camera == null) return 0;
+        var planes = camera.GetFrustum();
+        int n = Math.Min(planes.Count, _frustum.Length);
+        if (n == 0) return 0;
+
+        var xf = camera.GlobalTransform;
+        Vector3 inside = xf.Origin - xf.Basis.Z * ((camera.Near + camera.Far) * 0.5f);
+        for (int i = 0; i < n; i++)
+        {
+            Plane p = planes[i];
+            _frustum[i] = p.DistanceTo(inside) < 0f ? new Plane(-p.Normal, -p.D) : p;
+        }
+        return n;
+    }
+
+    /// <summary>
+    /// Does the sphere of <paramref name="radius"/>, swept along the vertical segment from
+    /// <paramref name="yLo"/> to <paramref name="yHi"/> at (x, z), touch the frustum? Pure C#,
+    /// no allocation, no marshalling — this runs once per entity per frame.
+    /// </summary>
+    private bool TouchesFrustum(int planeCount, float x, float z,
+                                 float yLo, float yHi, float radius)
+    {
+        for (int i = 0; i < planeCount; i++)
+        {
+            ref readonly Plane p = ref _frustum[i];
+            float flat = p.Normal.X * x + p.Normal.Z * z - p.D;
+            float dLo = flat + p.Normal.Y * yLo;
+            float dHi = flat + p.Normal.Y * yHi;
+            // Wholly behind this plane by more than the radius: outside, and no other plane can
+            // bring it back.
+            if (dLo < -radius && dHi < -radius) return false;
+        }
+        return true;
     }
 }
