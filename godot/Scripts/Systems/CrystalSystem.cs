@@ -162,9 +162,6 @@ public sealed class CrystalSystem : ISystem
         // === RANGED ATTACK PROCESSING ===
         ProcessRangedAttacks(em);
 
-        // === CRYSTAL-TO-CRYSTAL TRAVEL ===
-        ProcessKeeperTravel(em);
-
         // === SPAWN PENDING FAELINGS (respect population cap AND the faction budget) ===
         // Like NestSystem, this path had only the hard cap and no throttle, so it was on the
         // winning side of the ratchet — it just never had the numbers to exploit it (8 Faelings in
@@ -259,105 +256,6 @@ public sealed class CrystalSystem : ISystem
         {
             power.KeeperFaction = 0;
         }
-    }
-
-    /// <summary>
-    /// Move a keeper to the crystal nearest the region the census says is the problem.
-    ///
-    /// This is the answer to reach that does NOT involve more keepers. Twelve of them cannot stand
-    /// everywhere in a 1152-tile world, and the previous answer — 132 crystals, so that a keeper
-    /// was always already there — solved perception by fielding an army. Travel decouples the two:
-    /// the census says where, the crystal network says how.
-    ///
-    /// A traveller KEEPS ITS LINK to its home crystal. Re-linking to the destination would free
-    /// the origin to spawn a replacement, and Faeling population is exactly the crystal count by
-    /// construction — a mobility mechanic must not quietly become a breeding one. The visible
-    /// effect is concentration: crystals near the trouble hold several keepers, distant ones
-    /// stand empty until their own keeper walks home.
-    ///
-    /// A KEEPER IN A FIGHT CANNOT TRAVEL. Deliberate: letting one blink out of a siege it is
-    /// losing would make keepers unkillable, and massing on a single keeper is the counterplay the
-    /// other factions have against an elite unit. In combat (RegenCooldown, set whenever it takes
-    /// damage) or mid-siege, it stays and sees it through.
-    /// </summary>
-    private void ProcessKeeperTravel(EntityManager em)
-    {
-        const ComponentFlags required = ComponentFlags.Position | ComponentFlags.FaelingPower |
-                                        ComponentFlags.Species;
-
-        foreach (int entity in em.Query(required))
-        {
-            if (!em.DueThisTick[entity]) continue;
-
-            var def = SpeciesRegistry.GetById(em.Species[entity].SpeciesId);
-            if (def == null || def.CrystalTravelCooldown <= 0) continue;
-
-            ref var power = ref em.FaelingPowers[entity];
-            if (power.TravelCooldown > 0)
-            {
-                power.TravelCooldown = Math.Max(0,
-                    power.TravelCooldown - DecisionCadence.Elapsed(em, entity));
-                continue;
-            }
-
-            // In combat: stay and fight. See the class comment above.
-            if (em.HasComponents(entity, ComponentFlags.Energy)
-                && em.Energies[entity].RegenCooldown > 0)
-                continue;
-            // Mid-siege: finish the job rather than abandoning a half-broken structure.
-            if (em.HasComponents(entity, ComponentFlags.Siege) && em.Sieges[entity].HasTarget)
-                continue;
-
-            int dominant = _census.DominantFactionId(def.KeeperMinPresence,
-                excludeSpeciesId: em.Species[entity].SpeciesId);
-            if (dominant < 0) continue;                        // nobody is running away with it
-            if (!_census.TryHottestChunk(dominant, out float hotX, out float hotY, out _)) continue;
-
-            ref var pos = ref em.Positions[entity];
-            // Already in the right part of the world — nothing to travel to.
-            if (MathUtils.DistanceSquared(pos.X, pos.Y, hotX, hotY)
-                <= def.KeeperSenseRadius * def.KeeperSenseRadius)
-                continue;
-
-            int destination = FindCrystalNearest(em, hotX, hotY);
-            if (destination < 0) continue;
-
-            ref var dest = ref em.Positions[destination];
-            // No point relocating to a crystal no closer to the problem than we already are.
-            if (MathUtils.DistanceSquared(dest.X, dest.Y, hotX, hotY)
-                >= MathUtils.DistanceSquared(pos.X, pos.Y, hotX, hotY))
-            {
-                power.TravelCooldown = def.CrystalTravelCooldown;
-                continue;
-            }
-
-            pos.X = dest.X;
-            pos.Y = dest.Y;
-            power.TravelCooldown = def.CrystalTravelCooldown;
-            _spatialHash.Update(entity, pos.X, pos.Y);
-
-            if (EcosystemLogger.DecisionLoggingFor(em.Species[entity].SpeciesId))
-            {
-                EcosystemLogger.Instance!.LogDecision(em.Species[entity].SpeciesId, entity,
-                    pos.X, pos.Y, "crystal", "keeper_travel", FormattableString.Invariant(
-                        $"to={dest.X:F0}:{dest.Y:F0};toward={SpeciesRegistry.GetById(dominant)?.Name};hot={hotX:F0}:{hotY:F0}"));
-            }
-        }
-    }
-
-    private static int FindCrystalNearest(EntityManager em, float x, float y)
-    {
-        int best = -1;
-        float bestDistSq = float.MaxValue;
-        foreach (int e in em.Query(ComponentFlags.Crystal | ComponentFlags.Position))
-        {
-            if (em.HasComponents(e, ComponentFlags.Structure) && em.Structures[e].IsDestroyed)
-                continue;
-            ref var p = ref em.Positions[e];
-            float d = MathUtils.DistanceSquared(x, y, p.X, p.Y);
-            if (d < bestDistSq) { bestDistSq = d; best = e; }
-        }
-        return best;
     }
 
     private void ProcessRangedAttacks(EntityManager em)

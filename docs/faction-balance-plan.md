@@ -196,6 +196,40 @@ Two independent defects were identified. **The first is fixed; the second is sti
    fix above could be measured on its own; it is a reasonable second guard and should be its own
    change.
 
+## OPEN ITEM: keepers are inert — they have never damaged a structure
+
+**Measured 2026-08-29 across four 20,000-tick runs** (seeds 1234 and 999, with and without keeper
+travel). Grepping the events log for structure damage by attacker:
+
+| | seed 1234 | seed 999 |
+| --- | --- | --- |
+| `structure_damaged` by Sectid | 737 | 682 |
+| `structure_damaged` by environment | 2,164 | 995 |
+| **`structure_damaged` by Faeling** | **0** | **0** |
+| `structure_destroyed` by Faeling | **0** | **0** |
+
+**Not one blow, by any keeper, on any structure, in 80,000 keeper-ticks.** Every structure lost in
+these runs was a mycelium heart dying to `environment` (40 and 17) or a crystal broken by Sectids
+(2 and 2). The raid mechanic the Faeling faction is built around does not execute.
+
+This is why deleting crystal travel changed nothing measurable: a mobility mechanic serving a raid
+that never happens is a no-op whatever its cooldown. It also means the ~2,570-tick lone-keeper raid
+time is a **hypothetical** — no raid has ever been observed to start, let alone finish, so the
+figure has never been tested against reality.
+
+**Cause not established.** The obvious suspects were checked and ruled out: `FactionCensus.Refresh`
+does run (on `KeeperSenseInterval`), it correctly counts only `DietType.Terraformer` species, and
+`DominantFactionId` returns a real answer on these populations (Shroomer 2,886 against Sectid 1,067
+at t=20,000 clears the 1.5x margin). A likely contributor is that `StructureTargetsDominantOnly`
+mandates the dominant faction's structures, the dominant faction is Shroomer, and **worldgen seeds
+zero mycelium hearts** — the first Shroomer structure only exists around t≈12,500, so for the first
+five-eighths of a run there is nothing a keeper is permitted to attack. That does not explain the
+remaining 7,500 ticks, and it was not confirmed.
+
+Diagnosing this needs the same treatment the Sectid hunt funnel got: instrument
+`SiegeSystem.Acquire` per keeper and find which gate returns -1. Out of scope for the travel
+deletion, which was explicitly scoped away from `StructureTargetsDominantOnly` and `FactionCensus`.
+
 ## OPEN ITEM: native recruitment — what keeps Faeling viable at low count
 
 **Not built. This is the intended long-term answer to low Faeling numbers, and it needs its own
@@ -211,12 +245,25 @@ lever pulled was POPULATION:
 - 12 crystals → 12 Faelings, a designed constant, with sensing solved by a world census
   (`FactionCensus`) and reach solved by crystal-to-crystal travel.
 
+**Travel is deleted (2026-08-29).** Keepers that relocate can assemble, and assembled keepers move
+spot to spot wiping rivals unchallenged — the same failure the 132-crystal build produced, reached
+by a different route. Keepers now stay where they spawn and walk to their targets. The perception
+half is untouched and still correct: `FactionCensus` and `StructureTargetsDominantOnly` mean a
+keeper still knows globally which faction is ahead and refuses to attack anyone else. It simply has
+to get there on foot.
+
+Deleting it changed **nothing measurable**: two 20,000-tick runs (seeds 1234 and 999) produced
+population CSVs byte-identical to the runs with travel still in. See "Keepers were already inert"
+below — the mechanic was never firing.
+
 Twelve is the right shape but it is thin. A keeper that must suppress whichever faction is winning
-across a 1152x1152 world has, at any moment, one body per 110,000 tiles. Travel puts it in the
-right region; it does not give it enough force to change what is happening there. The current
-answer — heavy damage per keeper — is precisely the knob that produced the wipe, and it has been
-turned down hard (7 damage on a 90-tick cooldown, so a lone keeper needs ~2,570 ticks to break one
-nest).
+across a 1152x1152 world has, at any moment, one body per 110,000 tiles, and now no way to shorten
+that distance except walking. The current answer — heavy damage per keeper — is precisely the knob
+that produced the wipe, and it has been turned down hard (7 damage on a 90-tick cooldown, so a lone
+keeper needs ~2,570 ticks to break one nest). That number was derived assuming keepers could
+assemble; three of them took a nest in ~860 ticks. With travel gone, ~2,570 ticks by one keeper is
+the only rate there is. It is deliberately left unchanged — re-deriving it against the invariant is
+its own change with its own measurement.
 
 **Native recruitment** is the answer that adds force without adding keepers: a keeper rallies the
 DISPLACED NATIVES — the herbivores and predators whose habitat a bloom or a colony has converted —

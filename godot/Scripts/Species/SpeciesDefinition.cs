@@ -625,15 +625,6 @@ public sealed class SpeciesDefinition
     /// <summary>Health of a crystal. Finite: a crystal is an objective, not scenery.</summary>
     public float CrystalHealth { get; init; } = 400f;
 
-    /// <summary>
-    /// Ticks between crystal-to-crystal relocations. 0 disables travel.
-    ///
-    /// Long on purpose: this is how a small faction covers a large world, and it must read as a
-    /// deliberate redeployment rather than as teleportation. It is also the alternative to the
-    /// answer that broke the game — raising the faction's numbers until one was always nearby.
-    /// </summary>
-    public int CrystalTravelCooldown { get; init; } = 0;
-
     // === SIEGE — attacking enemy faction STRUCTURES (SiegeSystem) ===
     // A structure is an objective, not food, so none of the prey machinery applies to it: no mass
     // gate, no nutrition payoff, no carcass. What varies between factions is how much they care

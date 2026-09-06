@@ -3521,20 +3521,19 @@ public static class SpeciesRegistry
             // anything on its own timescale. 7 damage on a 90-tick cooldown is 0.078 dps, so a
             // 200-HP nest takes ~2,570 ticks — over two minutes of sustained work by a lone
             // keeper, and the colony's own retaliation has that entire window to answer.
-            // Concentration is the intended counter to that slowness: three keepers travelling to
-            // the same region (CrystalTravelCooldown) take the same nest in ~860 ticks, so a RAID
-            // is a thing the keepers assemble for rather than something one of them does in
-            // passing. The numbers are derived from the invariant in
-            // docs/whole-game-invariants.md — no anchor lost before t=6,000 — not from taste.
+            // THESE NUMBERS ASSUMED KEEPERS COULD ASSEMBLE, AND THEY NO LONGER CAN. Concentration
+            // was the intended counter to that slowness — three keepers relocating to one region
+            // took a nest in ~860 ticks, so a raid was something the keepers gathered for. Travel
+            // is deleted (keepers stay where they spawn and walk to their targets), so the only
+            // rate that remains is the lone keeper's ~2,570 ticks. Measured: with travel still in,
+            // keepers landed ZERO blows on any structure across two 20,000-tick runs, so the raid
+            // path was already inert and removing travel did not slow it. Left unchanged here
+            // deliberately: re-deriving raid damage against the invariant in
+            // docs/whole-game-invariants.md is its own change with its own measurement.
             StructureAttackPower = 7f,
             StructureAttackCooldown = 90,
             StructureAttackRange = 8f,     // ranged: it dismantles from a standoff ring
             StructureDefenseRadius = 0f,   // a crystal is a lone outpost; nobody comes to help it
-
-            // Reach without numbers. A keeper may relocate to the crystal nearest whatever region
-            // the world census flags, roughly every 600 ticks. This is the replacement for the
-            // fix that broke the game — being everywhere at once by being 132 strong.
-            CrystalTravelCooldown = 600,
 
             // A crystal is the most permanent thing in the game. A nest is replaceable — a colony
             // founds new ones — but nothing creates a crystal, so every one lost shrinks the

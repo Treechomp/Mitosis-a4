@@ -180,9 +180,6 @@ public struct FaelingPower
     public float KeeperHotspotY;
     public int KeeperSenseCooldown; // Ticks until the next dominance scan
 
-    /// <summary>Ticks until this keeper may relocate to another crystal (CrystalSystem).</summary>
-    public int TravelCooldown;
-
     public FaelingPower(int linkedCrystal, float powerPerKill = 5f, float powerPerTile = 0.2f)
     {
         Power = 0f;
@@ -195,7 +192,6 @@ public struct FaelingPower
         KeeperHotspotX = 0f;
         KeeperHotspotY = 0f;
         KeeperSenseCooldown = 0;
-        TravelCooldown = 0;
     }
 }
 
