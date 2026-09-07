@@ -1,3 +1,12 @@
+> ## ⚠ ARCHIVED — historical document
+> **Accurate as of 2026-08-25. It is not a description of the current code or the current design.**
+> Why it is here: The audit that motivated the design/implementation split: 31 verified doc-vs-code discrepancies against dabca20. Its findings list is now historical - the documents it audited have been replaced - but its "why this keeps happening" section is the reasoning behind the current structure.
+>
+> Current documentation: [`docs/design/`](../design/) for intent, [`docs/implementation/`](../implementation/)
+> for code, [`docs/changelog.md`](../changelog.md) for history. Everything below is preserved verbatim.
+
+---
+
 # Documentation Audit — docs/ vs. source
 
 > **Scope**: all 14 documentation files in the repo (12 in `docs/`, plus `README.md` and `CLAUDE.md`),

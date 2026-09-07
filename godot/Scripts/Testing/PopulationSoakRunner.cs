@@ -30,7 +30,7 @@ namespace Mitosis.Testing;
 ///
 /// Writes logs/population_soak.csv (one row per sample), prints a verdict on the two questions
 /// above, and then asserts the whole-game invariants: the exit code is the number of failed
-/// assertions, so this is a GATE as well as a measurement. See docs/whole-game-invariants.md.
+/// assertions, so this is a GATE as well as a measurement. See docs/archive/whole-game-invariants-2026-08.md.
 /// </summary>
 public partial class PopulationSoakRunner : Node
 {
@@ -48,7 +48,7 @@ public partial class PopulationSoakRunner : Node
     [Export] public float MinHeartSpacing = 50f;
 
     // ── Whole-game invariant thresholds ───────────────────────────────────────
-    // Provisional by design — see docs/whole-game-invariants.md. They exist so that "a faction
+    // Provisional by design — see docs/archive/whole-game-invariants-2026-08.md. They exist so that "a faction
     // wipes the map in five minutes" is a FAILING BUILD rather than something a person has to
     // notice. Unlike the LOD differential, which carries documented standing exceptions and
     // therefore always exits 1, this gate is binary: if an assertion needs an exception, the
@@ -60,7 +60,7 @@ public partial class PopulationSoakRunner : Node
     /// <summary>
     /// Below this the world is static: nobody is contesting any ground.
     ///
-    /// Was 0.02, which no healthy run reached — see docs/whole-game-invariants.md. Deviation is a
+    /// Was 0.02, which no healthy run reached — see docs/archive/whole-game-invariants-2026-08.md. Deviation is a
     /// whole-world MEAN over 1.33 million tiles, and the faction populations that exist at 20,000
     /// ticks work perhaps 1-2% of the map, so 0.02 asked for something the game cannot produce.
     /// Measured: 0.0044 while almost nothing is happening, 0.0139-0.0171 while visibly contested.
@@ -74,7 +74,7 @@ public partial class PopulationSoakRunner : Node
     // Per-faction population floors. An anchor with no faction is not a faction: the anchor test
     // alone passed a run holding 46 nests and ONE living Sectid. Each faction must clear BOTH its
     // anchor count and its head count. Provisional like every threshold here — see
-    // docs/whole-game-invariants.md.
+    // docs/archive/whole-game-invariants-2026-08.md.
 
     /// <summary>Sectids alive at the end of the run.</summary>
     [Export] public int MinSectidPopulation = 50;

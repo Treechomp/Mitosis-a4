@@ -1,3 +1,12 @@
+> ## ⚠ ARCHIVED — historical document
+> **Accurate as of 2026-08. It is not a description of the current code or the current design.**
+> Why it is here: The original test-harness reference. Its content is carried into implementation/tooling-and-tests.md, including the full scenario grammar; kept for its worked explanations of what each shipped scenario is for.
+>
+> Current documentation: [`docs/design/`](../design/) for intent, [`docs/implementation/`](../implementation/)
+> for code, [`docs/changelog.md`](../changelog.md) for history. Everything below is preserved verbatim.
+
+---
+
 # Test scenes — small, exactly-specified worlds for system testing
 
 **Branch:** `claude/game-test-scene-gen-2jkwur` — a standalone workstream, separate from the

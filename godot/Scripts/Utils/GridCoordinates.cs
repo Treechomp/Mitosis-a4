@@ -12,7 +12,7 @@ namespace Mitosis.Utils;
 ///
 /// (Historically odd rows were shifted half a tile to fake a hex/triangular look via
 /// SmoothRowOffset, but that made straight grid-space movement render as a zig-zag, so the
-/// offset was removed — see docs/3d-terrain-plan.md, Phase 1. SmoothRowOffset now returns 0
+/// offset was removed — see docs/archive/3d-terrain-plan-2026-06.md, Phase 1. SmoothRowOffset now returns 0
 /// and is retained only so call sites stay stable.)
 ///
 /// All gameplay systems (movement, pathfinding, spatial hash) operate in abstract grid
@@ -23,7 +23,7 @@ public static class GridCoordinates
     /// <summary>
     /// Row offset for the (former) offset-row layout. Disabled: returns 0 so the grid maps
     /// linearly to world space and grid-space movement renders straight (no zig-zag).
-    /// Kept as a no-op for call-site stability; see docs/3d-terrain-plan.md (Phase 1).
+    /// Kept as a no-op for call-site stability; see docs/archive/3d-terrain-plan-2026-06.md (Phase 1).
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static float SmoothRowOffset(float vy, float tileSize)

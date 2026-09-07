@@ -30,7 +30,7 @@
 # t=2,200, down to 0.00067 by t=24,000 with terraform_nudges dropping 43 -> 0-2 per interval — but
 # it is not reproducible on the current build, where a keeper suppresses a bloom without
 # eradicating it (below KeeperMinPresence it holds fire, so the bloom recovers). See
-# docs/whole-game-invariants.md.
+# docs/archive/whole-game-invariants-2026-08.md.
 
 [world]
 name = restoration

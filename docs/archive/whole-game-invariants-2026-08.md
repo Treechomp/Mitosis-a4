@@ -1,3 +1,12 @@
+> ## ⚠ ARCHIVED — historical document
+> **Accurate as of 2026-08-29. It is not a description of the current code or the current design.**
+> Why it is here: The reasoning behind the whole-game invariant gate, its assertions and their thresholds, and the history of what it caught. THE GATE ITSELF IS LIVE - the assertions are in PopulationSoakRunner. Its status lines are run results from 2026-08-29 and are not current.
+>
+> Current documentation: [`docs/design/`](../design/) for intent, [`docs/implementation/`](../implementation/)
+> for code, [`docs/changelog.md`](../changelog.md) for history. Everything below is preserved verbatim.
+
+---
+
 # Whole-game invariants
 
 **What this is.** A small set of properties that must hold for the game as a whole, asserted over a

@@ -1,3 +1,12 @@
+> ## ⚠ ARCHIVED — historical document
+> **Accurate as of 2026-08-29. It is not a description of the current code or the current design.**
+> Why it is here: The faction balance workstream log, in reverse-chronological session order. Its measured results are carried into changelog.md with provenance; its open items are in design/07-open-questions.md (F1, F2) and implementation/factions.md (D4). Several of its diagnoses have since been invalidated by later changes - notably the mycelium heart seeding hypothesis.
+>
+> Current documentation: [`docs/design/`](../design/) for intent, [`docs/implementation/`](../implementation/)
+> for code, [`docs/changelog.md`](../changelog.md) for history. Everything below is preserved verbatim.
+
+---
+
 # Faction Balance — Shroomer / Sectid / Faeling
 
 Workstream to turn the three terraformer factions into a genuine three-way war instead of a

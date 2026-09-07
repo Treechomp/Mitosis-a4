@@ -235,7 +235,7 @@ public enum StructureKind : byte
 /// <summary>
 /// A faction structure: a fixed, destructible objective rather than a creature.
 ///
-/// Structures used to be unattackable by construction. <c>HuntingSystem.IsEligiblePrey</c> requires
+/// Structures used to be unattackable by construction. <c>HuntingSystem.Eligibility</c> requires
 /// <c>ComponentFlags.Prey</c> (swarm hunters get a widened <c>Energy | Species</c> test), and a nest
 /// carried neither; a crystal's health was the sentinel <c>Energy(999999, 999999)</c>. So no entity
 /// in the game could damage either one, and the three-way faction war had nothing to contest except

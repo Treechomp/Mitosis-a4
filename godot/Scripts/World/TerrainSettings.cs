@@ -3,7 +3,7 @@ namespace Mitosis.World;
 /// <summary>
 /// Tunable terrain-generation parameters, surfaced as GameManager [Export] fields so the look
 /// can be adjusted in the editor without code changes. Defaults reproduce the original terrain
-/// plus modest surface detail. See docs/3d-terrain-plan.md (terrain shape).
+/// plus modest surface detail. See docs/archive/3d-terrain-plan-2026-06.md (terrain shape).
 /// </summary>
 public sealed class TerrainSettings
 {

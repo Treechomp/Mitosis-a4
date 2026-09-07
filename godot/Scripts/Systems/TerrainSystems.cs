@@ -326,7 +326,7 @@ public sealed class TerraformSystem : ISystem
                 }
 
                 // Terraform nudges the moisture parameter; the tile's classification and its
-                // continuous colour follow from the new params (docs/3d-terrain-plan.md Phase 2b).
+                // continuous colour follow from the new params (docs/archive/3d-terrain-plan-2026-06.md Phase 2b).
                 _worldManager.Terraform(targetX, targetY, terraform.Direction, MoistureStep * sizeScale);
             }
         }

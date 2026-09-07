@@ -8,7 +8,7 @@ namespace Mitosis.World;
 /// per-tile colours for pure-climate land so biome transitions are gradients, not hard edges.
 ///
 /// FIRST PASS: the anchor positions/colours below are reasoned starting values; tune them
-/// visually in-editor. See docs/3d-terrain-plan.md (Phase 2a).
+/// visually in-editor. See docs/archive/3d-terrain-plan-2026-06.md (Phase 2a).
 /// </summary>
 public static class TerrainPalette
 {

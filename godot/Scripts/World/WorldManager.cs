@@ -189,7 +189,7 @@ public sealed class WorldManager
     /// are unchanged, so terraforming only walks along the moisture spectrum within the tile's
     /// climate band (it never turns land into water or mountains). The continuous terrain
     /// colour follows automatically because it reads the params. Returns true if anything
-    /// changed (so the chunk is re-coloured). See docs/3d-terrain-plan.md (Phase 2b).
+    /// changed (so the chunk is re-coloured). See docs/archive/3d-terrain-plan-2026-06.md (Phase 2b).
     /// </summary>
     public bool Terraform(float worldX, float worldY, TerraformDirection direction, float step)
     {

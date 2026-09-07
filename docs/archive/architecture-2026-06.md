@@ -1,3 +1,12 @@
+> ## ⚠ ARCHIVED — historical document
+> **Accurate as of 2026-06. It is not a description of the current code or the current design.**
+> Why it is here: Superseded by implementation/architecture.md. Its system-order list predates SiegeSystem, MyceliumSystem and CarrionSystem, and its coordinate section describes render behaviour that has since changed.
+>
+> Current documentation: [`docs/design/`](../design/) for intent, [`docs/implementation/`](../implementation/)
+> for code, [`docs/changelog.md`](../changelog.md) for history. Everything below is preserved verbatim.
+
+---
+
 # Mitosis — Architecture Overview
 
 > **Project**: an early-development creature-sandbox **video game** (the world-ecology is a game

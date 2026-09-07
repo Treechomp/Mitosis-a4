@@ -1,3 +1,12 @@
+> ## ⚠ ARCHIVED — historical document
+> **Accurate as of 2026-02-14. It is not a description of the current code or the current design.**
+> Why it is here: The first docs-vs-code audit: 22 issues, all fixed at the time. Its "all resolved" status predates the 3D migration and the statistical-sim removal, so the document is itself stale - which is the point it now illustrates.
+>
+> Current documentation: [`docs/design/`](../design/), [`docs/implementation/`](../implementation/),
+> [`docs/changelog.md`](../changelog.md). Everything below is preserved verbatim.
+
+---
+
 # Documentation Review — Code vs Docs Audit
 
 > **Date**: February 2026

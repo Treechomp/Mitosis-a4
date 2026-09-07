@@ -1,3 +1,12 @@
+> ## ⚠ ARCHIVED — historical document
+> **Accurate as of 2026-02. It is not a description of the current code or the current design.**
+> Why it is here: Rendering and simulation LOD optimisation plan from the 2D era. Describes MultiMesh2D, chunk textures, old LOD tier names and the removed statistical simulation.
+>
+> Current documentation: [`docs/design/`](../design/), [`docs/implementation/`](../implementation/),
+> [`docs/changelog.md`](../changelog.md). Everything below is preserved verbatim.
+
+---
+
 # Optimization Plan: Rendering + Simulation LOD
 
 ## Goal

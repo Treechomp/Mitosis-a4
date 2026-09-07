@@ -26,7 +26,7 @@ namespace Mitosis.Testing;
 /// </summary>
 public partial class TestSceneManager : GameManager
 {
-    /// <summary>Scenario file to load (see docs/test-scenes.md for the format).</summary>
+    /// <summary>Scenario file to load (see docs/implementation/tooling-and-tests.md for the format).</summary>
     [Export(PropertyHint.File, "*.txt")]
     public string ScenarioPath = "res://TestScenarios/predator_prey.scenario.txt";
 

@@ -1,3 +1,12 @@
+> ## ⚠ ARCHIVED — historical document
+> **Accurate as of 2026-06-23. It is not a description of the current code or the current design.**
+> Why it is here: The design spec for the unified terrain profile, plus a built-vs-spec comparison. Implemented; the current behaviour is in implementation/species-data.md. Contains one claim about the element barrier that was later inverted.
+>
+> Current documentation: [`docs/design/`](../design/) for intent, [`docs/implementation/`](../implementation/)
+> for code, [`docs/changelog.md`](../changelog.md) for history. Everything below is preserved verbatim.
+
+---
+
 # Unified Species Terrain Profile — Design Spec
 
 Target design for consolidating terrain handling. Decisions captured from the

@@ -1,3 +1,12 @@
+> ## ⚠ ARCHIVED — historical document
+> **Accurate as of 2026-07-06. It is not a description of the current code or the current design.**
+> Why it is here: Drive-arbitration inventory and the Option A / Option B choice. Option A shipped. Option B (utility-AI rewrite) is design question C1.
+>
+> Current documentation: [`docs/design/`](../design/) for intent, [`docs/implementation/`](../implementation/)
+> for code, [`docs/changelog.md`](../changelog.md) for history. Everything below is preserved verbatim.
+
+---
+
 # Behavior Arbitration — design & roadmap
 
 How a creature prioritizes competing **drives** — hunger (forage/hunt), fear (flee), social

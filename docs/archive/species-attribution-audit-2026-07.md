@@ -1,3 +1,12 @@
+> ## ⚠ ARCHIVED — historical document
+> **Accurate as of 2026-07-06. It is not a description of the current code or the current design.**
+> Why it is here: Per-species stat and behaviour attribution across several long runs, plus a balance philosophy section. Workstream closed. Its run figures predate deterministic RNG.
+>
+> Current documentation: [`docs/design/`](../design/) for intent, [`docs/implementation/`](../implementation/)
+> for code, [`docs/changelog.md`](../changelog.md) for history. Everything below is preserved verbatim.
+
+---
+
 # Species Stat & Behavior Attribution Audit
 
 Working document for the attribution pass. Goal: stop the ecosystem collapsing into a few

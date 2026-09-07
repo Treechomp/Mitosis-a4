@@ -1,3 +1,12 @@
+> ## ⚠ ARCHIVED — historical document
+> **Accurate as of 2026-01-29. It is not a description of the current code or the current design.**
+> Why it is here: The engine evaluation that chose Godot 4 + C# over Python/Arcade, Unity DOTS and Bevy. The decision was made and executed; kept as the rationale.
+>
+> Current documentation: [`docs/design/`](../design/), [`docs/implementation/`](../implementation/),
+> [`docs/changelog.md`](../changelog.md). Everything below is preserved verbatim.
+
+---
+
 # Architecting large-scale ecosystem simulations with evolution mechanics
 
 **Your Python/pygame prototype should migrate to Godot 4 with C# or Bevy (Rust)**—Python's ~100-entity ceiling makes it unsuitable for thousands of autonomous creatures. The optimal architecture combines archetype-based ECS for data layout, spatial hashing for neighbor queries, time-sliced AI with Level of Detail, and compact genetic encoding. Games like Factorio and Dwarf Fortress prove that **10,000+ entities at 60 FPS is achievable** with careful design, though most hit single-core CPU bottlenecks rather than memory limits.

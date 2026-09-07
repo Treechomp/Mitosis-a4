@@ -59,7 +59,7 @@ public sealed class SpeciesDefinition
     // === BEHAVIOR ARBITRATION (per-species drive priorities) ===
     // These lift previously-hardcoded thresholds that govern how competing drives (hunger vs
     // social vs fear) are prioritized. Defaults match the old constants, so behavior is unchanged
-    // unless a species overrides. See docs/behavior-arbitration.md.
+    // unless a species overrides. See docs/archive/behavior-arbitration-2026-07.md.
 
     /// <summary>
     /// Hunger ratio below which a creature will MIGRATE toward food (roam to grazeable/FeedTile/
@@ -629,7 +629,7 @@ public sealed class SpeciesDefinition
     // A structure is an objective, not food, so none of the prey machinery applies to it: no mass
     // gate, no nutrition payoff, no carcass. What varies between factions is how much they care
     // about objectives relative to creatures, and that belongs here as data — a shared system must
-    // never test a concrete species (docs/behavior-constants-audit.md, antipattern 1).
+    // never test a concrete species (docs/archive/behavior-constants-audit-2026-06.md, antipattern 1).
 
     /// <summary>
     /// How far this species will divert from prey to attack an enemy structure, as a DISTANCE

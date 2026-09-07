@@ -32,7 +32,7 @@ namespace Mitosis.Testing;
 ///   [logging]   decisions, decision_species, terrain_interval, nutrition_interval,
 ///               snapshot_interval, track
 ///
-/// See docs/test-scenes.md and godot/TestScenarios/ for worked examples.
+/// See docs/implementation/tooling-and-tests.md and godot/TestScenarios/ for worked examples.
 /// </summary>
 public sealed class TestScenario
 {

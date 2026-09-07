@@ -40,7 +40,7 @@ public enum PopClass : byte
 ///    in NestSystem or CrystalSystem. At the cap every death frees one slot; a throttled species
 ///    needs ~430 attempts to claim it and an unthrottled one claims it immediately, so the
 ///    unthrottled faction's share rises monotonically and cannot fall back. This is the same
-///    defect that produced the documented Shroomer monoculture (docs/faction-balance-plan.md):
+///    defect that produced the documented Shroomer monoculture (docs/archive/faction-balance-plan-2026-08.md):
 ///    the ramp was added to SporeSystem and never to NestSystem, so the monoculture relocated to
 ///    the Sectids rather than resolving. Adding the ramp to the remaining paths would only move
 ///    it a third time — the fix is to stop having one shared pool at all.

@@ -24,7 +24,7 @@ namespace Mitosis.Testing;
 /// must multiply that quantity by <c>SimulationLOD.EffectiveInterval</c>, or the quantity simply
 /// runs slower the further the player stands away — Shroomer growth (10-20x fast at low tiers),
 /// attack cooldown overshoot and the terraform rate have each broken this rule in turn. The rule
-/// was enforced only by prose in docs/FEATURES_AND_DESIGN.md 6.1; this is the executable version.
+/// was enforced only by prose in docs/implementation/lod-and-performance.md; this is the executable version.
 ///
 /// Full vs Minimal is a 20x difference in decision cadence, so a missing multiplier shows up as
 /// an order-of-magnitude gap in an outcome count. The tolerance is deliberately loose (15% by
@@ -207,7 +207,7 @@ public partial class LodDifferentialRunner : Node
             GD.PrintErr("[LodDiff]   godot --headless --path godot " +
                         "res://Scenes/LodDifferential.tscn -- --ticks=3000 --record");
             GD.PrintErr("[LodDiff] then commit the file, with each FAIL explained in " +
-                        "docs/lod-differential-baseline.md.");
+                        "docs/archive/lod-differential-baseline-2026-08.md.");
             return 1;
         }
 
@@ -242,7 +242,7 @@ public partial class LodDifferentialRunner : Node
                 if (d.Kind == VerdictChange.Improvement)
                     GD.Print($"      {d.Scenario,-18} {d.Metric,-32} {d.Expected} -> {d.Actual}");
             GD.Print("[LodDiff] RE-RECORD (--record) and delete the exception's entry in " +
-                     "docs/lod-differential-baseline.md.");
+                     "docs/archive/lod-differential-baseline-2026-08.md.");
             GD.Print("[LodDiff] A fixed exception left in the file will hide the NEXT regression " +
                      "in that metric.");
         }

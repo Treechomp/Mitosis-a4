@@ -6,7 +6,7 @@ namespace Mitosis.SpeciesData;
 
 /// <summary>
 /// Single resolver for how a species relates to a terrain tile. Replaces the scattered,
-/// inconsistently-applied terrain logic documented in docs/terrain-handling-audit.md — every
+/// inconsistently-applied terrain logic documented in docs/archive/terrain-handling-audit-2026-06.md — every
 /// movement/AI system now consults these methods so behaviour is consistent by construction.
 ///
 /// Four dimensions:

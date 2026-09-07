@@ -123,7 +123,7 @@ public sealed class CarrionSystem : ISystem
     /// the world. Adding a gate here without a matching EffectiveInterval multiplier would make a
     /// carcass out of the player's sight take twenty times as long to rot; adding a multiplier
     /// without a gate would multiply rather than compensate. Leaving both out is the third
-    /// correct option, and it is the one in force. (docs/FEATURES_AND_DESIGN.md 6.1 previously
+    /// correct option, and it is the one in force. (docs/implementation/lod-and-performance.md previously
     /// listed corpse decay as an uncompensated LOD quantity; it is not one.)
     /// </summary>
     private void DecayCorpses(EntityManager em)

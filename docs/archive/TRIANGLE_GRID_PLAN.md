@@ -1,3 +1,12 @@
+> ## ⚠ ARCHIVED — historical document
+> **Accurate as of 2026-02. It is not a description of the current code or the current design.**
+> Why it is here: The phased 2D to 3D renderer migration plan. Delivered through phase 5B (true 3D) and phase 6.
+>
+> Current documentation: [`docs/design/`](../design/), [`docs/implementation/`](../implementation/),
+> [`docs/changelog.md`](../changelog.md). Everything below is preserved verbatim.
+
+---
+
 # Triangle Grid Implementation Plan
 
 ## Core Concept

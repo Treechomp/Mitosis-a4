@@ -1,3 +1,12 @@
+> ## ⚠ ARCHIVED — historical document
+> **Accurate as of 2026-02-20. It is not a description of the current code or the current design.**
+> Why it is here: A/B validation of a StatisticalSimSystem that no longer exists. The approach was replaced entirely by distance-based LOD - real entities everywhere, throttled by distance.
+>
+> Current documentation: [`docs/design/`](../design/), [`docs/implementation/`](../implementation/),
+> [`docs/changelog.md`](../changelog.md). Everything below is preserved verbatim.
+
+---
+
 # Statistical Simulation Validation Report
 
 **Date:** 2026-02-20

@@ -1,3 +1,12 @@
+> ## ⚠ ARCHIVED — historical document
+> **Accurate as of 2026-07. It is not a description of the current code or the current design.**
+> Why it is here: The single combined design+implementation reference, superseded by the docs/design/ + docs/implementation/ split. Accurate in bulk when written; 24 of the 31 findings in the 2026-08 audit are against this file. Kept for the reasoning in its long explanatory passages, much of which was carried forward.
+>
+> Current documentation: [`docs/design/`](../design/) for intent, [`docs/implementation/`](../implementation/)
+> for code, [`docs/changelog.md`](../changelog.md) for history. Everything below is preserved verbatim.
+
+---
+
 # Mitosis — Features, Systems & Design Reference
 
 > **Project**: an early-development creature-sandbox **video game** — the world-ecology is a game

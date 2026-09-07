@@ -1,3 +1,12 @@
+> ## ⚠ ARCHIVED — historical document
+> **Accurate as of 2026-07. It is not a description of the current code or the current design.**
+> Why it is here: Status document. Listed as future work several things that had already shipped. Status now lives in the code; direction lives in design/, history in changelog.md.
+>
+> Current documentation: [`docs/design/`](../design/) for intent, [`docs/implementation/`](../implementation/)
+> for code, [`docs/changelog.md`](../changelog.md) for history. Everything below is preserved verbatim.
+
+---
+
 # Mitosis — Development Roadmap & Status
 
 > An early-development creature-sandbox **video game** (the world-ecology is a game mechanic —

@@ -1,3 +1,12 @@
+> ## ⚠ ARCHIVED — historical document
+> **Accurate as of 2026-08-29. It is not a description of the current code or the current design.**
+> Why it is here: Commentary on the LOD differential test: why each standing exception is accepted, and the two real defects it exposes. THE GATE ITSELF IS LIVE - the contract is docs/lod-differential-expected.csv, which is read by the runner and must stay in docs/. This prose is what explains that file, and D2/D3 in implementation/lod-and-performance.md are the live statements of its findings.
+>
+> Current documentation: [`docs/design/`](../design/) for intent, [`docs/implementation/`](../implementation/)
+> for code, [`docs/changelog.md`](../changelog.md) for history. Everything below is preserved verbatim.
+
+---
+
 # LOD differential baseline
 
 **What this measures.** LOD gates most systems with `if (!em.DueThisTick[entity]) continue;`.

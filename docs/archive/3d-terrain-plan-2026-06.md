@@ -1,3 +1,12 @@
+> ## ⚠ ARCHIVED — historical document
+> **Accurate as of 2026-06-14. It is not a description of the current code or the current design.**
+> Why it is here: The phased plan for per-vertex parameters, world-space mapping and surface detail. Delivered through phase 3.
+>
+> Current documentation: [`docs/design/`](../design/) for intent, [`docs/implementation/`](../implementation/)
+> for code, [`docs/changelog.md`](../changelog.md) for history. Everything below is preserved verbatim.
+
+---
+
 # 3D Terrain & Movement Plan
 
 > Status: **living plan**, started June 2026. Engine: Godot 4.6.3 + C#.

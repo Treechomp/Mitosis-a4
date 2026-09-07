@@ -1,3 +1,12 @@
+> ## ⚠ ARCHIVED — historical document
+> **Accurate as of 2026-01. It is not a description of the current code or the current design.**
+> Why it is here: The original Python-era task roadmap.
+>
+> Current documentation: [`docs/design/`](../design/), [`docs/implementation/`](../implementation/),
+> [`docs/changelog.md`](../changelog.md). Everything below is preserved verbatim.
+
+---
+
 # Mitosis Project Roadmap (ARCHIVED)
 
 > **SUPERSEDED**: This is the original Python-era roadmap from January 2025, before the

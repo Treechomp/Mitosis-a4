@@ -1,34 +1,63 @@
-# Archived Documentation
+# Archive
 
-These documents are **superseded** and kept for historical reference only. They do **not**
-reflect the current codebase. For current docs see the parent [`docs/`](../) folder
-(`architecture.md`, `FEATURES_AND_DESIGN.md`, `godot-roadmap.md`) and the root `README.md`.
+*Last updated: 2026-09-07*
 
-## What's here
+Superseded documents, kept for the reasoning they contain. **None of them describes the current
+code or the current design**, and each carries a banner saying as of when it was true.
 
-| File | Era | Why archived |
-|------|-----|--------------|
-| `migration-evaluation-report.md` | Pre-migration research | Decision record for choosing Godot 4 + C# over Python/Arcade, Unity DOTS, Bevy. The decision was made and executed; kept as rationale. |
-| `development-plan.md` | Python/Arcade (Jan 2026) | Original design plan written for Esper ECS + Arcade + NumPy. Implementation details no longer apply. |
-| `roadmap-old.md` | Python/Arcade (Jan 2026) | Original Python-era task roadmap. Superseded by `godot-roadmap.md`. |
-| `TRIANGLE_GRID_PLAN.md` | 2D→3D migration | Phased plan for moving the renderer from flat 2D to a triangulated 3D mesh. The migration (through Phase 5B, true 3D) is essentially complete; current rendering is described in `architecture.md` / `FEATURES_AND_DESIGN.md`. |
-| `plan-optimization.md` | 2D era | Rendering/LOD optimization plan describing MultiMesh**2D**, chunk textures, the old LOD tier names, and the (removed) statistical sim. Contains session balance reviews tied to an old config. |
-| `statistical_sim_validation_report.md` | Statistical-sim experiment | A/B validation of a `StatisticalSimSystem` that no longer exists in the code. |
-| `documentation-review.md` | Feb 2026 audit | A prior docs-vs-code audit log. Its "all resolved" status predates the 3D migration and statistical-sim removal, so it is itself stale. |
+Current documentation: [`../design/`](../design/) for intent, [`../implementation/`](../implementation/)
+for code, [`../changelog.md`](../changelog.md) for history.
 
-## Why the docs were overhauled (June 2026)
+**Internal links inside archived files are left as they were written** and mostly point at
+documents that have since moved. They are preserved rather than rewritten because an archived
+document that has been edited is no longer a record of what was said.
 
-A full docs-vs-code audit found the active docs described a **2D** game and a simulation
-architecture that had both moved on. Key code realities the old docs missed:
+## Why anything is kept
 
-- **Renderer is 3D.** `GameManager` is a `Node3D`; terrain is `MeshInstance3D` meshes with
-  elevation and directional lighting; entities are `MultiMeshInstance3D` 3D primitives
-  (13 shapes). The old docs described `Node2D` + `MultiMeshInstance2D` + flat tile textures.
-- **`StatisticalSimSystem` was removed**, its role replaced by the LOD system. The old docs
-  described it as implemented (and a whole validation report analyzed it).
-- **Tile walkability was removed** — `TileType.IsWalkable()` no longer exists; passability is
-  elevation/cliff-based, and Mountain/Lava are now traversable (just slow).
-- **Config and engine version drift** — the documented world size / population / Godot
-  version no longer matched the project.
+A superseded document is worth keeping when it records *why* something was decided, or preserves a
+worked argument that the replacement compresses to a sentence. It is worth deleting when it only
+records *what* the code used to be — the repository already has that. Everything below is here for
+the first reason.
 
-The current documents were rewritten from a direct reading of the code.
+## Superseded 2026-09 (the design/implementation split)
+
+| File | As of | Contains |
+|---|---|---|
+| `features-and-design-2026-07.md` | 2026-07 | The single combined reference the split replaced. Long explanatory passages on nearly every system, most of which were carried forward into one layer or the other |
+| `architecture-2026-06.md` | 2026-06 | The previous architecture overview |
+| `godot-roadmap-2026-07.md` | 2026-07 | Status and roadmap. Direction is now in `design/`, history in `changelog.md` |
+| `documentation-audit-2026-08.md` | 2026-08-25 | **The audit that motivated the split.** 31 verified discrepancies, and a "why this keeps happening" section that is the reasoning behind the current structure |
+| `faction-balance-plan-2026-08.md` | 2026-08-29 | The faction balance workstream log, session by session. Several diagnoses in it have since been invalidated |
+| `terrain-roadmap-2026-07.md` | 2026-07-09 | Terrain workstream log |
+| `terrain-handling-audit-2026-06.md` | 2026-06-23 | Terrain handling *before* the unified resolver, plus the decisions that produced it |
+| `terrain-profile-design-2026-06.md` | 2026-06-23 | The unified terrain profile spec, with a built-vs-spec comparison |
+| `behavior-arbitration-2026-07.md` | 2026-07-06 | Drive-arbitration inventory; the Option A / Option B choice behind design question C1 |
+| `behavior-constants-audit-2026-06.md` | 2026-06-23 | The data-vs-logic audit that established "systems must not name species" |
+| `species-attribution-audit-2026-07.md` | 2026-07-06 | Per-species attribution across long runs, plus a balance philosophy |
+| `3d-terrain-plan-2026-06.md` | 2026-06-14 | Per-vertex parameters, world-space mapping, surface detail |
+| `lod-differential-baseline-2026-08.md` | 2026-08-29 | Why each LOD standing exception is accepted. **The gate is live** — its contract is `../lod-differential-expected.csv` |
+| `whole-game-invariants-2026-08.md` | 2026-08-29 | The reasoning behind the invariant gate and what it caught. **The gate is live** |
+| `test-scenes-2026-08.md` | 2026-08 | The original harness reference, with worked explanations of each shipped scenario |
+
+## Superseded earlier
+
+| File | As of | Contains |
+|---|---|---|
+| `migration-evaluation-report.md` | 2026-01-29 | The engine decision: Godot 4 + C# over Python/Arcade, Unity DOTS, Bevy |
+| `development-plan.md` | 2026-01 | The original Python/Arcade + Esper design plan |
+| `roadmap-old.md` | 2026-01 | The original Python-era roadmap |
+| `TRIANGLE_GRID_PLAN.md` | 2026-02 | The 2D→3D renderer migration plan, delivered |
+| `plan-optimization.md` | 2026-02 | 2D-era rendering/LOD optimisation plan |
+| `statistical_sim_validation_report.md` | 2026-02-20 | A/B validation of a system that no longer exists |
+| `documentation-review.md` | 2026-02-14 | The first docs-vs-code audit — itself now stale, which is the lesson |
+
+## Three things the code no longer does
+
+Older documents describe all three as present. They are gone.
+
+- **`StatisticalSimSystem`** — chunk-level population maths for distant areas. Removed; distance
+  LOD does the job with real entities everywhere.
+- **`TileType.IsWalkable`** — tile-based impassability. Removed; passability is elevation-based and
+  every tile is traversable.
+- **The global population-pressure ramp** — one shared birth-probability multiplier across all
+  species. Removed; replaced by per-class ceilings and local density.

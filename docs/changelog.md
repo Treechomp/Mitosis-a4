@@ -1,0 +1,189 @@
+# Changelog
+
+*Last updated: 2026-09-07 · current branch `claude/lod-override-testing-rhwq4f`, head `7a7fb28`*
+
+What changed, when, in which commit, and what it measured. Newest first.
+
+**Every measured figure in this project belongs here and nowhere else**, stamped with the seed and
+commit it came from. A figure without provenance is not evidence — the project has already had one
+headline result survive a change that invalidated it (noted below).
+
+Entries are grouped by workstream because that is how the work happened; within a group they run
+newest first. Commit subjects are quoted where they already say the result.
+
+---
+
+## 2026-09 — rendering cost, faction repair
+
+| Commit | Date | Change | Result |
+|---|---|---|---|
+| `7a7fb28` | 2026-09-06 | Frustum-cull entities before rendering | instances written per frame **10,401 → 243** |
+| `26f1a63` | 2026-09-06 | Let Shroomers answer a raider parked on their ground | — |
+| `5aa4ba7` | 2026-09-06 | Choose the mycelium heart count with `MinHeartSpacing` instead of letting it emerge | hearts **153 → 26** (seed 1234), **131 → 22** (seed 999) |
+| `d93d747` | 2026-09-06 | Delete keeper crystal-to-crystal travel | no measurable change — a mobility mechanic serving a raid that never happens (see D4) |
+| `c553833` | 2026-09-06 | Fix `Siege` zero-initialisation: every Sectid was born besieging entity 0 | Sectid `kills_made` **0 → 1,487** (seed 1234), **0 → 1,820** (seed 999) |
+| `72ea4ba` | 2026-09-06 | Gate the LOD differential on the difference from recorded verdicts | the gate can now exit 0; before this it never had |
+
+---
+
+## 2026-08 — structures, budgets, gates
+
+The three changes marked ⚠ each met their own acceptance criteria and together broke the game:
+within about a minute of world start, Faelings destroyed essentially every Sectid nest and mycelium
+heart on the map (**44 of 46 nests and 21 colonies in 6,000 ticks, first loss at t=951**). Nothing
+in the project could have caught it, which is why the whole-game invariant gate exists.
+
+| Commit | Date | Change | Result |
+|---|---|---|---|
+| `ff4248f` | 2026-08-29 | Diagnose Sectid zero-kills: every Sectid born besieging entity 0 | measurement that produced `c553833` |
+| `405ad48` | 2026-08-29 | Add per-faction population floors to the invariant gate | — |
+| `8ef94ce` | 2026-08-28 | Make `SiegeSystem` steer rather than assign velocity; make idle sieging opt-in | fixed besiegers drifting straight through terrain they should avoid |
+| `b10e992` | 2026-08-26 | Add a whole-game invariant gate, and fix what it caught | gate went red, named a faction, cause was one struct field |
+| `31b689f` ⚠ | 2026-08-26 | Make faction structures destructible objectives | before this, **no entity in the game could damage a nest or a crystal** |
+| `14e9f08` ⚠ | 2026-08-26 | Split the population cap into per-class budgets | 20,000 ticks, seed 1234: composition **89.7% herbivore / 4.1% predator → 45.4% / 14.1% / 35.6% faction**; herbivore:predator **21.8:1 → 3.2:1**; Faelings **8 → 99–128**; no class exceeded its ceiling at any sample; factions traded places inside a shared ceiling instead of one ratcheting upward |
+| `93818ea` ⚠ | 2026-08-25 | Enforce the LOD rate rule with a test, and fix what it found | — |
+| `a35639d` | 2026-08-25 | Add documentation audit | **31 doc-vs-code discrepancies**: 10 critical, 10 high, 11 housekeeping, across 8 of 14 files |
+
+**Measured 2026-08-29, four 20,000-tick runs, seeds 1234 and 999** (with and without keeper travel):
+**zero** structure damage and zero structure destruction attributed to any Faeling, in 80,000
+keeper-ticks. Every structure lost died to Sectids or to the environment. Cause not established;
+see D4 in [implementation/factions.md](implementation/factions.md).
+
+---
+
+## 2026-08 (earlier) — LOD correctness, the food web, observation
+
+| Commit | Date | Change | Result |
+|---|---|---|---|
+| `dabca20` | 2026-08-13 | Keep creatures in their element at every LOD tier; size-aware reef | reef speed now scales with body radius: small species pass freely, large ones drop toward a floor — a reef is partial refuge, not a wall |
+| `3486b40` | 2026-08-13 | Fix LOD growth multiplication; report population against what the cap limits | Shroomer growth had been running **10× faster at Low tier, 20× at Minimal** — compensation applied without gating |
+| `1a78b2b` | 2026-08-12 | **LOD gates decisions, not motion** | 5,000 creatures, 512-tile world: whole tick **12.5 → 11.4 ms** with Movement at 1.5 ms while running for every entity every tick. Before: a Low-tier creature covered **13%** of the ground a Full-tier one did over the same wall clock, Minimal **6%** |
+| — | — | Update phase staggering | peak-to-median tick cost **2.30× → 1.53×** |
+| `fc0a784` | 2026-08-12 | Reef counts as water for non-swimmers; mass decides who yields in a collision | before: a fox shunted a turtle as easily as the reverse, and nests were pushed across the map |
+| `14ef4e2` | 2026-08-12 | Fix unhittable bulky targets, the Sectid water leak, and thorn scaling | mature bloom (scale 2.5): a 4-wolf pack goes from **52 ticks at 35% HP loss** to **671 ticks at 45%**; lone bears, jaguars and boar trios break off; an 8-Sectid swarm still kills it in **40 ticks** |
+| `f68049c` | 2026-08-12 | Terrain escape heads for the nearest shore; runs become reproducible | before, all eight escape rays tied in open water and the tie broke by iteration order — every animal in a lake fled due east |
+| `bd2102a` | 2026-08-12 | Score prey by payoff, so predators pick meals not neighbours | bears **39% → 73%** big-game targeting on a stacked test. ⚠ **This figure predates deterministic RNG and has not been re-measured since; treat it as indicative only.** |
+| `a8441cb` | 2026-08-12 | Unify prey eligibility across hunting and tracking; otter survivability | ended the fox-pile-up on unkillable turtles |
+| `84a75a9` | 2026-08-11 | Food-web pass: unreachable prey, prey tiers, water fertility, otters | water carries fertility; deep water becomes a genuine refuge |
+| `71a48ca` | 2026-08-11 | Fix aquatic biome: element-aware discomfort, edge barrier, penguin haul-out | ended sharks and fish permanently "escaping" their own feeding grounds |
+| `fb01b34` | 2026-08-10 | Fix locked-in escape, missing newborn components, pack leadership cycles | — |
+| `6099c50` | 2026-08-10 | Observation tools: click-to-inspect, species highlight/jump, free camera | — |
+| `16abb9d` | 2026-08-09 | Shroomer defence, nutrition economy, penguin predation | **54% faster tick** |
+| `8660a1f` | 2026-08-07 | Faction tuning: habitat steering, Sectid colony shape, mass-scaled kill food | — |
+| `14f0a0b` | 2026-08-06 | Fix spatial-hash radius queries returning whole cells | found by the test-scene harness |
+
+---
+
+## 2026-07 — test harness, faction balance, worldgen defaults
+
+| Commit | Date | Change | Result |
+|---|---|---|---|
+| `a28a2c1` | 2026-07-13 | Test-scene harness: scenario-defined worlds, exact spawns, extended logging | the answer to "full-world balance runs have hit their limit" |
+| `0a70801` | 2026-07-13 | Pre-branch fixes: spore-true logging, area attack reach reduced, real terraform rates | faction terraforming had been set so low it barely marked the map — the strength value is a probability per roll, not an amount |
+| `fa45f3d` · `27f6030` | 2026-07-13 | Faeling keeper redesign — anti-dominance balancer | the keeper's current role |
+| `80bb6f5` | 2026-07-13 | Reframe the project as a game in development, not ecosystem-sim research | — |
+| `9ff6e29` | 2026-07-10 | Shroomers rely on and impact land fertility (user design directive) | removed the "cannot starve on wet tiles" rule that was the root of the historical monoculture |
+| `d6126e6` | 2026-07-10 | Relax Shroomer crowding so blooms can form (Sectids had starved) | — |
+| `a2af072` | 2026-07-10 | Record a no-faction baseline | reframed predator collapse as **faction-driven**, not an intrinsic predator problem |
+| `494386f` | 2026-07-10 | Shroomer self-limiting: crowding, drought, spread caps | drying a bloom's ground now kills it |
+| `2f95302` | 2026-07-10 | Anti-bloom pass: fungivore trait + Sectid retargeting | — |
+| `51fbdc0` | 2026-07-10 | Fix `ExclusivePrey` leaking through the defensive counter-attack path | a fish-only specialist had been hunting down its own predators |
+| `8da9d5c` · `d9c335a` · `e3de145` | 2026-07-08/09 | Live worldgen preview tool over the real pipeline; tuned defaults locked in | preview calls the same per-tile function generation loops over, so it cannot drift |
+| `8dc9c59` | 2026-07-07 | Moisture field in scale with the world: exported frequency + contrast | the Arid/Bog extremes raw FBM starves now actually occur |
+| `87a10fd` | 2026-07-07 | Snapshot set: elevation / moisture / temperature maps + spawn-point map | — |
+| `4a1dba4` | 2026-07-07 | Biome-aware shores, river meanders, sharper cliffs | shores became a distance post-pass, so beaches stay narrow on flat worlds |
+| `b15e862` | 2026-07-06 | **Two-way biome generation**: hydrology and relief feed back into climate | riparian corridors, delta fans, slope drainage |
+| `0a079c8` | 2026-07-06 | Terrain variety: ridged mountain ranges + terraced cliff regions | — |
+| `f536ef1` | 2026-07-06 | Fix rivers dying at the shore: mark hydrology down to the waterline | ended the long-standing "rivers end before the ocean" bug |
+| `339c162` · `a1dc25b` | 2026-07-06 | Penguin: feed from water tiles; root cause was terrain discomfort driving them out of the water they feed in | — |
+| `b02045d` | 2026-07-06 | Behaviour arbitration: lift hardcoded drive-priority thresholds to per-species parameters | — |
+| `d578aa1` | 2026-07-05 | Fix drowning/suffocation (beached sharks were near-immortal at coarse LOD); keep hunters in their element | — |
+
+**Scenario results recorded in this period** (each reproducible from its scenario file):
+
+- `heart_drying`, 8,000 ticks — a ring of drying nests takes the wet fraction **0.46 → 0.44 → 0.38
+  → 0.36 → 0.33**, crossing the floor at t≈4,800; the heart dies at **t=5,280**, every hit
+  attributed to `environment`, while the Shroomer count floor is never the one that gives way
+  (6 → 15 against a floor of 3). An earlier draft with the dryers *inside* the bloom lost outright:
+  14 Shroomers wetted ground faster than five nests could dry it.
+- `crystal_siege` — both crystals down by **t≈800**.
+- `nest_raid` — `nest_destroyed` and `colony_destroyed` both fire, plus the two-way counter-siege.
+
+---
+
+## 2026-06 — terrain profile, species attribution, carrion, the 3D docs rewrite
+
+| Commit | Date | Change |
+|---|---|---|
+| `6d3531c` | 2026-06-23 | Concealment tone-down + niche-aware spawn placement |
+| `436af1b` | 2026-06-23 | Terrain-aware food-seeking for predators |
+| `6152547` · `dcca479` | 2026-06-23 | Real deserts, thinner beaches, niche roll-ups split so beach sand cannot fake a desert |
+| `3835d05` · `99b911c` | 2026-06-23 | **Unified `TerrainProfile` resolver** + species-aware movement; concealment wired | replaced three divergent water-handling code paths |
+| `8f58f39` · `dbacfab` | 2026-06-20 | Aquatic speed overhaul; Penguin becomes a fish specialist |
+| `c932a7f` | 2026-06-19 | Fix predators unable to attack at reduced LOD — the "invulnerable prey" / prolonged-push bug | cooldown decrement overshot zero into a stuck negative |
+| `e4d3e60` | 2026-06-19 | Aquatic creatures avoid *land* instead of water |
+| `3934e86` | 2026-06-19 | Biome-differentiated grazing nutrition |
+| `a37fce2` | 2026-06-18 | Spatial-query fleeing; skip fully-regenerated chunks in tile regeneration |
+| `71cc1ab` | 2026-06-18 | Prey flee stamina: burst → tire → recover |
+| `5971de1` | 2026-06-18 | Fox → ambush/scavenger, Bear → ambush charger + fishing |
+| `2b0f268` | 2026-06-17 | Depth-aware water model: wade shallow, drown in deep |
+| `b53d94c` | 2026-06-17 | Fix Shark starvation: aquatic predators no longer avoid their own element |
+| `07af682` | 2026-06-16 | Per-species enable/disable toggle for balance runs |
+| `498c095` · `b1cc4e1` | 2026-06-16 | Stop predators abandoning hunts mid-approach — **the real collapse cause**; stop pack flankers aborting before the kill |
+| `147c03b` | 2026-06-16 | Hunting performance: defer the across-water test, cap candidates |
+| `4371f0a` | 2026-06-16 | Feed predators on a kill so they can reach reproduction |
+| `849888f` | 2026-06-16 | Wrong-element movement, hunger-scaled scavenging, nest-based terraforming |
+| `112c8db` · `35e6efc` | 2026-06-15 | Prevent immortal `NaN` corpses trapping every predator as a scavenger; fix the `NaN` hunger cascade from an uninitialised tick interval |
+| `b8f0cde` | 2026-06-15 | Fix CSV corruption from locale-dependent float formatting |
+| `15a16d6` · `b6a4d54` | 2026-06-15 | **Carrion**: corpse-on-death hook for every cause; decomposition enriches soil |
+| `4666700` · `f7dce3b` · `47e9da0` | 2026-06-15 | Defensive rally: attacked packs and swarms mob the attacker; proactive threat detection; committed mobbers do not flee their target |
+| `c55f099` | 2026-06-15 | Differentiate per-species energy — 14 species had shared the default |
+| `1feb16b` | 2026-06-14 | Predator target-viability re-evaluation |
+| `77cddb8` · `443cb41` · `3f4ce8f` · `e6ae9f6` | 2026-06-14/15 | Make Sectids viable: cheaper nest economy, hibernation food floor, swarm kills, field feeding |
+| `4074253` | 2026-06-14 | Directed foraging: hungry grazers seek food instead of starving in place |
+| `ca57670` … `a177835` | 2026-06-14 | 3D terrain plan phases 1–3: world-space mapping, per-vertex parameters, continuous palette, surface detail, flat depth-coloured sea, biome-aware roughness |
+| `6b2c5b4` | 2026-06-14 | Interpolate entity positions between simulation ticks |
+| `d4e39dd` · `1efda83` | 2026-06-13 | Documentation overhaul for the 3D codebase; superseded docs archived |
+
+---
+
+## 2026-02 to 2026-03 — the 2D→3D migration and the LOD era
+
+| Period | Work |
+|---|---|
+| 2026-03 | Elevation shading iterations (altitude shading → contour bands → manual Lambert), screen-space slope edge darkening, frustum-culling pop fixes, player movement precision on the row offset |
+| 2026-02 (late) | **Phase 5B: true 3D** (`66c80f9`) — `Node3D`, `Camera3D`, `MeshInstance3D`. Triangle-grid plan phases 1–6: per-vertex elevation, `GridCoordinates`, triangle mesh renderer replacing chunk textures, row offset applied to entities and camera, faux-isometric lift, hex alignment + slope resistance + flat spawn filter. `c7c41b2`: **tile-type impassability removed**, replaced by elevation-difference cliff detection |
+| 2026-02 (mid) | LOD replaces the statistical simulation (`874eeec`), `DueThisTick` array and cached intervals (`543ab35`), tier hysteresis (`a615857`), tile regen throttle + chunk LOD distance caching (`41cc8ab` — **tile regeneration 16 ms → ~4 ms**), smooth turning momentum |
+| 2026-02 (mid) | **Statistical simulation** built, validated and eventually removed: chunk-level population maths for distant areas, inter-chunk migration, cross-chunk predation, terraformer statistics. Superseded entirely by LOD |
+| 2026-02 (early) | Species diversity: 20 biome species, 13 procedural shapes, omnivore/flying/venom traits, hunting-tactic enum, area-attack S-curve; World Generation v2: new tile types and biomes, domain warping, temperature and latitude, tile nutrition, landmarks, flow-based rivers replacing noise rivers; drowning and suffocation; per-system profiling overlay |
+| 2026-02 (early) | Faction species implemented (`0369a8e`): Sectid nests, Shroomer spores, Faeling crystals. Coordinated flanking, ambush hunting with stealth, velocity damping and jitter fixes, `BehaviorSystems`/`GameManager` split into single-responsibility files |
+| 2026-02-14 | First docs-vs-code audit: 22 issues found and fixed (`3b11586`, `b9e1a53`) |
+
+---
+
+## 2026-01 — Python prototype and the migration decision
+
+Original prototype in **Python / Arcade + Esper ECS**, built out over about ten days: chunked
+world generation, grazing, hunting, fleeing, reproduction, ageing, herding and pack behaviour,
+terrain discomfort, separation and collision, stat variation, a data-driven species definition
+system, and a Fear component.
+
+It hit a performance ceiling around **~500 entities** despite batched rendering, vectorised
+terrain, threaded and then multiprocessed chunk generation, and predictive loading. The migration
+evaluation (`b26e419`, archived) compared Godot 4 + C#, Unity DOTS and Bevy and chose Godot; the
+port began at `b827b3f` (2026-01-29) and the Python source was archived at `ecb045f` (2026-02-06).
+
+Two commits from **2024-09** predate the project proper and carry only a README and an upload.
+
+---
+
+## Conventions for adding to this file
+
+- One row per commit that changed behaviour. Pure refactors and doc-only commits are summarised,
+  not listed.
+- A measured figure needs the **seed**, the **tick count** and the **commit** it was taken at. If
+  you cannot supply all three, do not record the figure.
+- When a later change invalidates an earlier measurement, mark the earlier one rather than deleting
+  it — the fact that it expired is itself information.
+- Design decisions do not live here. If a change embodies a decision, the decision goes in
+  [`design/`](design/) and this file records that the change landed.

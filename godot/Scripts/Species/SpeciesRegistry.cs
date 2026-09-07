@@ -3565,7 +3565,7 @@ public static class SpeciesRegistry
             // keepers landed ZERO blows on any structure across two 20,000-tick runs, so the raid
             // path was already inert and removing travel did not slow it. Left unchanged here
             // deliberately: re-deriving raid damage against the invariant in
-            // docs/whole-game-invariants.md is its own change with its own measurement.
+            // docs/archive/whole-game-invariants-2026-08.md is its own change with its own measurement.
             StructureAttackPower = 7f,
             StructureAttackCooldown = 90,
             StructureAttackRange = 8f,     // ranged: it dismantles from a standoff ring

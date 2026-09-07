@@ -1,3 +1,12 @@
+> ## ⚠ ARCHIVED — historical document
+> **Accurate as of 2026-07-09. It is not a description of the current code or the current design.**
+> Why it is here: Terrain workstream log. Closed; the tuned defaults it settled are in the code.
+>
+> Current documentation: [`docs/design/`](../design/) for intent, [`docs/implementation/`](../implementation/)
+> for code, [`docs/changelog.md`](../changelog.md) for history. Everything below is preserved verbatim.
+
+---
+
 # Terrain Workstream — Roadmap
 
 Active workstream after the terrain-profile redesign. Tracks the terrain-coupled problems the

@@ -1,3 +1,12 @@
+> ## ⚠ ARCHIVED — historical document
+> **Accurate as of 2026-01. It is not a description of the current code or the current design.**
+> Why it is here: The original Python/Arcade + Esper ECS design plan. Implementation details no longer apply; the ecosystem intentions in it are the ancestors of design/.
+>
+> Current documentation: [`docs/design/`](../design/), [`docs/implementation/`](../implementation/),
+> [`docs/changelog.md`](../changelog.md). Everything below is preserved verbatim.
+
+---
+
 # Mitosis Development Plan: Ecosystem Simulation Architecture
 
 > **SUPERSEDED**: This document was the original Python/Arcade + Esper ECS design plan

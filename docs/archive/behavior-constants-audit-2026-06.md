@@ -1,3 +1,12 @@
+> ## ⚠ ARCHIVED — historical document
+> **Accurate as of 2026-06-23. It is not a description of the current code or the current design.**
+> Why it is here: The data-vs-logic separation audit that established "systems must not name species". Its conclusions are now stated in implementation/species-data.md; the worked examples are here.
+>
+> Current documentation: [`docs/design/`](../design/) for intent, [`docs/implementation/`](../implementation/)
+> for code, [`docs/changelog.md`](../changelog.md) for history. Everything below is preserved verbatim.
+
+---
+
 # Behavior Constants Audit — data ↔ logic separation
 
 Goal (per request): keep a single species' stats and behavior *specifics* on the species
