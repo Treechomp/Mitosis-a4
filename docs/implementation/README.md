@@ -1,6 +1,6 @@
 # Implementation layer
 
-*Last updated: 2026-09-08 · verified against `afb5e99` on `claude/lod-override-testing-rhwq4f`*
+*Last updated: 2026-09-08 · verified against `3c5e2fc` on `claude/lod-override-testing-rhwq4f`*
 
 What the code does today and where it lives. Secondary to [`../design/`](../design/): if these two
 disagree about intent, design is right and the code has drifted; if they disagree about behaviour,
@@ -81,6 +81,8 @@ Open, reproduced, not fixed. Each is described in full in the document that owns
 | D9 | The "field feeding" of packmates described in earlier documentation is not implemented — no system feeds a groupmate | [factions.md](factions.md) |
 | D10 | `SpeciesDefinition.ImmuneToStarvation` is set on one species and read by nothing; the immunity actually comes from zeroed hunger rates | [survival-and-population.md](survival-and-population.md) |
 | D11 | The invariant gate's grace-window assertion is seed-dependent — it passes on one seed and fails on another *in the same build*, so a single-seed pass is not evidence the gate holds | [tooling-and-tests.md](tooling-and-tests.md) |
+| D14 | Only `CarrionSystem` checks `EntityManager.MaxEntities` before spawning; `NestSystem` and the spore and crystal paths call `CreateEntity` unguarded, so a `MaxPopulation` whose budgets approach 16,384 throws mid-run | [tooling-and-tests.md](tooling-and-tests.md) |
+| D15 | An exception inside a headless runner hangs the process instead of failing it: `Run()` throws out of `_Ready()`, so `GetTree().Quit()` never runs and the run idles at 0% CPU with no exit code | [tooling-and-tests.md](tooling-and-tests.md) |
 
 Ids are stable and are not reused, so the list has gaps. D8 — a kill created nutrition, because the
 killer's share was never subtracted from the corpse pool — was fixed; the change and what it moved

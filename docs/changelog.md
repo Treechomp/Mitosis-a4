@@ -1,6 +1,6 @@
 # Changelog
 
-*Last updated: 2026-09-08 · current branch `claude/lod-override-testing-rhwq4f`, head `afb5e99`*
+*Last updated: 2026-09-08 · current branch `claude/lod-override-testing-rhwq4f`, head `3c5e2fc`*
 
 What changed, when, in which commit, and what it measured. Newest first.
 
@@ -24,6 +24,8 @@ compensate for that, and where, is an open balance decision — it has not been 
 
 | Commit | Date | Change | Result |
 |---|---|---|---|
+| `3c5e2fc` | 2026-09-08 | Order `Eligibility` cheapest-gate-first and resolve the species registry once per candidate | seed 1234 / 999, 20,000 ticks: mean `HuntingSystem` **6.42 → 5.68** and **6.56 → 5.95** ms/tick (−11.6%, −9.4%), about −12% at the dense end. Behaviour identical — same final composition to the creature, and the LOD gate reports 226/0/0/0. **F1 was expected to be the largest single term and is not**: the curve is still superlinear in Sectid count |
+| `6a723a7` | 2026-09-08 | Time each system inside the soak | the instrument. Overhead below the wall clock's resolution: 3,000 ticks, profiled against not, 33s vs 33s and 34s vs 33s |
 | — | 2026-09-08 | Read the creature layer against the 60–120 minute target, to scope V1 | **the creature layer is about right; V1 is a faction-layer divergence.** Derived by reading `SpeciesRegistry` against `SurvivalSystems.HungerDecayScale` at `946d46f` — an analysis, not a run, so it carries no seed. Table below |
 | — | 2026-09-08 | Try D2's first mechanism on its own: spend the elapsed interval as attack credit | **worse, and reverted.** Failing metrics in the differential **44 → 48**; 14 regressions against 5 improvements, 8 of the 14 in `nest_raid` where cooldowns are shortest. Several predation metrics flipped from the coarse tier under-killing to over-killing: `kills.Sectid` full 6 / minimal 15, `deaths_predation.Rabbit` full 4 / minimal 13. Granting a window's blows at the sampling instant denies the prey the escape it gets at Full, so the rate returns as a burst. D2's two mechanisms are not separable |
 | `186a0fd` | 2026-09-08 | Re-record the LOD contract and gate at the tick count it was recorded at (fixes D12) | **the gate exits 0, and had never done so before.** 226 verdicts recorded, 44 `FAIL`, all four documented categories and nothing outside them; two consecutive runs report `known 226 / regression 0 / improvement 0 / drift 0`. The stale comparison was partly a tick-count mismatch: `Ticks` defaulted to 2,000 while the contract, the documented command and the runner's usage line used 3,000 |
@@ -38,6 +40,48 @@ compensate for that, and where, is an open balance decision — it has not been 
 | `d93d747` | 2026-09-06 | Delete keeper crystal-to-crystal travel | no measurable change — a mobility mechanic serving a raid that never happens (see D4) |
 | `c553833` | 2026-09-06 | Fix `Siege` zero-initialisation: every Sectid was born besieging entity 0 | Sectid `kills_made` **0 → 1,487** (seed 1234), **0 → 1,820** (seed 999) |
 | `72ea4ba` | 2026-09-06 | Gate the LOD differential on the difference from recorded verdicts | the gate can now exit 0; before this it never had |
+
+### HuntingSystem cost against Sectid count — seeds 1234 and 999, 20,000 ticks, default cap
+
+`MaxPopulation` 12,000. Two runs in parallel on a four-core machine in both the before and the
+after set, so the contention is the same on both sides; ms/tick is the mean over each 200-tick
+sample interval.
+
+| | | before | | after `3c5e2fc` | |
+|---|---|---|---|---|---|
+| tick | sectids | hunting ms | share of tick | hunting ms | share of tick |
+| 4,000 | 385 | 1.70 | 9.4% | 1.69 | 9.1% |
+| 8,000 | 669 | 4.47 | 17.0% | 4.36 | 15.8% |
+| 12,000 | 1,017 | 8.87 | 21.6% | 7.90 | 19.8% |
+| 16,000 | 1,020 | 10.16 | 21.5% | 8.91 | 20.0% |
+| 20,000 | 866 | 10.40 | 21.7% | 9.14 | 19.9% |
+
+Seed 1234 above; seed 999 runs 1.53 → 13.18 ms across the same span and ends at 1,445 Sectids.
+
+The shape is the finding. Between t=4,000 and t=20,000 the creature count rises 1.6× and hunting
+cost rises **6.1×**; cost *per Sectid* rises from 4.4 to 12.0 µs over the same span, so it is
+superlinear in the population that drives it and not merely in the world's. At ~1,020 Sectids
+hunting is 8.9–11.6 ms/tick, which reproduces the ~10 ms reported from the interactive build at
+~1,100 Sectids.
+
+### `MaxPopulation` above about 14,000 cannot run — an entity-array ceiling, not a cost ceiling
+
+`EntityManager.MaxEntities` is 16,384 and is a hard array bound. At `MaxPopulation` 20,000 the class
+budgets alone come to 8,400 + 2,600 + 6,600 = **17,600 creatures**, before a single corpse, spore or
+structure. `CarrionSystem.SpawnCorpse` is the only spawn path that checks the ceiling; `NestSystem`
+and the spore and crystal paths call `CreateEntity` unguarded, so the run throws
+`InvalidOperationException: Maximum entity count reached` (D14).
+
+Measured, not inferred: two soaks at `--max-pop=20000` threw at t≈17,000 and t≈19,800 on seeds 1234
+and 999. Both then **hung rather than failing** — `Run()` throws out of `_Ready()`, so
+`GetTree().Quit()` never runs and the process idles at 0% CPU indefinitely (D15). They sat for forty
+minutes before being killed.
+
+This bears on how the ~13,000-creature "usable ceiling" is read. 16,384 entities less the corpses,
+spores and structures a running world carries leaves creature headroom of roughly that size, so the
+observed ceiling is at least partly the array bound rather than the cost curve. The cost curve is
+real and is measured above; the two explanations are not exclusive, and the ceiling should not be
+attributed to cost without raising `MaxEntities` and re-measuring.
 
 ### The creature layer against a 90-minute run — read from the registry at `946d46f`
 
