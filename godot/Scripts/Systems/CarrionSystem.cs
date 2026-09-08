@@ -38,10 +38,52 @@ public sealed class CarrionSystem : ISystem
     // grazers back to a spot, which only reads if the number is big enough to see.
     private const float DecompositionEnrich = 0.35f;
 
+    /// <summary>
+    /// Fraction of a body the killer eats immediately on a kill (the "prime cut"); the corpse
+    /// holds the remaining <c>1 - PrimeCutShare</c>. Deliberately a share of the BODY rather than
+    /// of the species' base nutrition — that is what makes the two halves sum to the body instead
+    /// of exceeding it. Without an eat-on-kill bonus at all, predators relied solely on slow
+    /// corpse-scavenging and starved before they could breed.
+    /// </summary>
+    public const float PrimeCutShare = 0.6f;
+
     public CarrionSystem(SpatialHash spatialHash, WorldManager worldManager)
     {
         _spatialHash = spatialHash;
         _worldManager = worldManager;
+    }
+
+    /// <summary>
+    /// What a body is worth as food: the species' base nutrition, scaled down by how starved the
+    /// animal was and up by how far it had grown. This is the single authority for that value —
+    /// the corpse pool and a killer's prime cut are both shares of this one number, which is what
+    /// keeps a kill from creating food. Returns 0 for an entity carrying no species.
+    /// </summary>
+    public static float BodyNutrition(EntityManager em, int entity)
+    {
+        if (!em.HasComponents(entity, ComponentFlags.Species))
+            return 0f;
+
+        var def = SpeciesRegistry.GetById(em.Species[entity].SpeciesId);
+
+        // Better-fed animals are worth more; a starved one still yields the floor.
+        float condition = ConditionFloor;
+        if (em.HasComponents(entity, ComponentFlags.Hunger))
+        {
+            ref var h = ref em.Hungers[entity];
+            // Guard against a non-finite ratio: Math.Clamp(NaN, 0, 1) returns NaN, which
+            // would otherwise produce a NaN-nutrition corpse and infect every scavenger
+            // that feeds on it. Fall back to the condition floor in that case.
+            float ratio = h.Max > 0f ? h.Current / h.Max : 0f;
+            float clampedRatio = float.IsFinite(ratio) ? Math.Clamp(ratio, 0f, 1f) : 0f;
+            condition = ConditionFloor + (1f - ConditionFloor) * clampedRatio;
+        }
+
+        float nutrition = def.EffectiveNutrition * condition;
+        // Large grown bodies (Shroomers) carry proportionally more.
+        if (em.HasComponents(entity, ComponentFlags.Growth))
+            nutrition *= MathF.Max(1f, em.Growths[entity].CurrentScale);
+        return nutrition;
     }
 
     /// <summary>
@@ -67,24 +109,13 @@ public sealed class CarrionSystem : ISystem
             return;
 
         ref var sp = ref em.Species[source];
-        var def = SpeciesRegistry.GetById(sp.SpeciesId);
 
-        // Base nutrition by body size; better-fed animals leave more (condition factor).
-        float condition = ConditionFloor;
-        if (em.HasComponents(source, ComponentFlags.Hunger))
-        {
-            ref var h = ref em.Hungers[source];
-            // Guard against a non-finite ratio: Math.Clamp(NaN, 0, 1) returns NaN, which
-            // would otherwise produce a NaN-nutrition corpse and infect every scavenger
-            // that feeds on it. Fall back to the condition floor in that case.
-            float ratio = h.Max > 0f ? h.Current / h.Max : 0f;
-            float clampedRatio = float.IsFinite(ratio) ? Math.Clamp(ratio, 0f, 1f) : 0f;
-            condition = ConditionFloor + (1f - ConditionFloor) * clampedRatio;
-        }
-        float nutrition = def.EffectiveNutrition * condition;
-        // Large grown bodies (Shroomers) carry proportionally more.
-        if (em.HasComponents(source, ComponentFlags.Growth))
-            nutrition *= MathF.Max(1f, em.Growths[source].CurrentScale);
+        float nutrition = BodyNutrition(em, source);
+        // A killer has already eaten its prime cut out of this body, so the corpse holds what is
+        // left rather than a second helping of the whole animal. Both are shares of the same
+        // BodyNutrition, so a kill MOVES food into the killer instead of creating it.
+        if (em.HasComponents(source, ComponentFlags.PrimeCutTaken))
+            nutrition *= 1f - PrimeCutShare;
 
         if (nutrition < MinCorpseNutrition)
             return;

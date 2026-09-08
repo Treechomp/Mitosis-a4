@@ -53,6 +53,10 @@ public sealed class EntityManager
         Carrion = 1 << 25,
         Structure = 1 << 26,
         Siege = 1 << 27,
+        // A marker, and the only flag with no array behind it: it carries no data beyond its own
+        // presence. Set on prey whose killer has already eaten its prime cut, so that the death
+        // hook can size the corpse from what is left. Cleared with every other flag on destroy.
+        PrimeCutTaken = 1 << 28,
     }
 
     private readonly ComponentFlags[] _componentFlags;

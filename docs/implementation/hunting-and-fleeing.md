@@ -107,14 +107,20 @@ per-candidate cost and scales with prey *density*, so it is deferred to only the
 would actually become the new best — a pure rejection filter, behaviour-equivalent. Each scan also
 caps the number of scored candidates.
 
-On a kill, the killer immediately gains `EffectiveNutrition × KillNutritionShare` of the prey.
-Without that share, predators relied on slow scavenging and starved before they could breed.
+On a kill the killer immediately eats a "prime cut": `CarrionSystem.PrimeCutShare` of what the
+prey's body is worth. `CarrionSystem.BodyNutrition` is the single authority for that worth — species
+base nutrition, scaled down by the animal's condition and up by its growth scale — and
+`CarrionSystem.SpawnCorpse` draws the corpse pool from the same number, less the prime cut when the
+prey carries `ComponentFlags.PrimeCutTaken` (set by `HuntingSystem` at the kill, read by the death
+hook). Killer and corpse are two shares of one body rather than two independent helpings of it.
+Without an eat-on-kill share at all, predators relied on slow scavenging and starved before they
+could breed.
 
-**D8 — a kill creates nutrition.** The source comment says the corpse holds "the remainder", and it
-does not: `CarrionSystem.SpawnCorpse` computes the corpse pool independently from the prey's own
-`EffectiveNutrition` and condition, with nothing subtracting what the killer already ate. A kill
-therefore yields more total food than the prey was worth. The emergent-sharing behaviour the design
-wants is unaffected; the arithmetic is not what the comment or the previous documentation claimed.
+A killer already close to full gains less than its share, because the feed is clamped to
+`Hunger.Max`, and the unconsumed part is not returned to the carcass. That discrepancy can only
+lose food, never create it. The marker also makes the cut once-per-body: two predators that both
+see the same prey dead in one tick would otherwise each carve a full share out of one carcass.
+Deaths from starvation, age, venom or siege carry no marker and leave the whole body.
 
 Note also that `EffectiveNutrition` is body-mass-derived only when a species leaves
 `NutritionValue` unset; otherwise it is that flat value.

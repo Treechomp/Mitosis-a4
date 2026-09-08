@@ -79,6 +79,9 @@ Open, reproduced, not fixed. Each is described in full in the document that owns
 | D5 | `StatVariation` and `Species.Generation` exist and are never read | [species-data.md](species-data.md) |
 | D6 | `Crystal.FAELING_AGGREGATED` is a dead sentinel from the removed statistical simulation | [factions.md](factions.md) |
 | D7 | No automated tests below the whole-run gates — no unit coverage of individual systems | [tooling-and-tests.md](tooling-and-tests.md) |
-| D8 | A kill creates nutrition: the killer's immediate share is not subtracted from the corpse pool, so a kill yields more food than the prey was worth | [hunting-and-fleeing.md](hunting-and-fleeing.md) |
 | D9 | The "field feeding" of packmates described in earlier documentation is not implemented — no system feeds a groupmate | [factions.md](factions.md) |
 | D10 | `SpeciesDefinition.ImmuneToStarvation` is set on one species and read by nothing; the immunity actually comes from zeroed hunger rates | [survival-and-population.md](survival-and-population.md) |
+
+Ids are stable and are not reused, so the list has gaps once something is fixed. D8 — a kill created
+nutrition, because the killer's share was never subtracted from the corpse pool — was fixed; the
+change and what it moved are in [`../changelog.md`](../changelog.md).

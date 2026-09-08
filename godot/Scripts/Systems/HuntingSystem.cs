@@ -99,16 +99,6 @@ public sealed class HuntingSystem : ISystem
     private const int RallyAllyThreshold = 2;
     private const float RallyRangeMult = 2f; // × HuntRange: don't mob a threat that already fled far
 
-    // Fraction of a prey's nutrition the killer eats immediately on the kill (the "prime cut").
-    // A corpse still drops for packmates and scavengers, but it is NOT the remainder of this share:
-    // CarrionSystem.SpawnCorpse sizes the corpse pool independently, from the prey's own
-    // EffectiveNutrition and condition, so this cut is not subtracted from it and a kill yields more
-    // total food than the prey was worth (defect D8 in docs/implementation/README.md — whether to
-    // subtract the killer's share or to accept the surplus deliberately is an open decision).
-    // Without an eat-on-kill bonus, predators relied solely on slow corpse-scavenging and starved
-    // before they could breed.
-    private const float KillNutritionShare = 0.6f;
-
     // Upper bound on viable prey scored per neighbour scan. Caps per-tick work in dense prey
     // clusters (cost otherwise scales with prey density, not predator count). High enough that
     // ordinary neighbourhoods are unaffected; only pathological crowds get clamped.
@@ -1295,17 +1285,24 @@ public sealed class HuntingSystem : ISystem
                             }
 
                             // The killer eats first: a successful kill grants an immediate "prime
-                            // cut" of nutrition scaled to prey size. The death still drops a corpse
-                            // (via the ECS death hook) that packmates and scavengers feed from over
-                            // time (CarrionSystem). That corpse is sized independently of the prime
-                            // cut rather than being what is left after it — see KillNutritionShare
-                            // and defect D8. Pack "sharing" of the corpse stays emergent.
-                            if (em.HasComponents(predator.TargetEntity, ComponentFlags.Species))
+                            // cut", a share of the prey's body taken OUT of the corpse rather than
+                            // added on top of it. The death still drops a corpse (via the ECS death
+                            // hook) holding the rest, which packmates and scavengers feed from over
+                            // time (CarrionSystem). Pack "sharing" of it stays emergent.
+                            //
+                            // Once per body: a prey killed by two predators in the same tick is
+                            // seen dead by both, and without the marker test each would carve a
+                            // full cut out of one carcass.
+                            if (em.HasComponents(predator.TargetEntity, ComponentFlags.Species)
+                                && !em.HasComponents(predator.TargetEntity, ComponentFlags.PrimeCutTaken))
                             {
-                                var killedDef = SpeciesRegistry.GetById(
-                                    em.Species[predator.TargetEntity].SpeciesId);
-                                float killFeed = killedDef.EffectiveNutrition * KillNutritionShare;
+                                float killFeed = CarrionSystem.PrimeCutShare
+                                    * CarrionSystem.BodyNutrition(em, predator.TargetEntity);
                                 hunger.Current = MathF.Min(hunger.Max, hunger.Current + killFeed);
+                                // Tell the death hook to leave the eaten share out of the corpse.
+                                // A killer already near full wastes the difference rather than
+                                // leaving it on the carcass: food is never created, only lost.
+                                em.AddComponent(predator.TargetEntity, ComponentFlags.PrimeCutTaken);
                             }
                             predator.TargetEntity = -1;
                             predator.Phase = PackPhase.Idle;
