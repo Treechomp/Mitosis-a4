@@ -1911,18 +1911,15 @@ public sealed class HuntingSystem : ISystem
         if (prey == self || !em.IsAlive(prey))
             return PreyReject.SelfOrDead;
 
-        // Never target something standing in our wrong element. A hard element barrier means the
-        // predator cannot follow at all, so the hunt can only ever end in drowning or a shoving
-        // match — and for a swarm hunter, which may target ANY living creature, nothing else was
-        // stopping it: Sectids (AvoidsWater) were seen diving into water after fish. The
-        // across-water path test elsewhere only rejects a route with enough water ON THE WAY, so
-        // prey sitting just off a shoreline slipped through it.
-        if (_worldManager != null && em.HasComponents(prey, ComponentFlags.Position))
-        {
-            ref var pp = ref em.Positions[prey];
-            if (TerrainProfile.IsImpassable(selfDef, _worldManager.GetTile(pp.X, pp.Y)))
-                return PreyReject.Terrain;
-        }
+        // CHEAPEST GATE FIRST. Every hunting predator runs this for every entity its spatial query
+        // returned, so the order of the gates IS the cost of the system. The terrain test at the
+        // bottom resolves a tile through WorldManager and a TerrainProfile, and it used to run
+        // first — before the component-flag test that rejects most candidates outright, so a wolf
+        // paid a world lookup for every entity in its range to discard it one line later.
+        //
+        // The verdict is unchanged. Every gate here is a conjunct, so reordering cannot alter which
+        // candidates come back Eligible; it alters only which gate reports the rejection, which
+        // HuntFunnelProbe attributes and nothing else reads.
 
         // Swarm hunters can target any living creature (including predators); normal hunters
         // only entities flagged as Prey.
@@ -1932,34 +1929,56 @@ public sealed class HuntingSystem : ISystem
         if (!valid)
             return PreyReject.Species;
 
+        bool preyHasSpecies = em.HasComponents(prey, ComponentFlags.Species);
+
+        // Don't hunt your own kind. Two array reads and no registry resolve, so it comes before
+        // anything that needs a definition.
+        if (preyHasSpecies && em.HasComponents(self, ComponentFlags.Species)
+            && em.Species[self].SpeciesId == em.Species[prey].SpeciesId)
+            return PreyReject.Species;
+
+        // One registry resolve per candidate, shared by the mass gate and the diet tests below.
+        // It used to happen twice: once inside the mass gate and once again here.
+        SpeciesDefinition? preyDef = preyHasSpecies
+            ? SpeciesRegistry.GetById(em.Species[prey].SpeciesId)
+            : null;
+
         // Size-based eligibility: prey must not be too large.
-        if (GetPreyBodyMass(prey, em) > maxPreyMass)
+        if (PreyBodyMass(em, prey, preyDef) > maxPreyMass)
             return PreyReject.Mass;
 
-        if (!em.HasComponents(prey, ComponentFlags.Species))
-            return PreyReject.Eligible;
+        if (preyDef != null)
+        {
+            // Faelings can't be hunted by carnivores.
+            if (preyDef.UnhuntableByPredators && selfDef.Diet == DietType.Carnivore)
+                return PreyReject.Species;
 
-        ref var preySpecies = ref em.Species[prey];
-        var preyDef = SpeciesRegistry.GetById(preySpecies.SpeciesId);
+            // Specialist diet: a predator with an ExclusivePrey list ignores everything not on it
+            // (e.g. Penguins only ever hunt Fish).
+            if (selfDef.ExclusivePrey != null && !selfDef.ExclusivePrey.Contains(preyDef.Name))
+                return PreyReject.Species;
 
-        // Don't hunt your own kind.
-        if (em.HasComponents(self, ComponentFlags.Species)
-            && em.Species[self].SpeciesId == preySpecies.SpeciesId)
-            return PreyReject.Species;
+            // Fallback tier: small fry a well-fed predator won't waste effort on (a Shark passes
+            // over fish until it is genuinely hungry, so the shoal is thinned rather than cropped).
+            if (!selfDef.WillHunt(preyDef.Name, hungerRatio))
+                return PreyReject.Species;
+        }
 
-        // Faelings can't be hunted by carnivores.
-        if (preyDef.UnhuntableByPredators && selfDef.Diet == DietType.Carnivore)
-            return PreyReject.Species;
+        // Never target something standing in our wrong element. A hard element barrier means the
+        // predator cannot follow at all, so the hunt can only ever end in drowning or a shoving
+        // match — and for a swarm hunter, which may target ANY living creature, nothing else was
+        // stopping it: Sectids (AvoidsWater) were seen diving into water after fish. The
+        // across-water path test elsewhere only rejects a route with enough water ON THE WAY, so
+        // prey sitting just off a shoreline slipped through it. Last because it is the only gate
+        // that leaves the ECS: a candidate that reaches it is still rejected, only later.
+        if (_worldManager != null && em.HasComponents(prey, ComponentFlags.Position))
+        {
+            ref var pp = ref em.Positions[prey];
+            if (TerrainProfile.IsImpassable(selfDef, _worldManager.GetTile(pp.X, pp.Y)))
+                return PreyReject.Terrain;
+        }
 
-        // Specialist diet: a predator with an ExclusivePrey list ignores everything not on it
-        // (e.g. Penguins only ever hunt Fish).
-        if (selfDef.ExclusivePrey != null && !selfDef.ExclusivePrey.Contains(preyDef.Name))
-            return PreyReject.Species;
-
-        // Fallback tier: small fry a well-fed predator won't waste effort on (a Shark passes
-        // over fish until it is genuinely hungry, so the shoal is thinned rather than cropped).
-        return selfDef.WillHunt(preyDef.Name, hungerRatio)
-            ? PreyReject.Eligible : PreyReject.Species;
+        return PreyReject.Eligible;
     }
 
     /// <summary>Attribute a dropped candidate to a funnel stage. Diagnostic only.</summary>
@@ -2137,27 +2156,29 @@ public sealed class HuntingSystem : ISystem
         => em.HasComponents(entity, ComponentFlags.Renderable)
             ? BodyMetrics.Radius(em.Renderables[entity].Size, _tileSize) : 0f;
 
-    private float GetPreyBodyMass(int preyEntity, EntityManager em)
+    /// <summary>
+    /// Body mass as the mass gate sees it. Takes the candidate's definition rather than resolving
+    /// it, because <see cref="Eligibility"/> needs the same definition for the diet tests and was
+    /// otherwise resolving the registry twice for every candidate it looked at. A null definition
+    /// means the candidate carries no species.
+    /// </summary>
+    private static float PreyBodyMass(EntityManager em, int prey, SpeciesDefinition? preyDef)
     {
-        if (em.HasComponents(preyEntity, ComponentFlags.Spore))
+        if (em.HasComponents(prey, ComponentFlags.Spore))
             return SporeBodyMass;
 
-        if (em.HasComponents(preyEntity, ComponentFlags.Species))
+        if (preyDef == null)
+            return 1f;
+
+        float mass = preyDef.BodyMass;
+
+        // Growing creatures (Shroomers) scale mass with current size
+        if (em.HasComponents(prey, ComponentFlags.Growth))
         {
-            ref var preySpecies = ref em.Species[preyEntity];
-            var preyDef = SpeciesRegistry.GetById(preySpecies.SpeciesId);
-            float mass = preyDef.BodyMass;
-
-            // Growing creatures (Shroomers) scale mass with current size
-            if (em.HasComponents(preyEntity, ComponentFlags.Growth))
-            {
-                ref var growth = ref em.Growths[preyEntity];
-                mass *= growth.CurrentScale;
-            }
-
-            return mass;
+            ref var growth = ref em.Growths[prey];
+            mass *= growth.CurrentScale;
         }
 
-        return 1f;
+        return mass;
     }
 }
