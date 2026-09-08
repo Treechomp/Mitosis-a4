@@ -95,10 +95,21 @@ public partial class PopulationSoakRunner : Node
     /// <summary>Ticks per funnel row.</summary>
     [Export] public int FunnelWindow = 1000;
 
+    /// <summary>
+    /// Capture a world snapshot at t=0 and again at the end of the run (--snapshot-world), so that
+    /// a faction's advance can be looked at rather than inferred. Off by default: this runner
+    /// otherwise skips everything that only exists to be looked at, and each capture walks every
+    /// tile and writes four PNGs.
+    /// </summary>
+    [Export] public bool SnapshotWorld = false;
+
     private int _failures;
 
     private const int ChunkSize = 32;
     private const int TileSize = 16;
+    // Mirrors GameManager's export. The soak builds no meshes, so this only labels the snapshot
+    // report — but a wrong number in a report is still a wrong number.
+    private const float ElevationHeightScale = 64f;
     private const string LogRoot = "res://logs";
 
     public override void _Ready()
@@ -114,7 +125,8 @@ public partial class PopulationSoakRunner : Node
                  $"cap {MaxPopulation}, seed {InitialPopulation}, {Ticks} ticks, seed {WorldSeed}");
 
         // ── Build the world exactly as GameManager does, minus everything that only exists to
-        // be looked at (camera, lights, meshes, world-snapshot PNGs, debug UI).
+        // be looked at (camera, lights, meshes, debug UI — and the world-snapshot PNGs, unless
+        // --snapshot-world asks for them, where being looked at is the measurement).
         SimRandom.SetSeed(WorldSeed);
         var rng = SimRandom.Create();
 
@@ -127,7 +139,8 @@ public partial class PopulationSoakRunner : Node
             PopulationBudget.DefaultFactionShare);
         em.Budget = budget;
 
-        var world = new WorldManager(ChunkSize, WorldSizeChunks, WorldSeed, new TerrainSettings());
+        var terrainSettings = new TerrainSettings();
+        var world = new WorldManager(ChunkSize, WorldSizeChunks, WorldSeed, terrainSettings);
 
         var factory = new EntityFactory(em, rng);
         factory.SetPopulationCap(MaxPopulation);
@@ -151,6 +164,12 @@ public partial class PopulationSoakRunner : Node
         var genClock = System.Diagnostics.Stopwatch.StartNew();
         world.PregenerateWorld();
         GD.Print($"[Soak] {world.LoadedChunkCount} chunks in {genClock.Elapsed.TotalSeconds:F0}s");
+
+        string snapshotStart = "";
+        if (SnapshotWorld)
+            snapshotStart = WorldSnapshot.Capture(world, WorldSeed, ChunkSize, WorldSizeChunks,
+                                                  terrainSettings, ElevationHeightScale,
+                                                  label: "t0");
 
         SpeciesToggle.Configure("", false);
 
@@ -217,6 +236,14 @@ public partial class PopulationSoakRunner : Node
             }
         }
         clock.Stop();
+
+        if (SnapshotWorld)
+        {
+            string snapshotEnd = WorldSnapshot.Capture(world, WorldSeed, ChunkSize, WorldSizeChunks,
+                                                       terrainSettings, ElevationHeightScale,
+                                                       label: $"t{Ticks}");
+            GD.Print($"[Soak] world snapshots: {snapshotStart}  ->  {snapshotEnd}");
+        }
 
         WriteCsv(samples, budget);
         Report(samples, budget, logger);
@@ -626,6 +653,7 @@ public partial class PopulationSoakRunner : Node
                 case "min-faeling" when int.TryParse(value, out int v): MinFaelingPopulation = Math.Max(0, v); break;
                 case "funnel": FunnelSpecies = value; break;
                 case "funnel-window" when int.TryParse(value, out int v): FunnelWindow = Math.Max(1, v); break;
+                case "snapshot-world": SnapshotWorld = true; break;
                 default: GD.PushWarning($"[Soak] ignored argument '{arg}'"); break;
             }
         }

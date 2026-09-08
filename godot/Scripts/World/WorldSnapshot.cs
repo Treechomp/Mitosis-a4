@@ -30,11 +30,13 @@ public static class WorldSnapshot
     /// (<see cref="CaptureSpawns"/>) can pair its file with this generation's set.
     /// Written files: biome map, elevation map (stored elevation — ridges/cliffs/detail are
     /// visible), moisture map, temperature map, and the parameter/distribution report.
+    /// <paramref name="label"/> distinguishes repeated captures of one world within a single
+    /// process; empty leaves the established name shape untouched.
     /// </summary>
     public static string Capture(
         WorldManager wm, int seed, int chunkSize, int worldSizeChunks,
         TerrainSettings settings, float elevHeightScale,
-        string logDir = "res://logs")
+        string logDir = "res://logs", string label = "")
     {
         int n = wm.WorldSizeTiles;
         int px = PixelScale(n);
@@ -73,6 +75,11 @@ public static class WorldSnapshot
             Inv($"world_{ts}_seed{seed}_{worldSizeChunks}ch_ef{settings.ElevationFrequency:0.####}") +
             Inv($"_df{settings.DetailFrequency:0.####}_rf{settings.RoughnessFrequency:0.####}") +
             Inv($"_ra{settings.RidgeAmplitude:0.####}");
+        // Everything above is fixed by the seed and the worldgen parameters, and the timestamp is
+        // only second-resolution, so two captures of one world would otherwise overwrite each
+        // other. The label is what separates them.
+        if (!string.IsNullOrEmpty(label))
+            baseName += "_" + label;
 
         string pngPath = Path.Combine(dir, baseName + ".png");
         SavePng(img, pngPath);

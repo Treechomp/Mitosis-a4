@@ -168,6 +168,12 @@ population ceiling.
 **This gate is binary and must not grow an exception list.** If an assertion needs an exception,
 the threshold is wrong and should be changed deliberately with the reasoning recorded.
 
+`--snapshot-world` additionally writes a `WorldSnapshot` pair — one straight after generation, one
+after the last tick, each labelled so the two do not overwrite each other — for reading a faction's
+advance off the biome maps instead of inferring it from the CSV. Off by default, and it changes
+nothing the gate asserts: the runner otherwise builds nothing that exists only to be looked at, and
+every capture walks the whole world.
+
 It exists because three changes landed in sequence, each meeting its own acceptance criteria, and
 together they broke the game — one faction dismantling the other two within a minute of world
 start. Nothing else could have caught it: the LOD differential compares a build against itself, so
