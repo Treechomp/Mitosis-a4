@@ -66,8 +66,16 @@ public partial class LodDifferentialRunner : Node
     private const int ChunkSize = 32;
     private const int TileSize = 16;
 
-    /// <summary>Ticks each run is stepped for. Both runs get exactly this many.</summary>
-    [Export] public int Ticks = 2000;
+    /// <summary>
+    /// Ticks each run is stepped for. Both runs get exactly this many.
+    ///
+    /// Must match the tick count the contract was recorded at, or every metric is compared against
+    /// a verdict measured over a different span and the gate can never reach 0. It was 2,000 here
+    /// while the documented re-record command, this file's own usage line and the recorded
+    /// contract all used 3,000 — so the gate compared a 2,000-tick run against a 3,000-tick
+    /// contract and the difference was read as drift in the code.
+    /// </summary>
+    [Export] public int Ticks = 3000;
 
     /// <summary>Relative divergence at which a metric is called a failure.</summary>
     [Export] public float Tolerance = 0.15f;
@@ -184,7 +192,7 @@ public partial class LodDifferentialRunner : Node
             if (LodExpectedVerdicts.IsFail(v.Verdict)) failing++;
         GD.Print($"\n[LodDiff] RECORDED {verdicts.Count} verdicts ({failing} FAIL) -> {path}");
         GD.Print("[LodDiff] Commit it. An expected file that is not committed means nothing, and");
-        GD.Print("[LodDiff] every FAIL recorded here needs its reason in lod-differential-baseline.md.");
+        GD.Print("[LodDiff] every FAIL recorded here needs its reason in docs/implementation/lod-and-performance.md.");
         return 0;
     }
 
@@ -207,7 +215,7 @@ public partial class LodDifferentialRunner : Node
             GD.PrintErr("[LodDiff]   godot --headless --path godot " +
                         "res://Scenes/LodDifferential.tscn -- --ticks=3000 --record");
             GD.PrintErr("[LodDiff] then commit the file, with each FAIL explained in " +
-                        "docs/archive/lod-differential-baseline-2026-08.md.");
+                        "docs/implementation/lod-and-performance.md.");
             return 1;
         }
 
@@ -242,7 +250,7 @@ public partial class LodDifferentialRunner : Node
                 if (d.Kind == VerdictChange.Improvement)
                     GD.Print($"      {d.Scenario,-18} {d.Metric,-32} {d.Expected} -> {d.Actual}");
             GD.Print("[LodDiff] RE-RECORD (--record) and delete the exception's entry in " +
-                     "docs/archive/lod-differential-baseline-2026-08.md.");
+                     "docs/implementation/lod-and-performance.md.");
             GD.Print("[LodDiff] A fixed exception left in the file will hide the NEXT regression " +
                      "in that metric.");
         }

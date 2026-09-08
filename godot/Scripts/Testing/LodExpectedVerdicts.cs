@@ -124,7 +124,7 @@ public sealed class LodExpectedVerdicts
         sb.AppendLine("# Recorded LOD-differential verdicts — the machine-checkable contract.");
         sb.AppendLine("# Regenerate with: ... res://Scenes/LodDifferential.tscn -- --record");
         sb.AppendLine("# Accepting a new exception means re-recording AND writing down the reason");
-        sb.AppendLine("# in docs/archive/lod-differential-baseline-2026-08.md. An unexplained row here is a bug");
+        sb.AppendLine("# in docs/implementation/lod-and-performance.md. An unexplained row here is a bug");
         sb.AppendLine("# that has been made invisible.");
         sb.AppendLine(Header);
         foreach (var r in sorted)
