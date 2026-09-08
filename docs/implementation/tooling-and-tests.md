@@ -186,6 +186,13 @@ before/after comparison across this gate has to fix the seed and run both sides,
 flips one seed has not necessarily changed anything. The measured pairs are in
 [`../changelog.md`](../changelog.md).
 
+**D13 — a measurement is only comparable within its own working copy.** The soak is exactly
+reproducible when re-run in the same checkout, and not reproducible across checkouts of the same
+source: two independent copies agreed with each other and disagreed with the original by a few per
+cent in final faction populations. Until the cause is found, a before/after comparison has to hold
+the working copy fixed as well as the seed, and a difference smaller than a few per cent is not a
+result. The measured case is in [`../changelog.md`](../changelog.md).
+
 **D12 — the LOD differential's recorded contract is stale.** Run against the current code it
 reports regressions, improvements and drift all at once, which means the CSV describes a build that
 no longer exists. Until it is re-recorded deliberately, the gate cannot reach 0 and a genuine new

@@ -1,6 +1,6 @@
 # Changelog
 
-*Last updated: 2026-09-08 · current branch `claude/lod-override-testing-rhwq4f`, head `0b6c012`*
+*Last updated: 2026-09-08 · current branch `claude/lod-override-testing-rhwq4f`, head `0a0ae4d`*
 
 What changed, when, in which commit, and what it measured. Newest first.
 
@@ -24,6 +24,7 @@ compensate for that, and where, is an open balance decision — it has not been 
 
 | Commit | Date | Change | Result |
 |---|---|---|---|
+| `0a0ae4d` | 2026-09-08 | Set `PrimeCutShare` from a five-seed sweep rather than by choosing a number | Sectid mean across five seeds **195 → 1,007**, which is 88% of the pre-fix 1,145; invariant gate **2/5 → 4/5 seeds passing**, against 3/5 for the pre-fix build. Table below |
 | `0b6c012` | 2026-09-08 | Optionally snapshot the world at both ends of a soak run (`--snapshot-world`) | seed 1234, 2,000 ticks: verdict and exit code (2) identical with and without the flag; the flagged run wrote two labelled map sets (`_t0`, `_t2000`), the unflagged run wrote none |
 | `e5f5597` | 2026-09-08 | Take the killer's prime cut out of the corpse rather than adding to it (D8) | 20,000 ticks. Seed 1234: Sectid **1,058 → 293**, nests **179 → 51**, Sectid births **1,584 → 574** while Sectid deaths fell (predation 614 → 429, starvation 70 → 52); Shroomer 2,892 → 3,658; total kills 9,830 → 9,274; world deviation 0.0175 → 0.0137. Seed 999: Sectid **1,531 → 229**, nests **283 → 54**. The grace-window invariant went pass → fail on seed 1234; on seed 999 it failed **before** this change too (see D11) |
 | — | 2026-09-08 | Measured both gates at `946d46f` before changing anything, to have a control | invariant gate: seed 1234 **all 11 pass**, seed 999 **1 fails** (2 anchors lost before t=6000) — the assertion is seed-dependent (D11). LOD differential: **known 189, regression 10, improvement 21, drift 3**, exit 1 — the recorded contract no longer matches the code (D12) |
@@ -33,6 +34,41 @@ compensate for that, and where, is an open balance decision — it has not been 
 | `d93d747` | 2026-09-06 | Delete keeper crystal-to-crystal travel | no measurable change — a mobility mechanic serving a raid that never happens (see D4) |
 | `c553833` | 2026-09-06 | Fix `Siege` zero-initialisation: every Sectid was born besieging entity 0 | Sectid `kills_made` **0 → 1,487** (seed 1234), **0 → 1,820** (seed 999) |
 | `72ea4ba` | 2026-09-06 | Gate the LOD differential on the difference from recorded verdicts | the gate can now exit 0; before this it never had |
+
+### The prime-cut sweep — 20 runs, 20,000 ticks each, seeds 1234 / 999 / 4242 / 31337 / 8675309
+
+Final Sectid population, and whether the whole-game invariant gate passed. `PrimeCutShare` is the
+fraction of a body the killer eats on the kill; the corpse holds the rest, and the Sectid colony
+economy is what converts that rest into larvae.
+
+| seed | pre-fix `946d46f` | 0.60 | 0.30 | **0.15** |
+|---|---|---|---|---|
+| 1234 | 1,058 pass | 293 fail | 735 pass | 866 pass |
+| 999 | 1,531 fail | 229 fail | 531 pass | 1,445 pass |
+| 4242 | 1,073 pass | 237 pass | 589 pass | 1,033 pass |
+| 31337 | 1,050 pass | 105 fail | 561 pass | 740 pass |
+| 8675309 | 1,011 fail | 110 pass | 680 fail | 951 fail |
+| **gate** | **3/5** | **2/5** | **4/5** | **4/5** |
+| **mean Sectid** | **1,145** | **195** | **619** | **1,007** |
+
+Two things the sweep settles beyond the value itself.
+
+**Reproducibility is per-working-copy, not absolute (D13).** Within one working copy the same seed
+and build reproduce composition, anchor counts and verdict *exactly*, process after process. Across
+two working copies of functionally identical source they do not: seed 1234 at 0.15 gives Sectid 933
+in one checkout (three consecutive processes, identical every time) and Sectid 866 in each of two
+independent copies of that same checkout. The cause is not established, and it is not the obvious
+suspect — D1's per-process hash randomisation would vary run to run, and these runs do not.
+
+This does not overturn the table. The copy-to-copy spread is a few per cent; the differences the
+table turns on are nearly tenfold, and every column was measured the same way. It does mean the
+individual cell values carry that uncertainty, and that any future comparison must hold the working
+copy fixed as well as the seed.
+
+**The grace-window assertion does not respond monotonically to this parameter** (D11). Seed 8675309
+fails at 0.15, 0.30 and pre-fix but passes at 0.60; seed 1234 does the reverse. A single seed
+flipping across a change is therefore not evidence about that change, and the pass counts above
+are the only honest way to read this gate.
 
 ---
 

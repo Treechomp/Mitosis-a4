@@ -84,6 +84,7 @@ Open, reproduced, not fixed. Each is described in full in the document that owns
 | D10 | `SpeciesDefinition.ImmuneToStarvation` is set on one species and read by nothing; the immunity actually comes from zeroed hunger rates | [survival-and-population.md](survival-and-population.md) |
 | D11 | The invariant gate's grace-window assertion is seed-dependent — it passes on one seed and fails on another *in the same build*, so a single-seed pass is not evidence the gate holds | [tooling-and-tests.md](tooling-and-tests.md) |
 | D12 | The LOD differential's recorded contract no longer matches the code it gates: the run reports regressions, improvements and drift against a build that has moved on, so the gate cannot reach 0 and its exceptions are stale | [tooling-and-tests.md](tooling-and-tests.md) |
+| D13 | Soak results are reproducible within a working copy but differ between working copies of identical source — so a measurement is only comparable against another taken in the same checkout | [tooling-and-tests.md](tooling-and-tests.md) |
 
 Ids are stable and are not reused, so the list has gaps once something is fixed. D8 — a kill created
 nutrition, because the killer's share was never subtracted from the corpse pool — was fixed; the
