@@ -51,8 +51,28 @@ public static class SpeciesRegistry
 
     /// <summary>
     /// Get the ID for a species name.
+    ///
+    /// A deterministic hash, and deliberately NOT <c>string.GetHashCode()</c>: .NET randomises
+    /// that per process, so every species id differed from run to run and anything breaking a tie
+    /// by iteration order over an id-keyed structure took a different branch each time. A fixed
+    /// seed did not produce a fixed run, which is the first thing the simulation contract promises.
+    ///
+    /// FNV-1a, 32 bit. Never returns 0, because <see cref="GetById"/> reserves that for
+    /// "uninitialised". The exact function does not matter; being the same one every process does.
     /// </summary>
-    public static int GetId(string name) => name.GetHashCode();
+    public static int GetId(string name)
+    {
+        unchecked
+        {
+            uint hash = 2166136261u;          // FNV-1a offset basis
+            foreach (char c in name)
+            {
+                hash ^= c;
+                hash *= 16777619u;            // FNV-1a prime
+            }
+            return hash == 0u ? 1 : (int)hash;
+        }
+    }
 
     /// <summary>
     /// Get all registered species names.
@@ -95,7 +115,7 @@ public static class SpeciesRegistry
     public static void Register(SpeciesDefinition species)
     {
         _species[species.Name] = species;
-        _speciesById[species.Name.GetHashCode()] = species;
+        _speciesById[GetId(species.Name)] = species;
     }
 
     private static void RegisterDefaultSpecies()

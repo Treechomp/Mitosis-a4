@@ -56,9 +56,9 @@ public sealed class EcosystemLogger : ISystem
 
     /// <summary>
     /// Whether a species is being tracked. A separate flag rather than a negative sentinel:
-    /// species ids come from string.GetHashCode() and are negative about half the time (Wolf is
-    /// -1711233758), so every "id >= 0" guard silently disabled tracking for those species —
-    /// the TrackSpecies debug feature simply did nothing for half the roster.
+    /// species ids are a hash and so are negative about half the time, and every "id >= 0" guard
+    /// silently disabled tracking for those species — the TrackSpecies debug feature simply did
+    /// nothing for half the roster. Still true now the hash is deterministic; only which half.
     /// </summary>
     public static bool IsTrackingSpecies { get; private set; }
 
