@@ -65,6 +65,7 @@ evidence about that build.
 | V5 | **Death flow** | respawn at an anchor, paid for out of the faction pool | `FactionLives` is created and consumed by nothing; anchors pay no cost |
 | V6 | **No progression layer** | in-run character paths; between-run unlocks and species patterns that carry over | neither exists; there is no persistence of any kind |
 | V7 | **Rivals' advance is not visible** | one of the two clocks that make standing still bad | terraforming is a probability per cooldown roll applied to one tile at a time; nothing reads as a front. See R1 in [`design/08-open-questions.md`](../design/08-open-questions.md) |
+| V8 | **The killer's cut is no longer the larger part of the body** | the killer takes "the first and largest share", and the rest goes to whoever finds it ([`design/03-creatures.md`](../design/03-creatures.md)) | `CarrionSystem.PrimeCutShare` leaves the corpse holding the larger part. The value is not free: it is the main control on Sectid faction scale, and the split that makes the killer's share the larger one costs the Sectids most of their population (measured across five seeds, [`../changelog.md`](../changelog.md)). Either the design sentence means the largest *individual* share — no single scavenger takes the whole carcass — or design intent and faction balance are in conflict here. Undecided |
 
 ## Known defects
 

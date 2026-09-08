@@ -44,8 +44,14 @@ public sealed class CarrionSystem : ISystem
     /// of the species' base nutrition — that is what makes the two halves sum to the body instead
     /// of exceeding it. Without an eat-on-kill bonus at all, predators relied solely on slow
     /// corpse-scavenging and starved before they could breed.
+    ///
+    /// This is the main control on faction scale, not a flavour knob: what the killer does not eat
+    /// is what the Sectid colony economy has to convert into larvae. It was swept across five
+    /// seeds rather than chosen (the table is in docs/changelog.md) — an even split starved the
+    /// Sectids to a sixth of their former number, and this value holds them near it. Predators are
+    /// pinned at their population ceiling either way, so the cut comes out of slack on that side.
     /// </summary>
-    public const float PrimeCutShare = 0.6f;
+    public const float PrimeCutShare = 0.15f;
 
     public CarrionSystem(SpatialHash spatialHash, WorldManager worldManager)
     {
