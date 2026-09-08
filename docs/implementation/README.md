@@ -65,7 +65,6 @@ evidence about that build.
 | V5 | **Death flow** | respawn at an anchor, paid for out of the faction pool | `FactionLives` is created and consumed by nothing; anchors pay no cost |
 | V6 | **No progression layer** | in-run character paths; between-run unlocks and species patterns that carry over | neither exists; there is no persistence of any kind |
 | V7 | **Rivals' advance is not visible** | one of the two clocks that make standing still bad | terraforming is a probability per cooldown roll applied to one tile at a time; nothing reads as a front. See R1 in [`design/08-open-questions.md`](../design/08-open-questions.md) |
-| V8 | **The killer's cut is no longer the larger part of the body** | the killer takes "the first and largest share", and the rest goes to whoever finds it ([`design/03-creatures.md`](../design/03-creatures.md)) | `CarrionSystem.PrimeCutShare` leaves the corpse holding the larger part. The value is not free: it is the main control on Sectid faction scale, and the split that makes the killer's share the larger one costs the Sectids most of their population (measured across five seeds, [`../changelog.md`](../changelog.md)). Either the design sentence means the largest *individual* share — no single scavenger takes the whole carcass — or design intent and faction balance are in conflict here. Undecided |
 
 ## Known defects
 
@@ -73,7 +72,7 @@ Open, reproduced, not fixed. Each is described in full in the document that owns
 
 | # | Defect | Where |
 |---|---|---|
-| D1 | Species ids come from `string.GetHashCode()`, which .NET randomises per process — so multi-faction scenarios are not reproducible across processes | [species-data.md](species-data.md) |
+| D1 | Species ids come from `string.GetHashCode()`, which .NET randomises per process — so multi-faction scenarios are not reproducible across processes. Measured: the soak is a 9/9 coin flip between two trajectories over 18 runs of one binary, and a deterministic hash removes it | [species-data.md](species-data.md) |
 | D2 | Predation rate falls sharply at coarse LOD tiers: one attack per due tick, plus engagement geometry that ignores the path travelled since the last decision | [lod-and-performance.md](lod-and-performance.md) |
 | D3 | Nutrition consumed/regenerated diverges between LOD tiers in spatial granularity | [lod-and-performance.md](lod-and-performance.md) |
 | D4 | Faeling keepers have never been observed to damage a structure; cause not established, and the leading hypothesis was invalidated by a later change | [factions.md](factions.md) |
@@ -84,8 +83,9 @@ Open, reproduced, not fixed. Each is described in full in the document that owns
 | D10 | `SpeciesDefinition.ImmuneToStarvation` is set on one species and read by nothing; the immunity actually comes from zeroed hunger rates | [survival-and-population.md](survival-and-population.md) |
 | D11 | The invariant gate's grace-window assertion is seed-dependent — it passes on one seed and fails on another *in the same build*, so a single-seed pass is not evidence the gate holds | [tooling-and-tests.md](tooling-and-tests.md) |
 | D12 | The LOD differential's recorded contract no longer matches the code it gates: the run reports regressions, improvements and drift against a build that has moved on, so the gate cannot reach 0 and its exceptions are stale | [tooling-and-tests.md](tooling-and-tests.md) |
-| D13 | Soak results are reproducible within a working copy but differ between working copies of identical source — so a measurement is only comparable against another taken in the same checkout | [tooling-and-tests.md](tooling-and-tests.md) |
 
-Ids are stable and are not reused, so the list has gaps once something is fixed. D8 — a kill created
-nutrition, because the killer's share was never subtracted from the corpse pool — was fixed; the
-change and what it moved are in [`../changelog.md`](../changelog.md).
+Ids are stable and are not reused, so the list has gaps. D8 — a kill created nutrition, because the
+killer's share was never subtracted from the corpse pool — was fixed; the change and what it moved
+are in [`../changelog.md`](../changelog.md). D13 was **withdrawn**: it recorded soak results as
+reproducible within a working copy and not across copies, and wider sampling showed that was an
+artifact of too few runs. It was D1 all along, and the evidence now sits there.

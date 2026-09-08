@@ -1,6 +1,6 @@
 # 03 — Creatures
 
-*Last updated: 2026-09-07*
+*Last updated: 2026-09-08*
 
 ## A species is data, not code
 
@@ -59,8 +59,14 @@ others strip it properly and have to move.
 **Scavengers** eat the dead. Death always leaves a body — from any cause, including starvation,
 age, drowning and faction weapons — and that body holds real food that rots away over time and
 fertilises the ground as it goes. Corpses are what make a kill matter to more than the killer: the
-killer takes the first and largest share, and the rest is available to whoever finds it. Pack
-"sharing" is emergent from this, not scripted.
+killer eats first, but it takes a hunter's mouthful and not the carcass, and the bulk of the body
+is left for whoever finds it. Pack "sharing" is emergent from this, not scripted.
+
+That split is a live balance control, not a flavour detail. A kill yields one body, never more, so
+what the killer eats is taken from what the scavengers get. The faction that lives on carrion rises
+and falls with the remainder, which is why the killer's portion is the smaller one: a hunter that
+ate most of its kill would quietly starve a whole faction. The value is in the code and the
+measurement behind it is in the changelog.
 
 **Omnivores** do two of these. They are deliberately rare and each one is a specific design
 statement rather than a hedge.

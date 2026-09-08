@@ -53,17 +53,20 @@ economy is what converts that rest into larvae.
 
 Two things the sweep settles beyond the value itself.
 
-**Reproducibility is per-working-copy, not absolute (D13).** Within one working copy the same seed
-and build reproduce composition, anchor counts and verdict *exactly*, process after process. Across
-two working copies of functionally identical source they do not: seed 1234 at 0.15 gives Sectid 933
-in one checkout (three consecutive processes, identical every time) and Sectid 866 in each of two
-independent copies of that same checkout. The cause is not established, and it is not the obvious
-suspect — D1's per-process hash randomisation would vary run to run, and these runs do not.
+**Every cell above is one run, and one run is a coin flip (D1).** Re-running a single binary on
+seed 1234 eighteen times produced exactly two trajectories, nine times each; the same eighteen runs
+with a deterministic species-id hash produced one trajectory eighteen times. So each cell carries
+the spread between two outcomes — at seed 1234 that is Sectid 866 against 933, about 8%.
 
-This does not overturn the table. The copy-to-copy spread is a few per cent; the differences the
-table turns on are nearly tenfold, and every column was measured the same way. It does mean the
-individual cell values carry that uncertainty, and that any future comparison must hold the working
-copy fixed as well as the seed.
+An earlier draft of this entry blamed the working copy and recorded it as D13. That was wrong: the
+first samples happened to land the same way several times in a row, which looked like per-checkout
+determinism and was not. D13 is withdrawn and the evidence sits under D1.
+
+The table's conclusion survives, because the differences it turns on are nearly tenfold against a
+spread of 8%, and every column was measured identically. What does *not* survive single-run
+sampling is the pass/fail column: a binary verdict can flip on a re-run for no reason, which is a
+second and independent reason — alongside D11 — to read those as counts over seeds and never as a
+verdict.
 
 **The grace-window assertion does not respond monotonically to this parameter** (D11). Seed 8675309
 fails at 0.15, 0.30 and pre-fix but passes at 0.60; seed 1234 does the reverse. A single seed

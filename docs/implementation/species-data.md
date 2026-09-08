@@ -1,6 +1,6 @@
 # Species data
 
-*Last updated: 2026-09-07 · verified against `7a7fb28`*
+*Last updated: 2026-09-08 · verified against `f65a555`*
 
 ## Files
 
@@ -52,8 +52,21 @@ factions; every single-faction and no-faction scenario was stable. At short tick
 scenarios are byte-identical, so this is a tiny divergence amplifying chaotically rather than gross
 randomness.
 
-The mechanism fits all the evidence and has not been formally proven to be the only one. A stable
-id scheme (an explicit id, or a deterministic hash) fixes it at the source.
+Measured 2026-09-08 (`PopulationSoak`, seed 1234, 3,000 ticks, one binary, 18 consecutive runs):
+the run is a **coin flip between exactly two trajectories, 9 and 9**. Swapping `GetId` for a
+deterministic FNV-1a hash and repeating the same 18 runs gave **one trajectory, 18 times** — an
+outcome with probability about 2⁻¹⁷ if the flip were still live. That is strong evidence this
+mechanism is sufficient to explain the divergence, and that a stable id scheme removes it.
+
+The divergence is invisible until a population class saturates. Before the herbivore budget fills,
+the two trajectories are byte-identical; the first differing sample is the tick the cap is reached,
+because from then on a birth refused to one species is a slot handed to another. It peaks around a
+third of the Sectid count near mid-run and then contracts as the global ceiling binds. Amplifying
+chaos, bounded by the caps — not gross randomness.
+
+A stable id scheme (an explicit id, or a deterministic hash) fixes it at the source. Doing so
+changes every trajectory, so figures recorded before the change are not comparable with figures
+recorded after it.
 
 ## `SpeciesToggle`
 

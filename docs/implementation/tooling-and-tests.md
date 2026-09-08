@@ -186,12 +186,12 @@ before/after comparison across this gate has to fix the seed and run both sides,
 flips one seed has not necessarily changed anything. The measured pairs are in
 [`../changelog.md`](../changelog.md).
 
-**D13 — a measurement is only comparable within its own working copy.** The soak is exactly
-reproducible when re-run in the same checkout, and not reproducible across checkouts of the same
-source: two independent copies agreed with each other and disagreed with the original by a few per
-cent in final faction populations. Until the cause is found, a before/after comparison has to hold
-the working copy fixed as well as the seed, and a difference smaller than a few per cent is not a
-result. The measured case is in [`../changelog.md`](../changelog.md).
+**A single run is not a measurement, until D1 is fixed.** Re-running one binary on one seed lands
+on either of two trajectories with roughly even odds (D1, [species-data.md](species-data.md)), so
+any figure from a single run carries that spread and any *binary* verdict from one run can flip on
+a re-run for no reason at all. Read this gate over several seeds, and treat a difference smaller
+than the spread between the two trajectories as no difference. A deterministic species id removes
+the flip and is the real fix.
 
 **D12 — the LOD differential's recorded contract is stale.** Run against the current code it
 reports regressions, improvements and drift all at once, which means the CSV describes a build that
