@@ -79,14 +79,31 @@ Two mechanisms, measured across the aquatic, freshwater and predator/prey scenar
 
 1. **One attack per due tick.** `HuntingSystem` fires at most one attack per due tick even though
    the cooldown is correctly decremented by the effective interval. With shipped cooldowns in the
-   low tens of ticks, a coarse tier loses a substantial share of a fast attacker's damage output to
-   the cap alone. Same shape as the terraform defect, same fix: spend the elapsed ticks as credit
-   and act as many times as the window allows. Small and contained.
+   low tens of ticks, a coarse tier loses a share of a fast attacker's damage output to the cap
+   alone — and much more during an ambush burst, which quarters the cooldown.
 2. **Engagement geometry.** A predator must be in reach *at the moment of a due tick*. At a coarse
    tier it commits to a heading for many ticks and covers several tiles blind, so a chase that
-   would connect at Full passes straight through the strike window. Batching attacks does not fix
-   this; the strike test has to consider the path travelled since the last decision, the way
-   `DecisionCadence.Horizon` already does for terrain.
+   would connect at Full passes straight through the strike window. The strike test has to consider
+   the path travelled since the last decision, the way `DecisionCadence.Horizon` already does for
+   terrain.
+
+**The two are not separable, and this was established the hard way.** (1) was described here as the
+small contained half and was written: the elapsed ticks spent as credit, as many blows as the
+window bought, floored so no credit banks across targets, thorns answering only the blows that
+actually landed. It made the differential worse. More metrics failed after it than before, and the
+new failures concentrated in the swarm scenarios, where cooldowns are shortest — several flipped
+from the coarse tier under-killing to over-killing it.
+
+The reason is the flaw in (1) taken alone: being in reach *at the sampling instant* is not the same
+as having been in reach for the interval. At Full the prey can leave between blows; granting the
+window's blows at once takes that away, so a rate is restored as a burst. The blow count is only
+correct once something knows how long the predator was actually in reach — which is (2). Figures in
+[`../changelog.md`](../changelog.md); the attempt is not in the history, only its measurement.
+
+A note for whoever writes (2): `EntityManager.PrevPositions` does not help. It is snapshotted every
+tick for render interpolation, so for an entity due every twentieth tick it holds last tick's
+position, not the position at its last decision. The path over the elapsed window needs storing
+when the decision is taken.
 
 Both change predator/prey balance and belong in their own change with a balance pass behind it.
 (2) is also design question C2-adjacent — see
