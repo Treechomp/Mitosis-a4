@@ -429,6 +429,8 @@ public sealed class CrystalSystem : ISystem
             spawnY = y;
         }
 
+        if (!em.HasRoomForEntity) return -1;
+
         int entity = em.CreateEntity();
 
         em.Positions[entity] = new Position(spawnX, spawnY);
@@ -512,6 +514,8 @@ public sealed class CrystalSystem : ISystem
     /// </summary>
     public int SpawnCrystal(EntityManager em, float x, float y)
     {
+        if (!em.HasRoomForEntity) return -1;
+
         int entity = em.CreateEntity();
 
         em.Positions[entity] = new Position(x, y);

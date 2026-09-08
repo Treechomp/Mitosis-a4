@@ -78,6 +78,11 @@ public sealed class EntityFactory
             return -1;
         }
 
+        // The class budget can allow a spawn the entity arrays cannot hold: spores, corpses and
+        // structures are charged to no class but occupy the same fixed-size arrays.
+        if (!_entityManager.HasRoomForEntity)
+            return -1;
+
         int entity = _entityManager.CreateEntity();
         float variation = species.StatVariation;
 

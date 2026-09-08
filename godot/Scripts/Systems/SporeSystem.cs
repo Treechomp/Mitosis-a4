@@ -306,6 +306,8 @@ public sealed class SporeSystem : ISystem
     /// </summary>
     public void SpawnSpore(EntityManager em, float x, float y, int parentSpeciesId)
     {
+        if (!em.HasRoomForEntity) return;
+
         var parentDef = SpeciesRegistry.GetById(parentSpeciesId);
         int entity = em.CreateEntity();
 
@@ -348,6 +350,8 @@ public sealed class SporeSystem : ISystem
 
     private void SpawnShroomer(EntityManager em, float x, float y, int speciesId)
     {
+        if (!em.HasRoomForEntity) return;
+
         var speciesDef = SpeciesRegistry.GetById(speciesId);
         int entity = em.CreateEntity();
 

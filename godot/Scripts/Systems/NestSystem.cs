@@ -555,6 +555,8 @@ public sealed class NestSystem : ISystem
 
     private void SpawnSectid(EntityManager em, float x, float y, int colonyId)
     {
+        if (!em.HasRoomForEntity) return;
+
         var speciesDef = SpeciesRegistry.Get("Sectid");
         int entity = em.CreateEntity();
 
@@ -636,6 +638,8 @@ public sealed class NestSystem : ISystem
 
     public int SpawnNest(EntityManager em, float x, float y, int colonyId)
     {
+        if (!em.HasRoomForEntity) return -1;
+
         var nestDef = SpeciesRegistry.Get("Sectid");
         int entity = em.CreateEntity();
 

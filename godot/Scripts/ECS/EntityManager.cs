@@ -185,6 +185,16 @@ public sealed class EntityManager
     /// <summary>
     /// Create a new entity. Returns entity ID.
     /// </summary>
+    /// <summary>
+    /// Whether another entity can be created. The component arrays are a fixed
+    /// <see cref="MaxEntities"/> long, so this is a hard bound and not a policy:
+    /// <see cref="PopulationBudget"/> caps creatures per class, but spores, corpses and structures
+    /// are charged to no class and fill the same arrays. A caller that spawns without asking gets
+    /// an exception from <see cref="CreateEntity"/> — which is the right signal for a bug, and the
+    /// wrong one for a world that is simply full.
+    /// </summary>
+    public bool HasRoomForEntity => _freeIds.Count > 0 || _nextId < MaxEntities;
+
     public int CreateEntity()
     {
         int id;

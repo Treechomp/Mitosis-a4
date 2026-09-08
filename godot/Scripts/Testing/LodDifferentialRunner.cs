@@ -111,7 +111,21 @@ public partial class LodDifferentialRunner : Node
     public override void _Ready()
     {
         ParseCommandLine();
-        GetTree().Quit(RunAll());
+        // A throw out of _Ready leaves Godot idling with the scene loaded: no exit code, no
+        // failure, just a process that never returns. A gate that hangs cannot be waited on and
+        // cannot be distinguished from one that is merely slow, so an aborted run reports itself
+        // as a failure and quits.
+        int exitCode;
+        try
+        {
+            exitCode = RunAll();
+        }
+        catch (Exception ex)
+        {
+            GD.PrintErr($"[LodDiff] ABORTED: {ex}");
+            exitCode = 1;
+        }
+        GetTree().Quit(exitCode);
     }
 
     // ══════════════════════════════════════════════════════════════════════════

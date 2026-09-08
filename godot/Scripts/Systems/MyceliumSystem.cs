@@ -258,6 +258,7 @@ public sealed class MyceliumSystem : ISystem
     {
         var def = SpeciesRegistry.GetById(speciesId);
         if (def == null || def.MyceliumRadius <= 0f) return -1;
+        if (!em.HasRoomForEntity) return -1;
 
         int entity = em.CreateEntity();
 

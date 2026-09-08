@@ -124,7 +124,19 @@ public partial class PopulationSoakRunner : Node
     public override void _Ready()
     {
         ParseCommandLine();
-        Run();
+        // A throw out of _Ready leaves Godot idling with the scene loaded: no exit code, no
+        // failure, just a process that never returns. A gate that hangs cannot be waited on and
+        // cannot be distinguished from one that is merely slow, so an aborted run reports itself
+        // as a failure and quits.
+        try
+        {
+            Run();
+        }
+        catch (Exception ex)
+        {
+            GD.PrintErr($"[Soak] ABORTED: {ex}");
+            _failures = Math.Max(1, _failures);
+        }
         GetTree().Quit(_failures);
     }
 
