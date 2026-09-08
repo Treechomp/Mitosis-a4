@@ -96,6 +96,15 @@ public partial class PopulationSoakRunner : Node
     [Export] public int FunnelWindow = 1000;
 
     /// <summary>
+    /// Time each system separately and report ms/tick per sample (--no-profile turns it off).
+    /// On by default: the soak timed only the whole run, so which system was expensive could only
+    /// be read off the interactive overlay by eye, and a headless before/after could not be stated
+    /// in the idiom the rest of this project uses. A stopwatch per system per tick is cheap next
+    /// to a tick, but that is measured rather than assumed — see the changelog.
+    /// </summary>
+    [Export] public bool ProfileSystems = true;
+
+    /// <summary>
     /// Capture a world snapshot at t=0 and again at the end of the run (--snapshot-world), so that
     /// a faction's advance can be looked at rather than inferred. Off by default: this runner
     /// otherwise skips everything that only exists to be looked at, and each capture walks every
@@ -204,15 +213,43 @@ public partial class PopulationSoakRunner : Node
                  $"pred {budget.CountFor(PopClass.Predator)}, " +
                  $"faction {budget.CountFor(PopClass.Faction)})");
 
+        // Per-system cost accumulated since the last sample, in the shape GameManager already
+        // uses: one stopwatch, restarted around each Process call.
+        var systemClock = new System.Diagnostics.Stopwatch();
+        var systemMs = new double[systems.Count];
+        int ticksSinceSample = 0;
+        var timingCsv = new StringBuilder();
+        if (ProfileSystems)
+        {
+            timingCsv.Append("tick,total,sectids");
+            for (int i = 0; i < systems.Count; i++)
+                timingCsv.Append(',').Append(systems[i].GetType().Name);
+            timingCsv.AppendLine();
+        }
+
         // ── Tick, sampling as we go ──────────────────────────────────────────
         var samples = new List<Sample>(Ticks / Math.Max(1, SampleInterval) + 2);
         var clock = System.Diagnostics.Stopwatch.StartNew();
         for (int t = 1; t <= Ticks; t++)
         {
             em.SnapshotPositions();
-            for (int i = 0; i < systems.Count; i++)
-                systems[i].Process(em);
+            if (ProfileSystems)
+            {
+                for (int i = 0; i < systems.Count; i++)
+                {
+                    systemClock.Restart();
+                    systems[i].Process(em);
+                    systemClock.Stop();
+                    systemMs[i] += systemClock.Elapsed.TotalMilliseconds;
+                }
+            }
+            else
+            {
+                for (int i = 0; i < systems.Count; i++)
+                    systems[i].Process(em);
+            }
             em.FinalizeNewborns();
+            ticksSinceSample++;
 
             if (HuntFunnelProbe.Enabled && (t % FunnelWindow == 0 || t == Ticks))
             {
@@ -223,6 +260,14 @@ public partial class PopulationSoakRunner : Node
             if (t % SampleInterval == 0 || t == Ticks)
             {
                 samples.Add(Sample.Take(t, em, budget, logger));
+                if (ProfileSystems)
+                {
+                    AppendTimingRow(timingCsv, systems, systemMs, ticksSinceSample, samples[^1]);
+                    if (t % (SampleInterval * 10) == 0)
+                        PrintTopSystems(systems, systemMs, ticksSinceSample);
+                    Array.Clear(systemMs);
+                    ticksSinceSample = 0;
+                }
                 if (t % (SampleInterval * 10) == 0)
                 {
                     var s = samples[^1];
@@ -246,6 +291,7 @@ public partial class PopulationSoakRunner : Node
         }
 
         WriteCsv(samples, budget);
+        if (ProfileSystems) WriteTimingCsv(timingCsv);
         Report(samples, budget, logger);
         HuntFunnelProbe.End();
         logger.Close();
@@ -527,6 +573,45 @@ public partial class PopulationSoakRunner : Node
     private static string Pct(int part, int whole)
         => whole > 0 ? (part / (double)whole).ToString("P2", CultureInfo.InvariantCulture) : "n/a";
 
+    /// <summary>
+    /// One row of per-system mean cost in ms per tick over the sample interval, carrying the
+    /// Sectid count beside it: hunting cost tracks the density of one species rather than world
+    /// population, so it has to be plottable against the population that drives it.
+    /// </summary>
+    private static void AppendTimingRow(StringBuilder csv, List<ISystem> systems, double[] systemMs,
+                                        int ticks, in Sample s)
+    {
+        if (ticks <= 0) return;
+        csv.Append(s.Tick).Append(',').Append(s.Total).Append(',').Append(s.Sectids);
+        for (int i = 0; i < systems.Count; i++)
+            csv.Append(',').Append((systemMs[i] / ticks).ToString("0.####", CultureInfo.InvariantCulture));
+        csv.AppendLine();
+    }
+
+    /// <summary>The few systems actually costing anything, worst first.</summary>
+    private static void PrintTopSystems(List<ISystem> systems, double[] systemMs, int ticks)
+    {
+        if (ticks <= 0) return;
+        var order = new int[systems.Count];
+        for (int i = 0; i < order.Length; i++) order[i] = i;
+        Array.Sort(order, (a, b) => systemMs[b].CompareTo(systemMs[a]));
+
+        var line = new StringBuilder("    ms/tick:");
+        for (int k = 0; k < order.Length && k < 5; k++)
+            line.Append(FormattableString.Invariant(
+                $"  {systems[order[k]].GetType().Name} {systemMs[order[k]] / ticks:0.00}"));
+        GD.Print(line.ToString());
+    }
+
+    private void WriteTimingCsv(StringBuilder csv)
+    {
+        string dir = ProjectSettings.GlobalizePath(LogRoot);
+        Directory.CreateDirectory(dir);
+        string path = Path.Combine(dir, "population_soak_systems.csv");
+        File.WriteAllText(path, csv.ToString());
+        GD.Print($"[Soak] per-system ms/tick -> {path}");
+    }
+
     private void WriteCsv(List<Sample> samples, PopulationBudget budget)
     {
         var sb = new StringBuilder();
@@ -654,6 +739,7 @@ public partial class PopulationSoakRunner : Node
                 case "funnel": FunnelSpecies = value; break;
                 case "funnel-window" when int.TryParse(value, out int v): FunnelWindow = Math.Max(1, v); break;
                 case "snapshot-world": SnapshotWorld = true; break;
+                case "no-profile": ProfileSystems = false; break;
                 default: GD.PushWarning($"[Soak] ignored argument '{arg}'"); break;
             }
         }
