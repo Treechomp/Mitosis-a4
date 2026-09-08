@@ -59,6 +59,38 @@ outcome metrics against recorded verdicts. It is a gate, not a report: the pass/
 the difference from the recorded verdict set, so a change that alters LOD behaviour must
 deliberately re-record. See [tooling-and-tests.md](tooling-and-tests.md).
 
+## Only two of the tiers are tested
+
+`LodDifferentialRunner` runs each scenario at `LODLevel.Full` and at `LODLevel.Minimal`, with its
+control runs at Full. The tiers between them are never compared against anything. Every rate that
+must scale is therefore checked at one end of the ladder and assumed in the middle, in a codebase
+where the rate rule has been broken three times.
+
+That is worth knowing on its own, and it is also the shape the design layer is aiming at: the
+contract wants two levels, full and one compressed, and the gate already tests exactly that pair.
+Collapsing the ladder would delete the untested middle rather than test it.
+
+## Deferred, deliberately
+
+**D2 and D3 are parked, and this is a decision rather than an omission.** They are equivalence
+defects: the work is to make a compressed tier produce the world the full tier produces. Two things
+make that premature.
+
+The player is not implemented (V2, V3, V5 in [README.md](README.md)). Player agency is what the
+recent design work added, and it lands directly on the predation and nutrition economies these two
+defects live in. Tuning tier equivalence against the current balance would be fitting to a
+configuration that is known to be leaving.
+
+Equivalence is also not separately measurable from balance. The differential asks whether two tiers
+agree, not whether either is right; a change can close the gap between them while moving the game.
+D2's first mechanism was tried on exactly that basis and inverted several metrics rather than
+shrinking them — see the note under D2 and [`../changelog.md`](../changelog.md).
+
+So: the systems the equivalence is measured over should be in place and working first, and the LOD
+pass comes after. The gate stays green in the meantime, which is what makes it worth re-reading
+when the work resumes — a red gate carries no signal, and that is the state it took this long to
+leave.
+
 ## Standing divergences
 
 These four categories are what the recorded contract holds as expected `FAIL` rows: every metric

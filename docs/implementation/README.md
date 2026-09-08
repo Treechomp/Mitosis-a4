@@ -72,8 +72,8 @@ Open, reproduced, not fixed. Each is described in full in the document that owns
 
 | # | Defect | Where |
 |---|---|---|
-| D2 | Predation rate falls sharply at coarse LOD tiers: one attack per due tick, plus engagement geometry that ignores the path travelled since the last decision | [lod-and-performance.md](lod-and-performance.md) |
-| D3 | Nutrition consumed/regenerated diverges between LOD tiers in spatial granularity | [lod-and-performance.md](lod-and-performance.md) |
+| D2 | Predation rate falls sharply at coarse LOD tiers: one attack per due tick, plus engagement geometry that ignores the path travelled since the last decision. **Deferred by decision** until the systems it is measured over are in place | [lod-and-performance.md](lod-and-performance.md) |
+| D3 | Nutrition consumed/regenerated diverges between LOD tiers in spatial granularity. **Deferred by decision**, with D2 | [lod-and-performance.md](lod-and-performance.md) |
 | D4 | Faeling keepers have never been observed to damage a structure; cause not established, and the leading hypothesis was invalidated by a later change | [factions.md](factions.md) |
 | D5 | `StatVariation` and `Species.Generation` exist and are never read | [species-data.md](species-data.md) |
 | D6 | `Crystal.FAELING_AGGREGATED` is a dead sentinel from the removed statistical simulation | [factions.md](factions.md) |

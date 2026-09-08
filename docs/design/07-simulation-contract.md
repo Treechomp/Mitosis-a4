@@ -1,6 +1,6 @@
 # 06 — The simulation contract
 
-*Last updated: 2026-09-07*
+*Last updated: 2026-09-08*
 
 Five promises the simulation has to keep. Each exists because breaking it broke the game in a way
 that was hard to see and expensive to find, and each has cost real debugging time — so they are
@@ -32,6 +32,15 @@ Two corollaries, both learned the hard way:
 - **The correctness question is answerable.** Run the same world at full detail and at reduced
   detail and compare the outcomes; anything that diverges beyond noise is either a defect or a
   documented, deliberate exception. This is a test the project keeps, not a principle it hopes for.
+
+The intended end state is **two levels of detail, not a ladder of them**: full, and one compressed
+level for everything the player is not near. The promise above is only ever about cost against
+outcome, and nothing outside the player's vicinity is owed smoothness — a creature nobody is
+watching does not need to move fluidly, it needs to arrive at the right place having done the right
+things. Intermediate levels buy fluidity nobody sees, and each one is another place the rate rule
+can be broken quietly. Collapsing to two is contingent on the compressed level actually producing
+the same world as the full one; until that holds, the ladder is what keeps the error per step
+small enough to live with.
 
 ---
 
