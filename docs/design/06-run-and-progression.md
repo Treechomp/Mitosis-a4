@@ -1,6 +1,6 @@
 # 06 — The run, the goals, and progression
 
-*Last updated: 2026-09-07*
+*Last updated: 2026-09-08*
 
 ## Three nested loops
 
@@ -27,19 +27,41 @@ all expressed relative to how long a run lasts.
 This target is a design decision, not a tuning value, which is why it lives here. Everything it
 implies about specific rates lives in the implementation layer.
 
-**The current build is tuned for roughly a sixth of that**, because its rates were set from
-balance-run length rather than from play. Two consequences worth stating as design, not just as
-numbers:
+**The build does not miss this target uniformly, and where it misses matters more than by how
+much.** Read off the creature tuning rather than assumed, the creature layer already sits about
+right: the shorter-lived species live and breed through several turns of their cycle inside a
+target-length run, which is what the progression layer below needs from them. The faction layer is
+what does not fit, and it misses in two opposite directions at once — faction combat resolves far
+faster than the run wants, while faction terraforming may be too slow to read at all. No single
+scale factor corrects both, which is why a uniform retiming pass was proposed and then withdrawn.
+The figures, and the reading they came from, are in [../changelog.md](../changelog.md).
 
-- **All faction-scale events resolve inside the first few percent of the intended run.** A siege, a
-  bloom's collapse, the prey base filling its ceiling — all of it is over before the run has
-  properly begun. Retuning is not a polish pass; it is the pacing pass the whole design now depends
-  on.
-- **Lifespans no longer exceed a run.** In particular, the Shroomer's lifespan was chosen precisely
-  so that age would *never* check a bloom — leaving crowding and drought as its only limits. At the
-  target length, age begins to bite, which changes the mechanic rather than its numbers. It must be
-  decided deliberately: either lifespan is raised to preserve the original intent, or ageing becomes
-  a third Shroomer limiter and crowding and drought are re-tuned around it.
+- **Faction-scale events resolve inside the first few percent of the intended run.** A siege, a
+  bloom's collapse, the prey base filling its ceiling — over before the run has properly begun.
+  Retuning that is not a polish pass; it is the pacing pass the whole design depends on.
+- **The Shroomer's lifespan follows the growth it achieved.** The original intent was that age
+  would *never* check a bloom, leaving crowding and drought as its only limits, and at the target
+  length age begins to bite. The resolution is neither of the two obvious ones: not raising the
+  span to restore the old intent, and not bolting ageing on as a third flat limiter. **An
+  individual that reaches maturity lives long; one that stays stunted dies young.** Growth only
+  ever increases, so a span derived from it can only lengthen — an elder can never die because it
+  shrank, and the span can be re-derived continuously instead of being fixed at maturity.
+
+  The mechanism this produces is the point of it. A Shroomer on fertile ground grows and lives
+  long; one on ground its own kind has exhausted grows poorly and dies young. A bloom strips the
+  fertility beneath itself, so its own spores land on ground its parents ruined: **the core stops
+  renewing** — its elders live out the span they earned and are not replaced — while the advancing
+  edge, sown onto fresh ground, lives normally. The self-limiting front stops being an attrition
+  constant and becomes demography.
+
+  Two things follow, and they are consequences rather than settled values. Crowding attrition now
+  shares its job with ageing and has to be retuned rather than assumed to still fit: crowding
+  measures density, ageing measures fertility, and they are different limiters. And drying a
+  bloom's ground gains a second channel, because dried ground now produces short-lived offspring
+  and not merely fewer of them.
+
+  Left open: whether maturity, and the thresholds that gate an elder's abilities, stay on an
+  absolute scale or move with how much a given individual managed to grow.
 
 A side effect worth keeping: at the target length a player watches **several full generations** of
 the shorter-lived species. Generational drift becomes something you can see happening, which is the
@@ -85,6 +107,38 @@ strong enough to stay that way.
 It also fixes the endgame problem the condition otherwise has. "Nothing expanded for a while" is a
 negative state that a player can only wait for; "the wild is thriving and holding" is something
 they can see grow.
+
+### Durability — what makes an anchor hard to remove
+
+Durability is not a constant bolted to a structure. **Each faction earns it from what it is already
+good at**, so what makes a faction strong and what keeps its anchor standing are one investment
+rather than two competing ones.
+
+| Faction | Durability comes from | The decision it creates |
+|---|---|---|
+| **Shroomer** | extent — the heart holds more life the more ground the mycelium covers | spreading wide and being able to defend become the same investment, which is what an immobile faction needs |
+| **Sectid** | numbers, and how tightly its nests are clustered | how far to range, and how many to leave at home |
+| **Faeling** | crystal power, spent either on guardians among the wildlife or on a fast return to a threatened crystal | defending the anchor competes with everything else out of one purse |
+
+Three properties fall out of this, and they are why the principle is worth more than a durability
+number would be.
+
+**Extent gives the Shroomer hit points and perimeter at the same time.** A heart already dies when
+too little of the ground inside its reach is still moist, so a wide domain is simultaneously more
+life to cut through and more boundary to dry out. A bloom cannot be strong against both attacks at
+once. That is exactly the "two genuinely different and genuinely effective strategies against the
+same target" the domain section above claims, and which a flat durability value did not deliver.
+
+**Distance is the Sectid's identity.** It tolerates nearly any ground except water, so range is a
+choice for it and a constraint for the other two — the Shroomer cannot leave, the Faeling need not.
+It pays for that reach per individual: a Sectid far from home is fragile, and is not at home
+defending the nest.
+
+**A fast return revives a deleted mechanic, and its failure mode with it.** Keeper travel between
+crystals was removed because keepers that relocate assemble, and assembled keepers sweep the map
+unchallenged. Paying for it out of crystal power is a credible brake — assembling then costs
+exactly what assembling is for — but the failure returns with the mechanism and has to be
+re-measured rather than assumed away.
 
 ## Progression within a run
 

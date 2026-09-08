@@ -1,6 +1,6 @@
 # Changelog
 
-*Last updated: 2026-09-08 · current branch `claude/lod-override-testing-rhwq4f`, head `186a0fd`*
+*Last updated: 2026-09-08 · current branch `claude/lod-override-testing-rhwq4f`, head `afb5e99`*
 
 What changed, when, in which commit, and what it measured. Newest first.
 
@@ -24,6 +24,7 @@ compensate for that, and where, is an open balance decision — it has not been 
 
 | Commit | Date | Change | Result |
 |---|---|---|---|
+| — | 2026-09-08 | Read the creature layer against the 60–120 minute target, to scope V1 | **the creature layer is about right; V1 is a faction-layer divergence.** Derived by reading `SpeciesRegistry` against `SurvivalSystems.HungerDecayScale` at `946d46f` — an analysis, not a run, so it carries no seed. Table below |
 | — | 2026-09-08 | Try D2's first mechanism on its own: spend the elapsed interval as attack credit | **worse, and reverted.** Failing metrics in the differential **44 → 48**; 14 regressions against 5 improvements, 8 of the 14 in `nest_raid` where cooldowns are shortest. Several predation metrics flipped from the coarse tier under-killing to over-killing: `kills.Sectid` full 6 / minimal 15, `deaths_predation.Rabbit` full 4 / minimal 13. Granting a window's blows at the sampling instant denies the prey the escape it gets at Full, so the rate returns as a burst. D2's two mechanisms are not separable |
 | `186a0fd` | 2026-09-08 | Re-record the LOD contract and gate at the tick count it was recorded at (fixes D12) | **the gate exits 0, and had never done so before.** 226 verdicts recorded, 44 `FAIL`, all four documented categories and nothing outside them; two consecutive runs report `known 226 / regression 0 / improvement 0 / drift 0`. The stale comparison was partly a tick-count mismatch: `Ticks` defaulted to 2,000 while the contract, the documented command and the runner's usage line used 3,000 |
 | `6b798c0` | 2026-09-08 | Give species ids a deterministic hash (fixes D1) | **a fixed seed now produces a fixed run.** Seed 1234, 3,000 ticks, one binary: 18 consecutive runs were a 9/9 coin flip between two trajectories before, and 10/10 one trajectory after. `LodDifferential` reported *known 174 / reg 12 / imp 33 / drift 4* then *172 / 14 / 36 / 5* on two consecutive runs of one binary before, and identical counts on two consecutive runs after. The invariant gate's five-seed results are unchanged, cell for cell |
@@ -37,6 +38,33 @@ compensate for that, and where, is an open balance decision — it has not been 
 | `d93d747` | 2026-09-06 | Delete keeper crystal-to-crystal travel | no measurable change — a mobility mechanic serving a raid that never happens (see D4) |
 | `c553833` | 2026-09-06 | Fix `Siege` zero-initialisation: every Sectid was born besieging entity 0 | Sectid `kills_made` **0 → 1,487** (seed 1234), **0 → 1,820** (seed 999) |
 | `72ea4ba` | 2026-09-06 | Gate the LOD differential on the difference from recorded verdicts | the gate can now exit 0; before this it never had |
+
+### The creature layer against a 90-minute run — read from the registry at `946d46f`
+
+Derived by reading `SpeciesRegistry` against `SurvivalSystems.HungerDecayScale`, not measured from a
+run, so there is no seed to stamp. It exists because V1 asserted that *every* rate is set for
+balance-run length, and that is not true of this layer.
+
+| species | full → starving | lifespan | feeding cycles in 90 min | generations in 90 min |
+|---|---|---|---|---|
+| Rabbit | 6.2 min | 12.5 min | 14.4 | 7.2 |
+| Fish | 5.6 min | 8.3 min | 16.2 | 10.8 |
+| Sectid | 9.2 min | 20.8 min | 9.8 | 4.3 |
+| Deer | 13.3 min | 25.0 min | 6.8 | 3.6 |
+| Wolf | 14.6 min | 20.0 min | 6.2 | 4.5 |
+| Shroomer | 14.6 min | 41.7 min | 6.2 | 2.2 |
+| Bear | 24.3 min | 33.3 min | 3.7 | 2.7 |
+| Faeling | — | 50.0 min | — | 1.8 |
+
+Several generations of the shorter-lived species inside a target-length run is what the progression
+layer asks for, and it is what these numbers give. The mis-tuning V1 describes is in the faction
+layer, which misses in two opposite directions at once — combat far too fast, terraforming possibly
+too slow to read.
+
+One incidental finding, kept because it is the reason to distrust the archived reference rather
+than because the number matters: the hunger scale is `0.3` in `SurvivalSystems`, not the `0.6` the
+archived documentation claimed. That was audit finding 01, and it is still the clearest single
+argument for reading the code rather than the archive.
 
 ### The prime-cut sweep — 20 runs, 20,000 ticks each, seeds 1234 / 999 / 4242 / 31337 / 8675309
 

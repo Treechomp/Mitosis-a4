@@ -1,6 +1,6 @@
 # 08 — Open design questions
 
-*Last updated: 2026-09-07*
+*Last updated: 2026-09-08*
 
 Decisions that have not been made. Each states the question, why it is hard, and what is already
 known — not a recommendation. When one is settled, the answer moves into the document it belongs to
@@ -67,14 +67,34 @@ only hunger pushing it.
 This is not a UI question first. It is a question of whether faction advance is *shaped* like
 something visible — a front, a tide line, a spreading stain — or merely statistical.
 
-### R2 — The pacing rework, and what it does to the Shroomer
+The mechanism does bias toward a front: a share of every terraformer's acts works the ground
+directly underfoot rather than a random tile in reach, which is what lets a converter hold and
+extend an edge instead of speckling its neighbourhood. The split, and the rates behind it, are in
+[`../implementation/README.md`](../implementation/README.md) under V7. Whether that reads as a front at world scale has never
+been looked at. The soak runner can now write a biome map at the start and end of a long run, which
+is the instrument for looking.
 
-Rates are set for roughly a sixth of the target run length, so a pacing pass is unavoidable. One
-part of it is a mechanic decision rather than a number: the Shroomer's lifespan was chosen so that
-**age would never check a bloom**, leaving crowding and drought as its only limits. At the target
-length, age begins to bite. Either the lifespan is raised to preserve the original intent, or
-ageing becomes a third limiter and the other two are retuned around it. Both are defensible; they
-are different games for the Shroomer.
+The reading is agreed here in advance, so that it is not fitted to whatever the maps turn out to
+show:
+
+1. **A domain boundary can be pointed at on the end-of-run map.** Then R1 is not a mechanism
+   problem — the front exists and the player has no way to see it while playing, which is V1 in the
+   presentation section below, and different work.
+2. **The change is scattered rather than concentrated around structures.** Then there is no front,
+   despite the underfoot bias, and the mechanism is what has to change.
+3. **The late map looks like the early one.** Then the problem is not terraforming speed but early
+   equilibrium — C2 — and R1 half solves itself.
+
+### R2 — The pacing rework
+
+The faction layer does not fit the target run length, and it misses in two opposite directions:
+faction combat resolves far too fast, while faction terraforming may be too slow to read at all. A
+single scale factor cannot correct both, so the pass is a reshaping and not a retiming. The
+creature layer measures out about right and is not what has to move.
+
+What this does to the Shroomer is no longer part of the question. Its lifespan now follows the
+growth it achieved, which is a settled decision recorded in
+[06-run-and-progression.md](06-run-and-progression.md).
 
 ### R3 — How is the Faeling's ecosystem domain measured and shown?
 
@@ -158,6 +178,17 @@ point — each countering one and countered by another, with the third measuring
 accident of history, matters for every faction-balance decision made from here.
 
 ---
+
+### F5 — Does extent-derived heart health run away?
+
+Anchor durability is earned per faction, and the Shroomer earns it from extent: a wider mycelium
+makes a tougher heart ([06-run-and-progression.md](06-run-and-progression.md)). The obvious failure
+is positive feedback — a bigger bloom is harder to stop, so it gets bigger.
+
+Three counterweights are already settled, and are expected to hold it: drought, the perimeter that
+grows with the extent and has to be kept moist, and growth-derived lifespan stopping the core from
+renewing itself on ground it has exhausted. That they are *sufficient* is a prediction rather than
+a measurement, and it is the shape of prediction this project has been wrong about before.
 
 ## World
 

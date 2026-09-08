@@ -1,6 +1,6 @@
 # Implementation layer
 
-*Last updated: 2026-09-08 · verified against `186a0fd` on `claude/lod-override-testing-rhwq4f`*
+*Last updated: 2026-09-08 · verified against `afb5e99` on `claude/lod-override-testing-rhwq4f`*
 
 What the code does today and where it lives. Secondary to [`../design/`](../design/): if these two
 disagree about intent, design is right and the code has drifted; if they disagree about behaviour,
@@ -55,16 +55,16 @@ picture to compare against, and it is the first thing to re-read when planning w
 Figures here are stamped like changelog entries, because a gap measured against one build is
 evidence about that build.
 
-| # | Divergence | Design says | Code does (at `0b6c012`) |
+| # | Divergence | Design says | Code does (at `afb5e99`) |
 |---|---|---|---|
-| V1 | **Pacing.** Every rate is set from balance-run length rather than play length | median run resolves in 60–120 min ([`design/06-run-and-progression.md`](../design/06-run-and-progression.md)) | rates are tuned around a ~20,000-tick (~17 min) horizon; faction-scale events resolve in the first few percent of a target run — crystal siege ≈800 ticks, prey base at ceiling ≈4,000, a heart dried out ≈5,280 |
-| V1a | **Shroomer lifespan.** A mechanic decision inside V1 | either age never checks a bloom, or ageing becomes a third limiter — deliberately | `MaxLifespan` 50,000 ticks was chosen to *exceed* a run and no longer does; every species now dies of age inside a target run |
+| V1 | **Pacing — in the faction layer, and in two directions at once.** Not every rate, which is what this row used to claim | median run resolves in 60–120 min ([`design/06-run-and-progression.md`](../design/06-run-and-progression.md)) | the creature layer already fits the target: read off `SpeciesRegistry` lifespans and hunger rates against `SurvivalSystems.HungerDecayScale`, the shorter-lived species turn over several generations inside a 90-minute run (table in [`../changelog.md`](../changelog.md)). The faction layer is what misses, and it misses both ways — faction combat resolves far too fast for the run (crystal siege ≈800 ticks, a heart dried out ≈5,280) while faction terraforming may be too slow to read at all (V7). One scale factor cannot correct both, which is why the uniform "retime, then reshape" plan was withdrawn. The prey base reaching its ceiling ≈4,000 ticks is early equilibrium, C2, not lifespan tuning |
+| V1a | **Shroomer lifespan.** A mechanic decision inside V1, and now a settled one | lifespan follows achieved growth — an individual that reaches maturity lives long, one that stays stunted dies young ([`design/06-run-and-progression.md`](../design/06-run-and-progression.md)) | `MaxLifespan` is a flat per-species constant; nothing derives it from `Growth.CurrentScale`. The old fork in this row — raise the constant, or add ageing as a third limiter — is closed, and neither branch was taken |
 | V2 | **The player is not a faction creature** | one creature of one faction, same rules, developing along a path | the player entity has no `Species` component, so it takes no terrain speed clamp (≈1 tile/tick against a creature cap of 0.25), no diet, no faction, no mortality, no verbs |
 | V3 | **No influence channels** | anchors, signals and durable parameter writes — one mechanism, three targets | no signal field, no player-authored parameter writes; `SpeciesDefinition.StatVariation`, the medium the design writes into, is read by nothing (D5) |
 | V4 | **No goal conditions and no domain measure** | asymmetric triple; domain = terrain **and** anchors; the Faeling's domain is the wild it strengthened | nothing measures a per-faction domain. `WorldManager.DeviationAt` compares live moisture against `PristineMoisture` but returns `MathF.Abs(...)` — it discards the sign, which is exactly the attribution (wetter → Shroomer, drier → Sectid). Anchors are already counted |
 | V5 | **Death flow** | respawn at an anchor, paid for out of the faction pool | `FactionLives` is created and consumed by nothing; anchors pay no cost |
 | V6 | **No progression layer** | in-run character paths; between-run unlocks and species patterns that carry over | neither exists; there is no persistence of any kind |
-| V7 | **Rivals' advance is not visible** | one of the two clocks that make standing still bad | terraforming is a probability per cooldown roll applied to one tile at a time; nothing reads as a front. See R1 in [`design/08-open-questions.md`](../design/08-open-questions.md) |
+| V7 | **Rivals' advance is not visible — unverified.** An open measurement, not an established divergence | one of the two clocks that make standing still bad | the mechanism is deliberately biased toward a front: `TerraformSystem` sends half its acts to the tile underfoot and half to a random tile in radius, and its own comment says the underfoot half is what lets a frontier advance exist at all rather than speckling a neighbourhood. Whether that reads as a front at world scale has never been looked at; `--snapshot-world` (`0b6c012`) is the instrument, and the reading is agreed in advance under R1 in [`design/08-open-questions.md`](../design/08-open-questions.md). Parameters as checked here: Shroomer wetter 0.10 / cooldown 4 / radius 2, Sectid drier 0.04 / 6 / radius 3 plus a burst per hatch and an ambient pass every `NestSystem.AmbientTerraformInterval` ticks, Faeling restore 0.25 / 8 / radius 4; `TerraformSystem.MoistureStep` 0.05, scaled by growth |
 
 ## Known defects
 

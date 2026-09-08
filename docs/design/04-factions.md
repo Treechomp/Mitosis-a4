@@ -1,6 +1,6 @@
 # 04 — The three factions
 
-*Last updated: 2026-09-07*
+*Last updated: 2026-09-08*
 
 The factions are the world's plot engine. Ordinary animals produce a steady state; the factions
 produce a *direction* — ground changing hands, fronts advancing, a region that looked settled
@@ -169,11 +169,15 @@ infrastructure before it has built any has not been beaten, it has been deleted 
 Full treatment in [05-player.md](05-player.md) and [06-run-and-progression.md](06-run-and-progression.md);
 the summary belongs here because it is the same asymmetry seen from the player's side.
 
-| | You write into | You win by |
-|---|---|---|
-| **Shroomer** | the ground, and the traits of spores near your heart — defence against reach | holding a share of the world in your own state |
-| **Sectid** | places (a cleared site marked as good ground for a nest) and behaviour (pheromone, and at the top of that path a target mark) | holding a number of standing colonies |
-| **Faeling** | other species — raising the wild so it holds out against faction pressure | neither rival's domain growing, for a sustained period |
+| | You write into | Your anchor survives by | You win by |
+|---|---|---|---|
+| **Shroomer** | the ground, and the traits of spores near your heart — defence against reach | extent: a wider mycelium is a tougher heart, and a longer edge to dry | holding a share of the world in your own state |
+| **Sectid** | places (a cleared site marked as good ground for a nest) and behaviour (pheromone, and at the top of that path a target mark) | numbers and clustering, so ranging far is a real risk | holding a number of standing colonies |
+| **Faeling** | other species — raising the wild so it holds out against faction pressure | crystal power, spent on guardians or on getting back fast | neither rival's domain growing, for a sustained period |
+
+Durability is earned from what each faction is already good at rather than set per structure; the
+principle and what falls out of it are in
+[06-run-and-progression.md](06-run-and-progression.md).
 
 The Faeling's win is the one that had to be invented rather than derived: eliminating two entrenched
 factions is disproportionate effort, and a keeper that wins by conquest is not a keeper. It wins when
