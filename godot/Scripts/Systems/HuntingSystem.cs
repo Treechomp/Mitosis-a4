@@ -983,44 +983,60 @@ public sealed class HuntingSystem : ISystem
             }
             if (canTrack)
             {
-                // Wide-range scan for nearest prey (simulates scent/tracking)
-                _nearbyEntities.Clear();
-                _spatialHash.QueryRadius(pos.X, pos.Y, speciesDef.TrackingRange, _nearbyEntities);
-
                 float bestTrackDistSq = float.MaxValue;
                 int bestTrackTarget = -1;
-                int trackEvaluated = 0;
                 if (probing) HuntFunnelProbe.TrackSearches++;
 
-                foreach (int preyEntity in _nearbyEntities)
+                // EXPANDING RING. Prey is usually near, so scan a small disc first and widen only
+                // when it held nothing this predator would actually walk to. The answer is the
+                // same one a full sweep gives — if an acceptable candidate lies within r then the
+                // nearest acceptable overall lies within r as well, because a disc query returns
+                // everything closer too — but the 80-tile sweep, whose result is discarded except
+                // for a single entity, now runs only when the neighbourhood really is empty.
+                //
+                // The MaxHuntCandidates break this replaces could not do that job. It sat after
+                // the nearest-so-far test, so it counted distance RECORDS rather than candidates
+                // examined, and records grow like the logarithm of the crowd: in a dense swarm it
+                // effectively never fired and bounded nothing, which is the opposite of what its
+                // comment claimed.
+                float trackingRange = MathF.Max(1f, speciesDef.TrackingRange);
+                for (float radius = MathF.Max(1f, trackingRange * 0.25f); ; radius *= 2f)
                 {
-                    // Only walk toward prey we could actually attack on arrival. Tracking used to
-                    // run its own, much laxer test — see Eligibility for what that cost.
-                    if (preyEntity == predator.AvoidTarget)
-                        continue;
-                    if (Eligibility(em, entity, preyEntity, speciesDef, maxPreyMass,
-                            hungerRatio, isSwarm) != PreyReject.Eligible)
-                        continue;
+                    bool lastRing = radius >= trackingRange;
+                    if (lastRing) radius = trackingRange;
 
-                    ref var preyPos2 = ref em.Positions[preyEntity];
-                    float trackDistSq = MathUtils.DistanceSquared(pos.X, pos.Y, preyPos2.X, preyPos2.Y);
-                    if (trackDistSq >= bestTrackDistSq)
-                        continue;
+                    _nearbyEntities.Clear();
+                    _spatialHash.QueryRadius(pos.X, pos.Y, radius, _nearbyEntities);
 
-                    // Bound work in dense crowds (TrackingRange is wide — up to 80 tiles).
-                    if (++trackEvaluated > MaxHuntCandidates)
+                    foreach (int preyEntity in _nearbyEntities)
+                    {
+                        // Only walk toward prey we could actually attack on arrival. Tracking used
+                        // to run its own, much laxer test — see Eligibility for what that cost.
+                        if (preyEntity == predator.AvoidTarget)
+                            continue;
+                        if (Eligibility(em, entity, preyEntity, speciesDef, maxPreyMass,
+                                hungerRatio, isSwarm) != PreyReject.Eligible)
+                            continue;
+
+                        ref var preyPos2 = ref em.Positions[preyEntity];
+                        float trackDistSq = MathUtils.DistanceSquared(pos.X, pos.Y, preyPos2.X, preyPos2.Y);
+                        if (trackDistSq >= bestTrackDistSq)
+                            continue;
+
+                        // Land predators skip tracking targets across water. Deferred to the
+                        // prospective-best only, so path sampling runs a handful of times, not once
+                        // per entity in the (large) tracking radius.
+                        if (speciesDef.AvoidsOpenWater && _worldManager != null
+                            && _worldManager.GetWaterFractionOnPath(pos.X, pos.Y, preyPos2.X, preyPos2.Y,
+                                   deepOnly: !speciesDef.AvoidsWater) > 0.15f)
+                            continue;
+
+                        bestTrackDistSq = trackDistSq;
+                        bestTrackTarget = preyEntity;
+                    }
+
+                    if (bestTrackTarget >= 0 || lastRing)
                         break;
-
-                    // Land predators skip tracking targets across water. Deferred to the
-                    // prospective-best only, so path sampling runs a handful of times, not once
-                    // per entity in the (large) tracking radius.
-                    if (speciesDef.AvoidsOpenWater && _worldManager != null
-                        && _worldManager.GetWaterFractionOnPath(pos.X, pos.Y, preyPos2.X, preyPos2.Y,
-                               deepOnly: !speciesDef.AvoidsWater) > 0.15f)
-                        continue;
-
-                    bestTrackDistSq = trackDistSq;
-                    bestTrackTarget = preyEntity;
                 }
 
                 // Tracking stall. Walking toward prey you never get closer to is as fruitless as
