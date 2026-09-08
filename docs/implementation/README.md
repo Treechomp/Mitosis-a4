@@ -1,6 +1,6 @@
 # Implementation layer
 
-*Last updated: 2026-09-08 · verified against `0b6c012` on `claude/lod-override-testing-rhwq4f`*
+*Last updated: 2026-09-08 · verified against `6b798c0` on `claude/lod-override-testing-rhwq4f`*
 
 What the code does today and where it lives. Secondary to [`../design/`](../design/): if these two
 disagree about intent, design is right and the code has drifted; if they disagree about behaviour,
@@ -72,7 +72,6 @@ Open, reproduced, not fixed. Each is described in full in the document that owns
 
 | # | Defect | Where |
 |---|---|---|
-| D1 | Species ids come from `string.GetHashCode()`, which .NET randomises per process — so multi-faction scenarios are not reproducible across processes. Measured: the soak is a 9/9 coin flip between two trajectories over 18 runs of one binary, and a deterministic hash removes it | [species-data.md](species-data.md) |
 | D2 | Predation rate falls sharply at coarse LOD tiers: one attack per due tick, plus engagement geometry that ignores the path travelled since the last decision | [lod-and-performance.md](lod-and-performance.md) |
 | D3 | Nutrition consumed/regenerated diverges between LOD tiers in spatial granularity | [lod-and-performance.md](lod-and-performance.md) |
 | D4 | Faeling keepers have never been observed to damage a structure; cause not established, and the leading hypothesis was invalidated by a later change | [factions.md](factions.md) |
@@ -86,6 +85,8 @@ Open, reproduced, not fixed. Each is described in full in the document that owns
 
 Ids are stable and are not reused, so the list has gaps. D8 — a kill created nutrition, because the
 killer's share was never subtracted from the corpse pool — was fixed; the change and what it moved
-are in [`../changelog.md`](../changelog.md). D13 was **withdrawn**: it recorded soak results as
-reproducible within a working copy and not across copies, and wider sampling showed that was an
-artifact of too few runs. It was D1 all along, and the evidence now sits there.
+are in [`../changelog.md`](../changelog.md). D1 — species ids from a per-process-randomised hash,
+which made a fixed seed produce a coin flip between two runs — was fixed, and both gates are now
+reproducible. D13 was **withdrawn**: it recorded soak results as reproducible within a working copy
+and not across copies, and wider sampling showed that was an artifact of too few runs. It was D1 all
+along, and its evidence sits under the species registry.

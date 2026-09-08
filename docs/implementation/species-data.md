@@ -1,6 +1,6 @@
 # Species data
 
-*Last updated: 2026-09-08 · verified against `f65a555`*
+*Last updated: 2026-09-08 · verified against `6b798c0`*
 
 ## Files
 
@@ -38,11 +38,13 @@ Constructs every `SpeciesDefinition` and registers it. Lookup is by name hash:
 This file is the authority for every creature tuning value in the game. Nothing in `docs/` restates
 its numbers; read it, or dump it by reflection.
 
-### D1 — species ids are not stable across processes
+### Species ids are a deterministic hash (was D1, fixed)
 
-`string.GetHashCode()` is randomised per process in .NET, so every species id differs from run to
-run. Anything whose result depends on iteration order over a structure keyed by species id is
-therefore not reproducible across processes even with a fixed seed.
+`SpeciesRegistry.GetId` is FNV-1a over the species name, and `Register` keys `_speciesById` with
+the same function. It must not be `string.GetHashCode()`: .NET randomises that per process, so
+every species id differed from run to run, and anything whose result depended on iteration order
+over a structure keyed by species id took a different branch each time. A fixed seed did not
+produce a fixed run.
 
 Reproduced 2026-08-29: `FactionCensus.DominantFactionId` iterates a `Dictionary<int,int>` keyed by
 those ids and breaks a tie by whichever species the dictionary yields first. That answer drives the
@@ -53,10 +55,10 @@ scenarios are byte-identical, so this is a tiny divergence amplifying chaoticall
 randomness.
 
 Measured 2026-09-08 (`PopulationSoak`, seed 1234, 3,000 ticks, one binary, 18 consecutive runs):
-the run is a **coin flip between exactly two trajectories, 9 and 9**. Swapping `GetId` for a
-deterministic FNV-1a hash and repeating the same 18 runs gave **one trajectory, 18 times** — an
-outcome with probability about 2⁻¹⁷ if the flip were still live. That is strong evidence this
-mechanism is sufficient to explain the divergence, and that a stable id scheme removes it.
+before the fix the run was a **coin flip between exactly two trajectories, 9 and 9**. After it,
+the same batch gives **one trajectory** — 18 times in the prototype and 10 times again on the
+committed build. The `LodDifferential` gate, which reported different counts on two consecutive
+runs of one binary, now reports identical ones.
 
 The divergence is invisible until a population class saturates. Before the herbivore budget fills,
 the two trajectories are byte-identical; the first differing sample is the tick the cap is reached,
@@ -64,9 +66,13 @@ because from then on a birth refused to one species is a slot handed to another.
 third of the Sectid count near mid-run and then contracts as the global ceiling binds. Amplifying
 chaos, bounded by the caps — not gross randomness.
 
-A stable id scheme (an explicit id, or a deterministic hash) fixes it at the source. Doing so
-changes every trajectory, so figures recorded before the change are not comparable with figures
-recorded after it.
+Fixing it at the source was the only honest option: an id-order tie is not something a caller can
+guard against. It does mean figures recorded before the change carry no guarantee of matching
+figures after it — though in practice the five-seed prime-cut sweep reproduced exactly, because the
+deterministic ids happen to select the trajectory those runs had already landed on.
+
+Ids are still negative about half the time, and `GetById` still reserves 0 for "uninitialised", so
+`GetId` never returns it.
 
 ## `SpeciesToggle`
 

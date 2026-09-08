@@ -1,6 +1,6 @@
 # Changelog
 
-*Last updated: 2026-09-08 · current branch `claude/lod-override-testing-rhwq4f`, head `0a0ae4d`*
+*Last updated: 2026-09-08 · current branch `claude/lod-override-testing-rhwq4f`, head `6b798c0`*
 
 What changed, when, in which commit, and what it measured. Newest first.
 
@@ -24,6 +24,7 @@ compensate for that, and where, is an open balance decision — it has not been 
 
 | Commit | Date | Change | Result |
 |---|---|---|---|
+| `6b798c0` | 2026-09-08 | Give species ids a deterministic hash (fixes D1) | **a fixed seed now produces a fixed run.** Seed 1234, 3,000 ticks, one binary: 18 consecutive runs were a 9/9 coin flip between two trajectories before, and 10/10 one trajectory after. `LodDifferential` reported *known 174 / reg 12 / imp 33 / drift 4* then *172 / 14 / 36 / 5* on two consecutive runs of one binary before, and identical counts on two consecutive runs after. The invariant gate's five-seed results are unchanged, cell for cell |
 | `0a0ae4d` | 2026-09-08 | Set `PrimeCutShare` from a five-seed sweep rather than by choosing a number | Sectid mean across five seeds **195 → 1,007**, which is 88% of the pre-fix 1,145; invariant gate **2/5 → 4/5 seeds passing**, against 3/5 for the pre-fix build. Table below |
 | `0b6c012` | 2026-09-08 | Optionally snapshot the world at both ends of a soak run (`--snapshot-world`) | seed 1234, 2,000 ticks: verdict and exit code (2) identical with and without the flag; the flagged run wrote two labelled map sets (`_t0`, `_t2000`), the unflagged run wrote none |
 | `e5f5597` | 2026-09-08 | Take the killer's prime cut out of the corpse rather than adding to it (D8) | 20,000 ticks. Seed 1234: Sectid **1,058 → 293**, nests **179 → 51**, Sectid births **1,584 → 574** while Sectid deaths fell (predation 614 → 429, starvation 70 → 52); Shroomer 2,892 → 3,658; total kills 9,830 → 9,274; world deviation 0.0175 → 0.0137. Seed 999: Sectid **1,531 → 229**, nests **283 → 54**. The grace-window invariant went pass → fail on seed 1234; on seed 999 it failed **before** this change too (see D11) |
@@ -53,20 +54,19 @@ economy is what converts that rest into larvae.
 
 Two things the sweep settles beyond the value itself.
 
-**Every cell above is one run, and one run is a coin flip (D1).** Re-running a single binary on
-seed 1234 eighteen times produced exactly two trajectories, nine times each; the same eighteen runs
-with a deterministic species-id hash produced one trajectory eighteen times. So each cell carries
-the spread between two outcomes — at seed 1234 that is Sectid 866 against 933, about 8%.
+**Each cell was one run, and at the time one run was a coin flip (D1).** Re-running a single binary
+on seed 1234 eighteen times produced exactly two trajectories, nine times each — at seed 1234 that
+is Sectid 866 against 933, about 8%. That defect is now fixed, and re-running the whole 0.15 column
+against the deterministic build reproduced **every cell exactly**: 866, 1,445, 1,033, 740, 951, the
+same anchor counts and the same 4/5 pass rate. The ids happen to select the trajectory those runs
+had already landed on, so the column stands as measured rather than merely surviving its error bar.
 
 An earlier draft of this entry blamed the working copy and recorded it as D13. That was wrong: the
 first samples happened to land the same way several times in a row, which looked like per-checkout
-determinism and was not. D13 is withdrawn and the evidence sits under D1.
+determinism and was not. D13 is withdrawn and the evidence sits under the species registry.
 
-The table's conclusion survives, because the differences it turns on are nearly tenfold against a
-spread of 8%, and every column was measured identically. What does *not* survive single-run
-sampling is the pass/fail column: a binary verdict can flip on a re-run for no reason, which is a
-second and independent reason — alongside D11 — to read those as counts over seeds and never as a
-verdict.
+The pass/fail column is still a count over seeds and not a verdict — D11 is untouched by any of
+this, and the assertion still disagrees between seeds of one build.
 
 **The grace-window assertion does not respond monotonically to this parameter** (D11). Seed 8675309
 fails at 0.15, 0.30 and pre-fix but passes at 0.60; seed 1234 does the reverse. A single seed

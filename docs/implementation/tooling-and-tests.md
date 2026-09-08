@@ -1,6 +1,6 @@
 # Tooling & tests
 
-*Last updated: 2026-09-08 · verified against `0b6c012`*
+*Last updated: 2026-09-08 · verified against `6b798c0`*
 
 Four harnesses, three gates, one profiler, one preview tool. All of them build the world from
 `SimulationStack.Build`, so no harness can end up testing a different stack from the one the game
@@ -186,18 +186,20 @@ before/after comparison across this gate has to fix the seed and run both sides,
 flips one seed has not necessarily changed anything. The measured pairs are in
 [`../changelog.md`](../changelog.md).
 
-**A single run is not a measurement, until D1 is fixed.** Re-running one binary on one seed lands
-on either of two trajectories with roughly even odds (D1, [species-data.md](species-data.md)), so
-any figure from a single run carries that spread and any *binary* verdict from one run can flip on
-a re-run for no reason at all. Read this gate over several seeds, and treat a difference smaller
-than the spread between the two trajectories as no difference. A deterministic species id removes
-the flip and is the real fix.
+**A run repeats now, so a single run is a measurement of that seed.** Re-running one binary on one
+seed used to land on either of two trajectories with roughly even odds; deterministic species ids
+([species-data.md](species-data.md)) removed that. A figure is still evidence about one seed only —
+D11 has not gone anywhere, and this gate's assertions still disagree between seeds — so read it over
+several seeds. What has changed is that a difference between two runs is now a real difference
+rather than possibly the dice.
 
 **D12 — the LOD differential's recorded contract is stale.** Run against the current code it
 reports regressions, improvements and drift all at once, which means the CSV describes a build that
 no longer exists. Until it is re-recorded deliberately, the gate cannot reach 0 and a genuine new
 regression is not distinguishable from the standing ones — the exact failure mode the recorded
-contract was introduced to remove.
+contract was introduced to remove. Re-recording is now worth doing: with deterministic ids the gate
+returns the same counts on consecutive runs, so a re-record captures the build rather than one
+throw of the dice.
 
 The gate's current status is a **run result**, not a documentation fact; see
 [`../changelog.md`](../changelog.md).
