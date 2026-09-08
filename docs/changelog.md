@@ -1,6 +1,6 @@
 # Changelog
 
-*Last updated: 2026-09-08 · current branch `claude/lod-override-testing-rhwq4f`, head `3c5e2fc`*
+*Last updated: 2026-09-08 · current branch `claude/lod-override-testing-rhwq4f`, head `23ee09d`*
 
 What changed, when, in which commit, and what it measured. Newest first.
 
@@ -24,6 +24,9 @@ compensate for that, and where, is an open balance decision — it has not been 
 
 | Commit | Date | Change | Result |
 |---|---|---|---|
+| — | 2026-09-08 | Size the swarm kin-count loop that F3 proposed replacing, before building the replacement | **0.0155 ms/tick** — 310 ms over 20,000 ticks across 12.0M iterations, seed 999. That is 0.56% of `HuntingSystem` and **0.07% of the tick**, measured with the timestamp overhead included, so the true figure is lower. F3 is not worth a per-cell census |
+| `23ee09d` | 2026-09-08 | Search outward from the predator instead of sweeping the whole tracking range (F2) | seeds 1234 / 999, 20,000 ticks: `HuntingSystem` mean **6.42 → 3.27** and **6.56 → 2.75** ms/tick (−49%, −58%); −59% and −68% at the dense end; whole tick **32.9 → 20.0** and **34.4 → 22.1** ms (−39%, −36%). Behaviour changes: failing metrics 44 → 43, and invariants hold on 3 of 5 seeds against 4 of 5 — both failures the D11 grace-window assertion |
+| `45488fa` | 2026-09-08 | Ask before spawning; fail instead of hanging (D14, D15) | `--max-pop=20000 --initial=16000`, which threw during seeding, now seeds 14,506, declines the rest and exits 3. LOD gate 226/0/0/0 — the guards never fire at the shipped cap |
 | `3c5e2fc` | 2026-09-08 | Order `Eligibility` cheapest-gate-first and resolve the species registry once per candidate | seed 1234 / 999, 20,000 ticks: mean `HuntingSystem` **6.42 → 5.68** and **6.56 → 5.95** ms/tick (−11.6%, −9.4%), about −12% at the dense end. Behaviour identical — same final composition to the creature, and the LOD gate reports 226/0/0/0. **F1 was expected to be the largest single term and is not**: the curve is still superlinear in Sectid count |
 | `6a723a7` | 2026-09-08 | Time each system inside the soak | the instrument. Overhead below the wall clock's resolution: 3,000 ticks, profiled against not, 33s vs 33s and 34s vs 33s |
 | — | 2026-09-08 | Read the creature layer against the 60–120 minute target, to scope V1 | **the creature layer is about right; V1 is a faction-layer divergence.** Derived by reading `SpeciesRegistry` against `SurvivalSystems.HungerDecayScale` at `946d46f` — an analysis, not a run, so it carries no seed. Table below |
@@ -63,6 +66,24 @@ cost rises **6.1×**; cost *per Sectid* rises from 4.4 to 12.0 µs over the same
 superlinear in the population that drives it and not merely in the world's. At ~1,020 Sectids
 hunting is 8.9–11.6 ms/tick, which reproduces the ~10 ms reported from the interactive build at
 ~1,100 Sectids.
+
+### Where HuntingSystem's cost actually was
+
+Three candidate terms were read out of the code before any of them was changed. Measured, they are
+not close to equal.
+
+| term | what it was | measured |
+|---|---|---|
+| F1 — expensive gate first | a world tile resolved per candidate before the flag test that rejects most | −10% of hunting |
+| F2 — an unbounded tracking sweep | 80 tiles queried and fully scanned to keep one entity, with a cap that counted the wrong thing | **−49% to −58%** |
+| F3 — the per-entity kin count | every swarm member walking nearly the list its neighbours walk | **0.07% of the tick** |
+
+F1 was expected to be the largest single term and was worth a tenth. F3 was expected to be worth
+replacing with a per-cell census and is worth 0.0155 ms/tick — the census would have cost a build
+pass, a query per hunter and a deliberate approximation feeding `Pow(packSize, exponent)` into the
+mass gate, to buy back seven hundredths of one per cent. The whole of it was in F2, and the reason
+is not density but a bound that never bound: the cap counted successive nearest-so-far records
+rather than candidates examined, and records grow logarithmically.
 
 ### `MaxPopulation` above about 14,000 cannot run — an entity-array ceiling, not a cost ceiling
 
