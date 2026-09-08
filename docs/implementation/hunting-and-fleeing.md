@@ -1,6 +1,6 @@
 # Hunting, fleeing & social
 
-*Last updated: 2026-09-07 · verified against `7a7fb28`*
+*Last updated: 2026-09-08 · verified against `0b6c012`*
 
 ## `HuntingSystem` — `Systems/HuntingSystem.cs` · gated
 

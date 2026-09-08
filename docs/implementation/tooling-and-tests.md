@@ -1,6 +1,6 @@
 # Tooling & tests
 
-*Last updated: 2026-09-07 · verified against `7a7fb28`*
+*Last updated: 2026-09-08 · verified against `0b6c012`*
 
 Four harnesses, three gates, one profiler, one preview tool. All of them build the world from
 `SimulationStack.Build`, so no harness can end up testing a different stack from the one the game
@@ -179,6 +179,18 @@ together they broke the game — one faction dismantling the other two within a 
 start. Nothing else could have caught it: the LOD differential compares a build against itself, so
 a change uniformly wrong at every tier passes; the soak measured composition and the composition
 looked fine, because the factions were inside their budgets the whole time.
+
+**D11 — the grace-window assertion is seed-dependent.** The same build passes it on one seed and
+fails it on another, so a green run on a single seed says nothing about the assertion holding. Any
+before/after comparison across this gate has to fix the seed and run both sides, and a change that
+flips one seed has not necessarily changed anything. The measured pairs are in
+[`../changelog.md`](../changelog.md).
+
+**D12 — the LOD differential's recorded contract is stale.** Run against the current code it
+reports regressions, improvements and drift all at once, which means the CSV describes a build that
+no longer exists. Until it is re-recorded deliberately, the gate cannot reach 0 and a genuine new
+regression is not distinguishable from the standing ones — the exact failure mode the recorded
+contract was introduced to remove.
 
 The gate's current status is a **run result**, not a documentation fact; see
 [`../changelog.md`](../changelog.md).

@@ -1,6 +1,6 @@
 # Changelog
 
-*Last updated: 2026-09-07 · current branch `claude/lod-override-testing-rhwq4f`, head `7a7fb28`*
+*Last updated: 2026-09-08 · current branch `claude/lod-override-testing-rhwq4f`, head `0b6c012`*
 
 What changed, when, in which commit, and what it measured. Newest first.
 
@@ -13,10 +13,20 @@ newest first. Commit subjects are quoted where they already say the result.
 
 ---
 
-## 2026-09 — rendering cost, faction repair
+## 2026-09 — rendering cost, faction repair, the corpse economy
+
+Fixing D8 removed food that a bug had been inventing, and the faction that eats corpses paid for
+it. A kill used to yield the killer's cut **plus** an undiminished corpse; it now yields one body
+split between the two. The Sectid colony economy converts corpse mass into larvae
+(`NestSystem` spawns from `FoodStored`), so the change shows up as a birth-rate collapse rather
+than as starvation: Sectid deaths went *down* while births fell by roughly two thirds. Whether to
+compensate for that, and where, is an open balance decision — it has not been made.
 
 | Commit | Date | Change | Result |
 |---|---|---|---|
+| `0b6c012` | 2026-09-08 | Optionally snapshot the world at both ends of a soak run (`--snapshot-world`) | seed 1234, 2,000 ticks: verdict and exit code (2) identical with and without the flag; the flagged run wrote two labelled map sets (`_t0`, `_t2000`), the unflagged run wrote none |
+| `e5f5597` | 2026-09-08 | Take the killer's prime cut out of the corpse rather than adding to it (D8) | 20,000 ticks. Seed 1234: Sectid **1,058 → 293**, nests **179 → 51**, Sectid births **1,584 → 574** while Sectid deaths fell (predation 614 → 429, starvation 70 → 52); Shroomer 2,892 → 3,658; total kills 9,830 → 9,274; world deviation 0.0175 → 0.0137. Seed 999: Sectid **1,531 → 229**, nests **283 → 54**. The grace-window invariant went pass → fail on seed 1234; on seed 999 it failed **before** this change too (see D11) |
+| — | 2026-09-08 | Measured both gates at `946d46f` before changing anything, to have a control | invariant gate: seed 1234 **all 11 pass**, seed 999 **1 fails** (2 anchors lost before t=6000) — the assertion is seed-dependent (D11). LOD differential: **known 189, regression 10, improvement 21, drift 3**, exit 1 — the recorded contract no longer matches the code (D12) |
 | `7a7fb28` | 2026-09-06 | Frustum-cull entities before rendering | instances written per frame **10,401 → 243** |
 | `26f1a63` | 2026-09-06 | Let Shroomers answer a raider parked on their ground | — |
 | `5aa4ba7` | 2026-09-06 | Choose the mycelium heart count with `MinHeartSpacing` instead of letting it emerge | hearts **153 → 26** (seed 1234), **131 → 22** (seed 999) |

@@ -1,6 +1,6 @@
 # Implementation layer
 
-*Last updated: 2026-09-07 · verified against `7a7fb28` on `claude/lod-override-testing-rhwq4f`*
+*Last updated: 2026-09-08 · verified against `0b6c012` on `claude/lod-override-testing-rhwq4f`*
 
 What the code does today and where it lives. Secondary to [`../design/`](../design/): if these two
 disagree about intent, design is right and the code has drifted; if they disagree about behaviour,
@@ -55,7 +55,7 @@ picture to compare against, and it is the first thing to re-read when planning w
 Figures here are stamped like changelog entries, because a gap measured against one build is
 evidence about that build.
 
-| # | Divergence | Design says | Code does (at `7a7fb28`) |
+| # | Divergence | Design says | Code does (at `0b6c012`) |
 |---|---|---|---|
 | V1 | **Pacing.** Every rate is set from balance-run length rather than play length | median run resolves in 60–120 min ([`design/06-run-and-progression.md`](../design/06-run-and-progression.md)) | rates are tuned around a ~20,000-tick (~17 min) horizon; faction-scale events resolve in the first few percent of a target run — crystal siege ≈800 ticks, prey base at ceiling ≈4,000, a heart dried out ≈5,280 |
 | V1a | **Shroomer lifespan.** A mechanic decision inside V1 | either age never checks a bloom, or ageing becomes a third limiter — deliberately | `MaxLifespan` 50,000 ticks was chosen to *exceed* a run and no longer does; every species now dies of age inside a target run |
@@ -81,6 +81,8 @@ Open, reproduced, not fixed. Each is described in full in the document that owns
 | D7 | No automated tests below the whole-run gates — no unit coverage of individual systems | [tooling-and-tests.md](tooling-and-tests.md) |
 | D9 | The "field feeding" of packmates described in earlier documentation is not implemented — no system feeds a groupmate | [factions.md](factions.md) |
 | D10 | `SpeciesDefinition.ImmuneToStarvation` is set on one species and read by nothing; the immunity actually comes from zeroed hunger rates | [survival-and-population.md](survival-and-population.md) |
+| D11 | The invariant gate's grace-window assertion is seed-dependent — it passes on one seed and fails on another *in the same build*, so a single-seed pass is not evidence the gate holds | [tooling-and-tests.md](tooling-and-tests.md) |
+| D12 | The LOD differential's recorded contract no longer matches the code it gates: the run reports regressions, improvements and drift against a build that has moved on, so the gate cannot reach 0 and its exceptions are stale | [tooling-and-tests.md](tooling-and-tests.md) |
 
 Ids are stable and are not reused, so the list has gaps once something is fixed. D8 — a kill created
 nutrition, because the killer's share was never subtracted from the corpse pool — was fixed; the
