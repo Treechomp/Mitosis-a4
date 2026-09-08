@@ -1,6 +1,6 @@
 # LOD & performance
 
-*Last updated: 2026-09-07 · verified against `7a7fb28`*
+*Last updated: 2026-09-08 · verified against `186a0fd`*
 
 ## `LODSystem` — `Systems/LODSystem.cs` · runs first, never gated
 
@@ -60,6 +60,18 @@ the difference from the recorded verdict set, so a change that alters LOD behavi
 deliberately re-record. See [tooling-and-tests.md](tooling-and-tests.md).
 
 ## Standing divergences
+
+These four categories are what the recorded contract holds as expected `FAIL` rows: every metric
+failing in the current recording is a predation count, a spacing, a nutrition total, or a
+population or birth count downstream of those. A failing row outside them is not covered by
+anything written down and is a bug — that is the whole point of recording the set rather than the
+count. The scenarios are small, so a handful of individuals is tens of per cent; the gate takes a
+measured noise floor from two same-tier control runs and fails only when the tier difference clears
+both that floor and a fixed tolerance.
+
+The contract was last recorded once species ids became deterministic. It could not honestly be
+recorded before that: recording twice on one build produced materially different verdicts, which
+the previous baseline recorded as a blocking problem against itself.
 
 ### D2 — predation rate falls at coarse tiers
 

@@ -1,6 +1,6 @@
 # Changelog
 
-*Last updated: 2026-09-08 · current branch `claude/lod-override-testing-rhwq4f`, head `6b798c0`*
+*Last updated: 2026-09-08 · current branch `claude/lod-override-testing-rhwq4f`, head `186a0fd`*
 
 What changed, when, in which commit, and what it measured. Newest first.
 
@@ -24,6 +24,7 @@ compensate for that, and where, is an open balance decision — it has not been 
 
 | Commit | Date | Change | Result |
 |---|---|---|---|
+| `186a0fd` | 2026-09-08 | Re-record the LOD contract and gate at the tick count it was recorded at (fixes D12) | **the gate exits 0, and had never done so before.** 226 verdicts recorded, 44 `FAIL`, all four documented categories and nothing outside them; two consecutive runs report `known 226 / regression 0 / improvement 0 / drift 0`. The stale comparison was partly a tick-count mismatch: `Ticks` defaulted to 2,000 while the contract, the documented command and the runner's usage line used 3,000 |
 | `6b798c0` | 2026-09-08 | Give species ids a deterministic hash (fixes D1) | **a fixed seed now produces a fixed run.** Seed 1234, 3,000 ticks, one binary: 18 consecutive runs were a 9/9 coin flip between two trajectories before, and 10/10 one trajectory after. `LodDifferential` reported *known 174 / reg 12 / imp 33 / drift 4* then *172 / 14 / 36 / 5* on two consecutive runs of one binary before, and identical counts on two consecutive runs after. The invariant gate's five-seed results are unchanged, cell for cell |
 | `0a0ae4d` | 2026-09-08 | Set `PrimeCutShare` from a five-seed sweep rather than by choosing a number | Sectid mean across five seeds **195 → 1,007**, which is 88% of the pre-fix 1,145; invariant gate **2/5 → 4/5 seeds passing**, against 3/5 for the pre-fix build. Table below |
 | `0b6c012` | 2026-09-08 | Optionally snapshot the world at both ends of a soak run (`--snapshot-world`) | seed 1234, 2,000 ticks: verdict and exit code (2) identical with and without the flag; the flagged run wrote two labelled map sets (`_t0`, `_t2000`), the unflagged run wrote none |

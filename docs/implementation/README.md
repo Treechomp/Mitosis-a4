@@ -1,6 +1,6 @@
 # Implementation layer
 
-*Last updated: 2026-09-08 · verified against `6b798c0` on `claude/lod-override-testing-rhwq4f`*
+*Last updated: 2026-09-08 · verified against `186a0fd` on `claude/lod-override-testing-rhwq4f`*
 
 What the code does today and where it lives. Secondary to [`../design/`](../design/): if these two
 disagree about intent, design is right and the code has drifted; if they disagree about behaviour,
@@ -81,12 +81,12 @@ Open, reproduced, not fixed. Each is described in full in the document that owns
 | D9 | The "field feeding" of packmates described in earlier documentation is not implemented — no system feeds a groupmate | [factions.md](factions.md) |
 | D10 | `SpeciesDefinition.ImmuneToStarvation` is set on one species and read by nothing; the immunity actually comes from zeroed hunger rates | [survival-and-population.md](survival-and-population.md) |
 | D11 | The invariant gate's grace-window assertion is seed-dependent — it passes on one seed and fails on another *in the same build*, so a single-seed pass is not evidence the gate holds | [tooling-and-tests.md](tooling-and-tests.md) |
-| D12 | The LOD differential's recorded contract no longer matches the code it gates: the run reports regressions, improvements and drift against a build that has moved on, so the gate cannot reach 0 and its exceptions are stale | [tooling-and-tests.md](tooling-and-tests.md) |
 
 Ids are stable and are not reused, so the list has gaps. D8 — a kill created nutrition, because the
 killer's share was never subtracted from the corpse pool — was fixed; the change and what it moved
 are in [`../changelog.md`](../changelog.md). D1 — species ids from a per-process-randomised hash,
 which made a fixed seed produce a coin flip between two runs — was fixed, and both gates are now
-reproducible. D13 was **withdrawn**: it recorded soak results as reproducible within a working copy
+reproducible. D12 followed from it: with runs repeatable the LOD contract could be re-recorded, and
+that gate now passes. D13 was **withdrawn**: it recorded soak results as reproducible within a working copy
 and not across copies, and wider sampling showed that was an artifact of too few runs. It was D1 all
 along, and its evidence sits under the species registry.

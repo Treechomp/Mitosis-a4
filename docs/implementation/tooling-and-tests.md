@@ -1,6 +1,6 @@
 # Tooling & tests
 
-*Last updated: 2026-09-08 · verified against `6b798c0`*
+*Last updated: 2026-09-08 · verified against `186a0fd`*
 
 Four harnesses, three gates, one profiler, one preview tool. All of them build the world from
 `SimulationStack.Build`, so no harness can end up testing a different stack from the one the game
@@ -141,16 +141,20 @@ verdict is still recorded because it is worth reading.
 Re-recording is deliberate and never a side effect:
 
 ```
-godot --headless --path godot res://Scenes/LodDifferential.tscn -- --ticks=3000 --record
+godot --headless --path godot res://Scenes/LodDifferential.tscn -- --record
 ```
 
-Standing exceptions and their reasoning are in
-[`../archive/lod-differential-baseline-2026-08.md`](../archive/lod-differential-baseline-2026-08.md);
-the live defects are D2 and D3 in [lod-and-performance.md](lod-and-performance.md).
+**Record and gate at the same tick count.** `Ticks` is what both the recording run and the gating
+run step for, so a contract recorded over a different span is compared metric by metric against
+verdicts that were never measured under the same conditions, and the gate reads the mismatch as
+drift in the code. That is what had happened: the export defaulted to 2,000 while the recorded
+contract, the documented command and this runner's own usage line all used 3,000.
 
-**D1 blocks part of this gate**: scenarios with two or more factions are not reproducible across
-processes, so their recorded verdicts are unstable. Single-faction and no-faction scenarios are
-stable. See [species-data.md](species-data.md).
+Standing exceptions and the reasoning for each category are in
+[lod-and-performance.md](lod-and-performance.md), which is where the gate's own messages now send
+you; the live defects among them are D2 and D3. The pre-split history is in
+[`../archive/lod-differential-baseline-2026-08.md`](../archive/lod-differential-baseline-2026-08.md),
+including the reproducibility problem that blocked recording at the time and no longer applies.
 
 ## Gate 3 — whole-game invariants (`PopulationSoakRunner.cs`)
 
@@ -192,14 +196,6 @@ seed used to land on either of two trajectories with roughly even odds; determin
 D11 has not gone anywhere, and this gate's assertions still disagree between seeds — so read it over
 several seeds. What has changed is that a difference between two runs is now a real difference
 rather than possibly the dice.
-
-**D12 — the LOD differential's recorded contract is stale.** Run against the current code it
-reports regressions, improvements and drift all at once, which means the CSV describes a build that
-no longer exists. Until it is re-recorded deliberately, the gate cannot reach 0 and a genuine new
-regression is not distinguishable from the standing ones — the exact failure mode the recorded
-contract was introduced to remove. Re-recording is now worth doing: with deterministic ids the gate
-returns the same counts on consecutive runs, so a re-record captures the build rather than one
-throw of the dice.
 
 The gate's current status is a **run result**, not a documentation fact; see
 [`../changelog.md`](../changelog.md).
