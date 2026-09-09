@@ -1,6 +1,6 @@
 # Changelog
 
-*Last updated: 2026-09-09 · current branch `claude/lod-override-testing-rhwq4f`, head `35c12ec`*
+*Last updated: 2026-09-09 · current branch `claude/lod-override-testing-rhwq4f`, head `6e4dd46`*
 
 What changed, when, in which commit, and what it measured. Newest first.
 
@@ -24,6 +24,7 @@ compensate for that, and where, is an open balance decision — it has not been 
 
 | Commit | Date | Change | Result |
 |---|---|---|---|
+| `6e4dd46` | 2026-09-09 | Add the per-species, per-tile forage yield, and ship it with no species using it | **the mechanism is neutral and the tables are not shipped.** Neutral, verified not assumed: seed 1234, 20,000 ticks, the soak reproduces `f735cea` species for species including its single starvation death, and the LOD differential returns *known 223 / reg 1 / imp 2 / drift 0* — the same verdicts the unmodified build returns. With tables on: the herbivore total does not move, nothing starves, composition moves 30–90%, and the LOD differential loses about twenty verdicts at **any** table strength. Tables below |
 | — | 2026-09-08 | Compute what the grazing economy does, to settle C2 | **food is about a hundredfold from binding herbivore numbers, and is the only thing driving migration.** A Deer needs 2.1 grazeable tiles, the herbivore ceiling would eat from under 1% of the map, and a herd of six balances a thirteen-tile region — so it cannot deplete a meadow. Derived from the registry at `35c12ec`, not from a run. Table below |
 | — | 2026-09-08 | Size the swarm kin-count loop that F3 proposed replacing, before building the replacement | **0.0155 ms/tick** — 310 ms over 20,000 ticks across 12.0M iterations, seed 999. That is 0.56% of `HuntingSystem` and **0.07% of the tick**, measured with the timestamp overhead included, so the true figure is lower. F3 is not worth a per-cell census |
 | `23ee09d` | 2026-09-08 | Search outward from the predator instead of sweeping the whole tracking range (F2) | seeds 1234 / 999, 20,000 ticks: `HuntingSystem` mean **6.42 → 3.27** and **6.56 → 2.75** ms/tick (−49%, −58%); −59% and −68% at the dense end; whole tick **32.9 → 20.0** and **34.4 → 22.1** ms (−39%, −36%). Behaviour changes: failing metrics 44 → 43, and invariants hold on 3 of 5 seeds against 4 of 5 — both failures the D11 grace-window assertion |
@@ -67,6 +68,64 @@ cost rises **6.1×**; cost *per Sectid* rises from 4.4 to 12.0 µs over the same
 superlinear in the population that drives it and not merely in the world's. At ~1,020 Sectids
 hunting is 8.9–11.6 ms/tick, which reproduces the ~10 ms reported from the interactive build at
 ~1,100 Sectids.
+
+### What the forage yield does when it is switched on
+
+Seeds 1234 and 999, 20,000 ticks, `--chunks=36 --max-pop=12000 --initial=2000 --sample=200`,
+against the `f735cea` control on the same seeds. Three table variants were built and measured; none
+of them ships.
+
+| | herbivore total | starvation deaths | invariant gate | LOD differential |
+|---|---|---|---|---|
+| control `f735cea` | 5036 / 5040 | 1 / 0 | 11 of 11 · 10 of 11 (D11) | known 223, reg 1, imp 2 |
+| mechanism, no tables | 5036 | 1 | 11 of 11 | known 223, reg 1, imp 2 |
+| tables, yields to 0.2 | 5039 / 5034 | 0 / 0 | 11 of 11 · 10 of 11 (D11) | not run |
+| tables, yields to 0.45 | 5040 / 5039 | 1 / 0 | 11 of 11 · 11 of 11 | known 188, **reg 23**, imp 13, drift 4 |
+| the same, threshold on raw fertility | 5039 / 5038 | 0 / 0 | 10 of 11 (D11) · 11 of 11 | not run |
+| tables, yields to 0.75 | not run | — | — | known 193, **reg 22**, imp 9, drift 4 |
+
+**The herbivore total never moves.** It sits on its class ceiling in all ten runs, under a change
+that makes forage strictly harder to get. That is C2's finding surviving a direct attempt to break
+it, and it is the strongest single result here.
+
+**Nothing starves,** in any run, under any setting. The largest starvation count in the whole set is
+one animal.
+
+**Composition moves a great deal, and mostly not reproducibly.** At yields down to 0.45, seed 1234
+gives Deer −38%, Musk Ox −35%, Boar −31%; seed 999 gives Deer −41%, Elk +41%, Musk Ox +38%,
+Tapir −49%. Only Deer moves the same way on both seeds. At yields down to 0.2 the same shape gives
+Boar 127 → 10, Turtle 32 → 10 and Frog 27 → **0** — a species lost on one seed, which is what ruled
+that strength out.
+
+**The route is reproduction, not hunger.** Average hunger falls for the species that lose (Deer
+85.7% → 80.8%, Rabbit 97.0% → 85.7% on seed 1234) and `ReproHungerThreshold` is high — a Deer must
+be near-full to breed — so a species that eats slightly worse breeds much less and loses share of an
+allowance it competes for. None of that is visible as death.
+
+**One species already holds most of the herbivore class**: 74% and 66% of the herbivore total on the
+two control seeds, 80% and 63% with tables on. Any forage change is therefore mostly a re-division
+of one species' share, which is why the composition numbers above are large and unstable, and why
+the tables cannot be judged on them (V8 in [`implementation/README.md`](implementation/README.md)).
+
+**`MinAcceptableNutrition` reads as worth, not depletion.** Comparing it against raw fertility
+instead of the yielded value was built and measured: it made the composition swing worse on one seed
+(Deer −47% against −38%) and left species standing on ground that does not feed them. The shipped
+code compares the effective value.
+
+**The LOD cost does not scale with the size of the change.** Yields down to 0.45 cost 23
+regressions; yields down to 0.75 — a range of 1.33× between a species' best and worst ground, small
+enough to barely move the numbers — cost 22. The regressions cluster on `nutrition.consumed`,
+`nutrition.regenerated`, and on Deer's population, births and spacing. Filed as D16: the contract
+cannot separate "LOD fidelity got worse" from "the trajectory moved", so it fails any change to the
+food economy without saying whether the change was harmful.
+
+### The LOD contract was already stale at `f735cea`
+
+Measured as a control before anything was changed: an unmodified checkout returns *known 223,
+regression 1, improvement 2, drift 0* and exits 1. The three moved verdicts are all in
+`freshwater_pond` (`spacing.Deer` regressed, `pop.Fish` and `pop.total` improved) and date from
+`23ee09d`, which changed behaviour and was never re-recorded. A measurement that reads a non-zero
+LOD result as caused by the change under test is reading this instead.
 
 ### The grazing economy, read from the registry at `35c12ec`
 

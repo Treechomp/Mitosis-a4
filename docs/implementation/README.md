@@ -1,6 +1,6 @@
 # Implementation layer
 
-*Last updated: 2026-09-08 · verified against `23ee09d` on `claude/lod-override-testing-rhwq4f`*
+*Last updated: 2026-09-09 · verified against `6e4dd46` on `claude/lod-override-testing-rhwq4f`*
 
 What the code does today and where it lives. Secondary to [`../design/`](../design/): if these two
 disagree about intent, design is right and the code has drifted; if they disagree about behaviour,
@@ -66,6 +66,8 @@ evidence about that build.
 | V6 | **No progression layer** | in-run character paths; between-run unlocks and species patterns that carry over | neither exists; there is no persistence of any kind |
 | V7 | **Rivals' advance is not visible — unverified.** An open measurement, not an established divergence | one of the two clocks that make standing still bad | the mechanism is deliberately biased toward a front: `TerraformSystem` sends half its acts to the tile underfoot and half to a random tile in radius, and its own comment says the underfoot half is what lets a frontier advance exist at all rather than speckling a neighbourhood. Whether that reads as a front at world scale has never been looked at; `--snapshot-world` (`0b6c012`) is the instrument, and the reading is agreed in advance under R1 in [`design/08-open-questions.md`](../design/08-open-questions.md). Parameters as checked here: Shroomer wetter 0.10 / cooldown 4 / radius 2, Sectid drier 0.04 / 6 / radius 3 plus a burst per hatch and an ambient pass every `NestSystem.AmbientTerraformInterval` ticks, Faeling restore 0.25 / 8 / radius 4; `TerraformSystem.MoistureStep` 0.05, scaled by growth |
 
+| V8 | **The engine decides herbivore composition, through one shared class ceiling.** Measured, not inferred | composition is a property of the species, not of the engine ([`design/07-simulation-contract.md`](../design/07-simulation-contract.md)) | `PopulationBudget` gives the herbivore class one allowance and the fastest breeder takes what it can hold: across the soaks recorded in [`../changelog.md`](../changelog.md), a single species held most of the whole herbivore class on both seeds. The route is reproduction, not starvation — nothing starves in any run — so a species that eats slightly worse is slightly less well fed, misses `ReproHungerThreshold` more often, and loses share. That makes forage tuning unable to settle composition on its own: any per-species forage value is reweighting one race for one allowance. Figures in [`../changelog.md`](../changelog.md); the design question is C5 in [`design/08-open-questions.md`](../design/08-open-questions.md) |
+
 ## Known defects
 
 Open, reproduced, not fixed. Each is described in full in the document that owns it.
@@ -81,6 +83,7 @@ Open, reproduced, not fixed. Each is described in full in the document that owns
 | D9 | The "field feeding" of packmates described in earlier documentation is not implemented — no system feeds a groupmate | [factions.md](factions.md) |
 | D10 | `SpeciesDefinition.ImmuneToStarvation` is set on one species and read by nothing; the immunity actually comes from zeroed hunger rates | [survival-and-population.md](survival-and-population.md) |
 | D11 | The invariant gate's grace-window assertion is seed-dependent — it passes on one seed and fails on another *in the same build*, so a single-seed pass is not evidence the gate holds | [tooling-and-tests.md](tooling-and-tests.md) |
+| D16 | The LOD contract is stale, and it is brittle in a way that makes staleness likely. Stale: the recorded verdicts have not been re-recorded since the change that last moved them, so the gate exits non-zero on an unmodified checkout. Brittle: a change to the food economy small enough to leave the population totals alone still flips a large block of verdicts, and a gentler version of the same change flips as many — so the count does not scale with the size of the behaviour change, and the gate cannot distinguish "LOD fidelity got worse" from "the trajectory moved". Figures in [`../changelog.md`](../changelog.md) | [tooling-and-tests.md](tooling-and-tests.md) |
 
 Ids are stable and are not reused, so the list has gaps. D8 — a kill created nutrition, because the
 killer's share was never subtracted from the corpse pool — was fixed; the change and what it moved

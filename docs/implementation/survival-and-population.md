@@ -1,6 +1,6 @@
 # Survival & population
 
-*Last updated: 2026-09-09 · verified against `35c12ec`*
+*Last updated: 2026-09-09 · verified against `6e4dd46`*
 
 ## `HungerSystem` — `Systems/SurvivalSystems.cs` · gated
 
@@ -25,6 +25,10 @@ starvation damage to zero. The property is a trap: it reads as the mechanism and
 Herbivores on grazeable tiles consume tile nutrition and gain food **scaled by what remained**, so
 a stripped tile pays nothing. The consumed/requested ratio is guarded against a zero tick interval,
 which would otherwise be `0/0`.
+
+The payout is also scaled by `TerrainProfile.ForageYield` — what this ground is worth to this
+species. No species sets one today, so the multiplier is 1 and nothing changes; see
+[`species-data.md`](species-data.md) for what it is and why it is dormant.
 
 `FeedTiles` with a `FeedConsumeRate` behave exactly like grazing on water: fertility is stripped
 and food paid in proportion. Without a consume rate the tile is an inexhaustible subsistence floor —

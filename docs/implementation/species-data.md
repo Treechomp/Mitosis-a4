@@ -1,6 +1,6 @@
 # Species data
 
-*Last updated: 2026-09-09 · verified against `35c12ec`*
+*Last updated: 2026-09-09 · verified against `6e4dd46`*
 
 ## Files
 
@@ -102,39 +102,44 @@ sharks and fish — the tile table rates open water as punishing, negative comfo
 partly cancelled it, and the residue accumulated until both species were permanently "escaping" in
 their own feeding grounds, with hunting disabled the whole time.
 
-## Forage yield — decided, not built
+## `TerrainForageModifiers` — built, and not yet used
 
-The design layer asks for a per-species, per-tile forage yield
-([`../design/03-creatures.md`](../design/03-creatures.md)). This records what is there now and what
-that would actually change, so the size of the job is not re-guessed.
+`TerrainProfile.ForageYield` is the fifth dimension of the species↔tile resolver: the multiplier
+between a tile's fertility and the food this species gets out of it, backed by
+`SpeciesDefinition.TerrainForageModifiers`. An unlisted tile is worth face value, so **the roster
+sets no entries and every run is bit-identical to the build before it** — verified, not assumed
+(the LOD differential returns the same verdicts, verdict for verdict, as the build without it).
 
-**What is already per species.** `SpeciesDefinition.CanGraze` decides whether an animal grazes at
-all; `GrazeConsumeRate` is how much fertility it strips per grazing tick and `GrazeNutrition` how
-much hunger that repays. `SurvivalSystems` pays out in proportion to what the tile actually yielded
-against what was asked for, so a stripped tile feeds worse than a fresh one. `FeedTiles` with
-`FeedConsumeRate` is the same arrangement for species that feed off tiles no grazer can use.
+**It scales the payout, not the draw.** A grazer strips ground at `GrazeConsumeRate` wherever it
+stands; poor forage means less hunger back for the same mouthful. So the yield *is* the exchange
+rate between fertility and food, which is what decides how much ground a species needs — scaling
+both sides would only make a species eat faster, not make the ground worth more.
 
-**What is not.** Which grazeable tile the animal is standing on. `TileTypeExtensions.IsGrazeable`
-is one flag over a fixed list of terrain types, and `NutritionCap` — how much fertility that type
-holds and regrows to — is a property of the tile alone. Every species therefore reads the same
-ranking of ground, so no species has an advantage on any of it. `TerrainProfile` already separates
-species by where they will go and how well they tolerate being there; nothing separates them by
-what they get once they arrive.
+`TerrainProfile.EffectiveNutrition` is the tile's fertility as this species values it, and it is
+what every "is this worth eating" threshold now compares against:
 
-**What the change touches.**
+| Site | Question | Reads |
+|---|---|---|
+| `SurvivalSystems` grazing | is there anything here, and what do I get | effective nutrition for the guard, yield on the payout |
+| `SurvivalSystems` `FeedTiles` | the same, for a species that feeds off water | yield on `FeedNutrition` |
+| `WanderSystem.HasFoodAt` | is this still worth standing on | effective nutrition vs `MinAcceptableNutrition` |
+| `WanderSystem.GetFoodScore` | which way is better ground | effective nutrition as the score |
+| `TerrainSystems` grazing pressure | has this ground finished | effective nutrition vs the depletion band |
 
-- A yield lookup joins `TerrainProfile` beside `Speed`, `IsImpassable`, `SteerAversion`,
-  `DiscomfortRate` and `Concealment` — same table shape, same resolver, same fallback-to-neutral
-  rule. No per-tile storage is added; the tile keeps one fertility number.
-- `SurvivalSystems` grazing multiplies the requested draw and the hunger repaid by the resolved
-  yield. The design cares about the exchange rate between them, so both scale together or the
-  change means nothing.
-- `WanderSystem` needs no new mechanism. `HasFoodAt`, `GetFoodScore` and `TryFindFoodTarget`
-  already walk a hungry animal toward the best ground it can see; weighting the score by the
-  species' yield is the whole of the "deer to grass, camel to scrub" behaviour.
-- `EcosystemLogger` and `ReproductionSystem` read `NutritionCap` directly for reporting and for the
-  birth check. Both are per-tile questions, not per-species ones, and neither needs the yield.
-- Nothing about it names a species, which is what makes it admissible at all.
+The threshold sites read the effective value rather than raw fertility because
+`MinAcceptableNutrition` is documented as the point where a species stops treating ground as *worth*
+feeding on. The alternative — reading it as a pure depletion test — was built and measured, and it
+left species standing on ground that does not feed them instead of moving to ground that does.
+
+**Why no species sets one yet.** Turning the tables on was measured on both gates, over two seeds
+and three strengths, and the run figures are in [`../changelog.md`](../changelog.md). The short of
+it: the herbivore total does not move — it is pinned to its class ceiling either way, which is C2's
+finding holding under a change that makes forage strictly harder to get — and nothing starves. What
+moves is species composition, by a lot, in a direction reproducible across seeds for only one
+species; and the LOD differential loses a large block of verdicts to *any* strength of table,
+including one gentle enough to barely change the numbers (D16). Composition is decided by the shared
+class ceiling rather than by forage ([README.md](README.md), V8), so the values cannot be judged
+until that is fixed.
 
 ## D5 — unused fields
 

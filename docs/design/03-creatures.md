@@ -95,7 +95,7 @@ Two consequences, stated as consequences rather than as settled numbers:
 
 ### Feeding niches are per species and per ground
 
-Today a grazer eats every kind of vegetation equally well. How fast an animal strips ground and how
+A grazer still eats every kind of vegetation equally well. How fast an animal strips ground and how
 much that feeds it are already its own; what neither depends on is *which* pasture it is standing
 on. Vegetation is one flag over a list of terrain types plus a per-tile cap that applies the same to
 everyone, so species differ in where they can comfortably *live* and never in what ground is worth
@@ -104,7 +104,7 @@ more to them — and every grazer in a region draws from one shared pool.
 The decided shape is a **per-species, per-tile forage yield**: how much this ground is worth to this
 animal, as another dimension of the same per-species terrain profile that already answers how fast
 it moves here, whether it will enter at all, how quickly standing here wears on it, and how hidden
-it is. Four reasons this is the form:
+it is. Why this is the form:
 
 - It is the architectural move that produced that profile in the first place — one resolver
   answering "how does this species relate to this ground", instead of special cases scattered
@@ -115,8 +115,20 @@ it is. Four reasons this is the form:
 - **It replaces cutting fertility globally.** Reducing the world's grazeable area starves every
   species equally; giving each species a smaller and *different* pool separates them instead. Same
   lever, aimed better.
-- It fixes composition on the food axis as well as the breeding axis — the two together are what
-  stop one species taking a shared allowance.
+
+**The mechanism now exists and no species uses it**, which is deliberate. Switching it on was
+measured, and the measurement changes the order of the work:
+
+- **It does not fix composition, and it was never going to on its own.** Nothing starves; the
+  herbivore total does not move at all. What moves is *which* species hold the shared class
+  ceiling, because a species that eats slightly worse is slightly less well fed, and being well fed
+  is what the design requires before an animal may breed. Composition is settled by a race for one
+  allowance, and forage only reweights the race. **The limit has to become per species first** —
+  the breeding-ground work above — or every forage value is just a thumb on a scale that still has
+  one pan.
+- **Food binds reproduction long before it binds survival.** That is the missing half of "food does
+  not bind herbivore numbers": it does not bind them through hunger, but it reaches the birth rate
+  through the well-fed requirement, and that is a much shorter lever than starvation.
 
 ## Hunting
 

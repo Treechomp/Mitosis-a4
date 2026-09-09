@@ -153,6 +153,13 @@ starving.
 **What the economy is for instead** is migration: a herd should move because the land it stands on
 can no longer support it. It does not do that today, and making it do so is C4.
 
+**One correction, from building the forage mechanism and measuring it.** Food does not bind numbers
+through hunger — nothing starves, in any run, under any forage setting tried. But it reaches the
+birth rate directly, because the design requires an animal to be well fed before it may breed. So
+food *is* a lever on population; it is a much shorter one than starvation, and it acts on births.
+That does not reopen the question — the herbivore total stayed pinned to its class ceiling in every
+run — but it is why forage values move composition, and why they cannot settle it (C5).
+
 The original complaint — the prey base hits its ceiling early and is a flat line for the rest of the
 run — is not answered by this and is not a food question. It belongs to whatever varies a population
 over a run: predation, seasons, faction pressure.
@@ -179,6 +186,14 @@ the right value is the largest one that still leaves reproduction, not hunger, d
 there are.
 
 ### C5 — How much breeding habitat should each species have?
+
+**Now the blocking question, not one of several.** The forage mechanism is built and switched off,
+because measuring it showed that composition is decided by the race for one shared class allowance:
+a species that eats slightly worse breeds slightly less and loses share, and one species already
+holds most of the herbivore class ([`../implementation/README.md`](../implementation/README.md), V8).
+Every per-species forage value is a thumb on a scale with one pan until the limit itself is per
+species. C4 is behind this too — raising food pressure on a shared allowance moves who wins it, not
+how the world feeds.
 
 If numbers are set by breeding ground, then the size and scatter of that ground *is* the population
 control, and it is currently set by hand, on whichever species happened to need it. Open: whether
