@@ -112,6 +112,14 @@ public partial class PopulationSoakRunner : Node
     /// </summary>
     [Export] public bool SnapshotWorld = false;
 
+    /// <summary>
+    /// Ticks between nutrition-balance samples, 0 to record none. The instrument that answers
+    /// whether the world's food supply is anywhere near its demand: the CSV carries fill percent
+    /// against capacity and consumed against regenerated, which is the balance read off the world
+    /// rather than computed from rates.
+    /// </summary>
+    [Export] public int NutritionLogInterval = 0;
+
     private int _failures;
 
     private const int ChunkSize = 32;
@@ -176,7 +184,7 @@ public partial class PopulationSoakRunner : Node
         EcosystemLogger.DecisionLoggingEnabled = false;
         EcosystemLogger.DecisionSpeciesFilter = null;
         EcosystemLogger.TerrainLogInterval = 0;
-        EcosystemLogger.NutritionLogInterval = 0;
+        EcosystemLogger.NutritionLogInterval = NutritionLogInterval;
         EcosystemLogger.ClearTrackedSpecies();
         var logger = new EcosystemLogger(world, $"{LogRoot}/population_soak", budget);
         systems.Add(logger);
@@ -224,6 +232,7 @@ public partial class PopulationSoakRunner : Node
                  $"(herb {budget.CountFor(PopClass.Herbivore)}, " +
                  $"pred {budget.CountFor(PopClass.Predator)}, " +
                  $"faction {budget.CountFor(PopClass.Faction)})");
+        PrintHabitatCapacity(stack.Habitat, budget);
 
         // Per-system cost accumulated since the last sample, in the shape GameManager already
         // uses: one stopwatch, restarted around each Process call.
@@ -373,6 +382,12 @@ public partial class PopulationSoakRunner : Node
             ReportSeries(samples, fullFrom, "Faeling", s => s.Faelings);
         }
 
+        int ceilingTick = -1;
+        foreach (var s in samples)
+            if (s.Herbivores >= budget.BudgetFor(PopClass.Herbivore)) { ceilingTick = s.Tick; break; }
+        GD.Print($"  prey base reached its class ceiling at " +
+                 (ceilingTick < 0 ? "no point in the run — ecology bound first"
+                                  : $"t={ceilingTick} ({ceilingTick * 100 / Math.Max(1, Ticks)}% of the run)"));
         GD.Print($"  budget refusals: herbivore {budget.RefusalsFor(PopClass.Herbivore)}, " +
                  $"predator {budget.RefusalsFor(PopClass.Predator)}, " +
                  $"faction {budget.RefusalsFor(PopClass.Faction)} " +
@@ -601,6 +616,29 @@ public partial class PopulationSoakRunner : Node
     }
 
     /// <summary>The few systems actually costing anything, worst first.</summary>
+    /// <summary>
+    /// What the seed's terrain can feed, against what the world was seeded with. This is the
+    /// reading that says whether ecology or the engineering ceiling is the limit: a capacity far
+    /// above the class budget means the budget binds first, and the budget is a thread count.
+    /// </summary>
+    private static void PrintHabitatCapacity(HabitatCapacity habitat, PopulationBudget budget)
+    {
+        GD.Print("[Soak] habitat capacity — what this seed's ground can feed");
+        int total = 0;
+        foreach (string name in SpeciesRegistry.GetAllNames())
+        {
+            var def = SpeciesRegistry.Get(name);
+            int capacity = habitat.CapacityFor(def);
+            if (capacity == int.MaxValue) continue;      // not fed by the ground
+            total += capacity;
+            int live = budget.CountForSpecies(SpeciesRegistry.GetId(name));
+            GD.Print(FormattableString.Invariant(
+                $"  {name,-12} supply {habitat.SupplyFor(def),8:F3}/tick  demand {HabitatCapacity.DemandPerCreature(def),9:F6}/creature  capacity {capacity,8}  seeded {live,5}"));
+        }
+        GD.Print($"  ground-fed capacity {total} against a herbivore class budget of " +
+                 $"{budget.BudgetFor(PopClass.Herbivore)}");
+    }
+
     private static void PrintTopSystems(List<ISystem> systems, double[] systemMs, int ticks)
     {
         if (ticks <= 0) return;
@@ -751,6 +789,8 @@ public partial class PopulationSoakRunner : Node
                 case "funnel": FunnelSpecies = value; break;
                 case "funnel-window" when int.TryParse(value, out int v): FunnelWindow = Math.Max(1, v); break;
                 case "snapshot-world": SnapshotWorld = true; break;
+                case "nutrition-log" when int.TryParse(value, out int v):
+                    NutritionLogInterval = Math.Max(0, v); break;
                 case "no-profile": ProfileSystems = false; break;
                 default: GD.PushWarning($"[Soak] ignored argument '{arg}'"); break;
             }

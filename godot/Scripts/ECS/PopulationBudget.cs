@@ -71,6 +71,15 @@ public sealed class PopulationBudget
     private readonly int[] _count = new int[ClassCount];
     private readonly long[] _refusals = new long[ClassCount];
 
+    // Live count per species id, maintained by the same Track/Untrack calls that keep the class
+    // counts. The class counts alone cannot answer "is this species' habitat full", and a
+    // per-tick census of 12,000 entities to find out would cost more than every brake it feeds.
+    private readonly System.Collections.Generic.Dictionary<int, int> _countBySpecies = new(32);
+
+    // The species an entity is charged to, so the decrement is exactly the increment even if the
+    // registry changes underneath us — the same guarantee _classOf gives the class counts.
+    private readonly int[] _speciesOf = new int[EntityManager.MaxEntities];
+
     // Which class each live entity is charged to, so the decrement on death is exactly the
     // increment on birth even if the species registry changes underneath us.
     private readonly PopClass[] _classOf = new PopClass[EntityManager.MaxEntities];
@@ -97,6 +106,10 @@ public sealed class PopulationBudget
 
     /// <summary>Live creatures currently charged to a class.</summary>
     public int CountFor(PopClass c) => _count[(int)c];
+
+    /// <summary>Live creatures of one species.</summary>
+    public int CountForSpecies(int speciesId)
+        => _countBySpecies.TryGetValue(speciesId, out int n) ? n : 0;
 
     /// <summary>Spawns refused for a class since the run began.</summary>
     public long RefusalsFor(PopClass c) => _refusals[(int)c];
@@ -199,6 +212,9 @@ public sealed class PopulationBudget
         if (c == PopClass.None) return;
         _classOf[entity] = c;
         _count[(int)c]++;
+        _speciesOf[entity] = speciesId;
+        _countBySpecies.TryGetValue(speciesId, out int n);
+        _countBySpecies[speciesId] = n + 1;
     }
 
     /// <summary>
@@ -213,6 +229,11 @@ public sealed class PopulationBudget
         if (c == PopClass.None) return;
         _classOf[entity] = PopClass.None;
         _count[(int)c]--;
+
+        int speciesId = _speciesOf[entity];
+        _speciesOf[entity] = 0;
+        if (speciesId != 0 && _countBySpecies.TryGetValue(speciesId, out int n))
+            _countBySpecies[speciesId] = n - 1;
     }
 
     /// <summary>

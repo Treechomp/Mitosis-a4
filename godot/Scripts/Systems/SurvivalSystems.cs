@@ -17,11 +17,17 @@ public sealed class HungerSystem : ISystem
 {
     private readonly List<int> _toKill = new(32);
 
-    // Global multiplier on every species' hunger decay. Below 1 it slows starvation across the
-    // board. Predators benefit most — they die almost entirely of starvation between kills
-    // (logs showed ~274 starvation vs ~11 predation deaths) — while continuously-grazing
-    // herbivores sit near full regardless, so this mainly raises the predator carrying capacity.
-    private const float HungerDecayScale = 0.3f;
+    /// <summary>
+    /// Global multiplier on every species' hunger decay. Below 1 it slows starvation across the
+    /// board. Predators benefit most — they die almost entirely of starvation between kills
+    /// (logs showed ~274 starvation vs ~11 predation deaths) — while continuously-grazing
+    /// herbivores sit near full regardless, so this mainly raises the predator carrying capacity.
+    ///
+    /// Public because it is half of what an animal costs the world to keep alive, and
+    /// <see cref="ECS.HabitatCapacity"/> has to read the same number the simulation uses rather
+    /// than a copy of it.
+    /// </summary>
+    public const float HungerDecayScale = 0.3f;
 
     public void Process(EntityManager em)
     {

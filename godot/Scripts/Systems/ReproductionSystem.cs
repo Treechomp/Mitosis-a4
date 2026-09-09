@@ -24,6 +24,7 @@ public sealed class ReproductionSystem : ISystem
 
     private readonly EntityFactory _entityFactory;
     private readonly PopulationBudget? _budget;
+    private readonly HabitatCapacity? _habitat;
 
     /// <summary>
     /// Fraction of the local density limit a species may fill before crowding starts costing it
@@ -34,13 +35,14 @@ public sealed class ReproductionSystem : ISystem
 
     public ReproductionSystem(World.WorldManager worldManager, int maxPopulation,
                                SpatialHash spatialHash, EntityFactory entityFactory,
-                               PopulationBudget? budget = null)
+                               PopulationBudget? budget = null, HabitatCapacity? habitat = null)
     {
         _worldManager = worldManager;
         _maxPopulation = maxPopulation;
         _spatialHash = spatialHash;
         _entityFactory = entityFactory;
         _budget = budget;
+        _habitat = habitat;
     }
 
     public void Process(EntityManager em)
@@ -119,6 +121,17 @@ public sealed class ReproductionSystem : ISystem
             {
                 _budget.LogRefusal(speciesDef);
                 continue;
+            }
+
+            // How full this species' habitat already is, in the world this seed generated. A
+            // dictionary read and a divide, so it sits with the other cheap gates and above every
+            // world lookup. Per species and per world: it cannot select for fast breeders the way
+            // one shared ramp did, because no species' crowding is in another's divisor.
+            if (_habitat != null && _budget != null)
+            {
+                float habitatPass = _habitat.BirthPass(speciesDef, _budget.CountForSpecies(species.SpeciesId));
+                if (habitatPass < 1f && _rng.NextDouble() > habitatPass)
+                    continue;
             }
 
             ref var pos = ref em.Positions[entity];

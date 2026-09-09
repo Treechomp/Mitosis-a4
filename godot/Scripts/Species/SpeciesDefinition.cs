@@ -463,7 +463,7 @@ public sealed class SpeciesDefinition
     /// which made a rabbit and a deer press the pasture identically. Body size should show in the
     /// ground they leave behind.
     /// </summary>
-    public float GrazeConsumeRate { get; init; } = 0.02f;
+    public float GrazeConsumeRate { get; init; } = 0.0654f;
 
     /// <summary>
     /// Tile nutrition below which this species stops treating ground as worth feeding on and

@@ -209,9 +209,23 @@ public static class SpeciesRegistry
             // down to 0.08 — the two species therefore migrate at different times rather than
             // sweeping the map as one front.
             CanGraze = true,
-            GrazeConsumeRate = 0.035f,
+            GrazeConsumeRate = 0.1145f,
             MinAcceptableNutrition = 0.28f,
             GrazeNutrition = 0.5f,
+            // Forage — temperate browser — meadow and woodland edge are its ground; it does
+            // poorly on anything dry, cold or waterlogged.
+            TerrainForageModifiers = new Dictionary<TileType, float>
+            {
+                { TileType.Savanna, 0.83f },
+                { TileType.Shrubland, 0.83f },
+                { TileType.Steppe, 0.83f },
+                { TileType.Taiga, 0.78f },
+                { TileType.Jungle, 0.73f },
+                { TileType.Wetland, 0.67f },
+                { TileType.Tundra, 0.61f },
+                { TileType.Bog, 0.61f },
+                { TileType.Arid, 0.59f },
+            },
 
             // Separation
             SeparationRadius = 2.5f,
@@ -301,9 +315,26 @@ public static class SpeciesRegistry
             // Grazing — light feeder that can still get by on ground a deer has given up on,
             // so the two species stagger their migrations instead of moving as one mass.
             CanGraze = true,
-            GrazeConsumeRate = 0.012f,
+            GrazeConsumeRate = 0.03924f,
             MinAcceptableNutrition = 0.08f,
             GrazeNutrition = 0.3f,
+            // Forage — the generalist, and it pays for it: it eats everywhere and is best
+            // nowhere, so it fills ground the specialists have written off instead of beating
+            // them on theirs.
+            TerrainForageModifiers = new Dictionary<TileType, float>
+            {
+                { TileType.Grass, 0.92f },
+                { TileType.Shrubland, 0.92f },
+                { TileType.Savanna, 0.89f },
+                { TileType.Forest, 0.89f },
+                { TileType.Steppe, 0.89f },
+                { TileType.Taiga, 0.83f },
+                { TileType.Jungle, 0.78f },
+                { TileType.Tundra, 0.73f },
+                { TileType.Wetland, 0.73f },
+                { TileType.Arid, 0.73f },
+                { TileType.Bog, 0.7f },
+            },
             IsFungivore = true,  // nibbles Shroomer spores (not living sprouts — see
                                  // FungivoreEatsSprouts; adult Shroomers now repel grazers)
 
@@ -751,7 +782,15 @@ public static class SpeciesRegistry
                 TileType.ShallowWater, TileType.DeepWater, TileType.River, TileType.Reef,
             },
             FeedNutrition = 0.3f,
-            FeedConsumeRate = 0.006f,
+            FeedConsumeRate = 0.0714f,
+            // Forage — shoal feeder — the reef is worth most and the open deep least, so the
+            // shelf is where it pays to stay.
+            TerrainForageModifiers = new Dictionary<TileType, float>
+            {
+                { TileType.ShallowWater, 0.89f },
+                { TileType.River, 0.78f },
+                { TileType.DeepWater, 0.61f },
+            },
             MinAcceptableNutrition = 0.06f,  // thin water is worth leaving, not starving on
 
             // Separation
@@ -974,6 +1013,20 @@ public static class SpeciesRegistry
 
             CanGraze = true,
             GrazeNutrition = 0.3f,
+            // Forage — marsh feeder — wetland and bog; dry ground is worth least to it whatever
+            // grows there.
+            TerrainForageModifiers = new Dictionary<TileType, float>
+            {
+                { TileType.Jungle, 0.78f },
+                { TileType.Forest, 0.67f },
+                { TileType.Grass, 0.61f },
+                { TileType.Taiga, 0.61f },
+                { TileType.Savanna, 0.56f },
+                { TileType.Shrubland, 0.56f },
+                { TileType.Steppe, 0.56f },
+                { TileType.Tundra, 0.56f },
+                { TileType.Arid, 0.56f },
+            },
 
             SeparationRadius = 1.5f,
             SeparationStrength = 0.02f,
@@ -1237,6 +1290,20 @@ public static class SpeciesRegistry
 
             CanGraze = true,
             GrazeNutrition = 0.3f,
+            // Forage — marsh and shore grazer — wetland and bog; it strays further onto land than
+            // a frog and gets a little more for it.
+            TerrainForageModifiers = new Dictionary<TileType, float>
+            {
+                { TileType.Jungle, 0.73f },
+                { TileType.Grass, 0.67f },
+                { TileType.Forest, 0.67f },
+                { TileType.Savanna, 0.61f },
+                { TileType.Shrubland, 0.61f },
+                { TileType.Taiga, 0.61f },
+                { TileType.Steppe, 0.61f },
+                { TileType.Tundra, 0.59f },
+                { TileType.Arid, 0.56f },
+            },
 
             SeparationRadius = 2f,
             SeparationStrength = 0.02f,
@@ -1320,6 +1387,19 @@ public static class SpeciesRegistry
 
             CanGraze = true,
             GrazeNutrition = 0.6f,
+            // Forage — open northern grazer — grass, steppe and taiga; the tropics are worth
+            // little to it.
+            TerrainForageModifiers = new Dictionary<TileType, float>
+            {
+                { TileType.Forest, 0.89f },
+                { TileType.Savanna, 0.83f },
+                { TileType.Tundra, 0.83f },
+                { TileType.Shrubland, 0.78f },
+                { TileType.Wetland, 0.67f },
+                { TileType.Jungle, 0.61f },
+                { TileType.Bog, 0.61f },
+                { TileType.Arid, 0.56f },
+            },
 
             SeparationRadius = 3f,
             SeparationStrength = 0.03f,
@@ -1414,6 +1494,19 @@ public static class SpeciesRegistry
             // Grazing - omnivore: grazes at reduced efficiency, also hunts small prey
             CanGraze = true,
             GrazeNutrition = 0.3f,  // Lower than pure herbivores
+            // Forage — roots in wet woodland — forest, jungle and swamp; open dry ground gives it
+            // least.
+            TerrainForageModifiers = new Dictionary<TileType, float>
+            {
+                { TileType.Grass, 0.89f },
+                { TileType.Taiga, 0.89f },
+                { TileType.Bog, 0.89f },
+                { TileType.Shrubland, 0.83f },
+                { TileType.Savanna, 0.78f },
+                { TileType.Steppe, 0.73f },
+                { TileType.Tundra, 0.61f },
+                { TileType.Arid, 0.56f },
+            },
             // Rooting omnivore — the primary Shroomer-bloom control (widest reach, biggest bite).
             IsFungivore = true,
             FungivoreFeedRadius = 3.5f,
@@ -1698,6 +1791,20 @@ public static class SpeciesRegistry
 
             CanGraze = true,
             GrazeNutrition = 0.25f,  // Can eat sparse desert scrub
+            // Forage — desert scrub-eater; lush ground is not its food however much of it there
+            // is.
+            TerrainForageModifiers = new Dictionary<TileType, float>
+            {
+                { TileType.Savanna, 0.83f },
+                { TileType.Steppe, 0.73f },
+                { TileType.Grass, 0.67f },
+                { TileType.Forest, 0.61f },
+                { TileType.Jungle, 0.56f },
+                { TileType.Taiga, 0.56f },
+                { TileType.Tundra, 0.56f },
+                { TileType.Wetland, 0.56f },
+                { TileType.Bog, 0.56f },
+            },
             IsFungivore = true,      // nibbles spores/sprouts
 
             SeparationRadius = 1.5f,
@@ -1937,6 +2044,19 @@ public static class SpeciesRegistry
 
             CanGraze = true,
             GrazeNutrition = 0.4f,
+            // Forage — desert browser with the widest dry range — scrub, savanna and arid all pay
+            // in full.
+            TerrainForageModifiers = new Dictionary<TileType, float>
+            {
+                { TileType.Steppe, 0.78f },
+                { TileType.Grass, 0.73f },
+                { TileType.Forest, 0.61f },
+                { TileType.Tundra, 0.61f },
+                { TileType.Taiga, 0.59f },
+                { TileType.Jungle, 0.56f },
+                { TileType.Wetland, 0.56f },
+                { TileType.Bog, 0.56f },
+            },
 
             SeparationRadius = 3f,
             SeparationStrength = 0.025f,
@@ -2564,6 +2684,19 @@ public static class SpeciesRegistry
 
             CanGraze = true,
             GrazeNutrition = 0.5f,
+            // Forage — arctic grazer — tundra, taiga and steppe; heat-country forage is worth
+            // least to it.
+            TerrainForageModifiers = new Dictionary<TileType, float>
+            {
+                { TileType.Grass, 0.83f },
+                { TileType.Forest, 0.78f },
+                { TileType.Shrubland, 0.73f },
+                { TileType.Wetland, 0.67f },
+                { TileType.Bog, 0.67f },
+                { TileType.Savanna, 0.61f },
+                { TileType.Jungle, 0.56f },
+                { TileType.Arid, 0.56f },
+            },
 
             SeparationRadius = 2.5f,
             SeparationStrength = 0.025f,
@@ -2678,6 +2811,19 @@ public static class SpeciesRegistry
 
             CanGraze = true,
             GrazeNutrition = 0.4f,
+            // Forage — canopy forager — jungle and forest; open country is a place it crosses.
+            TerrainForageModifiers = new Dictionary<TileType, float>
+            {
+                { TileType.Wetland, 0.73f },
+                { TileType.Savanna, 0.73f },
+                { TileType.Grass, 0.67f },
+                { TileType.Shrubland, 0.67f },
+                { TileType.Bog, 0.67f },
+                { TileType.Taiga, 0.61f },
+                { TileType.Steppe, 0.61f },
+                { TileType.Tundra, 0.56f },
+                { TileType.Arid, 0.56f },
+            },
             IsFungivore = true,  // forages fungus in the canopy floor
 
             SeparationRadius = 1.5f,
@@ -2750,6 +2896,20 @@ public static class SpeciesRegistry
 
             CanGraze = true,
             GrazeNutrition = 0.3f,
+            // Forage — canopy feeder that will also take open fruit and seed — better off the
+            // trees than a monkey.
+            TerrainForageModifiers = new Dictionary<TileType, float>
+            {
+                { TileType.Savanna, 0.78f },
+                { TileType.Grass, 0.73f },
+                { TileType.Shrubland, 0.73f },
+                { TileType.Wetland, 0.73f },
+                { TileType.Taiga, 0.67f },
+                { TileType.Bog, 0.67f },
+                { TileType.Steppe, 0.61f },
+                { TileType.Arid, 0.59f },
+                { TileType.Tundra, 0.56f },
+            },
 
             SeparationRadius = 1.5f,
             SeparationStrength = 0.02f,
@@ -2977,6 +3137,20 @@ public static class SpeciesRegistry
 
             CanGraze = true,
             GrazeNutrition = 0.5f,
+            // Forage — wet tropical browser — jungle and swamp; it overlaps the boar in forest
+            // and the frog in bog, and leads neither there.
+            TerrainForageModifiers = new Dictionary<TileType, float>
+            {
+                { TileType.Forest, 0.89f },
+                { TileType.Bog, 0.89f },
+                { TileType.Grass, 0.67f },
+                { TileType.Savanna, 0.67f },
+                { TileType.Shrubland, 0.61f },
+                { TileType.Taiga, 0.61f },
+                { TileType.Steppe, 0.61f },
+                { TileType.Tundra, 0.56f },
+                { TileType.Arid, 0.56f },
+            },
 
             SeparationRadius = 2.5f,
             SeparationStrength = 0.025f,

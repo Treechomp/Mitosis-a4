@@ -29,14 +29,22 @@ public sealed class SimulationStack
     public CrystalSystem Crystal { get; }
     public MyceliumSystem Mycelium { get; }
 
+    /// <summary>
+    /// Per-species carrying capacity read off the generated world. Exposed so a harness can report
+    /// what the seed can feed against what it is holding — the number that says whether ecology or
+    /// the engineering ceiling is doing the limiting.
+    /// </summary>
+    public HabitatCapacity Habitat { get; }
+
     private SimulationStack(LODSystem lod, NestSystem nest, SporeSystem spore,
-                            CrystalSystem crystal, MyceliumSystem mycelium)
+                            CrystalSystem crystal, MyceliumSystem mycelium, HabitatCapacity habitat)
     {
         Lod = lod;
         Nest = nest;
         Spore = spore;
         Crystal = crystal;
         Mycelium = mycelium;
+        Habitat = habitat;
     }
 
     /// <summary>
@@ -55,6 +63,10 @@ public sealed class SimulationStack
         PopulationBudget? budget = null)
     {
         var spatialHash = world.SpatialHash;
+
+        // Censuses the terrain on first use rather than now: this runs before the world is
+        // pregenerated, and a census of an ungenerated world would describe nothing.
+        var habitat = new HabitatCapacity(world);
 
         // LODSystem must run FIRST to set tick gating
         var lod = new LODSystem(spatialHash);
@@ -84,7 +96,8 @@ public sealed class SimulationStack
         // is fed/held at the corpse before NestSystem decides whether to ferry the load home.
         systems.Add(new CarrionSystem(spatialHash, world));
         systems.Add(new AgingSystem());
-        systems.Add(new ReproductionSystem(world, maxPopulation, spatialHash, entityFactory, budget));
+        systems.Add(new ReproductionSystem(world, maxPopulation, spatialHash, entityFactory, budget,
+                                            habitat));
         systems.Add(new TerraformSystem(world));
         systems.Add(new TileRegenerationSystem(world));
 
@@ -101,6 +114,6 @@ public sealed class SimulationStack
         var mycelium = new MyceliumSystem(world, spatialHash);
         systems.Add(mycelium);
 
-        return new SimulationStack(lod, nest, spore, crystal, mycelium);
+        return new SimulationStack(lod, nest, spore, crystal, mycelium, habitat);
     }
 }
