@@ -1,6 +1,6 @@
 # Species data
 
-*Last updated: 2026-09-09 · verified against `4bca4f7`*
+*Last updated: 2026-09-09 · verified against `c41212b`*
 
 ## Files
 
@@ -140,6 +140,25 @@ their yields there, so a table is what turns a smaller pool into a *different* p
 Measured on their own, before that second use existed, the tables only moved composition around and
 could not settle it, because the shared class ceiling settled it instead. The figures for both
 states are in [`../changelog.md`](../changelog.md).
+
+## `BreakEvenFullness` — the one number that prices ground
+
+The ground fullness at which a species just holds its condition while feeding. Below it an animal
+loses hunger and must move or die; above it, it gains and can eventually breed. Lower is hardier.
+
+It replaced `GrazeNutrition`, which is deleted. A payout authored independently of hunger drain
+drifts away from it, and had: every grazer was paid enough per mouthful to stay full on ground at a
+tenth of its cap, so being driven onto exhausted land cost nothing. What a full tile pays is now
+`hunger drain ÷ BreakEvenFullness`, computed where it is used, so the two cannot separate again.
+
+It is stated as fullness **while feeding**, not averaged over a run. An animal is only standing on
+ground it can feed from part of the time, so the fullness it actually needs is higher than the
+number — which is the same factor `HabitatCapacity.OccupancyFraction` carries, seen from the other
+side.
+
+`HabitatCapacity` reads it too: a species' demand is `consume rate × BreakEvenFullness`, the draw at
+equilibrium. That is why raising the consume rate and lowering the break-even leaves the population
+where it was and changes only how hard the ground is worn while an animal is on it.
 
 ## D5 — unused fields
 

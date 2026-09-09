@@ -1,6 +1,6 @@
 # Changelog
 
-*Last updated: 2026-09-09 · current branch `claude/lod-override-testing-rhwq4f`, head `4bca4f7`*
+*Last updated: 2026-09-09 · current branch `claude/lod-override-testing-rhwq4f`, head `c41212b`*
 
 What changed, when, in which commit, and what it measured. Newest first.
 
@@ -24,6 +24,7 @@ compensate for that, and where, is an open balance decision — it has not been 
 
 | Commit | Date | Change | Result |
 |---|---|---|---|
+| `c41212b` | 2026-09-09 | Make what a mouthful is worth depend on how full the ground is, stop full animals feeding, and put hunger on the timescale of a run | **animals now starve where they cannot make a living, and no species is lost to it.** Seeds 1234 / 999, 20,000 ticks: starvation deaths **0 → 32 / 34**, average hunger spread **84–96% → 49–94%** and ranked by the quality of the ground each species holds, herbivores 3,177 / 2,776 on a plateau, all invariants holding on both seeds, class ceiling still never reached. Tables below |
 | `4bca4f7` | 2026-09-09 | Give each species a carrying capacity read off the seed's terrain, and raise what species extract to match | **the engine stops deciding how many herbivores there are.** Seeds 1234 / 999, 20,000 ticks: the prey base reaches its class ceiling at **no point in either run** against t=2400 (12% of the run) before, herbivore birth refusals **1,813,206 → 0**, and Lizard — extinct in both controls — returns at 109 / 219. Herbivore total 5,036 / 5,040 → 3,958 / 3,779, held by thirteen species instead of one. Tables below |
 | `6e4dd46` | 2026-09-09 | Add the per-species, per-tile forage yield, and ship it with no species using it | **the mechanism is neutral and the tables are not shipped.** Neutral, verified not assumed: seed 1234, 20,000 ticks, the soak reproduces `f735cea` species for species including its single starvation death, and the LOD differential returns *known 223 / reg 1 / imp 2 / drift 0* — the same verdicts the unmodified build returns. With tables on: the herbivore total does not move, nothing starves, composition moves 30–90%, and the LOD differential loses about twenty verdicts at **any** table strength. Tables below |
 | — | 2026-09-08 | Compute what the grazing economy does, to settle C2 | **food is about a hundredfold from binding herbivore numbers, and is the only thing driving migration.** A Deer needs 2.1 grazeable tiles, the herbivore ceiling would eat from under 1% of the map, and a herd of six balances a thirteen-tile region — so it cannot deplete a meadow. Derived from the registry at `35c12ec`, not from a run. Table below |
@@ -69,6 +70,48 @@ cost rises **6.1×**; cost *per Sectid* rises from 4.4 to 12.0 µs over the same
 superlinear in the population that drives it and not merely in the world's. At ~1,020 Sectids
 hunting is 8.9–11.6 ms/tick, which reproduces the ~10 ms reported from the interactive build at
 ~1,100 Sectids.
+
+### Making hunger track the ground
+
+Seeds 1234 and 999, 20,000 ticks, against the `4bca4f7` build on the same seeds.
+
+**What was wrong, in one number.** A deer's payout was flat for any tile holding more than 0.11
+nutrition, because it scaled by `consumed ÷ requested` rather than by how full the tile was. Its
+`MinAcceptableNutrition` is 0.28 and the move-on pressure starts at 0.30, so it was steered off
+ground long before the payout could fall. The same held for every species. Ground quality decided
+where animals went and never what it was worth to be there.
+
+| | `4bca4f7` | after |
+|---|---|---|
+| starvation deaths | 0 / 0 | **32 / 34** |
+| average hunger, across species | 84–96% | **49–94%** |
+| species lost | none | none |
+| herbivores at t=20,000 | 3,958 / 3,779 | 3,177 / 2,776 |
+| world nutrition fill | 92.0% | 93.8% / 94.6% |
+| invariants | 10 of 11 (D11) · 11 of 11 | **11 of 11 · 11 of 11** |
+| class ceiling | never reached | never reached |
+
+**Hunger now ranks species by the ground they hold, and the ranking reproduces.** Worst fed on both
+seeds are Tapir (49% / 57%), Turtle (64% / 59%) and Fish (64% / 51%) — the species on scarce or
+contested habitat. Best fed are Camel (93% / 92%), Musk Ox (88% / 94%) and Boar (91% / 90%), which
+hold ground nothing else wants. That ordering is the design working: a species thrives where its
+ground supports it.
+
+**The calibration took three passes, and the first two are the useful record.** With the food model
+alone, populations declined all run: hunger had become live but `ReproHungerThreshold` was still set
+at 83–100% of maximum, a threshold that only made sense when every animal sat near full, so almost
+nothing bred. Lowering it to 65% turned the decline into a plateau. The second pass lost Parrot
+entirely on seed 1234 — a flat ×5 on hunger drain gave the smallest-bellied species a 1,444-tick
+starvation time, faster than it could find new ground. Banding every ground feeder into 2,500–8,000
+ticks brought it back at 231.
+
+**Total grazing pressure did not rise, and cannot be raised this way.** Consumption per animal is
+0.0166/tick against 0.0174 before, and the world sits at 94% full either way. At equilibrium an
+animal's draw is its hunger drain divided by how efficiently it converts ground into food, so
+tripling what it strips per feeding tick cuts the time it spends feeding by the same factor. The
+knob that does move it is efficiency — `BreakEvenFullness`, the ground fullness a species needs to
+hold condition. Raising it wears the world harder and starves more animals; the two are the same
+trade, and it sits with C5's density as one decision rather than two.
 
 ### What the terrain-derived capacity does
 

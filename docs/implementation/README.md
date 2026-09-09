@@ -1,6 +1,6 @@
 # Implementation layer
 
-*Last updated: 2026-09-09 · verified against `4bca4f7` on `claude/lod-override-testing-rhwq4f`*
+*Last updated: 2026-09-09 · verified against `c41212b` on `claude/lod-override-testing-rhwq4f`*
 
 What the code does today and where it lives. Secondary to [`../design/`](../design/): if these two
 disagree about intent, design is right and the code has drifted; if they disagree about behaviour,
@@ -85,7 +85,7 @@ Open, reproduced, not fixed. Each is described in full in the document that owns
 | D11 | The invariant gate's grace-window assertion is seed-dependent — it passes on one seed and fails on another *in the same build*, so a single-seed pass is not evidence the gate holds | [tooling-and-tests.md](tooling-and-tests.md) |
 | D16 | The LOD contract is stale, and it is brittle in a way that makes staleness likely. Stale: the recorded verdicts have not been re-recorded since the change that last moved them, so the gate exits non-zero on an unmodified checkout. Brittle: a change to the food economy small enough to leave the population totals alone still flips a large block of verdicts, and a gentler version of the same change flips as many — so the count does not scale with the size of the behaviour change, and the gate cannot distinguish "LOD fidelity got worse" from "the trajectory moved". Figures in [`../changelog.md`](../changelog.md) | [tooling-and-tests.md](tooling-and-tests.md) |
 
-| D17 | A grazer draws from the tile under it every due tick it stands on fertile ground, **whether or not it is hungry** — the hunger gain is clamped at full and the nutrition is destroyed. Measured over a run, most of what grazers take from the world is thrown away, and it is why the world's food flow looked a hundred times larger than the demand on it when computed from what animals need. It also makes hunger a nearly dead variable: animals sit near full for whole runs, so being displaced onto poor ground costs them almost nothing | [survival-and-population.md](survival-and-population.md) |
+| D17 | **Closed.** A grazer drew from the tile under it every due tick it stood on fertile ground, hungry or not, and the hunger gain was clamped, so most of what grazers took from the world was destroyed. It also made hunger a dead variable — animals sat near full for whole runs, so being displaced onto poor ground cost them almost nothing. A full animal now stops feeding, and what a mouthful is worth depends on how full the ground is; hunger spreads across species by the quality of the ground they hold, and animals starve where they cannot make a living. Figures in [`../changelog.md`](../changelog.md) | [survival-and-population.md](survival-and-population.md) |
 
 Ids are stable and are not reused, so the list has gaps. D8 — a kill created nutrition, because the
 killer's share was never subtracted from the corpse pool — was fixed; the change and what it moved

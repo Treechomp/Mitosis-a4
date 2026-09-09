@@ -193,9 +193,18 @@ the right value is the largest one that still leaves reproduction, not hunger, d
 there are.
 
 The pairing has since happened: what a species extracts was raised, and the birth brake it needed
-arrived with it (C5). What has *not* happened is the part this question was really about — the world
-is still nearly full of food and nothing goes hungry, so a herd still does not move because the land
-it stands on stopped supporting it. That needs hunger to be a live variable, which needs D17.
+arrived with it (C5). D17 followed, and with it the half this question was really about — hunger now
+tracks the ground. Animals on contested or marginal habitat sit visibly hungrier than animals on
+ground they hold alone, they starve where they cannot make a living, and no species is lost to it.
+
+**What is left is one number.** The world is still close to full of food in the average, because at
+equilibrium total grazing pressure is fixed by how many animals the world is sized to hold, not by
+how fast any one of them eats — raising a consume rate raises the draw per feeding tick and lowers
+the time spent feeding by the same factor. The efficiency knob is what actually moves it: a species
+that needs *fuller* ground to hold its condition draws more for the same hunger and wears the world
+harder. The remaining question is how hard, which is the same trade as C5's density and should be
+settled with it: more visible grazing means animals that need better ground, which means more of
+them starve.
 
 ### C5 — How densely packed should a niche be? **The mechanism is settled; the number is not.**
 

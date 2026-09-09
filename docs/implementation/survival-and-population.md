@@ -1,6 +1,6 @@
 # Survival & population
 
-*Last updated: 2026-09-09 · verified against `4bca4f7`*
+*Last updated: 2026-09-09 · verified against `c41212b`*
 
 ## `HungerSystem` — `Systems/SurvivalSystems.cs` · gated
 
@@ -22,13 +22,27 @@ starvation damage to zero. The property is a trap: it reads as the mechanism and
 
 ## `GrazingSystem` — `Systems/SurvivalSystems.cs` · gated
 
-Herbivores on grazeable tiles consume tile nutrition and gain food **scaled by what remained**, so
-a stripped tile pays nothing. The consumed/requested ratio is guarded against a zero tick interval,
-which would otherwise be `0/0`.
+**A full animal stops.** Grazing is skipped entirely while hunger is at maximum. It used to run
+regardless, stripping the ground and throwing the food away against the clamp, which destroyed most
+of what grazers took from the world and wore out pasture for nothing (was D17).
 
-The payout is also scaled by `TerrainProfile.ForageYield` — what this ground is worth to this
-species. No species sets one today, so the multiplier is 1 and nothing changes; see
-[`species-data.md`](species-data.md) for what it is and why it is dormant.
+**What a mouthful is worth depends on how full the ground is.** The payout is
+`FullGroundPayout × fullness × ForageYield`, where fullness is the tile's nutrition against its own
+`NutritionCap` — ground at a third of its cap feeds a third as well. It previously scaled by
+`consumed ÷ requested`, which only falls once a tile holds less than a single bite; every species is
+steered off ground long before that, so worn ground cost an animal nothing and hunger tracked
+nothing.
+
+**The payout itself is derived, not authored.** `FullGroundPayout` is the animal's own hunger drain
+divided by `SpeciesDefinition.BreakEvenFullness` — the ground fullness at which it just holds
+condition. Authoring a separate "nutrition per mouthful" is what let the two drift apart until a
+deer was as well fed on exhausted ground as on fresh. Taking the entity's own decay rate rather than
+the definition's carries per-individual variation through: a hungrier animal needs richer ground,
+which is the same statement.
+
+`FeedTiles` species with a `FeedConsumeRate` follow the identical rule — a shoal in water it has
+eaten down is fed in proportion to what is left. The free `FeedNutrition` floor (a species the water
+does not have to carry, and the faction subsistence path) is unchanged.
 
 `FeedTiles` with a `FeedConsumeRate` behave exactly like grazing on water: fertility is stripped
 and food paid in proportion. Without a consume rate the tile is an inexhaustible subsistence floor —
