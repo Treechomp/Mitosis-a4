@@ -144,21 +144,28 @@ fraction of one per cent of the map. Grazing is therefore not a population limit
 made into one by tuning around the edges. The working is in [../changelog.md](../changelog.md), with
 the commit it was read at.
 
-**What limits numbers instead** is reproduction — breeding grounds and fertility-coupled births,
-both per species, both already in the code ([03-creatures.md](03-creatures.md)). That keeps
-composition a property of the species rather than of the engine, which is what
-[07-simulation-contract.md](07-simulation-contract.md) requires, and it does it without anything
-starving.
+**What limits numbers instead** is reproduction — a per-species carrying capacity read off the
+seed's terrain, with breeding grounds and fertility-coupled births inside it
+([03-creatures.md](03-creatures.md)). That keeps composition a property of the species rather than
+of the engine, which is what [07-simulation-contract.md](07-simulation-contract.md) requires.
+
+That is a statement about *numbers*, and it is no longer also a statement about survival. An animal
+on ground that cannot feed it starves, by design — the rule that rejected starvation outright has
+been replaced, and the distinction it was missing is in
+[03-creatures.md](03-creatures.md).
 
 **What the economy is for instead** is migration: a herd should move because the land it stands on
 can no longer support it. It does not do that today, and making it do so is C4.
 
 **One correction, from building the forage mechanism and measuring it.** Food does not bind numbers
-through hunger — nothing starves, in any run, under any forage setting tried. But it reaches the
-birth rate directly, because the design requires an animal to be well fed before it may breed. So
-food *is* a lever on population; it is a much shorter one than starvation, and it acts on births.
-That does not reopen the question — the herbivore total stayed pinned to its class ceiling in every
-run — but it is why forage values move composition, and why they cannot settle it (C5).
+through hunger. It reaches the birth rate directly, because the design requires an animal to be well
+fed before it may breed, so food *is* a lever on population — a much shorter one than starvation,
+acting on births. That does not reopen the question, but it is why forage values move composition
+and why they cannot settle it (C5).
+
+**Nothing starved in any run measured while answering this**, which read at the time as the design
+working. It was not: it meant ground quality had no consequence anywhere, so being driven off good
+land cost an animal nothing. That is now a defect to fix rather than a property to preserve.
 
 The original complaint — the prey base hits its ceiling early and is a flat line for the rest of the
 run — is not answered by this and is not a food question. It belongs to whatever varies a population

@@ -119,8 +119,8 @@ it is. Why this is the form:
 **The mechanism now exists and no species uses it**, which is deliberate. Switching it on was
 measured, and the measurement changes the order of the work:
 
-- **It does not fix composition, and it was never going to on its own.** Nothing starves; the
-  herbivore total does not move at all. What moves is *which* species hold the shared class
+- **It does not fix composition, and it was never going to on its own.** Nothing starved in any
+  run measured at the time, and the herbivore total did not move at all. What moves is *which* species hold the shared class
   ceiling, because a species that eats slightly worse is slightly less well fed, and being well fed
   is what the design requires before an animal may breed. Composition is settled by a race for one
   allowance, and forage only reweights the race. **The limit has to become per species first** —
@@ -146,8 +146,10 @@ With it, a low-value target has to be proportionally closer to be chosen, and th
 with predator size by itself.
 
 Crucially this is a **preference, not a gate**. Nothing is ever excluded for being small. A
-specialist whose entire diet is small game must never starve on principle, and a world containing
-only small prey must still be hunted normally. Hunger flattens the preference: a desperate
+specialist whose entire diet is small game must never starve *by construction* — no species may be
+built such that it cannot make a living even where its prey is abundant — and a world containing
+only small prey must still be hunted normally. That is a rule about the roster; an individual
+starving because it is somewhere it cannot feed is a different thing and is intended. Hunger flattens the preference: a desperate
 predator takes what it can reach.
 
 **Can I find it?** Detection is not a fixed radius. Prey that matches its ground is noticed from
@@ -231,7 +233,7 @@ not a brake at all — see [07-simulation-contract.md](07-simulation-contract.md
 a birth, not a footstep. Nothing stops animals walking into ground that is already crowded, which is
 why a lot of them can stand in a small place despite the brake.
 
-### Numbers are limited at the point of birth, not by hunger
+### Numbers are limited at the point of birth
 
 **How many of a species there are is a fact about the ground, and it is decided at birth.** Each
 species has a carrying capacity read off the world the seed actually generated: the food flow of the
@@ -268,12 +270,41 @@ there are species, which is the fix that already worked once.
 chosen by a thread budget ([07-simulation-contract.md](07-simulation-contract.md)). Numbers set by
 what the ground can feed leave that allowance untouched, which is what it is for.
 
-*Starvation is a local outcome, not the equilibrium.* A herd pushed off its ground — by predators,
-by a rival faction's terraforming, by its own numbers — should be able to starve there, and that is
-worth having. What is rejected is starvation as the *mechanism that sets the population*: an
-equilibrium reached by continuous die-off is a world of corpses, and this project has had to undo
-that more than once. Limiting at birth reaches the same numbers and leaves hunger free to be a real
-danger in the places where it should be one.
+*Numbers and survival are different questions, and hunger answers the second one.* Limiting at
+birth decides **how many** there are. It does not decide **where** they can be, and it must not be
+used to spare them. See below.
+
+### A species thrives where its ground supports it, and nowhere else
+
+**An animal on ground that cannot feed it starves.** A herd driven onto arid land by a predator, a
+sounder pushed out of its forest by a rival faction's terraforming, a population that has eaten its
+own patch bare — if there is no living to be made where they end up and they do not find their way
+to somewhere there is, they die there. That is the intended outcome, not a failure to be tuned out.
+
+This replaces an earlier rule that rejected starvation outright. That rule was written against a
+real failure — equilibria reached by continuous die-off, which this project has had to undo more
+than once — but it was the wrong generalisation, and it made hunger meaningless everywhere in order
+to prevent a die-off in one place. The distinction that actually holds:
+
+- **Starvation as the population limit is still rejected.** A world that holds its numbers by
+  killing the surplus every generation is a world of corpses, and it puts the prey base on a
+  boom-and-bust cycle the player can do nothing about. Reproduction sets the numbers.
+- **Starvation as a local consequence is required.** It is what makes ground worth holding, what
+  makes being driven off it a real loss, and what makes a faction's terraforming an act with
+  victims rather than a change of colour. Without it, displacement costs nothing and the map is
+  wallpaper.
+
+Two things follow, and both are load-bearing:
+
+**Being fed has to depend on where you are standing.** Ground that has been grazed down, or that
+suits the species badly to begin with, must feed an animal *less* — not merely be somewhere it
+prefers not to be. A preference an animal can ignore at no cost is not a pressure.
+
+**Hunger has to move on the timescale of a run.** An animal that would take three runs to starve is
+not under any pressure at all, whatever the ground is doing.
+
+The species that are *meant* to be hardy stay hardy: a camel crossing bad country should be the one
+that survives it. Hardiness is a species property, not a property of the world.
 
 ## What the roster is for
 

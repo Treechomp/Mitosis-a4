@@ -1,6 +1,6 @@
 # Design layer
 
-*Last updated: 2026-09-07*
+*Last updated: 2026-09-09*
 
 What Mitosis is meant to be, and why its systems are shaped the way they are. Everything here is
 readable without opening the codebase, and nothing here can be verified — or falsified — by
@@ -26,7 +26,7 @@ Function, intent, constraint, and the reasoning behind a choice. A system is des
 job it does in the game** and **what it guarantees**, not by how it is written.
 
 - ✅ "A predator prefers prey that is worth the chase, but is never forbidden a small meal — a
-  specialist whose whole diet is small game must not starve on principle."
+  specialist whose whole diet is small game must not starve by construction."
 - ❌ "`HuntingSystem` multiplies the candidate score by `1 / (nutrition / (MaxHunger × 0.25))`,
   clamped to 20×."
 
