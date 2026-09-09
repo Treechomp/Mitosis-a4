@@ -1,6 +1,6 @@
 # Changelog
 
-*Last updated: 2026-09-09 · current branch `claude/lod-override-testing-rhwq4f`, head `6e4dd46`*
+*Last updated: 2026-09-09 · current branch `claude/lod-override-testing-rhwq4f`, head `4bca4f7`*
 
 What changed, when, in which commit, and what it measured. Newest first.
 
@@ -24,6 +24,7 @@ compensate for that, and where, is an open balance decision — it has not been 
 
 | Commit | Date | Change | Result |
 |---|---|---|---|
+| `4bca4f7` | 2026-09-09 | Give each species a carrying capacity read off the seed's terrain, and raise what species extract to match | **the engine stops deciding how many herbivores there are.** Seeds 1234 / 999, 20,000 ticks: the prey base reaches its class ceiling at **no point in either run** against t=2400 (12% of the run) before, herbivore birth refusals **1,813,206 → 0**, and Lizard — extinct in both controls — returns at 109 / 219. Herbivore total 5,036 / 5,040 → 3,958 / 3,779, held by thirteen species instead of one. Tables below |
 | `6e4dd46` | 2026-09-09 | Add the per-species, per-tile forage yield, and ship it with no species using it | **the mechanism is neutral and the tables are not shipped.** Neutral, verified not assumed: seed 1234, 20,000 ticks, the soak reproduces `f735cea` species for species including its single starvation death, and the LOD differential returns *known 223 / reg 1 / imp 2 / drift 0* — the same verdicts the unmodified build returns. With tables on: the herbivore total does not move, nothing starves, composition moves 30–90%, and the LOD differential loses about twenty verdicts at **any** table strength. Tables below |
 | — | 2026-09-08 | Compute what the grazing economy does, to settle C2 | **food is about a hundredfold from binding herbivore numbers, and is the only thing driving migration.** A Deer needs 2.1 grazeable tiles, the herbivore ceiling would eat from under 1% of the map, and a herd of six balances a thirteen-tile region — so it cannot deplete a meadow. Derived from the registry at `35c12ec`, not from a run. Table below |
 | — | 2026-09-08 | Size the swarm kin-count loop that F3 proposed replacing, before building the replacement | **0.0155 ms/tick** — 310 ms over 20,000 ticks across 12.0M iterations, seed 999. That is 0.56% of `HuntingSystem` and **0.07% of the tick**, measured with the timestamp overhead included, so the true figure is lower. F3 is not worth a per-cell census |
@@ -68,6 +69,61 @@ cost rises **6.1×**; cost *per Sectid* rises from 4.4 to 12.0 µs over the same
 superlinear in the population that drives it and not merely in the world's. At ~1,020 Sectids
 hunting is 8.9–11.6 ms/tick, which reproduces the ~10 ms reported from the interactive build at
 ~1,100 Sectids.
+
+### What the terrain-derived capacity does
+
+Seeds 1234 and 999, 20,000 ticks, `--chunks=36 --max-pop=12000 --initial=2000 --sample=200`,
+against the `f735cea` control on the same seeds. Three builds: the control, the capacity brake
+alone, and the brake with forage tables and rebalanced extraction rates.
+
+| | prey base reached its class ceiling | herbivore birth refusals | herbivore total | invariants |
+|---|---|---|---|---|
+| control `f735cea` | t=2400 — 12% of the run | 1,813,206 | 5,036 / 5,040 | 11 of 11 · 10 of 11 (D11) |
+| brake only, rates unchanged | t=2400 | 1,813,206 | 5,038 | 11 of 11 |
+| **brake, tables, rebalanced rates** | **never — ecology bound first** | **0** | 3,958 / 3,779 | 10 of 11 (D11) · 11 of 11 |
+
+**The refusal count is the result.** 1,813,206 refused herbivore births in a 20,000-tick run is the
+engine choosing the world's contents about ninety times a tick, and it is now zero. The prey base
+rises to roughly 4,100 by t=6000 and holds between 3,900 and 4,200 for the rest of the run, against
+a class allowance of 5,040 that is never touched.
+
+**Composition stops being one species.** Fish held 74% and 66% of the herbivore class in the two
+controls and holds 30% and 29% now. Lizard was extinct in both controls — 0 individuals at t=20,000
+— and ends at 109 and 219. Every rare species recovers on both seeds: seed 1234 gives Rabbit
+4 → 501, Parrot 2 → 70, Monkey 26 → 246, Frog 21 → 227, Camel 41 → 272, and seed 999 the same
+directions. Deer and Fish, the two that were over their computed capacity, fall to it: Deer 471 → 153
+against a capacity of 165, Fish 3,737 → 1,179 against 1,195.
+
+**The direction reproduces across seeds**, which the forage tables alone never did. The mechanism is
+a limit rather than a reweighting, so the same species win and lose on both.
+
+**The brake alone does almost nothing**, which is the control that matters: with rates unchanged the
+capacities are about five times the class allowance, so the ceiling is still reached at t=2400 and
+the refusal count is unchanged. It is the rebalanced extraction that moves the binding constraint;
+the brake is what catches it when it moves.
+
+**Nothing starves, and the world is still nearly full of food.** Starvation deaths are 0 or 1 in
+every run. `--nutrition-log=500` on seed 1234 to t=8000: the world holds 92.0% of its total
+nutrition capacity at equilibrium, consuming 71.2/tick against 70.0/tick regenerated. So the
+population is limited by the capacity model, not by running out of food — the model is a design
+choice about how densely a niche should be packed, and it says so.
+
+**The gap the density number is hiding.** The capacity model prices an animal at the rate it strips
+while feeding. Measured, ~4,100 herbivores consume 71.2/tick, which is 0.017 each against a nominal
+rate of 0.065 — animals are actually feeding about a quarter of the time. So the occupancy fraction
+absorbs a duty cycle as well as a margin, and is part ecology and part fudge until D17 is fixed.
+
+**What D17 costs, in numbers.** Grazers draw from the ground whether or not they are hungry. What
+the same population *needs* to stay fed is about 8/tick against the 71.2/tick it takes, so about
+seven eighths of everything grazers strip from the world is destroyed rather than eaten. That is
+also why the earlier "food is a hundredfold from binding" figure was wrong: it computed the 8, and
+the world is drawn down by the 71.
+
+**The LOD differential cannot adjudicate this change.** It returns known 178 / regression 24 /
+improvement 14 / drift 10, against 223 / 1 / 2 / 0 for the control — the same order of movement the
+forage tables alone produced at any strength, which is D16. The contract has not been re-recorded:
+re-recording would bury 24 regressions that nothing has established are harmless, and leaving it red
+loses nothing, since it was already red at `f735cea`.
 
 ### What the forage yield does when it is switched on
 

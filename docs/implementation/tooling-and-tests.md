@@ -1,6 +1,6 @@
 # Tooling & tests
 
-*Last updated: 2026-09-08 · verified against `186a0fd`*
+*Last updated: 2026-09-09 · verified against `4bca4f7`*
 
 Four harnesses, three gates, one profiler, one preview tool. All of them build the world from
 `SimulationStack.Build`, so no harness can end up testing a different stack from the one the game
@@ -171,6 +171,17 @@ population ceiling.
 
 **This gate is binary and must not grow an exception list.** If an assertion needs an exception,
 the threshold is wrong and should be changed deliberately with the reasoning recorded.
+
+The run also reports two readings that say whether ecology or the engine is doing the limiting: a
+per-species **habitat capacity** table taken after seeding — supply, demand and capacity against the
+class budget — and the tick at which the prey base first reached its class ceiling, or that it never
+did. A ceiling reached early, or a large refusal count, is the signal
+[`../design/07-simulation-contract.md`](../design/07-simulation-contract.md) says to read.
+
+`--nutrition-log=N` samples the world's food balance every N ticks to
+`nutrition_*.csv`: total nutrition against total capacity, the fill percentage, and consumed against
+regenerated. This is the supply/demand balance read off the world rather than computed from rates,
+and it is the only way to tell a population limited by food from one limited by a number.
 
 `--snapshot-world` additionally writes a `WorldSnapshot` pair — one straight after generation, one
 after the last tick, each labelled so the two do not overwrite each other — for reading a faction's

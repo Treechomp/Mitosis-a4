@@ -233,34 +233,47 @@ why a lot of them can stand in a small place despite the brake.
 
 ### Numbers are limited at the point of birth, not by hunger
 
-**Food does not bind herbivore numbers and is not going to.** The grazing economy was computed
-rather than argued about, and it is about a hundredfold away from binding: the whole herbivore
-ceiling would feed from a fraction of one per cent of the map (figures in
-[../changelog.md](../changelog.md)). Two mechanisms limit numbers instead, both per species and both
-already in the code, each used by a species or two today.
+**How many of a species there are is a fact about the ground, and it is decided at birth.** Each
+species has a carrying capacity read off the world the seed actually generated: the food flow of the
+terrain it can feed on, divided among the species that contest that terrain in proportion to what
+the ground is worth to each of them, divided again by what one animal takes. Births slow as a
+species fills that capacity — graded, not a cliff, and per species, so crowding among deer says
+nothing about whether a camel may breed.
 
-**Breeding grounds — a limit in space.** A species may only breed while standing on ground that
-suits it. This makes a population a function of its breeding habitat rather than of its pasture, and
-it limits numbers without anything going hungry. It is also what makes a semi-aquatic animal
-genuinely amphibious rather than a land animal that tolerates water.
+The consequence is the point of it. **A world of steppe feeds the species that do well on steppe,
+and the jungle species is rare there** — from the map, with no species named anywhere in a system
+and nothing tuned per world. Two seeds are two different ecologies rather than the same roster at
+two sizes.
 
-**Births coupled to local fertility.** The chance of a birth scales with how much of its own cap the
-parent's ground still holds, so a population that has eaten its patch down stops replacing itself
+The remaining question is not *whether* the ground decides but *how densely* — how many animals a
+niche should hold. That is one number, it is a design choice rather than a derivation, and it is the
+knob that says whether this world is teeming or sparse.
+
+**Two older mechanisms sit inside this one.** Breeding grounds — a species may only breed while
+standing on ground that suits it — remain the *place* constraint, and are what makes a semi-aquatic
+animal genuinely amphibious rather than a land animal that tolerates water. Births coupled to local
+fertility remain the *local* one: a population that has eaten its patch down stops replacing itself
 there long before it starves.
 
-Two reasons this is the shape, and the second is the stronger one.
-
-*Starvation-driven equilibria are rejected.* Herbivores have never starved in this game; the
-historical failures were all on the predator side. An equilibrium reached by animals dying of hunger
-produces mass die-offs, which this project has repeatedly had to undo. Limiting at the point of
-birth reaches the same equilibrium without them.
+Three reasons this is the shape.
 
 *A shared ceiling is won by the fastest breeder.* The herbivore ceiling is shared by every
 herbivore, so within the class the shortest cooldown and the earliest maturity take it — and the
 roster has a clear winner on both. That is the same competitive exclusion the per-class budgets
-removed *between* classes, still running *inside* each one. Giving each species its own breeding
-habitat replaces one shared count with several independent pools, which is the fix that already
-worked once.
+removed *between* classes, still running *inside* each one, and it had already emptied a species out
+of the roster. Per-species capacity replaces one shared count with as many independent pools as
+there are species, which is the fix that already worked once.
+
+*The engine must not be the limit.* A prey base pinned to its class allowance has had its size
+chosen by a thread budget ([07-simulation-contract.md](07-simulation-contract.md)). Numbers set by
+what the ground can feed leave that allowance untouched, which is what it is for.
+
+*Starvation is a local outcome, not the equilibrium.* A herd pushed off its ground — by predators,
+by a rival faction's terraforming, by its own numbers — should be able to starve there, and that is
+worth having. What is rejected is starvation as the *mechanism that sets the population*: an
+equilibrium reached by continuous die-off is a world of corpses, and this project has had to undo
+that more than once. Limiting at birth reaches the same numbers and leaves hunger free to be a real
+danger in the places where it should be one.
 
 ## What the roster is for
 

@@ -71,13 +71,27 @@ So:
   binding — and that is the thing worth being able to read off a log.
 - **The real limiters are ecological and local**: crowding where you stand, food where you stand,
   and being eaten.
+- **A ceiling reached early and held is a flat line, not an equilibrium.** This is the readable
+  form of the rule above, and the one to check a build against: a prey base that fills its
+  allowance in the opening fifth of a run and sits on it for the remaining four fifths has had its
+  size chosen by a thread budget. The class ceiling should be approached late in a run if it is
+  approached at all, because something ecological should have bound first. A run that refuses
+  births by the million is not at equilibrium; it is being held down.
 
-That last line was aspiration until it was checked. Food is about a hundredfold from limiting
-anything ([03-creatures.md](03-creatures.md)), so the ceiling was doing the work the ecology was
-supposed to do, and inside each class the fastest breeder was taking the shared allowance — the same
-exclusion these per-class budgets removed *between* classes, still running inside them. What makes
-the line true is limiting numbers at the point of birth, per species: breeding habitat and
-fertility-coupled births give each species its own pool instead of a share of one count.
+That last line was aspiration until it was checked, twice, and the second check corrected the
+first. Food was found to be about a hundredfold from limiting anything — but that arithmetic
+measured what an animal *needs* to stay fed, and a grazer draws from the ground it stands on
+whether it needs the food or not. Measured on what animals take rather than what they need, the
+world's food flow was about ten times the draw of the population it was holding, and the ceiling
+was doing the ecology's work: over a full run the engine refused herbivore births by the million
+while every animal in the world stayed near full. Inside each class the fastest breeder was taking
+the shared allowance — the same exclusion these per-class budgets removed *between* classes, still
+running inside them, and it had already emptied a species out of the roster entirely.
+
+What makes the line true is limiting numbers at the point of birth, per species, against what the
+world can actually feed: a carrying capacity read off the terrain the seed generated, so the ground
+decides the numbers and the engine only says how many entities may exist at once. Figures, with
+seed and commit, in [../changelog.md](../changelog.md).
 
 ---
 

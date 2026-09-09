@@ -171,7 +171,7 @@ between runs. The mechanism is not. How much an individual may differ from its s
 pass to offspring, whether mutation is possible without a player writing it, and how a species
 avoids drifting into something unrecognisable are all undecided.
 
-### C4 — How much food pressure should a herd actually be under?
+### C4 — How much food pressure should a herd actually be under? **Partly answered by C5.**
 
 C2 settled that grazing drives migration rather than numbers, and the arithmetic says by roughly how
 much the demand has to rise for a herd's draw to balance a meadow rather than a dozen tiles. **That
@@ -185,23 +185,31 @@ numbers, which C2 rejects, so it is bounded from above by the birth brake it has
 the right value is the largest one that still leaves reproduction, not hunger, deciding how many
 there are.
 
-### C5 — How much breeding habitat should each species have?
+The pairing has since happened: what a species extracts was raised, and the birth brake it needed
+arrived with it (C5). What has *not* happened is the part this question was really about — the world
+is still nearly full of food and nothing goes hungry, so a herd still does not move because the land
+it stands on stopped supporting it. That needs hunger to be a live variable, which needs D17.
 
-**Now the blocking question, not one of several.** The forage mechanism is built and switched off,
-because measuring it showed that composition is decided by the race for one shared class allowance:
-a species that eats slightly worse breeds slightly less and loses share, and one species already
-holds most of the herbivore class ([`../implementation/README.md`](../implementation/README.md), V8).
-Every per-species forage value is a thumb on a scale with one pan until the limit itself is per
-species. C4 is behind this too — raising food pressure on a shared allowance moves who wins it, not
-how the world feeds.
+### C5 — How densely packed should a niche be? **The mechanism is settled; the number is not.**
 
-If numbers are set by breeding ground, then the size and scatter of that ground *is* the population
-control, and it is currently set by hand, on whichever species happened to need it. Open: whether
-every species that needs limiting gets a breeding habitat or only some; whether it is a terrain
-list, a comfort threshold, or something the species carries with it; how a designer reasons about
-"this much ground means about this many animals" without recomputing it each time; and what happens
-to a species whose breeding ground the player or a faction destroys — a limit that can be driven to zero
-is an extinction mechanism, not a cap.
+**Settled: habitat is derived, not authored.** A species' capacity is read off the world the seed
+generated — the food flow of the ground it can feed on, split among the species contesting that
+ground in proportion to what it is worth to each of them, divided by what one animal takes. Nothing
+is listed per species and nothing is tuned per world; the terrain decides, which is what makes two
+seeds two ecologies rather than one roster at two sizes. It closed V8: the class allowance is no
+longer touched and the engine refuses no births.
+
+**Open: the density.** One number sets how many animals a unit of habitat holds, and it is a design
+choice rather than a derivation — the difference between a teeming world and a sparse one. It is
+also doing a second job it should eventually stop doing: it absorbs the gap between what an animal
+takes while it is feeding and what it takes averaged over a run. Those are different quantities and
+the second is much smaller, so the number is currently part ecology and part fudge. Separating them
+means fixing D17 first.
+
+Still open and no longer blocking anything: whether the *place* constraint should generalise — today
+a species may be required to stand on particular ground to breed, and only some are — and what
+happens to a species whose breeding ground a player or a faction destroys, since a limit that can be
+driven to zero is an extinction mechanism rather than a cap.
 
 ---
 

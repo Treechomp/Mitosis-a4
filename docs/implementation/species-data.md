@@ -1,6 +1,6 @@
 # Species data
 
-*Last updated: 2026-09-09 · verified against `6e4dd46`*
+*Last updated: 2026-09-09 · verified against `4bca4f7`*
 
 ## Files
 
@@ -102,13 +102,13 @@ sharks and fish — the tile table rates open water as punishing, negative comfo
 partly cancelled it, and the residue accumulated until both species were permanently "escaping" in
 their own feeding grounds, with hunting disabled the whole time.
 
-## `TerrainForageModifiers` — built, and not yet used
+## `TerrainForageModifiers` — the per-species forage yield
 
 `TerrainProfile.ForageYield` is the fifth dimension of the species↔tile resolver: the multiplier
 between a tile's fertility and the food this species gets out of it, backed by
-`SpeciesDefinition.TerrainForageModifiers`. An unlisted tile is worth face value, so **the roster
-sets no entries and every run is bit-identical to the build before it** — verified, not assumed
-(the LOD differential returns the same verdicts, verdict for verdict, as the build without it).
+`SpeciesDefinition.TerrainForageModifiers`. An unlisted tile is worth face value, and every grazer
+now sets a table: a specialist reaches face value only on its own ground and the roster's generalist
+reaches it nowhere, which is what a generalist costs.
 
 **It scales the payout, not the draw.** A grazer strips ground at `GrazeConsumeRate` wherever it
 stands; poor forage means less hunger back for the same mouthful. So the yield *is* the exchange
@@ -131,15 +131,15 @@ The threshold sites read the effective value rather than raw fertility because
 feeding on. The alternative — reading it as a pure depletion test — was built and measured, and it
 left species standing on ground that does not feed them instead of moving to ground that does.
 
-**Why no species sets one yet.** Turning the tables on was measured on both gates, over two seeds
-and three strengths, and the run figures are in [`../changelog.md`](../changelog.md). The short of
-it: the herbivore total does not move — it is pinned to its class ceiling either way, which is C2's
-finding holding under a change that makes forage strictly harder to get — and nothing starves. What
-moves is species composition, by a lot, in a direction reproducible across seeds for only one
-species; and the LOD differential loses a large block of verdicts to *any* strength of table,
-including one gentle enough to barely change the numbers (D16). Composition is decided by the shared
-class ceiling rather than by forage ([README.md](README.md), V8), so the values cannot be judged
-until that is fixed.
+**The tables are load-bearing twice.** In the moment they decide what a mouthful is worth and which
+way a hungry animal walks. Over a run they decide how the world's food flow is divided:
+`HabitatCapacity` splits each tile type's supply among the species that feed on it in proportion to
+their yields there, so a table is what turns a smaller pool into a *different* pool
+([survival-and-population.md](survival-and-population.md)).
+
+Measured on their own, before that second use existed, the tables only moved composition around and
+could not settle it, because the shared class ceiling settled it instead. The figures for both
+states are in [`../changelog.md`](../changelog.md).
 
 ## D5 — unused fields
 

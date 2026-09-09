@@ -1,6 +1,6 @@
 # Survival & population
 
-*Last updated: 2026-09-09 · verified against `6e4dd46`*
+*Last updated: 2026-09-09 · verified against `4bca4f7`*
 
 ## `HungerSystem` — `Systems/SurvivalSystems.cs` · gated
 
@@ -104,6 +104,35 @@ the nearest patch, overriding the roam cooldown the way lethal ground does.
 spatial density query, which is the most expensive guard and is therefore last. This was once
 violated and the system spent an eighth of a tick building neighbour lists for creatures about to
 be refused anyway.
+
+## `HabitatCapacity` — `ECS/HabitatCapacity.cs`
+
+How many of each species the generated world can feed, and the birth brake that follows. It is what
+makes population a fact about the terrain a seed produced rather than about a thread budget.
+
+Three quantities, all read off the world and the registry, none of them stored per species:
+
+| | Is | Comes from |
+|---|---|---|
+| supply | the share of the world's sustainable food flow this species can claim | a one-off census of the generated terrain, each tile type's count split among the species that feed on it in proportion to their `TerrainProfile.ForageYield` there, times `Chunk.RegenerationRate` |
+| demand | what one animal strips per tick while feeding | `GrazeConsumeRate`, or `FeedConsumeRate` for a species that feeds off tiles |
+| capacity | how many the ground holds | `OccupancyFraction × supply ÷ demand` |
+
+`ReproductionSystem` consults `BirthPass`, which is one below a fraction of capacity and falls
+linearly to zero at it — graded for the same reason the local-density brake is graded, and per
+species so it cannot select for fast breeders the way the deleted global ramp did
+([`../design/07-simulation-contract.md`](../design/07-simulation-contract.md)). `PopulationBudget`
+carries the live per-species counts it reads.
+
+The census is taken on first use, not at construction: `SimulationStack.Build` runs before the world
+is pregenerated.
+
+**Fertility regrows at a flat rate per tile, so supply counts ground rather than richness.**
+`NutritionCap` sets how much a tile holds, which is what makes it worth stopping on; it does not
+change how fast it comes back. **`OccupancyFraction` is a design choice, not a derivation** — it is
+where "how densely packed a niche should be" is set, and it also absorbs the gap between the rate an
+animal draws while feeding and the rate it draws averaged over a run, which is much lower. The
+measured gap is in [`../changelog.md`](../changelog.md).
 
 ## `PopulationBudget` — `ECS/PopulationBudget.cs`
 
