@@ -1,6 +1,6 @@
 # Species data
 
-*Last updated: 2026-09-08 · verified against `6b798c0`*
+*Last updated: 2026-09-09 · verified against `35c12ec`*
 
 ## Files
 
@@ -101,6 +101,40 @@ intolerance. Habitat preference belongs in aversion. Routing it through discomfo
 sharks and fish — the tile table rates open water as punishing, negative comfort modifiers only
 partly cancelled it, and the residue accumulated until both species were permanently "escaping" in
 their own feeding grounds, with hunting disabled the whole time.
+
+## Forage yield — decided, not built
+
+The design layer asks for a per-species, per-tile forage yield
+([`../design/03-creatures.md`](../design/03-creatures.md)). This records what is there now and what
+that would actually change, so the size of the job is not re-guessed.
+
+**What is already per species.** `SpeciesDefinition.CanGraze` decides whether an animal grazes at
+all; `GrazeConsumeRate` is how much fertility it strips per grazing tick and `GrazeNutrition` how
+much hunger that repays. `SurvivalSystems` pays out in proportion to what the tile actually yielded
+against what was asked for, so a stripped tile feeds worse than a fresh one. `FeedTiles` with
+`FeedConsumeRate` is the same arrangement for species that feed off tiles no grazer can use.
+
+**What is not.** Which grazeable tile the animal is standing on. `TileTypeExtensions.IsGrazeable`
+is one flag over a fixed list of terrain types, and `NutritionCap` — how much fertility that type
+holds and regrows to — is a property of the tile alone. Every species therefore reads the same
+ranking of ground, so no species has an advantage on any of it. `TerrainProfile` already separates
+species by where they will go and how well they tolerate being there; nothing separates them by
+what they get once they arrive.
+
+**What the change touches.**
+
+- A yield lookup joins `TerrainProfile` beside `Speed`, `IsImpassable`, `SteerAversion`,
+  `DiscomfortRate` and `Concealment` — same table shape, same resolver, same fallback-to-neutral
+  rule. No per-tile storage is added; the tile keeps one fertility number.
+- `SurvivalSystems` grazing multiplies the requested draw and the hunger repaid by the resolved
+  yield. The design cares about the exchange rate between them, so both scale together or the
+  change means nothing.
+- `WanderSystem` needs no new mechanism. `HasFoodAt`, `GetFoodScore` and `TryFindFoodTarget`
+  already walk a hungry animal toward the best ground it can see; weighting the score by the
+  species' yield is the whole of the "deer to grass, camel to scrub" behaviour.
+- `EcosystemLogger` and `ReproductionSystem` read `NutritionCap` directly for reporting and for the
+  birth check. Both are per-tile questions, not per-species ones, and neither needs the yield.
+- Nothing about it names a species, which is what makes it admissible at all.
 
 ## D5 — unused fields
 

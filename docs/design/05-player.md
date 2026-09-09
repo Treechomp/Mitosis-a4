@@ -1,6 +1,6 @@
 # 05 — The player
 
-*Last updated: 2026-09-07*
+*Last updated: 2026-09-09*
 
 ## Who you are
 
@@ -81,6 +81,12 @@ It also disarms the obvious balance problem by construction. A Faeling raising t
 against its rivals is spending crystal power — the same power that is its own strength and its own
 respawn. **The ecosystem-buffing Faeling is a weaker, more mortal Faeling.** No extra limiter is
 needed.
+
+The same construction is what prices the keeper's fortress (provisional,
+[04-factions.md](04-factions.md)): guardians recruited from the wildlife around a crystal are bought
+with the same crystal power, so a player who fortifies has chosen a defended home over a strong
+body, and has taken the animals doing the defending out of the wild that measures the faction's
+success. It is the *this larva, or a stronger me?* decision in the one faction that has no larvae.
 
 ## The horde, and why it is not an order
 

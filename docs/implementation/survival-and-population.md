@@ -1,6 +1,6 @@
 # Survival & population
 
-*Last updated: 2026-09-07 · verified against `7a7fb28`*
+*Last updated: 2026-09-09 · verified against `35c12ec`*
 
 ## `HungerSystem` — `Systems/SurvivalSystems.cs` · gated
 
@@ -86,6 +86,11 @@ the budget, and offspring of a disabled species are refused here too.
 limit, falling linearly to zero at it. The limit is derived from the species' preferred group size
 and counted within a multiple of its social radius — per species and per place, which is what makes
 it usable as the main throttle.
+
+**It gates a birth, not a footstep.** The check runs in `ReproductionSystem` and refuses to spawn;
+nothing anywhere refuses movement into ground that is already crowded. So a large number of animals
+can stand in a small area despite the brake, and observing that is not evidence the brake is
+failing — it is evidence of what the brake is.
 
 **Breeding grounds**: a species with `BreedingTiles` may only breed while the **parent** stands on
 one, and `WanderSystem.IsBreedingReady` gives a fed mature adult that is off them a roam target on

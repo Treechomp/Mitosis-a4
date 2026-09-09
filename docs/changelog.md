@@ -1,6 +1,6 @@
 # Changelog
 
-*Last updated: 2026-09-08 · current branch `claude/lod-override-testing-rhwq4f`, head `23ee09d`*
+*Last updated: 2026-09-09 · current branch `claude/lod-override-testing-rhwq4f`, head `35c12ec`*
 
 What changed, when, in which commit, and what it measured. Newest first.
 
@@ -24,6 +24,7 @@ compensate for that, and where, is an open balance decision — it has not been 
 
 | Commit | Date | Change | Result |
 |---|---|---|---|
+| — | 2026-09-08 | Compute what the grazing economy does, to settle C2 | **food is about a hundredfold from binding herbivore numbers, and is the only thing driving migration.** A Deer needs 2.1 grazeable tiles, the herbivore ceiling would eat from under 1% of the map, and a herd of six balances a thirteen-tile region — so it cannot deplete a meadow. Derived from the registry at `35c12ec`, not from a run. Table below |
 | — | 2026-09-08 | Size the swarm kin-count loop that F3 proposed replacing, before building the replacement | **0.0155 ms/tick** — 310 ms over 20,000 ticks across 12.0M iterations, seed 999. That is 0.56% of `HuntingSystem` and **0.07% of the tick**, measured with the timestamp overhead included, so the true figure is lower. F3 is not worth a per-cell census |
 | `23ee09d` | 2026-09-08 | Search outward from the predator instead of sweeping the whole tracking range (F2) | seeds 1234 / 999, 20,000 ticks: `HuntingSystem` mean **6.42 → 3.27** and **6.56 → 2.75** ms/tick (−49%, −58%); −59% and −68% at the dense end; whole tick **32.9 → 20.0** and **34.4 → 22.1** ms (−39%, −36%). Behaviour changes: failing metrics 44 → 43, and invariants hold on 3 of 5 seeds against 4 of 5 — both failures the D11 grace-window assertion |
 | `45488fa` | 2026-09-08 | Ask before spawning; fail instead of hanging (D14, D15) | `--max-pop=20000 --initial=16000`, which threw during seeding, now seeds 14,506, declines the rest and exits 3. LOD gate 226/0/0/0 — the guards never fire at the shipped cap |
@@ -66,6 +67,52 @@ cost rises **6.1×**; cost *per Sectid* rises from 4.4 to 12.0 µs over the same
 superlinear in the population that drives it and not merely in the world's. At ~1,020 Sectids
 hunting is 8.9–11.6 ms/tick, which reproduces the ~10 ms reported from the interactive build at
 ~1,100 Sectids.
+
+### The grazing economy, read from the registry at `35c12ec`
+
+An analysis, not a run, so there is no seed to stamp. It exists because C2 asked whether food should
+bind herbivore numbers and the question had never been answered arithmetically.
+
+Hunger drains at `HungerDecayRate × SurvivalSystems.HungerDecayScale` (0.3). Grazing draws
+`GrazeConsumeRate` from the tile and pays `GrazeNutrition` in hunger, so the exchange rate is the
+ratio of the two. A tile regrows at `Chunk.RegenerationRate` 0.0005 per tick, and there is no hidden
+loss in the sweep: `TileRegenerationSystem` visits each chunk every `RegenInterval × RegenSweepPasses`
+= 32 ticks and regenerates 32 ticks' worth.
+
+| | Deer | Rabbit |
+|---|---|---|
+| hunger drain per tick | 0.05 × 0.3 = 0.015 | 0.08 × 0.3 = 0.024 |
+| hunger per unit of nutrition | 0.5 / 0.035 = 14.3 | 0.3 / 0.012 = 25 |
+| sustained demand, nutrition per tick | **0.00105** | **0.00096** |
+| grazeable tiles to sustain one animal | **2.1** | **1.9** |
+
+**As a population limiter it is roughly a hundredfold from binding.** The herbivore ceiling of 5,040
+at the shipped cap would be fed by about 10,600 tiles at the Deer rate, against 1,152² = 1,327,104
+tiles in a 36-chunk world — **0.8% of the map** — and `IsGrazeable` covers eleven terrain types,
+Wetland and Bog among them.
+
+**As a driver of migration it is the only thing the economy does, and the numbers say why it does it
+badly.** On a lush tile (`NutritionCap` 1.0 — caps run 0.2 to 1.0 by biome) a grazing Deer strips
+the tile in 1.0 / 0.035 ≈ 29 ticks and the tile takes 1.0 / 0.0005 = 2,000 ticks to come back. But a
+herd of six sustains itself on 0.0063 nutrition per tick, which balances about thirteen tiles. A
+herd therefore cannot deplete a meadow: it strips what it stands on, steps a few tiles, and
+everything has regrown before it returns. That is why herd movement reads as shuffling rather than
+as a response to the land.
+
+At twenty times the demand a herd of six would balance ~250 tiles and a herd of sixty ~2,500, which
+is a meadow. That factor is a computed target and nobody has played it.
+
+Three corrections to the analysis as it was handed over, found while checking it against source:
+
+- `BreedingTiles` is set on **two** species, Otter and Penguin, not one. `BreedingNutritionSensitivity`
+  is indeed set on exactly one, Fish, at 1.0.
+- Wolf `SpawnWeight` is 1.5 against 0.3–0.4 for the apex predators, so it is seeded **3.75× to 5×**
+  denser, not four to five.
+- The strip and recovery times above are per biome, not global: on Arid or Tundra soil
+  (`NutritionCap` 0.2) the same Deer strips a tile in about six ticks and it returns in 400.
+
+Fish has both the shortest `ReproCooldown` (300) and the shortest `MaturityAge` (600) in the roster,
+which is the competitive-exclusion claim the design layer now rests on.
 
 ### Where HuntingSystem's cost actually was
 

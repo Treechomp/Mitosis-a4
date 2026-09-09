@@ -1,10 +1,12 @@
 # 08 — Open design questions
 
-*Last updated: 2026-09-08*
+*Last updated: 2026-09-09*
 
 Decisions that have not been made. Each states the question, why it is hard, and what is already
 known — not a recommendation. When one is settled, the answer moves into the document it belongs to
-and the entry is deleted.
+and the entry is deleted — unless the closure itself is what stops the question being reopened from
+intuition, in which case the entry stays, marked settled, and says where the answer and its
+arithmetic live.
 
 Known *defects* are not listed here; a thing that is broken is not a thing that is undecided. Nor
 are **divergences** — places where the code does not yet do what this layer describes. Both live in
@@ -103,6 +105,13 @@ those populations, the ground they hold, or a combination is open — as is how 
 without a spreadsheet. The other two factions' domains have an obvious visual (converted ground,
 standing structures); this one does not yet.
 
+Now partly constrained. Since numbers are set by breeding ground (C2, C5), the honest measure is
+**per habitat rather than per world**: a species filling the breeding ground it has is a domain the
+player can see on the map and can act on, where a raw headcount is neither. This does not make the
+domain unbounded — a species is still capped by its class share, so strengthening the wild moves
+populations towards their ceilings and cannot push them past. Whether that ceiling should itself
+respond to the faction is a separate question and is not assumed here.
+
 ### R4 — How much of a species pattern carries over?
 
 Settled: what persists between runs is the outcome of selection, not a decree. Open: how much of
@@ -124,15 +133,29 @@ two drives fighting for one body.
 Now also a player-facing question: the pheromone design adds "follow the player" as a competing
 drive, and how it loses to hunger and fear is exactly an arbitration question.
 
-### C2 — Should food bind herbivore numbers?
+### C2 — Should food bind herbivore numbers? **Settled: no.**
 
-The prey base is currently limited by its class ceiling rather than by grazing — regrowth against
-consumption leaves each grazer far more ground than it needs. That is the engine deciding the
-world's composition, which [07-simulation-contract.md](07-simulation-contract.md) says it should not.
+Kept rather than deleted because the intuitive answer is the wrong one and the question will
+otherwise be asked again.
 
-More pressing at the target run length: the prey base reaches its ceiling within the first few
-percent of a run and then sits there for the rest of it. Whatever the answer, "the herbivore
-population is a flat line for ninety minutes" is not it.
+**What decided it was arithmetic, not preference.** The grazing economy was read out of the registry
+and it is about a hundredfold away from binding: the entire herbivore ceiling would feed from a
+fraction of one per cent of the map. Grazing is therefore not a population limiter and cannot be
+made into one by tuning around the edges. The working is in [../changelog.md](../changelog.md), with
+the commit it was read at.
+
+**What limits numbers instead** is reproduction — breeding grounds and fertility-coupled births,
+both per species, both already in the code ([03-creatures.md](03-creatures.md)). That keeps
+composition a property of the species rather than of the engine, which is what
+[07-simulation-contract.md](07-simulation-contract.md) requires, and it does it without anything
+starving.
+
+**What the economy is for instead** is migration: a herd should move because the land it stands on
+can no longer support it. It does not do that today, and making it do so is C4.
+
+The original complaint — the prey base hits its ceiling early and is a flat line for the rest of the
+run — is not answered by this and is not a food question. It belongs to whatever varies a population
+over a run: predation, seasons, faction pressure.
 
 ### C3 — What does per-individual variation actually do?
 
@@ -140,6 +163,30 @@ Its *purpose* is now settled: it is the medium the player writes into, and the t
 between runs. The mechanism is not. How much an individual may differ from its species, how traits
 pass to offspring, whether mutation is possible without a player writing it, and how a species
 avoids drifting into something unrecognisable are all undecided.
+
+### C4 — How much food pressure should a herd actually be under?
+
+C2 settled that grazing drives migration rather than numbers, and the arithmetic says by roughly how
+much the demand has to rise for a herd's draw to balance a meadow rather than a dozen tiles. **That
+figure is computed, not played.** Nobody has run the game at it, and it is the first time herbivores
+would be under food pressure at all, so what it does to herd behaviour, to starvation deaths and to
+the predator base is unknown.
+
+Two things make it a real question rather than a tuning pass. It is measured across seeds or not at
+all — the invariant gate's own assertion is seed-dependent. And it pushes food *towards* binding
+numbers, which C2 rejects, so it is bounded from above by the birth brake it has to be paired with:
+the right value is the largest one that still leaves reproduction, not hunger, deciding how many
+there are.
+
+### C5 — How much breeding habitat should each species have?
+
+If numbers are set by breeding ground, then the size and scatter of that ground *is* the population
+control, and it is currently set by hand, on whichever species happened to need it. Open: whether
+every species that needs limiting gets a breeding habitat or only some; whether it is a terrain
+list, a comfort threshold, or something the species carries with it; how a designer reasons about
+"this much ground means about this many animals" without recomputing it each time; and what happens
+to a species whose breeding ground the player or a faction destroys — a limit that can be driven to zero
+is an extinction mechanism, not a cap.
 
 ---
 
@@ -152,6 +199,11 @@ The reach problem is not gone, though — the ecosystem it strengthens is the ec
 Crystal-to-crystal relocation was built and deleted, because keepers that relocate assemble and
 assembled keepers sweep. Whether the answer is that a keeper only ever works its own region, and the
 world census merely tells it *which* of its regions to work, is not decided.
+
+The keeper's fortress ([04-factions.md](04-factions.md), provisional) answers half of it in the
+opposite direction — not reaching further, but leaving a region defended while the keeper's
+attention is elsewhere. It moves nothing, so it cannot revive the failure above. It says nothing
+about where a keeper can *act*.
 
 ### F2 — Is the keeper's raid role real?
 

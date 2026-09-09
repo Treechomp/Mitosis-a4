@@ -1,6 +1,6 @@
 # 03 — Creatures
 
-*Last updated: 2026-09-08*
+*Last updated: 2026-09-09*
 
 ## A species is data, not code
 
@@ -70,6 +70,53 @@ measurement behind it is in the changelog.
 
 **Omnivores** do two of these. They are deliberately rare and each one is a specific design
 statement rather than a hedge.
+
+### Grazing is tuned for migration, not for population
+
+The economy has two possible jobs and only ever does one of them. It is nowhere near limiting how
+many animals there are — that is settled above, and the arithmetic is in
+[../changelog.md](../changelog.md). What it is *for* is movement: **a herd should move because the
+land it is standing on can no longer support it, and different herds should move differently.**
+
+For that, a herd's consumption has to outweigh the regeneration of a *region*, not of a tile. Today
+it outweighs neither: a grazer strips the tile under it in a second or two, but a herd's draw is
+balanced by a patch barely larger than the herd, so the ground it left has recovered before it
+comes back. That is why herd movement reads as shuffling rather than as a response to the land.
+Raising the demand until a herd's draw balances a meadow rather than a dozen tiles is the change.
+
+Two consequences, stated as consequences rather than as settled numbers:
+
+- **It has to be paired with the birth brake above.** The same change that makes food drive
+  migration also moves food towards binding population — and a population limited by hunger is the
+  outcome this design rejects.
+- **It puts the game in a regime it has never run in.** Herbivores have never been under food
+  pressure, so this is measured across several seeds and not one: the invariant gate's own
+  assertion is seed-dependent, so a single-seed result says nothing.
+
+### Feeding niches are per species and per ground
+
+Today a grazer eats every kind of vegetation equally well. How fast an animal strips ground and how
+much that feeds it are already its own; what neither depends on is *which* pasture it is standing
+on. Vegetation is one flag over a list of terrain types plus a per-tile cap that applies the same to
+everyone, so species differ in where they can comfortably *live* and never in what ground is worth
+more to them — and every grazer in a region draws from one shared pool.
+
+The decided shape is a **per-species, per-tile forage yield**: how much this ground is worth to this
+animal, as another dimension of the same per-species terrain profile that already answers how fast
+it moves here, whether it will enter at all, how quickly standing here wears on it, and how hidden
+it is. Four reasons this is the form:
+
+- It is the architectural move that produced that profile in the first place — one resolver
+  answering "how does this species relate to this ground", instead of special cases scattered
+  through systems.
+- It plugs into machinery that already exists. The wander logic already scores ground by how much
+  food is left on it and walks a hungry animal toward the best it can see; weighting that by the
+  species' own yield sends a deer to grass and a camel to scrub without any system naming either.
+- **It replaces cutting fertility globally.** Reducing the world's grazeable area starves every
+  species equally; giving each species a smaller and *different* pool separates them instead. Same
+  lever, aimed better.
+- It fixes composition on the food axis as well as the breeding axis — the two together are what
+  stop one species taking a shared allowance.
 
 ## Hunting
 
@@ -168,7 +215,40 @@ thresholds sitting in the right order relative to each other, not out of a scrip
 
 **Crowding is the brake, and it is local.** A species stops breeding where it is already dense,
 graded rather than cliff-edged, per species and per place. A global brake shared by all species is
-not a brake at all — see [07-simulation-contract.md](07-simulation-contract.md).
+not a brake at all — see [07-simulation-contract.md](07-simulation-contract.md). Note what it gates:
+a birth, not a footstep. Nothing stops animals walking into ground that is already crowded, which is
+why a lot of them can stand in a small place despite the brake.
+
+### Numbers are limited at the point of birth, not by hunger
+
+**Food does not bind herbivore numbers and is not going to.** The grazing economy was computed
+rather than argued about, and it is about a hundredfold away from binding: the whole herbivore
+ceiling would feed from a fraction of one per cent of the map (figures in
+[../changelog.md](../changelog.md)). Two mechanisms limit numbers instead, both per species and both
+already in the code, each used by a species or two today.
+
+**Breeding grounds — a limit in space.** A species may only breed while standing on ground that
+suits it. This makes a population a function of its breeding habitat rather than of its pasture, and
+it limits numbers without anything going hungry. It is also what makes a semi-aquatic animal
+genuinely amphibious rather than a land animal that tolerates water.
+
+**Births coupled to local fertility.** The chance of a birth scales with how much of its own cap the
+parent's ground still holds, so a population that has eaten its patch down stops replacing itself
+there long before it starves.
+
+Two reasons this is the shape, and the second is the stronger one.
+
+*Starvation-driven equilibria are rejected.* Herbivores have never starved in this game; the
+historical failures were all on the predator side. An equilibrium reached by animals dying of hunger
+produces mass die-offs, which this project has repeatedly had to undo. Limiting at the point of
+birth reaches the same equilibrium without them.
+
+*A shared ceiling is won by the fastest breeder.* The herbivore ceiling is shared by every
+herbivore, so within the class the shortest cooldown and the earliest maturity take it — and the
+roster has a clear winner on both. That is the same competitive exclusion the per-class budgets
+removed *between* classes, still running *inside* each one. Giving each species its own breeding
+habitat replaces one shared count with several independent pools, which is the fix that already
+worked once.
 
 ## What the roster is for
 

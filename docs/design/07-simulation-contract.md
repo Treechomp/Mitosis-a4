@@ -1,6 +1,6 @@
 # 06 — The simulation contract
 
-*Last updated: 2026-09-08*
+*Last updated: 2026-09-09*
 
 Five promises the simulation has to keep. Each exists because breaking it broke the game in a way
 that was hard to see and expensive to find, and each has cost real debugging time — so they are
@@ -71,6 +71,13 @@ So:
   binding — and that is the thing worth being able to read off a log.
 - **The real limiters are ecological and local**: crowding where you stand, food where you stand,
   and being eaten.
+
+That last line was aspiration until it was checked. Food is about a hundredfold from limiting
+anything ([03-creatures.md](03-creatures.md)), so the ceiling was doing the work the ecology was
+supposed to do, and inside each class the fastest breeder was taking the shared allowance — the same
+exclusion these per-class budgets removed *between* classes, still running inside them. What makes
+the line true is limiting numbers at the point of birth, per species: breeding habitat and
+fertility-coupled births give each species its own pool instead of a share of one count.
 
 ---
 

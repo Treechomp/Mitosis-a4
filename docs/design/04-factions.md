@@ -1,6 +1,6 @@
 # 04 — The three factions
 
-*Last updated: 2026-09-08*
+*Last updated: 2026-09-09*
 
 The factions are the world's plot engine. Ordinary animals produce a steady state; the factions
 produce a *direction* — ground changing hands, fronts advancing, a region that looked settled
@@ -121,6 +121,40 @@ the design describes; a hundred immortal raiders is not.
 
 **Its anchor is its crystal** — one crystal, one Faeling. Break the crystal and that lineage ends;
 the Faeling fights on but will never come back.
+
+**Its fortress is the wild around the crystal (provisional).** A keeper's crystal is the one thing
+it cannot afford to lose and the one thing it cannot stand next to permanently, because a keeper
+that guards its crystal is not judging the world. So it defends the crystal with what is already
+there: **guardians are recruited from the local wildlife, not summoned.** A keeper strengthens
+animals that live near its crystal and they defend the ground they already live on.
+
+Three reasons this is the shape rather than a summoned garrison or a way to arrive at a fight:
+
+- **It moves no keepers.** Crystal-to-crystal relocation was built and deleted because keepers that
+  relocate assemble, and assembled keepers sweep (F1 in
+  [08-open-questions.md](08-open-questions.md)). A fortress cannot revive that failure, because
+  nothing about it travels. It answers the reach problem the opposite way: the keeper's region
+  defends itself while the keeper's attention is elsewhere.
+- **It is the faction's own verb.** Strengthening the wild is what a Faeling already does. This is
+  that verb aimed at a place instead of at a balance, so it adds a use for an existing mechanic
+  rather than a mechanic.
+- **It does not buy presence with bodies.** Guardians are stationary and local; they do not extend
+  where a keeper can act, only what survives while it is away. The scarcity rule above stays intact
+  — a keeper still cannot be everywhere, it can only leave somewhere defended.
+
+Two bounds keep it from becoming the strongest thing in the game, and neither is an added limiter:
+
+- **It is paid out of the purse.** Guardians cost crystal power — the same pool as the keeper's own
+  strength and its own respawn ([05-player.md](05-player.md)). A keeper with a fortress is a weaker,
+  more mortal keeper.
+- **It draws down the thing it protects.** Recruiting does not create animals. A guardian is a wild
+  animal that has stopped behaving like one, taken out of the population it belonged to, and the
+  local wild is what a Faeling's domain is measured by (R3 in
+  [08-open-questions.md](08-open-questions.md)). Fortifying heavily is spending the
+  ecosystem to defend the ecosystem, which is a decision rather than an accumulation.
+
+Provisional: how a guardian is chosen, whether the change is permanent, and what happens to a
+guardian when its crystal breaks are not decided.
 
 ## The war
 
