@@ -161,8 +161,20 @@ side.
 equilibrium. That is why raising the consume rate and lowering the break-even leaves the population
 where it was and changes only how hard the ground is worn while an animal is on it.
 
-## D5 — unused fields
+## D5 — `Species.Generation` is written and never read
 
-`SpeciesDefinition.StatVariation` and `Species.Generation` are populated and never read. They are
-reserved for per-individual trait variation and inheritance (design question C3). Harmless, but they
-make the definition look like it supports something it does not.
+`Species.Generation` is set when an entity is constructed and read by nothing. It is reserved for
+inheritance (design question C3).
+
+**`StatVariation` is not in this row, and used to be.** It is read in `EntityFactory` and applied
+through `Vary(...)` to 34 distinct species fields at spawn — lifespan and maturity, all four
+reproduction thresholds and costs plus cooldown and spawn radius, max hunger and hunger decay,
+wander speed and direction-change chance, body size, both discomfort parameters, grazing pressure,
+the three terraform parameters, flee range and speed, all five fear parameters, hunt range and the
+three attack parameters, and the four social parameters. Two of those take a fixed rate rather than
+the species' own: body size, and the leadership score, which is not a species field at all.
+
+**The real gap is heredity, not variation.** Every individual differs from its species mean, and
+none of that difference survives to its offspring: `ReproductionSystem` hands `SpawnCreature` the
+species definition, so a child is re-rolled around the species value rather than around its
+parent's. Nothing can therefore be selected for, which is what C3 is about.
