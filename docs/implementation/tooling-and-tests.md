@@ -1,6 +1,6 @@
 # Tooling & tests
 
-*Last updated: 2026-09-09 · verified against `4bca4f7`*
+*Last updated: 2026-09-09 · verified against `c41212b`*
 
 Four harnesses, three gates, one profiler, one preview tool. All of them build the world from
 `SimulationStack.Build`, so no harness can end up testing a different stack from the one the game

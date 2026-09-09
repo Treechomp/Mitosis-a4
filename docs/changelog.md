@@ -218,6 +218,22 @@ enough to barely move the numbers — cost 22. The regressions cluster on `nutri
 cannot separate "LOD fidelity got worse" from "the trajectory moved", so it fails any change to the
 food economy without saying whether the change was harmful.
 
+### The LOD contract, measured at each step
+
+3,000 ticks, the documented gating command, on an unmodified checkout each time.
+
+| build | known | regression | improvement | drift |
+|---|---|---|---|---|
+| `f735cea` — before any of this session's work | 223 | 1 | 2 | 0 |
+| `6e4dd46` — forage mechanism, no tables | 223 | 1 | 2 | 0 |
+| forage tables at either strength (not shipped) | 188 / 193 | 23 / 22 | 13 / 9 | 4 / 4 |
+| `4bca4f7` — terrain-derived capacity | 178 | 24 | 14 | 10 |
+| `c41212b` — hunger tracks the ground | **176** | **32** | **14** | **20** |
+
+The contract has not been re-recorded at any point. Drift is metrics entering or leaving the
+minimum-count filter as species populations move, which is most of what the last two rows are. None
+of it is evidence about LOD fidelity either way, which is the whole of D16.
+
 ### The LOD contract was already stale at `f735cea`
 
 Measured as a control before anything was changed: an unmodified checkout returns *known 223,

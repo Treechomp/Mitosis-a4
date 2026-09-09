@@ -1,6 +1,6 @@
 # LOD & performance
 
-*Last updated: 2026-09-08 · verified against `186a0fd`*
+*Last updated: 2026-09-09 · verified against `c41212b`*
 
 ## `LODSystem` — `Systems/LODSystem.cs` · runs first, never gated
 
@@ -87,9 +87,25 @@ D2's first mechanism was tried on exactly that basis and inverted several metric
 shrinking them — see the note under D2 and [`../changelog.md`](../changelog.md).
 
 So: the systems the equivalence is measured over should be in place and working first, and the LOD
-pass comes after. The gate stays green in the meantime, which is what makes it worth re-reading
-when the work resumes — a red gate carries no signal, and that is the state it took this long to
-leave.
+pass comes after.
+
+**The gate is red, and it went red exactly as predicted.** It exits non-zero on an unmodified
+checkout and the mismatch is large — the counts, with their commit, are in
+[`../changelog.md`](../changelog.md). Nothing about that is an LOD regression in the sense the gate
+means: the food economy was rebuilt underneath it (per-species carrying capacity, forage yields,
+hunger that tracks the ground), so the populations every metric is measured on are different
+populations. The contract has deliberately **not** been re-recorded, because re-recording across a
+behaviour change buries whatever real fidelity loss might be inside it.
+
+That is D16 in [README.md](README.md): the contract cannot separate "LOD fidelity got worse" from
+"the trajectory moved", so it fails any change to the systems it measures without saying which
+happened. Measured, the count does not even scale with the size of the change — a forage change
+gentle enough to barely move the population flipped as many verdicts as one that moved it a third.
+
+**What that means for the LOD pass.** Re-recording is the first step of the work and not a
+housekeeping task before it: the contract has to be re-recorded against a balance that is going to
+hold, and read once with the knowledge that its baseline moved. Until then the gate's exit code
+carries no signal, and the per-metric output still does.
 
 ## Standing divergences
 

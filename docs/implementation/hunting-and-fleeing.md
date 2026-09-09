@@ -1,6 +1,6 @@
 # Hunting, fleeing & social
 
-*Last updated: 2026-09-08 · verified against `0b6c012`*
+*Last updated: 2026-09-09 · verified against `c41212b`*
 
 ## `HuntingSystem` — `Systems/HuntingSystem.cs` · gated
 
@@ -55,7 +55,7 @@ whichever is nearer, which is always the smaller one.
 
 ### Mass gates
 
-`GetPreyBodyMass` against the predator's own mass times a solo ratio; for packs and swarms the base
+`PreyBodyMass` against the predator's own mass times a solo ratio; for packs and swarms the base
 mass is scaled by group size raised to an exponent. `IsPreyIsolated` and `CheckFlankersInPosition`
 support the pack phases.
 

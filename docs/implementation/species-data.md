@@ -32,8 +32,9 @@ Two data-vs-logic distinctions worth knowing before adding a field:
 
 ## `SpeciesRegistry`
 
-Constructs every `SpeciesDefinition` and registers it. Lookup is by name hash:
-`GetId(name) => name.GetHashCode()`, with `GetById`, `GetByName` and `GetAllNames`.
+Constructs every `SpeciesDefinition` and registers it. Lookup is by name hash — `GetId(name)`,
+`GetById`, `Get(name)` and `GetAllNames`. The hash function is the subject of the next section and
+is emphatically not `string.GetHashCode()`.
 
 This file is the authority for every creature tuning value in the game. Nothing in `docs/` restates
 its numbers; read it, or dump it by reflection.

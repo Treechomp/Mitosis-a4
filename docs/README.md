@@ -1,5 +1,7 @@
 # Mitosis — documentation
 
+*Last updated: 2026-09-09*
+
 Mitosis is a top-down creature-sandbox game built in Godot 4.6.3 / C#. This folder holds two
 kinds of document, kept deliberately apart, plus a history.
 

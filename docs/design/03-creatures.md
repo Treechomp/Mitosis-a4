@@ -116,19 +116,21 @@ it is. Why this is the form:
   species equally; giving each species a smaller and *different* pool separates them instead. Same
   lever, aimed better.
 
-**The mechanism now exists and no species uses it**, which is deliberate. Switching it on was
-measured, and the measurement changes the order of the work:
+**Every species that eats the ground now has one.** A specialist reaches face value only on its own
+ground; the generalist reaches it nowhere, which is what being a generalist costs. The tables do two
+jobs: in the moment they decide what a mouthful is worth and which way a hungry animal walks, and
+over a run they decide how the world's food is divided, because a species' share of contested ground
+is its yield there against its rivals'.
 
-- **It does not fix composition, and it was never going to on its own.** Nothing starved in any
-  run measured at the time, and the herbivore total did not move at all. What moves is *which* species hold the shared class
-  ceiling, because a species that eats slightly worse is slightly less well fed, and being well fed
-  is what the design requires before an animal may breed. Composition is settled by a race for one
-  allowance, and forage only reweights the race. **The limit has to become per species first** —
-  the breeding-ground work above — or every forage value is just a thumb on a scale that still has
-  one pan.
-- **Food binds reproduction long before it binds survival.** That is the missing half of "food does
-  not bind herbivore numbers": it does not bind them through hunger, but it reaches the birth rate
-  through the well-fed requirement, and that is a much shorter lever than starvation.
+Switching them on was measured twice, and the first measurement is the one worth remembering:
+
+- **On their own they could not fix composition, and were never going to.** While every species drew
+  on one shared allowance, a species that ate slightly worse was slightly less well fed, bred less,
+  and lost share — so forage values only reweighted a race rather than settling it. Nothing starved,
+  because nothing could. **The limit had to become per species first.**
+- **Food binds reproduction long before it binds survival.** It reaches the birth rate through the
+  well-fed requirement, which is a much shorter lever than starvation — and that remains true now
+  that starvation is also real.
 
 ## Hunting
 
