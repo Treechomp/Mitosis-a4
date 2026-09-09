@@ -49,10 +49,18 @@ public sealed class HabitatCapacity
 {
     /// <summary>
     /// The share of the world's sustainable food flow a population is allowed to be sized to.
-    /// Below 1 because a population is never spread evenly over its habitat and fertility takes
-    /// time to come back: the ground has to carry local crowding, not just the average.
+    ///
+    /// Well below 1, and for a reason that can be measured rather than asserted: an animal is only
+    /// standing on ground it can feed from part of the time, so it can only ever claim part of the
+    /// flow. Sampled over a run that share came out near a quarter, which is where this sits. It
+    /// also carries the margin for a population never being spread evenly over its habitat and for
+    /// fertility taking time to come back — the ground has to carry local crowding, not the
+    /// average.
+    ///
+    /// This is the one number that says how densely packed a niche should be, and it is a design
+    /// choice. Everything else here is derived from the world and the registry.
     /// </summary>
-    public const float OccupancyFraction = 0.5f;
+    public const float OccupancyFraction = 0.22f;
 
     /// <summary>
     /// Fraction of capacity below which births are unaffected. Above it the pass chance falls
@@ -122,15 +130,21 @@ public sealed class HabitatCapacity
     }
 
     /// <summary>
-    /// Nutrition one animal strips per tick while it is feeding. Zero for anything that does not
-    /// eat the ground — a hunter is limited by its prey and a faction by its own systems, neither
-    /// by this.
+    /// Nutrition one animal draws per tick at equilibrium: what it strips while feeding, times the
+    /// share of the time it has to be feeding to hold its condition on good ground — which is its
+    /// break-even fullness. Zero for anything that does not eat the ground: a hunter is limited by
+    /// its prey and a faction by its own systems, neither by this.
+    ///
+    /// The two terms are the two halves of the design. The consume rate says how hard the ground is
+    /// worn while an animal is on it; the break-even says how much of the time it has to be. Only
+    /// their product decides how many the world can hold, which is why raising one and lowering the
+    /// other leaves the population where it was and changes only how the ground looks.
     /// </summary>
     public static float DemandPerCreature(SpeciesDefinition def)
     {
-        if (def.CanGraze && def.GrazeConsumeRate > 0f) return def.GrazeConsumeRate;
-        if (def.FeedConsumeRate > 0f) return def.FeedConsumeRate;
-        return 0f;
+        float strip = def.CanGraze && def.GrazeConsumeRate > 0f ? def.GrazeConsumeRate
+                    : def.FeedConsumeRate > 0f ? def.FeedConsumeRate : 0f;
+        return strip * def.BreakEvenFullness;
     }
 
     /// <summary>Every species that eats tile fertility — the set that contests the same ground.</summary>

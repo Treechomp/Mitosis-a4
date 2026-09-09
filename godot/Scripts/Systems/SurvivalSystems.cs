@@ -224,6 +224,28 @@ public sealed class GrazingSystem : ISystem
         _spatialHash = spatialHash;
     }
 
+    /// <summary>
+    /// What a tile at full fertility pays this species per tick. Derived, never authored: it is the
+    /// animal's own hunger drain divided by the ground fullness at which it should just hold its
+    /// condition. Authoring the payout separately is what let a species be fed by ground that was
+    /// nearly bare — the two numbers drifted apart and hunger stopped meaning anything.
+    ///
+    /// Takes the entity's own decay rate rather than the definition's, so per-individual variation
+    /// flows through: a hungrier animal needs richer ground, which is the same statement.
+    /// </summary>
+    private static float FullGroundPayout(SpeciesDefinition def, float decayRate)
+        => decayRate * HungerSystem.HungerDecayScale / MathF.Max(0.01f, def.BreakEvenFullness);
+
+    /// <summary>
+    /// How full this tile is against its own biome cap, 0..1. Arid soil at its cap is full ground
+    /// for whatever can live on it; the cap is what differs, not the meaning of "full".
+    /// </summary>
+    private static float Fullness(TileType tile, float nutrition)
+    {
+        float cap = tile.NutritionCap();
+        return cap > 0f ? MathF.Min(1f, nutrition / cap) : 0f;
+    }
+
     public void Process(EntityManager em)
     {
         const ComponentFlags required = ComponentFlags.Position | ComponentFlags.Species | ComponentFlags.Hunger;
@@ -248,27 +270,34 @@ public sealed class GrazingSystem : ISystem
             var tile = _worldManager.GetTile(pos.X, pos.Y);
 
             // Standard herbivore grazing — nutrition-dependent
-            // Omnivores also graze but at whatever GrazeNutrition their definition sets
+            // Omnivores graze too, at whatever break-even their definition sets
             if (species.Type == SpeciesType.Herbivore || species.Type == SpeciesType.Omnivore)
             {
                 var herbDef = SpeciesRegistry.GetById(species.SpeciesId);
-                if (herbDef.CanGraze && tile.IsGrazeable())
+                // A full animal stops. It used to keep stripping the ground it stood on and throw
+                // the food away against the hunger clamp, which destroyed most of what grazers
+                // took from the world and meant a herd wore out its pasture for nothing.
+                bool hungry = hunger.Current < hunger.Max;
+                if (hungry && herbDef.CanGraze && tile.IsGrazeable())
                 {
                     // Check tile nutrition as THIS species values it; depleted tiles yield less
                     // food, and so does ground this species is poorly suited to feed on.
                     float grazeYield = TerrainProfile.ForageYield(herbDef, tile);
-                    float nutrition = _worldManager.GetNutrition(pos.X, pos.Y) * grazeYield;
-                    if (nutrition > 0.05f)
+                    float rawNutrition = _worldManager.GetNutrition(pos.X, pos.Y);
+                    if (rawNutrition * grazeYield > 0.05f)
                     {
                         float requested = herbDef.GrazeConsumeRate * tickMult;
-                        float consumed = _worldManager.ConsumeNutrition(pos.X, pos.Y, requested);
-                        // Food gained scales with tile nutrition level. Guard the ratio:
-                        // requested can only be 0 if tickMult is 0, which would make this 0/0 = NaN.
-                        float richness = requested > 0f ? consumed / requested : 0f;
+                        _worldManager.ConsumeNutrition(pos.X, pos.Y, requested);
+                        // What the mouthful is worth depends on how full the ground is, not on
+                        // whether the mouthful was available: ground at a third of its cap feeds a
+                        // third as well. The old ratio only fell once a tile held less than one
+                        // bite, which is below the level every species is already steered off, so
+                        // worn ground cost an animal nothing and hunger tracked nothing.
+                        float fullness = Fullness(tile, rawNutrition);
                         // The yield scales the payout and not the draw, so poor forage means more
                         // ground stripped per unit of hunger — which is what makes a species need
                         // more of the pasture it is badly suited to than of the pasture it is not.
-                        float foodGained = herbDef.GrazeNutrition * richness * grazeYield;
+                        float foodGained = FullGroundPayout(herbDef, hunger.DecayRate) * fullness * grazeYield;
                         hunger.Current = MathF.Min(hunger.Max, hunger.Current + foodGained * tickMult);
                     }
                 }
@@ -277,18 +306,21 @@ public sealed class GrazingSystem : ISystem
                 // pasture, and are paid in proportion to what they actually got — so a shoal eats
                 // its patch of water down and has to move on. Without one they feed for free
                 // (unchanged behaviour, still used as a subsistence floor elsewhere).
-                else if (herbDef.FeedTiles != null && herbDef.FeedTiles.Contains(tile))
+                else if (hungry && herbDef.FeedTiles != null && herbDef.FeedTiles.Contains(tile))
                 {
                     // Same exchange-rate rule as grazing: a feeding tile is worth what this
                     // species can get out of it, so a shoal can prefer reef to open water.
                     float feedYield = TerrainProfile.ForageYield(herbDef, tile);
                     if (herbDef.FeedConsumeRate > 0f)
                     {
+                        float rawNutrition = _worldManager.GetNutrition(pos.X, pos.Y);
                         float requested = herbDef.FeedConsumeRate * tickMult;
-                        float consumed = _worldManager.ConsumeNutrition(pos.X, pos.Y, requested);
-                        float richness = requested > 0f ? consumed / requested : 0f;
+                        _worldManager.ConsumeNutrition(pos.X, pos.Y, requested);
+                        // A shoal in water it has eaten down is fed in proportion to what is left,
+                        // exactly as a herd on worn pasture is.
                         hunger.Current = MathF.Min(hunger.Max,
-                            hunger.Current + herbDef.FeedNutrition * richness * feedYield * tickMult);
+                            hunger.Current + FullGroundPayout(herbDef, hunger.DecayRate)
+                                             * Fullness(tile, rawNutrition) * feedYield * tickMult);
                     }
                     else
                     {

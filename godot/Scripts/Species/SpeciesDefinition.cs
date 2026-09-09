@@ -456,14 +456,30 @@ public sealed class SpeciesDefinition
 
     // === GRAZING ===
     public bool CanGraze { get; init; } = false;
-    public float GrazeNutrition { get; init; } = 0.5f;
+
+    /// <summary>
+    /// The ground fullness — fertility as a fraction of the tile's own cap — at which this species
+    /// just holds its condition while feeding. Below it an animal loses hunger and has to move or
+    /// die; above it, it gains and can eventually breed. Lower is hardier.
+    ///
+    /// It replaces an authored "nutrition per mouthful", which was the reason hunger never mattered:
+    /// a deer was paid the same on ground at a tenth of its cap as on ground at full, so being
+    /// driven onto exhausted land cost it nothing. What a full tile pays is now derived from this
+    /// and the species' own hunger drain, so the two can never drift apart — see
+    /// <c>GrazingSystem.FullGroundPayout</c>.
+    ///
+    /// The value is a fraction of ground fullness *while feeding*, not of the run: an animal is
+    /// only on ground it can feed from part of the time, so the fullness it actually needs to hold
+    /// condition is higher than this number.
+    /// </summary>
+    public float BreakEvenFullness { get; init; } = 0.15f;
 
     /// <summary>
     /// Nutrition stripped from a tile per grazing tick. Was one hardcoded rate for every grazer,
     /// which made a rabbit and a deer press the pasture identically. Body size should show in the
     /// ground they leave behind.
     /// </summary>
-    public float GrazeConsumeRate { get; init; } = 0.0654f;
+    public float GrazeConsumeRate { get; init; } = 0.1962f;
 
     /// <summary>
     /// Tile nutrition below which this species stops treating ground as worth feeding on and

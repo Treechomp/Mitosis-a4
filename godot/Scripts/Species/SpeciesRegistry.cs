@@ -170,7 +170,7 @@ public static class SpeciesRegistry
 
             // Survival
             MaxHunger = 240f,
-            HungerDecayRate = 0.05f,
+            HungerDecayRate = 0.25f,
             MaxLifespan = 30000,
             MaturityAge = 2000,
 
@@ -178,7 +178,7 @@ public static class SpeciesRegistry
             // predators could crop. Slower turnaround and a fuller belly required before breeding,
             // so herd growth now depends on actually finding good pasture rather than being
             // near-automatic. Works together with the higher graze draw above.
-            ReproHungerThreshold = 228f,   // of MaxHunger 240 — must be genuinely well fed
+            ReproHungerThreshold = 156f,   // 65% of MaxHunger — comfortably fed, not stuffed
             ReproEnergyThreshold = 80f,
             ReproCooldown = 900,
 
@@ -209,9 +209,8 @@ public static class SpeciesRegistry
             // down to 0.08 — the two species therefore migrate at different times rather than
             // sweeping the map as one front.
             CanGraze = true,
-            GrazeConsumeRate = 0.1145f,
+            GrazeConsumeRate = 0.3435f,
             MinAcceptableNutrition = 0.28f,
-            GrazeNutrition = 0.5f,
             // Forage — temperate browser — meadow and woodland edge are its ground; it does
             // poorly on anything dry, cold or waterlogged.
             TerrainForageModifiers = new Dictionary<TileType, float>
@@ -280,13 +279,13 @@ public static class SpeciesRegistry
 
             // Survival - shorter lifespan, faster metabolism
             MaxHunger = 180f,
-            HungerDecayRate = 0.08f,
+            HungerDecayRate = 0.24f,
             MaxLifespan = 15000,
             MaturityAge = 1000,
 
             // Reproduction - breeds easily (energy values fit the frail 40 HP budget: a 70
             // threshold against MaxEnergy 40 made reproduction impossible).
-            ReproHungerThreshold = 180f,
+            ReproHungerThreshold = 117f,
             ReproEnergyThreshold = 25f,
             ReproCooldown = 600,   // Breeds a bit faster to offset higher predation losses
 
@@ -315,9 +314,8 @@ public static class SpeciesRegistry
             // Grazing — light feeder that can still get by on ground a deer has given up on,
             // so the two species stagger their migrations instead of moving as one mass.
             CanGraze = true,
-            GrazeConsumeRate = 0.03924f,
+            GrazeConsumeRate = 0.1177f,
             MinAcceptableNutrition = 0.08f,
-            GrazeNutrition = 0.3f,
             // Forage — the generalist, and it pays for it: it eats everywhere and is best
             // nowhere, so it fills ground the specialists have written off instead of beating
             // them on theirs.
@@ -713,7 +711,7 @@ public static class SpeciesRegistry
 
             // Survival - short-lived, fast metabolism
             MaxHunger = 120f,
-            HungerDecayRate = 0.06f,
+            HungerDecayRate = 0.16f,
             MaxLifespan = 10000,
             MaturityAge = 600,
 
@@ -721,7 +719,7 @@ public static class SpeciesRegistry
             // (Shark, Polar Bear, Penguin all feed on fish), so it must recover fast from heavy
             // predation. Short cooldown; the existing local-density + global-pressure brakes in
             // ReproductionSystem cap the standing population so this can't run away.
-            ReproHungerThreshold = 100f,
+            ReproHungerThreshold = 78f,
             ReproEnergyThreshold = 32f,  // lowered to fit the smaller MaxEnergy (45)
             ReproCooldown = 300,
             ReproHungerCost = 45f,
@@ -782,7 +780,7 @@ public static class SpeciesRegistry
                 TileType.ShallowWater, TileType.DeepWater, TileType.River, TileType.Reef,
             },
             FeedNutrition = 0.3f,
-            FeedConsumeRate = 0.0714f,
+            FeedConsumeRate = 0.2142f,
             // Forage — shoal feeder — the reef is worth most and the open deep least, so the
             // shelf is where it pays to stay.
             TerrainForageModifiers = new Dictionary<TileType, float>
@@ -951,12 +949,12 @@ public static class SpeciesRegistry
 
             // Survival - short-lived
             MaxHunger = 140f,
-            HungerDecayRate = 0.06f,
+            HungerDecayRate = 0.1867f,
             MaxLifespan = 12000,
             MaturityAge = 800,
 
             // Reproduction - controlled breeding
-            ReproHungerThreshold = 120f,
+            ReproHungerThreshold = 91f,
             ReproEnergyThreshold = 30f,  // lowered to fit the smaller MaxEnergy (Frog 40 / Lizard 45)
             ReproCooldown = 750,
             ReproHungerCost = 40f,
@@ -1012,7 +1010,6 @@ public static class SpeciesRegistry
             PreferredBiomes = new List<BiomeType> { BiomeType.Wetland, BiomeType.River },
 
             CanGraze = true,
-            GrazeNutrition = 0.3f,
             // Forage — marsh feeder — wetland and bog; dry ground is worth least to it whatever
             // grows there.
             TerrainForageModifiers = new Dictionary<TileType, float>
@@ -1240,14 +1237,14 @@ public static class SpeciesRegistry
 
             // Survival - very long-lived, slow metabolism
             MaxHunger = 300f,
-            HungerDecayRate = 0.02f,
+            HungerDecayRate = 0.125f,
             MaxLifespan = 60000,
             MaturityAge = 5000,
             MaxEnergy = 180f,
             EnergyRegenRate = 0.3f,
 
             // Reproduction - slow
-            ReproHungerThreshold = 260f,
+            ReproHungerThreshold = 195f,
             ReproEnergyThreshold = 90f,
             ReproCooldown = 2000,
             ReproHungerCost = 60f,
@@ -1289,7 +1286,6 @@ public static class SpeciesRegistry
             PreferredBiomes = new List<BiomeType> { BiomeType.Coast, BiomeType.Wetland, BiomeType.River },
 
             CanGraze = true,
-            GrazeNutrition = 0.3f,
             // Forage — marsh and shore grazer — wetland and bog; it strays further onto land than
             // a frog and gets a little more for it.
             TerrainForageModifiers = new Dictionary<TileType, float>
@@ -1353,13 +1349,13 @@ public static class SpeciesRegistry
 
             // Survival - large, long-lived
             MaxHunger = 300f,
-            HungerDecayRate = 0.05f,
+            HungerDecayRate = 0.25f,
             MaxLifespan = 35000,
             MaturityAge = 2500,
             MaxEnergy = 120f,
 
             // Reproduction
-            ReproHungerThreshold = 260f,
+            ReproHungerThreshold = 195f,
             ReproEnergyThreshold = 85f,
             ReproCooldown = 800,
             ReproHungerCost = 60f,
@@ -1386,7 +1382,6 @@ public static class SpeciesRegistry
             PreferredBiomes = new List<BiomeType> { BiomeType.Grassland },
 
             CanGraze = true,
-            GrazeNutrition = 0.6f,
             // Forage — open northern grazer — grass, steppe and taiga; the tropics are worth
             // little to it.
             TerrainForageModifiers = new Dictionary<TileType, float>
@@ -1450,7 +1445,7 @@ public static class SpeciesRegistry
 
             // Survival
             MaxHunger = 250f,
-            HungerDecayRate = 0.06f,
+            HungerDecayRate = 0.3f,
             MaxLifespan = 22000,
             MaturityAge = 1500,
             MaxEnergy = 110f,
@@ -1463,7 +1458,7 @@ public static class SpeciesRegistry
             PackShareRadius = 8f,
 
             // Reproduction - slower breeding for omnivore
-            ReproHungerThreshold = 220f,
+            ReproHungerThreshold = 162f,
             ReproEnergyThreshold = 75f,
             ReproCooldown = 900,
             ReproHungerCost = 60f,
@@ -1493,7 +1488,6 @@ public static class SpeciesRegistry
 
             // Grazing - omnivore: grazes at reduced efficiency, also hunts small prey
             CanGraze = true,
-            GrazeNutrition = 0.3f,  // Lower than pure herbivores
             // Forage — roots in wet woodland — forest, jungle and swamp; open dry ground gives it
             // least.
             TerrainForageModifiers = new Dictionary<TileType, float>
@@ -1726,12 +1720,12 @@ public static class SpeciesRegistry
 
             // Survival - short-lived, adapted to heat
             MaxHunger = 140f,
-            HungerDecayRate = 0.04f,
+            HungerDecayRate = 0.1867f,
             MaxLifespan = 12000,
             MaturityAge = 800,
 
             // Reproduction - controlled breeding
-            ReproHungerThreshold = 120f,
+            ReproHungerThreshold = 91f,
             ReproEnergyThreshold = 30f,  // lowered to fit the smaller MaxEnergy (Frog 40 / Lizard 45)
             ReproCooldown = 750,
             ReproHungerCost = 40f,
@@ -1790,7 +1784,6 @@ public static class SpeciesRegistry
             PreferredBiomes = new List<BiomeType> { BiomeType.Desert },
 
             CanGraze = true,
-            GrazeNutrition = 0.25f,  // Can eat sparse desert scrub
             // Forage — desert scrub-eater; lush ground is not its food however much of it there
             // is.
             TerrainForageModifiers = new Dictionary<TileType, float>
@@ -1978,13 +1971,13 @@ public static class SpeciesRegistry
 
             // Survival - desert adapted, very slow hunger
             MaxHunger = 400f,
-            HungerDecayRate = 0.02f,  // Extremely slow - desert adapted
+            HungerDecayRate = 0.1667f,  // Extremely slow - desert adapted
             MaxLifespan = 35000,
             MaturityAge = 3000,
             MaxEnergy = 130f,
 
             // Reproduction
-            ReproHungerThreshold = 350f,
+            ReproHungerThreshold = 260f,
             ReproEnergyThreshold = 85f,
             ReproCooldown = 1000,
             ReproHungerCost = 70f,
@@ -2043,7 +2036,6 @@ public static class SpeciesRegistry
             PreferredBiomes = new List<BiomeType> { BiomeType.Desert },
 
             CanGraze = true,
-            GrazeNutrition = 0.4f,
             // Forage — desert browser with the widest dry range — scrub, savanna and arid all pay
             // in full.
             TerrainForageModifiers = new Dictionary<TileType, float>
@@ -2618,14 +2610,14 @@ public static class SpeciesRegistry
 
             // Survival - tough, long-lived
             MaxHunger = 320f,
-            HungerDecayRate = 0.04f,
+            HungerDecayRate = 0.2f,
             MaxLifespan = 30000,
             MaturityAge = 2500,
             MaxEnergy = 160f,
             EnergyRegenRate = 0.25f,
 
             // Reproduction
-            ReproHungerThreshold = 280f,
+            ReproHungerThreshold = 208f,
             ReproEnergyThreshold = 85f,
             ReproCooldown = 900,
             ReproHungerCost = 65f,
@@ -2683,7 +2675,6 @@ public static class SpeciesRegistry
             PreferredBiomes = new List<BiomeType> { BiomeType.Arctic },
 
             CanGraze = true,
-            GrazeNutrition = 0.5f,
             // Forage — arctic grazer — tundra, taiga and steppe; heat-country forage is worth
             // least to it.
             TerrainForageModifiers = new Dictionary<TileType, float>
@@ -2745,12 +2736,12 @@ public static class SpeciesRegistry
 
             // Survival
             MaxHunger = 180f,
-            HungerDecayRate = 0.06f,
+            HungerDecayRate = 0.24f,
             MaxLifespan = 20000,
             MaturityAge = 1200,
 
             // Reproduction
-            ReproHungerThreshold = 155f,
+            ReproHungerThreshold = 117f,
             ReproEnergyThreshold = 70f,
             ReproCooldown = 600,
             ReproHungerCost = 40f,
@@ -2810,7 +2801,6 @@ public static class SpeciesRegistry
             PreferredBiomes = new List<BiomeType> { BiomeType.Tropical },
 
             CanGraze = true,
-            GrazeNutrition = 0.4f,
             // Forage — canopy forager — jungle and forest; open country is a place it crosses.
             TerrainForageModifiers = new Dictionary<TileType, float>
             {
@@ -2868,12 +2858,12 @@ public static class SpeciesRegistry
 
             // Survival
             MaxHunger = 130f,
-            HungerDecayRate = 0.06f,
+            HungerDecayRate = 0.1733f,
             MaxLifespan = 18000,
             MaturityAge = 1000,
 
             // Reproduction
-            ReproHungerThreshold = 110f,
+            ReproHungerThreshold = 84f,
             ReproEnergyThreshold = 30f,  // lowered to fit the smaller MaxEnergy (42)
             ReproCooldown = 550,
             ReproHungerCost = 30f,
@@ -2895,7 +2885,6 @@ public static class SpeciesRegistry
             AllowedSpawnTiles = new List<TileType> { TileType.Jungle, TileType.Forest, TileType.Savanna },
 
             CanGraze = true,
-            GrazeNutrition = 0.3f,
             // Forage — canopy feeder that will also take open fruit and seed — better off the
             // trees than a monkey.
             TerrainForageModifiers = new Dictionary<TileType, float>
@@ -3071,13 +3060,13 @@ public static class SpeciesRegistry
 
             // Survival
             MaxHunger = 270f,
-            HungerDecayRate = 0.05f,
+            HungerDecayRate = 0.25f,
             MaxLifespan = 28000,
             MaturityAge = 2000,
             MaxEnergy = 110f,
 
             // Reproduction
-            ReproHungerThreshold = 235f,
+            ReproHungerThreshold = 176f,
             ReproEnergyThreshold = 80f,
             ReproCooldown = 700,
             ReproHungerCost = 55f,
@@ -3136,7 +3125,6 @@ public static class SpeciesRegistry
             PreferredBiomes = new List<BiomeType> { BiomeType.Tropical },
 
             CanGraze = true,
-            GrazeNutrition = 0.5f,
             // Forage — wet tropical browser — jungle and swamp; it overlaps the boar in forest
             // and the frog in bog, and leads neither there.
             TerrainForageModifiers = new Dictionary<TileType, float>
