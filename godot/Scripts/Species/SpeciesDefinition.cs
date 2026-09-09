@@ -279,6 +279,25 @@ public sealed class SpeciesDefinition
     public Dictionary<TileType, float>? TerrainAversionModifiers { get; init; }
 
     /// <summary>
+    /// Per-terrain forage yield: how much of this ground's fertility this species can actually
+    /// turn into food. MULTIPLY semantics against the tile's own nutrition — unlisted tiles are
+    /// worth their face value (1.0), and 0 means the ground is not forage for this species at all.
+    ///
+    /// This is the dimension that separates feeding niches. Speed, aversion, discomfort and
+    /// concealment already say where a species will go and how it fares standing there; none of
+    /// them said what the ground was worth once it arrived, so every grazer read the same ranking
+    /// of pasture and drew on one shared pool. A camel that gets full value from scrub and half
+    /// from meadow does not compete with a deer for the same grass — see
+    /// docs/design/03-creatures.md.
+    ///
+    /// It scales the PAYOUT, not the draw: a grazer strips ground at GrazeConsumeRate wherever it
+    /// stands, and poor forage means it gets less hunger back for the same mouthful. So the yield
+    /// is literally the exchange rate between fertility and food, which is what decides how much
+    /// ground a species needs to sustain itself. See TerrainProfile.ForageYield.
+    /// </summary>
+    public Dictionary<TileType, float>? TerrainForageModifiers { get; init; }
+
+    /// <summary>
     /// Biomes where this species can spawn. Empty/null = spawn in any biome.
     /// </summary>
     public List<BiomeType>? PreferredBiomes { get; init; }

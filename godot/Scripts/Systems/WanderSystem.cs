@@ -553,10 +553,15 @@ public sealed class WanderSystem : ISystem
         if (IsLethalSubstrate(def, tile)) return false;
         // Anything that draws fertility from the ground it stands on — grazers, Shroomers, and
         // water-feeding shoals — sees a stripped tile as no food at all, whatever its type.
+        // Against the value TO THIS SPECIES, not the raw fertility. MinAcceptableNutrition is
+        // "ground I no longer think is worth feeding on", which is a question about worth, and
+        // reading it as a bare depletion test was measured to leave species standing on ground
+        // that does not feed them instead of moving to ground that does.
         if (DrawsFertility(def, tile))
-            return _worldManager.GetNutrition(x, y) > def.MinAcceptableNutrition;
+            return TerrainProfile.EffectiveNutrition(def, tile, _worldManager.GetNutrition(x, y))
+                   > def.MinAcceptableNutrition;
         if (def.FeedTiles != null && def.FeedTiles.Contains(tile))
-            return true;
+            return TerrainProfile.ForageYield(def, tile) > 0f;
         return false;
     }
 
@@ -735,11 +740,13 @@ public sealed class WanderSystem : ISystem
             // Ground already below what this species will settle for scores nothing, so a picky
             // browser routes past thin pasture a small generalist would happily stop on — and a
             // shoal steers toward richer water instead of milling over the patch it just stripped.
-            float n = _worldManager.GetNutrition(x, y);
+            // Scored as this species values it, which is the whole of "a deer heads for grass
+            // and a camel for scrub": both read the same map and rank it differently.
+            float n = TerrainProfile.EffectiveNutrition(def, tile, _worldManager.GetNutrition(x, y));
             return n > def.MinAcceptableNutrition ? n : 0f;
         }
         if (def.FeedTiles != null && def.FeedTiles.Contains(tile))
-            return 1f;
+            return TerrainProfile.ForageYield(def, tile);
         // Predator hunting grounds: a hungry predator with no prey in range scores its
         // HuntTerrain so it migrates toward where its prey lives (Penguin → water, Scorpion →
         // desert) instead of wandering blind off into hostile terrain.

@@ -111,9 +111,12 @@ public sealed class TerrainDiscomfortSystem : ISystem
                 // "Can I eat where I'm standing" is species-specific: a shoal feeds on the water
                 // column, which the grazeable-tile test would call barren ground.
                 bool feedsHere = speciesDef != null
-                    ? (speciesDef.CanGraze || speciesDef.FertilityConsumeRate > 0f) && tile.IsGrazeable()
-                      || speciesDef.FeedConsumeRate > 0f && speciesDef.FeedTiles != null
-                         && speciesDef.FeedTiles.Contains(tile)
+                    ? ((speciesDef.CanGraze || speciesDef.FertilityConsumeRate > 0f) && tile.IsGrazeable()
+                       || speciesDef.FeedConsumeRate > 0f && speciesDef.FeedTiles != null
+                          && speciesDef.FeedTiles.Contains(tile))
+                      // Ground this species cannot make a living on is not "food here", however
+                      // edible the tile type is in general.
+                      && TerrainProfile.ForageYield(speciesDef, tile) > 0f
                     : tile.IsGrazeable();
 
                 if (!feedsHere)
@@ -128,7 +131,12 @@ public sealed class TerrainDiscomfortSystem : ISystem
                     // exactly as useless as ground that never grew anything, and since discomfort
                     // now settles at a level instead of piling up, a discounted pressure would
                     // simply never reach the escape threshold — stranding herds on dead pasture.
-                    float nutrition = _worldManager.GetNutrition(pos.X, pos.Y);
+                    // As this species values it, so the move-on pressure and the foraging
+                    // steering agree about which ground is finished.
+                    float nutrition = speciesDef != null
+                        ? TerrainProfile.EffectiveNutrition(
+                            speciesDef, tile, _worldManager.GetNutrition(pos.X, pos.Y))
+                        : _worldManager.GetNutrition(pos.X, pos.Y);
                     if (nutrition < 0.3f)
                     {
                         float depletionFactor = 1f - (nutrition / 0.3f);

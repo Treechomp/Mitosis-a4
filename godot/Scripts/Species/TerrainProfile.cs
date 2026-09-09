@@ -9,11 +9,12 @@ namespace Mitosis.SpeciesData;
 /// inconsistently-applied terrain logic documented in docs/archive/terrain-handling-audit-2026-06.md — every
 /// movement/AI system now consults these methods so behaviour is consistent by construction.
 ///
-/// Four dimensions:
+/// The dimensions:
 ///  - Speed:       movement multiplier (REPLACE — a species' own value overrides the tile grip).
 ///  - IsImpassable / SteerAversion: where a species will/won't go (hard element barrier + soft dislike).
 ///  - DiscomfortRate: how fast standing here builds the "leave this ground" urge.
 ///  - Concealment: how hidden the species is here (cover), reducing its detectability.
+///  - ForageYield: what this ground is worth as food to this species (MULTIPLY on tile nutrition).
 ///
 /// SteerAversion is the soft PREFERENCE (a pull, overridable by hunger and fear); DiscomfortRate is
 /// the soft INTOLERANCE that eventually forces an escape. Keeping them separate is what lets a
@@ -177,4 +178,27 @@ public static class TerrainProfile
     public static float Concealment(SpeciesDefinition s, TileType tile)
         => s.TerrainConcealment != null && s.TerrainConcealment.TryGetValue(tile, out float m)
             ? m : tile.GetCoverBonus();
+
+    /// <summary>
+    /// Forage yield on a tile: the multiplier between the ground's fertility and the food this
+    /// species gets out of it. 1.0 (the default for any unlisted tile) means face value; 0 means
+    /// this ground is not forage for this species however fertile it looks.
+    ///
+    /// Every question of the form "is there food here, and how much" resolves through
+    /// <see cref="EffectiveNutrition"/> so that grazing, foraging and the move-on pressure all
+    /// read one number. Without that they disagree: a species would keep grazing ground its own
+    /// wander logic had already written off, or walk away from ground it was still eating.
+    /// </summary>
+    public static float ForageYield(SpeciesDefinition s, TileType tile)
+        => s.TerrainForageModifiers != null && s.TerrainForageModifiers.TryGetValue(tile, out float m)
+            ? MathF.Max(0f, m) : 1f;
+
+    /// <summary>
+    /// A tile's nutrition as this species values it — the raw fertility scaled by
+    /// <see cref="ForageYield"/>. This is the number every "is this worth eating" threshold
+    /// compares against, so the grazing code, the foraging code and the move-on pressure all mean
+    /// the same thing by it.
+    /// </summary>
+    public static float EffectiveNutrition(SpeciesDefinition s, TileType tile, float tileNutrition)
+        => tileNutrition * ForageYield(s, tile);
 }

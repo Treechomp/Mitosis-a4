@@ -248,8 +248,10 @@ public sealed class GrazingSystem : ISystem
                 var herbDef = SpeciesRegistry.GetById(species.SpeciesId);
                 if (herbDef.CanGraze && tile.IsGrazeable())
                 {
-                    // Check tile nutrition; depleted tiles yield less food
-                    float nutrition = _worldManager.GetNutrition(pos.X, pos.Y);
+                    // Check tile nutrition as THIS species values it; depleted tiles yield less
+                    // food, and so does ground this species is poorly suited to feed on.
+                    float grazeYield = TerrainProfile.ForageYield(herbDef, tile);
+                    float nutrition = _worldManager.GetNutrition(pos.X, pos.Y) * grazeYield;
                     if (nutrition > 0.05f)
                     {
                         float requested = herbDef.GrazeConsumeRate * tickMult;
@@ -257,7 +259,10 @@ public sealed class GrazingSystem : ISystem
                         // Food gained scales with tile nutrition level. Guard the ratio:
                         // requested can only be 0 if tickMult is 0, which would make this 0/0 = NaN.
                         float richness = requested > 0f ? consumed / requested : 0f;
-                        float foodGained = herbDef.GrazeNutrition * richness;
+                        // The yield scales the payout and not the draw, so poor forage means more
+                        // ground stripped per unit of hunger — which is what makes a species need
+                        // more of the pasture it is badly suited to than of the pasture it is not.
+                        float foodGained = herbDef.GrazeNutrition * richness * grazeYield;
                         hunger.Current = MathF.Min(hunger.Max, hunger.Current + foodGained * tickMult);
                     }
                 }
@@ -268,17 +273,21 @@ public sealed class GrazingSystem : ISystem
                 // (unchanged behaviour, still used as a subsistence floor elsewhere).
                 else if (herbDef.FeedTiles != null && herbDef.FeedTiles.Contains(tile))
                 {
+                    // Same exchange-rate rule as grazing: a feeding tile is worth what this
+                    // species can get out of it, so a shoal can prefer reef to open water.
+                    float feedYield = TerrainProfile.ForageYield(herbDef, tile);
                     if (herbDef.FeedConsumeRate > 0f)
                     {
                         float requested = herbDef.FeedConsumeRate * tickMult;
                         float consumed = _worldManager.ConsumeNutrition(pos.X, pos.Y, requested);
                         float richness = requested > 0f ? consumed / requested : 0f;
                         hunger.Current = MathF.Min(hunger.Max,
-                            hunger.Current + herbDef.FeedNutrition * richness * tickMult);
+                            hunger.Current + herbDef.FeedNutrition * richness * feedYield * tickMult);
                     }
                     else
                     {
-                        hunger.Current = MathF.Min(hunger.Max, hunger.Current + herbDef.FeedNutrition * tickMult);
+                        hunger.Current = MathF.Min(hunger.Max,
+                            hunger.Current + herbDef.FeedNutrition * feedYield * tickMult);
                     }
                 }
 
