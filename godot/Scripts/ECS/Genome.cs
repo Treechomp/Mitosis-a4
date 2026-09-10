@@ -212,7 +212,12 @@ public sealed class Genome
             ref var d = ref em.TerrainDiscomforts[entity];
             d.Threshold = this[Trait.DiscomfortThreshold];
             d.DecayRate = this[Trait.DiscomfortDecayRate];
-            d.GrazingPressure = this[Trait.GrazingPressure];
+            // Only for a species that actually grazes. The factory zeroes this for one that does
+            // not, so inheriting it — and regressing it toward a species value the founders were
+            // never given — hands a shoal a pressure to leave pasture it does not eat. Measured, a
+            // shoal's descendants had acquired 89% of one over nineteen generations.
+            if (SpeciesRegistry.GetById(em.Species[entity].SpeciesId).CanGraze)
+                d.GrazingPressure = this[Trait.GrazingPressure];
         }
         if (em.HasComponents(entity, ComponentFlags.Terraform))
         {
