@@ -27,13 +27,26 @@ public sealed class NestSystem : ISystem
     private readonly WorldManager _worldManager;
     private readonly SpatialHash _spatialHash;
     private readonly Random _rng = SimRandom.Create();
+
+    /// <summary>
+    /// What each nest's brood descends from, and how many descents that template already is from a
+    /// founder. A larva has no parent — it is grown from a larder many Sectids filled — so the
+    /// template is the labour that fed it: each delivery mixes the courier's own traits in at the
+    /// weight of its load against the larder it joined.
+    ///
+    /// Kept beside the component rather than in it so the nest's memory costs the entity arrays
+    /// nothing, and re-created by <c>SpawnNest</c> so a reused entity id can never inherit a dead
+    /// nest's brood.
+    /// </summary>
+    private readonly Dictionary<int, (Genome template, float generation)> _nestBrood = new(64);
     private readonly List<int> _nearbyBuffer = new(64);
 
     /// <summary>How far a carrier will look for a nest to haul food back to.</summary>
     private const float NestSearchRadius = 60f;
 
     // Spawn tracking
-    private readonly List<(float x, float y, int colonyId)> _pendingSpawns = new(16);
+    private readonly List<(float x, float y, int colonyId, Genome? brood, int generation)>
+        _pendingSpawns = new(16);
     private readonly List<(float x, float y, int colonyId)> _pendingNests = new(4);
     private int _nextColonyId = 1;
     private readonly int _maxPopulation;
@@ -161,7 +174,7 @@ public sealed class NestSystem : ISystem
         // privileged over another.
         var sectidSpeciesId = SpeciesRegistry.GetId("Sectid");
         var sectidDefBudget = SpeciesRegistry.Get("Sectid");
-        foreach (var (x, y, colonyId) in _pendingSpawns)
+        foreach (var (x, y, colonyId, brood, generation) in _pendingSpawns)
         {
             if (em.CreatureCount >= _maxPopulation) break;
             if (_budget != null && !_budget.CanSpawn(sectidDefBudget))
@@ -169,7 +182,7 @@ public sealed class NestSystem : ISystem
                 _budget.LogRefusal(sectidDefBudget);
                 continue;
             }
-            SpawnSectid(em, x, y, colonyId);
+            SpawnSectid(em, x, y, colonyId, brood, generation);
             EcosystemLogger.Instance?.LogReproduction(sectidSpeciesId, -1, x, y, 1);
         }
 
@@ -206,7 +219,9 @@ public sealed class NestSystem : ISystem
 
             if (_worldManager.IsSpawnable(spawnX, spawnY))
             {
-                _pendingSpawns.Add((spawnX, spawnY, nest.ColonyId));
+                _nestBrood.TryGetValue(nestEntity, out var brood);
+                _pendingSpawns.Add((spawnX, spawnY, nest.ColonyId, brood.template,
+                                    (int)MathF.Round(brood.generation) + 1));
                 nest.SpawnsThisStage++;
                 // The colony reshapes the land around its nest as a brood emerges. Concentrated
                 // at the stationary nest, so the imprint actually accumulates over many hatches.
@@ -459,6 +474,29 @@ public sealed class NestSystem : ISystem
         if (distSq < deliveryRange * deliveryRange)
         {
             ref var nest = ref em.Nests[carrier.TargetNest];
+
+            // The brood resembles whoever filled the larder it is eating from. One blend per
+            // delivery, weighted by the load against what was already there, so no contributor
+            // list is needed — and because the weight falls with the food as larvae are grown,
+            // influence is eaten along with it and nobody owns the colony permanently.
+            float delivered = carrier.FoodCarried;
+            if (delivered > 0f)
+            {
+                var courier = Genome.From(em, entity);
+                float courierGeneration = em.Species[entity].Generation;
+                if (_nestBrood.TryGetValue(carrier.TargetNest, out var brood) && brood.template != null)
+                {
+                    float w = delivered / (nest.FoodStored + delivered);
+                    _nestBrood[carrier.TargetNest] = (
+                        Genome.Blend(brood.template, courier, w),
+                        brood.generation * (1f - w) + courierGeneration * w);
+                }
+                else
+                {
+                    _nestBrood[carrier.TargetNest] = (courier, courierGeneration);
+                }
+            }
+
             nest.FoodStored += carrier.FoodCarried;
             carrier.FoodCarried = 0f;
             carrier.TargetNest = -1;
@@ -553,7 +591,8 @@ public sealed class NestSystem : ISystem
         return best;
     }
 
-    private void SpawnSectid(EntityManager em, float x, float y, int colonyId)
+    private void SpawnSectid(EntityManager em, float x, float y, int colonyId,
+                              Genome? brood = null, int generation = 0)
     {
         if (!em.HasRoomForEntity) return;
 
@@ -572,7 +611,7 @@ public sealed class NestSystem : ISystem
         em.SimulationLODs[entity] = new SimulationLOD(LODLevel.Full);
         em.AddComponent(entity, ComponentFlags.SimulationLOD);
 
-        em.Species[entity] = new Species(SpeciesType.Sectid, 0, SpeciesRegistry.GetId("Sectid"));
+        em.Species[entity] = new Species(SpeciesType.Sectid, generation, SpeciesRegistry.GetId("Sectid"));
         em.AddComponent(entity, ComponentFlags.Species);
 
         em.Ages[entity] = new Age(0, speciesDef.MaxLifespan, speciesDef.MaturityAge);
@@ -634,6 +673,12 @@ public sealed class NestSystem : ISystem
         em.TerrainDiscomforts[entity] = new TerrainDiscomfort(
             speciesDef.DiscomfortThreshold, speciesDef.DiscomfortDecayRate);
         em.AddComponent(entity, ComponentFlags.TerrainDiscomfort);
+
+        // Descent from the larder rather than from a parent. Without a template — a colony seeded
+        // at worldgen, before any Sectid has carried anything home — this path takes the species
+        // values flat, as it always did.
+        if (brood != null)
+            brood.Inherit(_rng, speciesDef).ApplyTo(em, entity);
     }
 
     public int SpawnNest(EntityManager em, float x, float y, int colonyId)
@@ -642,6 +687,9 @@ public sealed class NestSystem : ISystem
 
         var nestDef = SpeciesRegistry.Get("Sectid");
         int entity = em.CreateEntity();
+        // A fresh nest starts with no brood template, and clearing here is what stops a reused
+        // entity id inheriting the brood of the nest that held it before.
+        _nestBrood.Remove(entity);
 
         em.Positions[entity] = new Position(x, y);
         em.AddComponent(entity, ComponentFlags.Position);

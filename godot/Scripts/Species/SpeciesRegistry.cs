@@ -246,7 +246,7 @@ public static class SpeciesRegistry
             BaseSize = 8f,
             Shape = ShapeType.Circle,
 
-            StatVariation = 0.2f,
+            FounderSpread = 0.2f,
         });
 
         Register(new SpeciesDefinition
@@ -359,7 +359,7 @@ public static class SpeciesRegistry
             BaseSize = 5f,
             Shape = ShapeType.Teardrop,
 
-            StatVariation = 0.25f,
+            FounderSpread = 0.25f,
         });
 
         // ============================
@@ -463,7 +463,7 @@ public static class SpeciesRegistry
             BaseSize = 10f,
             Shape = ShapeType.Triangle,
 
-            StatVariation = 0.2f,
+            FounderSpread = 0.2f,
         });
 
         Register(new SpeciesDefinition
@@ -561,7 +561,7 @@ public static class SpeciesRegistry
             BaseSize = 7f,
             Shape = ShapeType.Triangle,
 
-            StatVariation = 0.2f,
+            FounderSpread = 0.2f,
         });
 
         // ============================
@@ -674,7 +674,7 @@ public static class SpeciesRegistry
             BaseSize = 14f,
             Shape = ShapeType.Fangs,
 
-            StatVariation = 0.15f,
+            FounderSpread = 0.15f,
         });
 
         // ============================
@@ -807,7 +807,7 @@ public static class SpeciesRegistry
             BaseColor = new Color(0.3f, 0.6f, 0.9f),
             BaseSize = 4f,
             Shape = ShapeType.FishShape,
-            StatVariation = 0.25f,
+            FounderSpread = 0.25f,
         });
 
         Register(new SpeciesDefinition
@@ -916,7 +916,7 @@ public static class SpeciesRegistry
             BaseColor = new Color(0.2f, 0.3f, 0.5f),
             BaseSize = 14f,
             Shape = ShapeType.Fin,
-            StatVariation = 0.15f,
+            FounderSpread = 0.15f,
         });
 
         Register(new SpeciesDefinition
@@ -1038,7 +1038,7 @@ public static class SpeciesRegistry
             BaseColor = new Color(0.2f, 0.8f, 0.3f),
             BaseSize = 4f,
             Shape = ShapeType.Circle,
-            StatVariation = 0.25f,
+            FounderSpread = 0.25f,
         });
 
         // The freshwater answer to fish. Sharks and penguins only patrol the sea, so a pond or a
@@ -1209,7 +1209,7 @@ public static class SpeciesRegistry
             BaseColor = new Color(0.42f, 0.29f, 0.18f),
             BaseSize = 7f,
             Shape = ShapeType.Teardrop,
-            StatVariation = 0.2f,
+            FounderSpread = 0.2f,
         });
 
         Register(new SpeciesDefinition
@@ -1314,7 +1314,7 @@ public static class SpeciesRegistry
             BaseColor = new Color(0.25f, 0.45f, 0.2f),
             BaseSize = 8f,
             Shape = ShapeType.Diamond,
-            StatVariation = 0.15f,
+            FounderSpread = 0.15f,
         });
 
         // ============================
@@ -1409,7 +1409,7 @@ public static class SpeciesRegistry
             BaseColor = new Color(0.55f, 0.4f, 0.25f),
             BaseSize = 11f,
             Shape = ShapeType.Circle,
-            StatVariation = 0.2f,
+            FounderSpread = 0.2f,
         });
 
         Register(new SpeciesDefinition
@@ -1519,7 +1519,7 @@ public static class SpeciesRegistry
             BaseColor = new Color(0.4f, 0.3f, 0.2f),
             BaseSize = 9f,
             Shape = ShapeType.Diamond,
-            StatVariation = 0.2f,
+            FounderSpread = 0.2f,
         });
 
         Register(new SpeciesDefinition
@@ -1608,7 +1608,7 @@ public static class SpeciesRegistry
             BaseColor = new Color(0.35f, 0.2f, 0.1f),
             BaseSize = 15f,
             Shape = ShapeType.Fangs,
-            StatVariation = 0.15f,
+            FounderSpread = 0.15f,
         });
 
         Register(new SpeciesDefinition
@@ -1679,7 +1679,7 @@ public static class SpeciesRegistry
             BaseColor = new Color(0.5f, 0.35f, 0.15f),
             BaseSize = 7f,
             Shape = ShapeType.Chevron,
-            StatVariation = 0.2f,
+            FounderSpread = 0.2f,
         });
 
         // ============================
@@ -1813,7 +1813,7 @@ public static class SpeciesRegistry
             BaseColor = new Color(0.85f, 0.75f, 0.4f),
             BaseSize = 4f,
             Shape = ShapeType.Diamond,
-            StatVariation = 0.25f,
+            FounderSpread = 0.25f,
         });
 
         Register(new SpeciesDefinition
@@ -1942,7 +1942,7 @@ public static class SpeciesRegistry
             BaseColor = new Color(0.6f, 0.15f, 0.1f),
             BaseSize = 5f,
             Shape = ShapeType.Crescent,
-            StatVariation = 0.2f,
+            FounderSpread = 0.2f,
         });
 
         Register(new SpeciesDefinition
@@ -2063,7 +2063,7 @@ public static class SpeciesRegistry
             BaseColor = new Color(0.8f, 0.7f, 0.5f),
             BaseSize = 12f,
             Shape = ShapeType.Circle,
-            StatVariation = 0.15f,
+            FounderSpread = 0.15f,
         });
 
         Register(new SpeciesDefinition
@@ -2190,7 +2190,7 @@ public static class SpeciesRegistry
             BaseColor = new Color(0.45f, 0.5f, 0.2f),
             BaseSize = 6f,
             Shape = ShapeType.Serpent,
-            StatVariation = 0.2f,
+            FounderSpread = 0.2f,
         });
 
         // ============================
@@ -2355,7 +2355,7 @@ public static class SpeciesRegistry
             BaseColor = new Color(0.15f, 0.15f, 0.2f),
             BaseSize = 6f,
             Shape = ShapeType.Teardrop,
-            StatVariation = 0.2f,
+            FounderSpread = 0.2f,
         });
 
         Register(new SpeciesDefinition
@@ -2464,7 +2464,7 @@ public static class SpeciesRegistry
             BaseColor = new Color(0.9f, 0.9f, 0.85f),
             BaseSize = 16f,
             Shape = ShapeType.Fangs,
-            StatVariation = 0.15f,
+            FounderSpread = 0.15f,
         });
 
         Register(new SpeciesDefinition
@@ -2580,7 +2580,7 @@ public static class SpeciesRegistry
             BaseColor = new Color(0.8f, 0.8f, 0.85f),
             BaseSize = 6f,
             Shape = ShapeType.Triangle,
-            StatVariation = 0.2f,
+            FounderSpread = 0.2f,
         });
 
         Register(new SpeciesDefinition
@@ -2702,7 +2702,7 @@ public static class SpeciesRegistry
             BaseColor = new Color(0.3f, 0.25f, 0.15f),
             BaseSize = 13f,
             Shape = ShapeType.Diamond,
-            StatVariation = 0.15f,
+            FounderSpread = 0.15f,
         });
 
         // ============================
@@ -2829,7 +2829,7 @@ public static class SpeciesRegistry
             BaseColor = new Color(0.6f, 0.4f, 0.2f),
             BaseSize = 6f,
             Shape = ShapeType.Circle,
-            StatVariation = 0.25f,
+            FounderSpread = 0.25f,
         });
 
         Register(new SpeciesDefinition
@@ -2913,7 +2913,7 @@ public static class SpeciesRegistry
             BaseColor = new Color(0.2f, 0.9f, 0.3f),
             BaseSize = 5f,
             Shape = ShapeType.Chevron,
-            StatVariation = 0.25f,
+            FounderSpread = 0.25f,
         });
 
         Register(new SpeciesDefinition
@@ -3029,7 +3029,7 @@ public static class SpeciesRegistry
             BaseColor = new Color(0.85f, 0.65f, 0.2f),
             BaseSize = 12f,
             Shape = ShapeType.Fangs,
-            StatVariation = 0.15f,
+            FounderSpread = 0.15f,
         });
 
         Register(new SpeciesDefinition
@@ -3153,7 +3153,7 @@ public static class SpeciesRegistry
             BaseColor = new Color(0.35f, 0.3f, 0.3f),
             BaseSize = 10f,
             Shape = ShapeType.Teardrop,
-            StatVariation = 0.2f,
+            FounderSpread = 0.2f,
         });
 
         // ============================
@@ -3410,7 +3410,7 @@ public static class SpeciesRegistry
             BaseSize = 9f,
             Shape = ShapeType.Mushroom,
 
-            StatVariation = 0.2f,
+            FounderSpread = 0.2f,
         });
 
         Register(new SpeciesDefinition
@@ -3612,7 +3612,7 @@ public static class SpeciesRegistry
             BaseSize = 5f,   // Smaller — numerous
             Shape = ShapeType.Star,
 
-            StatVariation = 0.25f,
+            FounderSpread = 0.25f,
         });
 
         Register(new SpeciesDefinition
@@ -3769,7 +3769,7 @@ public static class SpeciesRegistry
             BaseSize = 8f,
             Shape = ShapeType.Square,
 
-            StatVariation = 0.15f,
+            FounderSpread = 0.15f,
         });
     }
 }

@@ -793,8 +793,30 @@ public sealed class SpeciesDefinition
     public int VenomDurationTicks { get; init; } = 0;
     public bool HasVenom => VenomDamagePerTick > 0f && VenomDurationTicks > 0;
 
-    // === STAT VARIATION ===
-    public float StatVariation { get; init; } = 0.2f;
+    // === TRAIT VARIATION ===
+
+    /// <summary>
+    /// How far an individual created WITHOUT a parent may differ from its species values, as a
+    /// fraction, applied to every heritable trait at spawn. World seeding, scenario spawns and any
+    /// path with no genome to descend from use this; it is the spread a population starts with.
+    ///
+    /// Deliberately NOT the mutation rate, and no longer named as though it were. Founder spread is
+    /// a one-off applied to the first generation; mutation (<see cref="TraitMutationRates"/>) is
+    /// applied at every birth, to a value that came from a parent rather than from here. Conflating
+    /// the two is how a population either freezes at its founders' values or wanders off its
+    /// species.
+    /// </summary>
+    public float FounderSpread { get; init; } = 0.2f;
+
+    /// <summary>
+    /// Per-trait mutation rate overrides, as a fraction of the species value, drawn uniformly in
+    /// ±rate at each birth. Unlisted traits take <c>Genome.MutationRate</c>'s default, which is one
+    /// rate for everything except the traits held at species level there.
+    ///
+    /// This is where a species says what about it is allowed to evolve: zero holds a trait at the
+    /// species value, and a larger rate makes that trait the substance of its drift.
+    /// </summary>
+    public Dictionary<ECS.Trait, float>? TraitMutationRates { get; init; }
 
     // === COMPUTED PROPERTIES ===
 

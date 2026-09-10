@@ -233,6 +233,7 @@ public partial class PopulationSoakRunner : Node
                  $"pred {budget.CountFor(PopClass.Predator)}, " +
                  $"faction {budget.CountFor(PopClass.Faction)})");
         PrintHabitatCapacity(stack.Habitat, budget);
+        var traitsAtStart = CaptureTraitMeans(em);
 
         // Per-system cost accumulated since the last sample, in the shape GameManager already
         // uses: one stopwatch, restarted around each Process call.
@@ -313,6 +314,7 @@ public partial class PopulationSoakRunner : Node
 
         WriteCsv(samples, budget);
         if (ProfileSystems) WriteTimingCsv(timingCsv);
+        ReportTraitDrift(traitsAtStart, CaptureTraitMeans(em));
         Report(samples, budget, logger);
         HuntFunnelProbe.End();
         logger.Close();
@@ -637,6 +639,127 @@ public partial class PopulationSoakRunner : Node
         }
         GD.Print($"  ground-fed capacity {total} against a herbivore class budget of " +
                  $"{budget.BudgetFor(PopClass.Herbivore)}");
+    }
+
+    /// <summary>
+    /// Mean of every heritable trait, per species, over the live population — and the mean
+    /// generation reached. Taken after seeding and again at the end, the pair answers which way
+    /// selection pulled and how hard, which is the only honest basis for deciding what a trait's
+    /// mutation rate should be.
+    /// </summary>
+    private static Dictionary<int, TraitSample> CaptureTraitMeans(EntityManager em)
+    {
+        var bySpecies = new Dictionary<int, TraitSample>(32);
+        foreach (int entity in em.Query(ComponentFlags.Species))
+        {
+            if (em.HasComponents(entity, ComponentFlags.Structure) ||
+                em.HasComponents(entity, ComponentFlags.Spore) ||
+                em.HasComponents(entity, ComponentFlags.Carrion))
+                continue;
+
+            ref var sp = ref em.Species[entity];
+            if (!bySpecies.TryGetValue(sp.SpeciesId, out var acc))
+                acc = new TraitSample();
+
+            var g = Genome.From(em, entity);
+            for (int i = 0; i < Genome.TraitCount; i++)
+            {
+                // Counted per trait, not per animal: an entity without the component that carries
+                // a trait has no value for it, and averaging an absent value in as zero would read
+                // as a collapse.
+                if (!Genome.CarriesTrait(em, entity, (Trait)i)) continue;
+                acc.Sums[i] += g[(Trait)i];
+                acc.Counts[i]++;
+            }
+            acc.Population++;
+            acc.Generations += sp.Generation;
+            bySpecies[sp.SpeciesId] = acc;
+        }
+        return bySpecies;
+    }
+
+    /// <summary>Running totals for one species' traits, counted per trait.</summary>
+    private sealed class TraitSample
+    {
+        public readonly double[] Sums = new double[Genome.TraitCount];
+        public readonly int[] Counts = new int[Genome.TraitCount];
+        public int Population;
+        public double Generations;
+    }
+
+    /// <summary>
+    /// Write the drift table and print a digest of it. Values are means as a fraction of the
+    /// species value, so a trait reads the same whether it is measured in ticks or tiles.
+    /// </summary>
+    private void ReportTraitDrift(Dictionary<int, TraitSample> start, Dictionary<int, TraitSample> end)
+    {
+        var rows = new List<(string Species, Trait Trait, double Start, double End, double Drift)>(512);
+        foreach (var (speciesId, tail) in end)
+        {
+            if (tail.Population == 0) continue;
+            var def = SpeciesRegistry.GetById(speciesId);
+            start.TryGetValue(speciesId, out var head);
+
+            for (int i = 0; i < Genome.TraitCount; i++)
+            {
+                var trait = (Trait)i;
+                float speciesValue = Genome.SpeciesValue(def, trait);
+                if (speciesValue == 0f || tail.Counts[i] == 0) continue;
+
+                double endMean = tail.Sums[i] / tail.Counts[i] / speciesValue;
+                double startMean = head != null && head.Counts[i] > 0
+                    ? head.Sums[i] / head.Counts[i] / speciesValue : double.NaN;
+                rows.Add((def.Name, trait, startMean, endMean, endMean - startMean));
+            }
+        }
+
+        WriteTraitDriftCsv(rows, end);
+
+        GD.Print("\n[Soak] ───────── trait drift ─────────");
+        GD.Print("  mean generation reached, and the traits that moved furthest from where they started");
+        foreach (var (speciesId, tail) in end)
+        {
+            if (tail.Population < MinDriftPopulation) continue;
+            var def = SpeciesRegistry.GetById(speciesId);
+            var moved = rows.FindAll(r => r.Species == def.Name && !double.IsNaN(r.Drift));
+            moved.Sort((a, b) => Math.Abs(b.Drift).CompareTo(Math.Abs(a.Drift)));
+            var top = moved.Count > 0 ? moved.GetRange(0, Math.Min(3, moved.Count)) : new();
+            string detail = string.Join("  ", top.ConvertAll(
+                r => FormattableString.Invariant($"{r.Trait} {r.Drift * 100:+0.0;-0.0}%")));
+            GD.Print(FormattableString.Invariant(
+                $"  {def.Name,-12} n={tail.Population,5}  gen {tail.Generations / tail.Population,5:F1}   {detail}"));
+        }
+        GD.Print("[Soak] ─────────────────────────────");
+    }
+
+    /// <summary>Populations below this are noise and are left out of the printed digest.</summary>
+    private const int MinDriftPopulation = 20;
+
+    private void WriteTraitDriftCsv(
+        List<(string Species, Trait Trait, double Start, double End, double Drift)> rows,
+        Dictionary<int, TraitSample> end)
+    {
+        var sb = new System.Text.StringBuilder();
+        sb.AppendLine("seed,species,population,mean_generation,trait,mean_start,mean_end,drift");
+        foreach (var (speciesId, tail) in end)
+        {
+            var def = SpeciesRegistry.GetById(speciesId);
+            foreach (var r in rows)
+            {
+                if (r.Species != def.Name) continue;
+                sb.AppendLine(string.Format(CultureInfo.InvariantCulture,
+                    "{0},{1},{2},{3:F2},{4},{5:F4},{6:F4},{7:F4}",
+                    WorldSeed, def.Name, tail.Population, tail.Generations / Math.Max(1, tail.Population),
+                    r.Trait, r.Start, r.End, r.Drift));
+            }
+        }
+        string path = $"{LogRoot}/population_soak/trait_drift_seed{WorldSeed}.csv";
+        using var file = Godot.FileAccess.Open(path, Godot.FileAccess.ModeFlags.Write);
+        if (file != null)
+        {
+            file.StoreString(sb.ToString());
+            GD.Print($"  trait drift written to {path}");
+        }
     }
 
     private static void PrintTopSystems(List<ISystem> systems, double[] systemMs, int ticks)

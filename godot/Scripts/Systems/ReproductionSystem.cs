@@ -19,7 +19,8 @@ public sealed class ReproductionSystem : ISystem
     private readonly SpatialHash _spatialHash;
     private readonly int _maxPopulation;
     private readonly Random _rng = SimRandom.Create();
-    private readonly List<(float x, float y, SpeciesType speciesType, int speciesId, int groupId)> _toSpawn = new(32);
+    private readonly List<(float x, float y, SpeciesType speciesType, int speciesId, int groupId,
+                            Genome genome, int generation)> _toSpawn = new(32);
     private readonly List<int> _nearbyBuffer = new(64);
 
     private readonly EntityFactory _entityFactory;
@@ -216,19 +217,25 @@ public sealed class ReproductionSystem : ISystem
             EcosystemLogger.Instance?.LogReproduction(
                 species.SpeciesId, entity, pos.X, pos.Y, reproduction.OffspringCount);
 
-            // Queue offspring for spawning (inherit parent species)
+            // Queue offspring for spawning. The parent's realised traits are read now, while it
+            // is certainly alive and before anything in this tick can have changed it; each child
+            // descends from that rather than from the species definition, which is the whole of
+            // heredity for ordinary animals.
+            var parentGenome = Genome.From(em, entity);
+            int childGeneration = species.Generation + 1;
             for (int i = 0; i < reproduction.OffspringCount; i++)
             {
                 _toSpawn.Add((spawnX, spawnY, species.Type, species.SpeciesId,
-                    em.HasComponents(entity, ComponentFlags.Social) ? em.Socials[entity].GroupId : -1));
+                    em.HasComponents(entity, ComponentFlags.Social) ? em.Socials[entity].GroupId : -1,
+                    parentGenome, childGeneration));
             }
         }
 
         // Spawn offspring
-        foreach (var (x, y, speciesType, speciesId, groupId) in _toSpawn)
+        foreach (var (x, y, speciesType, speciesId, groupId, genome, generation) in _toSpawn)
         {
             if (em.CreatureCount >= _maxPopulation) break;
-            SpawnCreature(em, x, y, speciesType, speciesId, groupId);
+            SpawnCreature(em, x, y, speciesType, speciesId, groupId, genome, generation);
         }
     }
 
@@ -242,7 +249,7 @@ public sealed class ReproductionSystem : ISystem
     /// so an ageing wolf population lost the ability to hunt together as its founders died off.
     /// </summary>
     private void SpawnCreature(EntityManager em, float x, float y, SpeciesType speciesType,
-        int speciesId, int groupId)
+        int speciesId, int groupId, Genome parentGenome, int generation)
     {
         if (em.CreatureCount >= _maxPopulation) return;
         // Disabled species never spawn, even via reproduction (belt-and-suspenders: with no
@@ -256,6 +263,6 @@ public sealed class ReproductionSystem : ISystem
         // Offspring start at age 0 and inherit the parent's group so herds and packs stay whole
         // across generations instead of every newborn being an unaffiliated loner.
         _entityFactory.SpawnCreature(x, y, speciesDef, groupId, forceSolitary: false,
-            isAlpha: false, startAge: 0);
+            isAlpha: false, startAge: 0, inherited: parentGenome, generation: generation);
     }
 }

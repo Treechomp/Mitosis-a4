@@ -30,8 +30,15 @@ public sealed class SporeSystem : ISystem
     private readonly SpatialHash _spatialHash;
     private readonly Random _rng = SimRandom.Create();
 
-    private readonly List<(float x, float y, int speciesId)> _pendingSpores = new(16);
-    private readonly List<(float x, float y, int speciesId)> _pendingTransforms = new(8);
+    private readonly List<(float x, float y, int speciesId, Genome? genome, int generation)> _pendingSpores = new(16);
+    private readonly List<(float x, float y, int speciesId, Genome? genome, int generation)> _pendingTransforms = new(8);
+
+    /// <summary>
+    /// What each live spore descends from. A spore carries no components worth inheriting, so the
+    /// parent's traits ride alongside it here until the spore becomes a body. Entries are removed
+    /// when the spore transforms or withers, which is every way a spore can leave the world.
+    /// </summary>
+    private readonly Dictionary<int, (Genome genome, int generation)> _sporeLineage = new(64);
     private readonly List<int> _toKill = new(16);
     private readonly List<int> _nearbyBuffer = new(32);
     private readonly List<int> _crowdBuffer = new(32);
@@ -96,7 +103,10 @@ public sealed class SporeSystem : ISystem
             // Check for transformation
             if (spore.IsReadyToTransform)
             {
-                _pendingTransforms.Add((pos.X, pos.Y, spore.ParentSpeciesId));
+                _sporeLineage.TryGetValue(entity, out var lineage);
+                _pendingTransforms.Add((pos.X, pos.Y, spore.ParentSpeciesId,
+                                        lineage.genome, lineage.generation));
+                _sporeLineage.Remove(entity);
                 _toKill.Add(entity);
                 continue;
             }
@@ -104,6 +114,7 @@ public sealed class SporeSystem : ISystem
             // Check for death from withering
             if (energy.IsDead)
             {
+                _sporeLineage.Remove(entity);
                 _toKill.Add(entity);
             }
         }
@@ -213,8 +224,12 @@ public sealed class SporeSystem : ISystem
                 float sx = pos.X + MathF.Cos(angle) * dist;
                 float sy = pos.Y + MathF.Sin(angle) * dist;
 
+                // A spore is the parent spreading itself where it stands, so it carries the
+                // parent's own traits. The player's Shroomer uses this identical path — their
+                // influence is choosing where to stand and when to spread, not a different rule.
                 if (_worldManager.IsSpawnable(sx, sy))
-                    _pendingSpores.Add((sx, sy, species.SpeciesId));
+                    _pendingSpores.Add((sx, sy, species.SpeciesId,
+                                        Genome.From(em, entity), species.Generation + 1));
             }
         }
 
@@ -265,14 +280,14 @@ public sealed class SporeSystem : ISystem
         // === CLEANUP AND SPAWNING ===
         em.DestroyEntities(_toKill);
 
-        foreach (var (x, y, speciesId) in _pendingSpores)
+        foreach (var (x, y, speciesId, genome, generation) in _pendingSpores)
         {
             if (em.CreatureCount >= _maxPopulation) break;
-            SpawnSpore(em, x, y, speciesId);
+            SpawnSpore(em, x, y, speciesId, genome, generation);
             EcosystemLogger.Instance?.LogSporeCreated(x, y);
         }
 
-        foreach (var (x, y, speciesId) in _pendingTransforms)
+        foreach (var (x, y, speciesId, genome, generation) in _pendingTransforms)
         {
             if (em.CreatureCount >= _maxPopulation) break;
             // Per-class ceiling: a maturing spore is a new faction creature and is charged like
@@ -284,7 +299,7 @@ public sealed class SporeSystem : ISystem
                 _budget.LogRefusal(shroomDef);
                 continue;
             }
-            SpawnShroomer(em, x, y, speciesId);
+            SpawnShroomer(em, x, y, speciesId, genome, generation);
             EcosystemLogger.Instance?.LogSporeMatured(x, y);
             EcosystemLogger.Instance?.LogReproduction(speciesId, -1, x, y, 1);
         }
@@ -304,12 +319,15 @@ public sealed class SporeSystem : ISystem
     /// Create a spore entity. Public so test scenarios can seed spores directly
     /// (e.g. fungivore / anti-bloom tests) — normal gameplay creates them via Shroomer spread.
     /// </summary>
-    public void SpawnSpore(EntityManager em, float x, float y, int parentSpeciesId)
+    public void SpawnSpore(EntityManager em, float x, float y, int parentSpeciesId,
+                            Genome? parentGenome = null, int generation = 0)
     {
         if (!em.HasRoomForEntity) return;
 
         var parentDef = SpeciesRegistry.GetById(parentSpeciesId);
         int entity = em.CreateEntity();
+        if (parentGenome != null)
+            _sporeLineage[entity] = (parentGenome, generation);
 
         em.Positions[entity] = new Position(x, y);
         em.AddComponent(entity, ComponentFlags.Position);
@@ -348,7 +366,8 @@ public sealed class SporeSystem : ISystem
         _spatialHash.Update(entity, x, y);
     }
 
-    private void SpawnShroomer(EntityManager em, float x, float y, int speciesId)
+    private void SpawnShroomer(EntityManager em, float x, float y, int speciesId,
+                                Genome? parentGenome = null, int generation = 0)
     {
         if (!em.HasRoomForEntity) return;
 
@@ -367,7 +386,7 @@ public sealed class SporeSystem : ISystem
         em.SimulationLODs[entity] = new SimulationLOD(LODLevel.Full);
         em.AddComponent(entity, ComponentFlags.SimulationLOD);
 
-        em.Species[entity] = new Species(SpeciesType.Shroomer, 0, speciesId);
+        em.Species[entity] = new Species(SpeciesType.Shroomer, generation, speciesId);
         em.AddComponent(entity, ComponentFlags.Species);
 
         em.Ages[entity] = new Age(0, speciesDef.MaxLifespan, speciesDef.MaturityAge);
@@ -414,6 +433,12 @@ public sealed class SporeSystem : ISystem
         em.TerrainDiscomforts[entity] = new TerrainDiscomfort(
             speciesDef.DiscomfortThreshold, speciesDef.DiscomfortDecayRate);
         em.AddComponent(entity, ComponentFlags.TerrainDiscomfort);
+
+        // Descent. A body assembled here takes its species values flat — this path never applied
+        // founder spread — so without a parent every Shroomer grown from a spore is identical.
+        // With one, it is that parent regressed, mutated and banded, like any other birth.
+        if (parentGenome != null)
+            parentGenome.Inherit(_rng, speciesDef).ApplyTo(em, entity);
     }
 
     /// <summary>

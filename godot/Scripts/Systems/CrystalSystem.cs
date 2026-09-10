@@ -28,6 +28,18 @@ public sealed class CrystalSystem : ISystem
     private readonly Random _rng = SimRandom.Create();
 
     private readonly List<(float x, float y, int crystalEntity, float inheritedPower)> _pendingFaelings = new(4);
+
+    /// <summary>
+    /// What each crystal remembers of its keeper: the traits of the Faeling it is currently linked
+    /// to, refreshed while that Faeling lives, and all that is left of it once it does not.
+    ///
+    /// Taken from the living keeper rather than recorded at its death because a Faeling can die in
+    /// four different systems, and a memory that has to be written at every one of them is a memory
+    /// that will be missed at the fifth. Fidelity is a flat copy in this change; the design wants
+    /// it purchasable, which is a crystal-economy decision recorded in
+    /// docs/design/04-factions.md and deliberately not built here.
+    /// </summary>
+    private readonly Dictionary<int, (Genome genome, int generation)> _crystalMemory = new(16);
     private readonly List<int> _nearbyBuffer = new(32);
     private readonly List<int> _senseBuffer = new(64);
     private readonly int _maxPopulation;
@@ -87,7 +99,13 @@ public sealed class CrystalSystem : ISystem
             // Check if linked Faeling is still alive
             if (crystal.HasFaeling)
             {
-                if (!em.IsAlive(crystal.LinkedFaeling))
+                if (em.IsAlive(crystal.LinkedFaeling))
+                {
+                    // Keep the crystal's memory of its keeper current while there is one to read.
+                    _crystalMemory[entity] = (Genome.From(em, crystal.LinkedFaeling),
+                                              em.Species[crystal.LinkedFaeling].Generation);
+                }
+                else
                 {
                     // Faeling died — start spawning replacement
                     // Try to inherit power from the dead faeling
@@ -445,7 +463,9 @@ public sealed class CrystalSystem : ISystem
         em.SimulationLODs[entity] = new SimulationLOD(LODLevel.Full);
         em.AddComponent(entity, ComponentFlags.SimulationLOD);
 
-        em.Species[entity] = new Species(SpeciesType.Faeling, 0, SpeciesRegistry.GetId("Faeling"));
+        _crystalMemory.TryGetValue(crystalEntity, out var kept);
+        em.Species[entity] = new Species(SpeciesType.Faeling,
+            kept.genome != null ? kept.generation + 1 : 0, SpeciesRegistry.GetId("Faeling"));
         em.AddComponent(entity, ComponentFlags.Species);
 
         // Faelings live very long
@@ -505,6 +525,12 @@ public sealed class CrystalSystem : ISystem
             em.Sieges[entity] = new Siege(target: -1);
             em.AddComponent(entity, ComponentFlags.Siege);
         }
+
+        // Descent: a copy of what the crystal kept of its last keeper, mutated and banded like any
+        // other birth. A crystal that has never held one — the first keeper of a run — produces a
+        // founder, which is what every crystal did before this.
+        if (kept.genome != null)
+            kept.genome.Inherit(_rng, speciesDef).ApplyTo(em, entity);
 
         return entity;
     }

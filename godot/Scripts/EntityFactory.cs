@@ -60,10 +60,16 @@ public sealed class EntityFactory
     /// could not drown, never felt terrain or grazing pressure, never accumulated fear, and — for
     /// pack species — were invisible to pack coordination, which requires Social. A single
     /// assembly path is the only thing that keeps those in step.</param>
+    /// <param name="inherited">The parent's (or the nest's, or the crystal's) realised traits. When
+    /// given, the child is those values regressed toward the species, mutated per trait and clamped
+    /// to the band — see <see cref="ECS.Genome"/>. When absent the creature is a founder, rolled
+    /// around the species values with <c>FounderSpread</c>: what every path did before heredity
+    /// existed, and what world seeding still does.</param>
+    /// <param name="generation">How many descents from a founder. Founders are 0.</param>
     /// <returns>The new entity id, or -1 when the population cap refused the spawn.</returns>
     public int SpawnCreature(float x, float y, SpeciesDefinition species, int groupId = -1,
                                bool forceSolitary = false, bool isAlpha = false,
-                               int? startAge = null)
+                               int? startAge = null, Genome? inherited = null, int generation = 0)
     {
         // Hard population cap — refuse to spawn beyond the limit
         if (_entityManager.CreatureCount >= _populationCap)
@@ -84,7 +90,7 @@ public sealed class EntityFactory
             return -1;
 
         int entity = _entityManager.CreateEntity();
-        float variation = species.StatVariation;
+        float variation = species.FounderSpread;
 
         // Core components
         _entityManager.Positions[entity] = new Position(x, y);
@@ -137,7 +143,7 @@ public sealed class EntityFactory
             },
             _ => SpeciesType.Herbivore
         };
-        _entityManager.Species[entity] = new Species(speciesType, 0, SpeciesRegistry.GetId(species.Name));
+        _entityManager.Species[entity] = new Species(speciesType, generation, SpeciesRegistry.GetId(species.Name));
         _entityManager.AddComponent(entity, ComponentFlags.Species);
 
         // Hunger from species
@@ -276,6 +282,15 @@ public sealed class EntityFactory
 
         // Faelings spawned from crystals get their components from CrystalSystem,
         // not from GameManager, so no special handling needed here.
+
+        // Descent, last: the assembly above rolled a founder, and this replaces the heritable part
+        // of it with what the parent actually was. Applying it here rather than threading a genome
+        // through every constructor above means no trait can be inherited on one path and missed on
+        // another, and the number of random draws the assembly makes is unchanged either way — so
+        // adding heredity does not shift the run's random stream.
+        if (inherited != null)
+            inherited.Inherit(_rng, species).ApplyTo(_entityManager, entity);
+
         return entity;
     }
 
