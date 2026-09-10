@@ -1,6 +1,6 @@
 # Implementation layer
 
-*Last updated: 2026-09-09 · verified against `c41212b` on `claude/lod-override-testing-rhwq4f`*
+*Last updated: 2026-09-10 · verified against `f3ea31c` on `claude/lod-override-testing-rhwq4f`*
 
 What the code does today and where it lives. Secondary to [`../design/`](../design/): if these two
 disagree about intent, design is right and the code has drifted; if they disagree about behaviour,
@@ -86,6 +86,8 @@ Open, reproduced, not fixed. Each is described in full in the document that owns
 | D16 | The LOD contract is stale, and it is brittle in a way that makes staleness likely. Stale: the recorded verdicts have not been re-recorded since the change that last moved them, so the gate exits non-zero on an unmodified checkout. Brittle: a change to the food economy small enough to leave the population totals alone still flips a large block of verdicts, and a gentler version of the same change flips as many — so the count does not scale with the size of the behaviour change, and the gate cannot distinguish "LOD fidelity got worse" from "the trajectory moved". Figures in [`../changelog.md`](../changelog.md) | [tooling-and-tests.md](tooling-and-tests.md) |
 
 | D17 | **Closed.** A grazer drew from the tile under it every due tick it stood on fertile ground, hungry or not, and the hunger gain was clamped, so most of what grazers took from the world was destroyed. It also made hunger a dead variable — animals sat near full for whole runs, so being displaced onto poor ground cost them almost nothing. A full animal now stops feeding, and what a mouthful is worth depends on how full the ground is; hunger spreads across species by the quality of the ground they hold, and animals starve where they cannot make a living. Figures in [`../changelog.md`](../changelog.md) | [survival-and-population.md](survival-and-population.md) |
+
+| D18 | **Unexplained.** A one-line guard in `Genome.Inherit` — "a trait the parent does not express is not restored by regression", implemented as *skip the trait when the parent's value is exactly zero* — slowed the tick loop by about two orders of magnitude on the standard world: 200 ticks did not finish in 560 seconds against 400 ticks in 3. It is reproducible and it bisects cleanly to that line. No mechanism has been established, and the intended behaviour was reached another way instead (write grazing pressure only for a species that grazes), so the pathology is recorded rather than fixed. **Anything that generalises the "unexpressed trait" rule should reproduce this first** | [species-data.md](species-data.md) |
 
 Ids are stable and are not reused, so the list has gaps. D8 — a kill created nutrition, because the
 killer's share was never subtracted from the corpse pool — was fixed; the change and what it moved

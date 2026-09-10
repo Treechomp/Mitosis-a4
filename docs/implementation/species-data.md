@@ -1,6 +1,6 @@
 # Species data
 
-*Last updated: 2026-09-09 · verified against `c41212b`*
+*Last updated: 2026-09-10 · verified against `f3ea31c`*
 
 ## Files
 
@@ -161,20 +161,35 @@ side.
 equilibrium. That is why raising the consume rate and lowering the break-even leaves the population
 where it was and changes only how hard the ground is worn while an animal is on it.
 
-## D5 — `Species.Generation` is written and never read
+## Trait variation and descent
 
-`Species.Generation` is set when an entity is constructed and read by nothing. It is reserved for
-inheritance (design question C3).
+`FounderSpread` is how far an individual created **without a parent** may differ from its species
+values, applied by `EntityFactory` through `Vary(...)` to 34 species fields at spawn. Body size and
+the leadership score take a fixed rate instead of the species' own; the leadership score is not a
+species field at all.
 
-**`StatVariation` is not in this row, and used to be.** It is read in `EntityFactory` and applied
-through `Vary(...)` to 34 distinct species fields at spawn — lifespan and maturity, all four
-reproduction thresholds and costs plus cooldown and spawn radius, max hunger and hunger decay,
-wander speed and direction-change chance, body size, both discomfort parameters, grazing pressure,
-the three terraform parameters, flee range and speed, all five fear parameters, hunt range and the
-three attack parameters, and the four social parameters. Two of those take a fixed rate rather than
-the species' own: body size, and the leadership score, which is not a species field at all.
+Every other creature descends from something. `ECS/Genome.cs` gathers an individual's realised
+values, applies them to a new entity, blends two of them, and produces a child's — regressed toward
+the species value, mutated at that trait's own rate, clamped to a band. Which trait is heritable is
+the `Trait` enum; what a species allows to move is `TraitMutationRates`; what a trait is measured
+against is `Genome.SpeciesValue`. The four paths that use it are in
+[`survival-and-population.md`](survival-and-population.md) and
+[`factions.md`](factions.md).
 
-**The real gap is heredity, not variation.** Every individual differs from its species mean, and
-none of that difference survives to its offspring: `ReproductionSystem` hands `SpawnCreature` the
-species definition, so a child is re-rolled around the species value rather than around its
-parent's. Nothing can therefore be selected for, which is what C3 is about.
+**Two rules the genome has to respect, both found by measuring rather than by reading.** A trait is
+only carried by the component that holds it, so an animal without that component has *no* value
+rather than a value of zero — averaging an absent one in reads as a collapse that never happened.
+And a parent that does not express a trait its species defines must not have it restored by
+regression: the factory zeroes grazing pressure for a species that cannot graze and the social
+values for a solitary animal, and pulling those toward the species value gave a shoal's descendants
+89% of a grazing pressure their founders never had.
+
+## D5 — `Species.Generation` is no longer in this row
+
+`Species.Generation` was written at construction and read by nothing. It is now the count of
+descents from a founder, set by every inheritance path and reported by the drift measurement. The
+row is kept because ids are stable and the correction is worth being able to find.
+
+`StatVariation` was in this row too and never belonged: it was read, and reached 34 fields. It is
+now `FounderSpread`, because under heredity it means the first generation's spread and the mutation
+rate is a different quantity applied at every birth.

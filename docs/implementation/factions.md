@@ -1,6 +1,6 @@
 # Faction systems
 
-*Last updated: 2026-09-07 · verified against `7a7fb28`*
+*Last updated: 2026-09-10 · verified against `f3ea31c`*
 
 | File | Role |
 |---|---|
@@ -205,6 +205,28 @@ which is the other reason they cannot be the same number.
 
 **Nothing consumes it yet.** Player control, input and the death flow are a later change; the
 counter exists so that flow has a home to spend from.
+
+## Descent, per faction
+
+Each faction assembles its own creatures rather than going through `EntityFactory`, so each applies
+its own inheritance — one rule per faction's allocation verb, not three mechanisms
+([`../design/03-creatures.md`](../design/03-creatures.md)).
+
+| System | Holds the template | Applies it |
+|---|---|---|
+| `SporeSystem` | `_sporeLineage`, keyed by spore entity, because a spore carries no components worth inheriting | `SpawnShroomer`, on transform |
+| `NestSystem` | `_nestBrood`, keyed by nest entity: one `Genome.Blend` per delivery at the courier's load against the larder it joined | `SpawnSectid`, on hatch |
+| `CrystalSystem` | `_crystalMemory`, refreshed from the living keeper each tick | `SpawnFaeling`, on respawn |
+
+Three notes on why each is shaped that way. The nest needs no contributor list: one weighted blend
+per delivery is O(1), and because the weight is the larder itself, influence is consumed as larvae
+are grown. The crystal reads its keeper while it lives rather than recording it at death, because a
+Faeling can die in four different systems and a memory written at every one is a memory that will be
+missed at the fifth. And each store is keyed by entity id, so `SpawnNest` clears its entry on
+creation — otherwise a reused id would inherit the brood of the nest that held it before.
+
+Faeling fidelity is a flat copy. Making it purchasable is a crystal-economy decision, recorded in
+[`../design/04-factions.md`](../design/04-factions.md) and deliberately not built.
 
 ## D4 — keepers have never damaged a structure
 

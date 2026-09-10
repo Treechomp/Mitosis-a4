@@ -1,6 +1,6 @@
 # 03 — Creatures
 
-*Last updated: 2026-09-09*
+*Last updated: 2026-09-10*
 
 ## A species is data, not code
 
@@ -307,6 +307,57 @@ not under any pressure at all, whatever the ground is doing.
 
 The species that are *meant* to be hardy stay hardy: a camel crossing bad country should be the one
 that survives it. Hardiness is a species property, not a property of the world.
+
+## Descent
+
+**An animal is its parent, not its species.** Every individual differs from its species across most
+of its behaviour — how long it lives, how soon it breeds, how far it runs, how hard it hits, how
+closely it keeps to its herd — and a child now inherits its parent's values rather than being rolled
+fresh around the species. That is the whole of it, and everything below is the consequence.
+
+It is what makes the world capable of changing on its own. A species under pressure moves, over
+generations, in the direction the pressure points, and the record of that is legible: an animal
+knows how many descents it is from a founder, so "twelfth-generation wolves run eight per cent
+faster than the first" is a sentence the game can produce. It is also the medium the player writes
+into — a trait a player strengthens is a trait that can persist, which a re-rolled one never could.
+
+**It is leashed, and the leash is deliberate.** A child's value is pulled slightly back toward its
+species before it is perturbed, and clamped to a band around the species value that no lineage may
+leave. Regression alone is self-limiting; the band is the guarantee that a long chain of runs cannot
+hand the player a roster nobody designed. Bounds first; the interesting trade-offs get designed
+against measured drift rather than imagined drift.
+
+Each trait carries its own rate, so a species can say what about it is allowed to evolve: nothing
+about how it reshapes the world, quite a lot about how it hunts and breeds.
+
+### One rule seen from three sides
+
+The three factions allocate everything differently, and descent is no exception. These are not three
+mechanisms; they are one rule wearing each faction's verb.
+
+| Faction | Shape | What the child is made from |
+|---|---|---|
+| Shroomer | direct descent | the parent's own body — you spread yourself where you stand |
+| Sectid | pooled by contribution | the labour that fed the brood |
+| Faeling | copy with loss | what the crystal could afford to keep |
+
+**The Shroomer spreads itself.** A spore carries the traits of the Shroomer that released it, and
+the body it becomes is built from them. The player's Shroomer uses the identical rule: their
+influence is choosing where to stand and when to spread, not a different inheritance.
+
+**The Sectid brood resembles whoever filled the larder.** A larva has no parent. It is grown from
+stored food, so what it descends from is the labour that stored it — each delivery mixes the
+courier's own traits into the nest's template at the weight of its load. Influence is eaten along
+with the food, so no single provider owns a colony permanently.
+
+*This one selects, and the direction is predictable.* A brood that resembles its best providers is
+a brood selected for the traits that make a good provider — speed, endurance, a cheap metabolism —
+and it will keep selecting for them. Weighting by the larder damps it because influence is consumed;
+it does not remove the direction. It is the first thing to look for in the drift measurement.
+
+**The Faeling comes back as a copy.** A keeper's crystal holds what it knew of its keeper and
+rebuilds from that. Fidelity is total today, and is not meant to stay that way — see
+[04-factions.md](04-factions.md).
 
 ## What the roster is for
 

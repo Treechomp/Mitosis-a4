@@ -1,6 +1,6 @@
 # Survival & population
 
-*Last updated: 2026-09-09 · verified against `c41212b`*
+*Last updated: 2026-09-10 · verified against `f3ea31c`*
 
 ## `HungerSystem` — `Systems/SurvivalSystems.cs` · gated
 
@@ -153,6 +153,21 @@ only standing on ground it can feed from part of the time, so it can only ever c
 flow, and that share was sampled near a quarter over a run. (The other gap — feeding only as often
 as it needs to — now sits explicitly in `demand`, as `BreakEvenFullness`.) Figures in
 [`../changelog.md`](../changelog.md).
+
+## Descent — `ECS/Genome.cs`
+
+`ReproductionSystem` reads the parent's realised traits with `Genome.From` while the parent is
+certainly alive, queues them with the offspring, and passes them to `EntityFactory.SpawnCreature`
+as `inherited`. The factory applies descent **after** assembly: the child is built as a founder
+would be and the heritable part is then replaced. That is deliberate — threading a genome through
+every constructor would let a trait be inherited on one path and missed on another, and applying it
+last leaves the number of random draws the assembly makes unchanged, so heredity does not shift a
+run's random stream.
+
+`Species.Generation` becomes the parent's plus one. It had never been read before.
+
+The other three paths are the faction systems' and are described in
+[`factions.md`](factions.md); each assembles its own creature, so each applies the genome itself.
 
 ## `PopulationBudget` — `ECS/PopulationBudget.cs`
 

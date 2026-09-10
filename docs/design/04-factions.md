@@ -1,6 +1,6 @@
 # 04 — The three factions
 
-*Last updated: 2026-09-09*
+*Last updated: 2026-09-10*
 
 The factions are the world's plot engine. Ordinary animals produce a steady state; the factions
 produce a *direction* — ground changing hands, fronts advancing, a region that looked settled
@@ -155,6 +155,31 @@ Two bounds keep it from becoming the strongest thing in the game, and neither is
 
 Provisional: how a guardian is chosen, whether the change is permanent, and what happens to a
 guardian when its crystal breaks are not decided.
+
+**Its crystal has three taps, and they compete (provisional).** Crystal power is limited and comes
+back slowly, and it is meant to be spent on three things:
+
+- **Growing the keeper faster** — the compounding one. Power spent here makes every later kill and
+  every later restoration worth more.
+- **Guardians** — the placed one. Local wildlife strengthened into a defence for the ground around
+  a crystal, as above.
+- **Coming back whole** — the insurance one. A keeper's replacement is built from what its crystal
+  kept of it, and how much of the original survives is what power buys. A depleted crystal still
+  returns you, and still returns you quickly, but substantially less than you were.
+
+Three things follow, and they are why this is recorded as one decision rather than three features:
+
+- **Today crystal power buys nothing.** It raises growth and ranged damage passively, so these would
+  be the faction's first spending decisions. One tap built alone is the only sink there is, and
+  therefore always the correct spend — the choice only exists once all three do. **All three or
+  none.**
+- **Death degrading rather than blocking risks a spiral**: a weak crystal returns a diminished
+  keeper, which dies more easily, which weakens the crystal. It needs a floor, or regeneration that
+  outpaces the descent at the bottom, or the faction gains a third failure condition nobody
+  designed.
+- **It is a real trilemma, and that is the point** — provided no tap dominates. Growth compounds,
+  guardians are place-bound, fidelity is insurance. They should be strongest in different
+  situations, and if one is simply better the other two are decoration.
 
 ## The war
 

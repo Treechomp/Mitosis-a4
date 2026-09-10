@@ -1,6 +1,6 @@
 # Changelog
 
-*Last updated: 2026-09-09 · current branch `claude/lod-override-testing-rhwq4f`, head `c41212b`*
+*Last updated: 2026-09-10 · current branch `claude/lod-override-testing-rhwq4f`, head `f3ea31c`*
 
 What changed, when, in which commit, and what it measured. Newest first.
 
@@ -24,6 +24,7 @@ compensate for that, and where, is an open balance decision — it has not been 
 
 | Commit | Date | Change | Result |
 |---|---|---|---|
+| `f3ea31c` | 2026-09-10 | Give offspring their parents' traits, on a leash, and measure where selection takes them | **selection is real, it is measurable, and it points the way this project has twice had to undo.** Five seeds, 20,000 ticks: lineages reach 21 generations at the fast end and under 2 at the slow, and `ReproHungerThreshold` falls in 19 of 24 species — hardest where generations are highest (Fish −13.4% at gen 21, Penguin −9.8% at gen 13) and not at all where they are lowest. Invariants hold on 4 of 5 seeds, the fifth being D11. Tables below |
 | `c41212b` | 2026-09-09 | Make what a mouthful is worth depend on how full the ground is, stop full animals feeding, and put hunger on the timescale of a run | **animals now starve where they cannot make a living, and no species is lost to it.** Seeds 1234 / 999, 20,000 ticks: starvation deaths **0 → 32 / 34**, average hunger spread **84–96% → 49–94%** and ranked by the quality of the ground each species holds, herbivores 3,177 / 2,776 on a plateau, all invariants holding on both seeds, class ceiling still never reached. Tables below |
 | `4bca4f7` | 2026-09-09 | Give each species a carrying capacity read off the seed's terrain, and raise what species extract to match | **the engine stops deciding how many herbivores there are.** Seeds 1234 / 999, 20,000 ticks: the prey base reaches its class ceiling at **no point in either run** against t=2400 (12% of the run) before, herbivore birth refusals **1,813,206 → 0**, and Lizard — extinct in both controls — returns at 109 / 219. Herbivore total 5,036 / 5,040 → 3,958 / 3,779, held by thirteen species instead of one. Tables below |
 | `6e4dd46` | 2026-09-09 | Add the per-species, per-tile forage yield, and ship it with no species using it | **the mechanism is neutral and the tables are not shipped.** Neutral, verified not assumed: seed 1234, 20,000 ticks, the soak reproduces `f735cea` species for species including its single starvation death, and the LOD differential returns *known 223 / reg 1 / imp 2 / drift 0* — the same verdicts the unmodified build returns. With tables on: the herbivore total does not move, nothing starves, composition moves 30–90%, and the LOD differential loses about twenty verdicts at **any** table strength. Tables below |
@@ -70,6 +71,62 @@ cost rises **6.1×**; cost *per Sectid* rises from 4.4 to 12.0 µs over the same
 superlinear in the population that drives it and not merely in the world's. At ~1,020 Sectids
 hunting is 8.9–11.6 ms/tick, which reproduces the ~10 ms reported from the interactive build at
 ~1,100 Sectids.
+
+### Where selection takes a trait when descent is switched on
+
+Seeds 1234, 999, 4242, 31337 and 8675309, 20,000 ticks each, standard world. Drift is the change in
+a species' population mean between t=0 and the end, as a fraction of that species' own value, so
+traits measured in ticks and in tiles read on one scale. Full tables per seed in
+`logs/population_soak/trait_drift_seed*.csv`.
+
+**Lineages are real and their depth varies by an order of magnitude.** Mean generations reached:
+
+| | Fish | Penguin | Lizard | Parrot | Rabbit | Wolf | Sectid | Shroomer | Deer | Musk Ox | Polar Bear |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| generations | 21.1 | 13.2 | 10.0 | 6.9 | 6.0 | 3.8 | 3.8 | 2.5 | 2.9 | 1.9 | 1.7 |
+
+**The clearest signal is the one this project has removed twice.** `ReproHungerThreshold` — how fed
+an animal must be before it may breed — falls in 19 of 24 species, mean −3.1%, and it is the
+tightest non-social trait in the set (spread 4.4 against 18–20 for the social ones). It scales with
+generation count, which is what separates selection from noise:
+
+| species | generations | ReproHungerThreshold | MaturityAge |
+|---|---|---|---|
+| Fish | 21.1 | **−13.4%** | −4.2% |
+| Penguin | 13.2 | **−9.8%** | −3.7% |
+| Arctic Fox | 4.6 | −9.1% | −2.9% |
+| Fox | 4.6 | −7.1% | +0.9% |
+| Rabbit | 6.0 | −5.6% | −4.8% |
+| Wolf | 3.8 | −4.1% | −1.1% |
+| Sectid | 3.8 | +0.2% | −0.5% |
+| Shroomer | 2.5 | +0.1% | −1.6% |
+| Polar Bear | 1.7 | +2.4% | −0.3% |
+
+Breed sooner, at a lower bar. The leash bounds how far it can go — no lineage may leave a band
+around its species value — but the direction is unambiguous and it is what the trade-off matrix has
+to be designed against. The two faction species that breed through a nest and a spore rather than
+by pairing barely move, which is consistent: their selection acts on the larder and the substrate,
+not on a breeding threshold.
+
+**Metabolism drifts, and the capacity model does not know.** `HungerDecayRate` runs −13.5% to
++12.8% across species and `MaxHunger` −6.6% to +12.4%. `HabitatCapacity` prices an animal at
+`GrazeConsumeRate × BreakEvenFullness`, both species constants and neither heritable, so the model
+is not wrong today — but the payout an animal actually receives is computed from its own decay rate,
+which is drifting. Whether capacity should read a live mean is now a question with numbers attached.
+
+**The social traits are noise at this length.** `PreferredGroupSize`, `GroupAffinity`,
+`CohesionStrength` and `AlignmentStrength` all show means near +5% with a spread near 20 — the mean
+is a handful of small populations, not a signal. Read them again over longer runs before touching a
+rate.
+
+**Two artefacts and one pathology, all found by measuring.** A trait must be counted only over
+animals carrying the component that holds it, or an absent value averages in as zero and reads as a
+45% collapse. A grower's body size belongs to `GrowthSystem`, so reading it as a trait had a spore
+inherit its parent's *grown* size. And a shoal's descendants acquired **89% of a grazing pressure
+their founders never had** over 19 generations, purely from regression pulling an unexpressed trait
+toward a species value — fixed by writing grazing pressure only for a species that grazes. The
+general form of that fix cost two orders of magnitude of tick rate for reasons not established, and
+is filed as D18.
 
 ### Making hunger track the ground
 
@@ -229,10 +286,15 @@ food economy without saying whether the change was harmful.
 | forage tables at either strength (not shipped) | 188 / 193 | 23 / 22 | 13 / 9 | 4 / 4 |
 | `4bca4f7` — terrain-derived capacity | 178 | 24 | 14 | 10 |
 | `c41212b` — hunger tracks the ground | **176** | **32** | **14** | **20** |
+| `f3ea31c` — heredity | 178 | 30 | 16 | 20 |
 
 The contract has not been re-recorded at any point. Drift is metrics entering or leaving the
-minimum-count filter as species populations move, which is most of what the last two rows are. None
-of it is evidence about LOD fidelity either way, which is the whole of D16.
+minimum-count filter as species populations move, which is most of what the last rows are. None of
+it is evidence about LOD fidelity either way, which is the whole of D16.
+
+Heredity moved two verdicts, which is the expected answer: the differential compares two tiers of
+one build, and descent applies identically at both. Stochastic drift should make it noisier over
+time, and that is worth knowing before it is later mistaken for a regression.
 
 ### The LOD contract was already stale at `f735cea`
 

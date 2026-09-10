@@ -1,6 +1,6 @@
 # 08 — Open design questions
 
-*Last updated: 2026-09-09*
+*Last updated: 2026-09-10*
 
 Decisions that have not been made. Each states the question, why it is hard, and what is already
 known — not a recommendation. When one is settled, the answer moves into the document it belongs to
@@ -171,12 +171,26 @@ The original complaint — the prey base hits its ceiling early and is a flat li
 run — is not answered by this and is not a food question. It belongs to whatever varies a population
 over a run: predation, seasons, faction pressure.
 
-### C3 — What does per-individual variation actually do?
+### C3 — What does per-individual variation actually do? **Mechanism built; the rates are open.**
 
-Its *purpose* is now settled: it is the medium the player writes into, and the thing that carries
-between runs. The mechanism is not. How much an individual may differ from its species, how traits
-pass to offspring, whether mutation is possible without a player writing it, and how a species
-avoids drifting into something unrecognisable are all undecided.
+Its purpose was already settled: the medium the player writes into, and the thing that carries
+between runs. The mechanism now exists — a child descends from its parent rather than from the
+species, on a leash of regression toward the species value plus a hard band no lineage may leave
+([03-creatures.md](03-creatures.md)). Mutation is possible without a player writing anything, which
+is what makes the medium worth writing into: a world that only changes when pushed is a world where
+the player is the only author.
+
+What is open is **how fast, per trait**. Every heritable field carries its own mutation rate, and
+the first set was chosen to preserve the spread a population already had rather than to express any
+intent about what should evolve. The measurement that answers it is a drift table — per trait, per
+species, which way selection pulled over a run and how hard — and it is in
+[../changelog.md](../changelog.md). Read it before arguing about a rate.
+
+Two things it should be read for specifically. **Reproduction traits** are the r/K filter this
+project has removed twice: if cooldowns and thresholds drift downward across the board, selection is
+rediscovering the fastest breeder and the leash is the only thing holding it. And **metabolism** —
+if hunger decay or maximum hunger drift, the carrying-capacity model is computing from species
+constants that no longer describe the population, and it will have to read a live mean instead.
 
 ### C4 — How much food pressure should a herd actually be under? **Partly answered by C5.**
 

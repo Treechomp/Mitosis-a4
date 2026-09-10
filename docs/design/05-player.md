@@ -1,6 +1,6 @@
 # 05 — The player
 
-*Last updated: 2026-09-09*
+*Last updated: 2026-09-10*
 
 ## Who you are
 
@@ -87,6 +87,13 @@ The same construction is what prices the keeper's fortress (provisional,
 with the same crystal power, so a player who fortifies has chosen a defended home over a strong
 body, and has taken the animals doing the defending out of the wild that measures the faction's
 success. It is the *this larva, or a stronger me?* decision in the one faction that has no larvae.
+
+**The keeper's version of that decision has three ways to spend, not two** (provisional): grow
+faster, hold ground with guardians, or come back whole. The third is the one with no analogue in the
+other factions — a Faeling that spends everything on growth and guardians dies back to a fraction of
+itself, while one that keeps its crystal full is harder to diminish and weaker in every fight it
+picks. Death degrades rather than blocks, so the cost of dying is a slider the player sets in
+advance rather than a wall they hit.
 
 ## The horde, and why it is not an order
 
