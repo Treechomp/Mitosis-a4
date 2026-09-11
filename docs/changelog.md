@@ -1,6 +1,6 @@
 # Changelog
 
-*Last updated: 2026-09-10 · current branch `claude/lod-override-testing-rhwq4f`, head `f3ea31c`*
+*Last updated: 2026-09-11 · current branch `claude/lod-override-testing-rhwq4f`, head `e0eb76a`*
 
 What changed, when, in which commit, and what it measured. Newest first.
 
@@ -71,6 +71,75 @@ cost rises **6.1×**; cost *per Sectid* rises from 4.4 to 12.0 µs over the same
 superlinear in the population that drives it and not merely in the world's. At ~1,020 Sectids
 hunting is 8.9–11.6 ms/tick, which reproduces the ~10 ms reported from the interactive build at
 ~1,100 Sectids.
+
+### D18 named: a structural zero, a NaN, and a loop with only float exits
+
+Reproduced on the standard world, seed 1234, by reinstating the pathological guard behind nothing
+but a local edit and instrumenting the two readings that could falsify the hypothesis. The result
+confirms half of it and refutes the other half cleanly.
+
+**What the instrument said.** Per sample: entities with a non-finite position, velocity or hunger;
+the fullest spatial-hash cell; the mean size of a neighbour query.
+
+| | healthy build | pathological build |
+|---|---|---|
+| non-finite entities | 0 through t=600 | **first at t=25** |
+| fullest cell | 12–16 | **16 at the stall** |
+| mean query size | 3.5–4.4 | **4.1 at the stall** |
+| progress | 600 ticks in 3s | tick 26 unfinished after 280s |
+
+**The spatial-hash half of the hypothesis is refuted.** Buckets and query sizes are normal at the
+moment everything stops. Nothing degrades gradually; one tick simply never ends.
+
+**The chain, each link measured rather than argued.** A watchdog that printed each system before
+entering it named `WanderSystem` as the one the tick enters and never leaves. The first bad entity
+is a **generation-1 Boar with NaN velocity and entirely finite hunger** — which also refutes the
+hunger route the hypothesis proposed. Logging which traits the guard zeroed named the source:
+
+1. A solitary-spawned parent carries zeroes in the four social traits, because the factory writes
+   them that way. The guard read "the parent's value is zero" as "the parent does not express this"
+   and copied the zeroes into a child assembled as a herd animal, which does have a `Social`
+   component — so `PreferredGroupSize` became 0.
+2. `HerdingSystem` computes `1 − (groupSize − preferred) / (preferred × 0.5)`. With both zero that
+   is `0/0`, and `MathF.Max` propagates the NaN rather than discarding it.
+3. The NaN cohesion factor reaches velocity.
+4. `DecisionCadence.Horizon` reads velocity: `sqrt(NaN)` is NaN, `speed <= 0f` is false for NaN, and
+   `MathF.Max`/`Math.Clamp` propagate — so the wander look-ahead is NaN.
+5. `WanderSystem.WorstAversionAlong` was `for (float d = step; ; d += step)` with exits
+   `worst >= 1f` and `d >= lookAhead`. Every comparison against NaN is false, so neither ever fires.
+
+That is the two orders of magnitude: not a slowdown at all, but a single tick that does not
+terminate. It also explains why the cost was the whole tick rather than births alone, and why it
+bisected to a line that is correct in isolation.
+
+**Three fixes, in order of how much they matter.** The presence mask makes the ambiguity
+unwritable — absence is a bit, and there is no value-based test left to reach for. The look-ahead
+loop is now step-bounded, so a bad value upstream produces a wrong steering decision rather than a
+hang. The herding divide is guarded. A fourth, `SpatialHash.QueryRadius`, now refuses a non-finite
+or absurd radius loudly instead of sweeping billions of cells — it was not this bug's path, but it
+is the same class of failure one call away.
+
+**And the ambiguity was live in shipped code, not only in the pathological guard.** `Genome.Blend`
+mixed slot by slot, and `SpawnSectid` creates no `Reproduction` component while the factory that
+seeds the founder Sectids does. So every delivery from a nest-born courier blended a zero into six
+reproduction traits of the nest template and dragged them toward zero for as long as the colony ran.
+It was inert — nest-born larvae have no `Reproduction` component for `ApplyTo` to write into — but it
+was wrong, and it is exactly what the mask prevents. `SpawnShroomer` is missing `Age` and
+`Reproduction` the same way.
+
+**Verification of the fix.** Five seeds, 20,000 ticks: invariants hold on 4 of 5, the fifth being
+the D11 grace-window assertion on a different seed than last time — which is what D11 says to
+expect. The drift signal is unchanged in kind and magnitude: seed 1234 still reaches 21 generations
+of Fish with `ReproHungerThreshold` down 8.9%. Health at full population is clean — no non-finite
+entities, fullest cell 42, mean query 10.4.
+
+The LOD differential moves, and that is a finding rather than a failure: *known 173 / regression 31
+/ improvement 17 / drift 17* against 178 / 30 / 16 / 20 before. The mask is not purely structural
+because one path really did change. Some founders are spawned force-solitary, so their genomes
+carried four zeroed social traits; the old code regressed those zeroes toward the species value and
+wrote them into herd-born children, which therefore started at about a tenth of their species'
+cohesion. With the mask those traits are simply absent and the child keeps the values the factory
+rolled for it. That is the intended behaviour and it was never intended to be inherited.
 
 ### Where selection takes a trait when descent is switched on
 

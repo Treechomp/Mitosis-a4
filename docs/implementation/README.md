@@ -1,6 +1,6 @@
 # Implementation layer
 
-*Last updated: 2026-09-10 · verified against `f3ea31c` on `claude/lod-override-testing-rhwq4f`*
+*Last updated: 2026-09-11 · verified against `f3ea31c` on `claude/lod-override-testing-rhwq4f`*
 
 What the code does today and where it lives. Secondary to [`../design/`](../design/): if these two
 disagree about intent, design is right and the code has drifted; if they disagree about behaviour,
@@ -87,7 +87,7 @@ Open, reproduced, not fixed. Each is described in full in the document that owns
 
 | D17 | **Closed.** A grazer drew from the tile under it every due tick it stood on fertile ground, hungry or not, and the hunger gain was clamped, so most of what grazers took from the world was destroyed. It also made hunger a dead variable — animals sat near full for whole runs, so being displaced onto poor ground cost them almost nothing. A full animal now stops feeding, and what a mouthful is worth depends on how full the ground is; hunger spreads across species by the quality of the ground they hold, and animals starve where they cannot make a living. Figures in [`../changelog.md`](../changelog.md) | [survival-and-population.md](survival-and-population.md) |
 
-| D18 | **Unexplained.** A one-line guard in `Genome.Inherit` — "a trait the parent does not express is not restored by regression", implemented as *skip the trait when the parent's value is exactly zero* — slowed the tick loop by about two orders of magnitude on the standard world: 200 ticks did not finish in 560 seconds against 400 ticks in 3. It is reproducible and it bisects cleanly to that line. No mechanism has been established, and the intended behaviour was reached another way instead (write grazing pressure only for a species that grazes), so the pathology is recorded rather than fixed. **Anything that generalises the "unexpressed trait" rule should reproduce this first** | [species-data.md](species-data.md) |
+| D18 | **Closed — mechanism named.** A guard that read "the parent's trait value is zero" as "the parent does not express this trait" copied a solitary parent's zeroed social values into a herd-born child; `HerdingSystem` divided by a preferred group size of zero; the NaN reached velocity, then the wander look-ahead, then a loop whose only exits were float comparisons — so one tick entered `WanderSystem` and never left. Not a slowdown: a non-terminating tick. The hypothesis that it was spatial-hash degradation is refuted by measurement — buckets and query sizes are normal at the stall. Fixed structurally by a presence mask on `Genome`, plus bounds on the look-ahead loop, the herding divide and `QueryRadius`. Chain and figures in [`../changelog.md`](../changelog.md) | [species-data.md](species-data.md) |
 
 Ids are stable and are not reused, so the list has gaps. D8 — a kill created nutrition, because the
 killer's share was never subtracted from the corpse pool — was fixed; the change and what it moved

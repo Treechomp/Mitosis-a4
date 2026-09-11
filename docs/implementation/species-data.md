@@ -1,6 +1,6 @@
 # Species data
 
-*Last updated: 2026-09-10 · verified against `f3ea31c`*
+*Last updated: 2026-09-11 · verified against `f3ea31c`*
 
 ## Files
 
@@ -176,13 +176,31 @@ against is `Genome.SpeciesValue`. The four paths that use it are in
 [`survival-and-population.md`](survival-and-population.md) and
 [`factions.md`](factions.md).
 
-**Two rules the genome has to respect, both found by measuring rather than by reading.** A trait is
-only carried by the component that holds it, so an animal without that component has *no* value
-rather than a value of zero — averaging an absent one in reads as a collapse that never happened.
-And a parent that does not express a trait its species defines must not have it restored by
-regression: the factory zeroes grazing pressure for a species that cannot graze and the social
-values for a solitary animal, and pulling those toward the species value gave a shoal's descendants
-89% of a grazing pressure their founders never had.
+### Absence is a bit, not a value
+
+`Genome` carries a **presence mask** — one bit per trait, set in `From` exactly where a component
+was found, and the only thing `Inherit`, `Blend` and `ApplyTo` are allowed to key on. A trait the
+genome does not hold is not regressed, not mutated, not blended and not written; the child keeps
+whatever its species default gave it.
+
+**Do not replace this with a test on the value.** An absent trait and a genuinely zero trait are the
+same float, and reading absence off the float is what produced D18 — the whole mechanism is in
+[`../changelog.md`](../changelog.md). The short version: a solitary parent carries zeroes in the
+four social traits, a value-based guard copied those into a herd-born child, `HerdingSystem` divided
+by a preferred group size of zero, and the NaN reached velocity, then the wander horizon, then a
+loop whose only exits were float comparisons. One tick entered `WanderSystem` and never left.
+
+The same ambiguity was live in shipped code without the mask, on the Sectid nest template: `Blend`
+mixed slot by slot, and a nest-born courier carries no `Reproduction` component, so every delivery
+from one blended a zero into six reproduction traits and dragged the template toward zero for as
+long as the colony ran. It was inert only because nest-born larvae have no `Reproduction` component
+for `ApplyTo` to write into. `SpawnShroomer` is missing `Age` and `Reproduction` in the same way.
+
+Two further rules the measurement forced. A trait is only carried by the component that holds it, so
+an animal without that component has *no* value rather than a value of zero — averaging an absent
+one in reads as a collapse that never happened. And a grower's body size belongs to `GrowthSystem`,
+which is why `CarriesTrait` is the single authority for what presence means and `From` consults it
+rather than repeating the component checks.
 
 ## D5 — `Species.Generation` is no longer in this row
 
