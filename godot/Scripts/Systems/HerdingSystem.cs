@@ -365,7 +365,12 @@ public sealed class HerdingSystem : ISystem
 
                 // Size factor (reduce pull in large groups)
                 float sizeFactor = 1f;
-                if (currentGroupSize >= social.PreferredGroupSize)
+                // A preferred group size of zero makes the divide below 0/0, and MathF.Max
+                // propagates the NaN straight into the cohesion vector and from there into
+                // velocity. It should be unreachable now that a genome cannot hand a herd animal a
+                // solitary animal's zeroes, but the guard is one comparison and the failure it
+                // prevents cost a whole tick (D18).
+                if (social.PreferredGroupSize > 0f && currentGroupSize >= social.PreferredGroupSize)
                 {
                     sizeFactor = MathF.Max(0.2f, 1f - (currentGroupSize - social.PreferredGroupSize) /
                                                       (social.PreferredGroupSize * 0.5f));
@@ -420,7 +425,7 @@ public sealed class HerdingSystem : ISystem
                 float distanceFactor = MathF.Max(0, 1f - (distToCenter / (socialRadius * 0.8f)));
 
                 float sizeFactor = 1f;
-                if (currentGroupSize >= social.PreferredGroupSize)
+                if (social.PreferredGroupSize > 0f && currentGroupSize >= social.PreferredGroupSize)
                 {
                     sizeFactor = MathF.Max(0.1f, 1f - (currentGroupSize - social.PreferredGroupSize) /
                                                       (social.PreferredGroupSize * 0.5f));

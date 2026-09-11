@@ -172,6 +172,32 @@ public sealed class SpatialHash
     /// Filtering here rather than at ~28 call sites makes the safe behaviour the default one,
     /// and shrinks result lists so callers' own per-candidate work drops too.
     /// </summary>
+    /// <summary>
+    /// Neighbour-query volume since the counters were last reset. Two increments on a hot path,
+    /// which is nothing against the work the query itself does, and it is the only direct read of
+    /// the quantity `23ee09d` established as the dominant term in tick cost.
+    /// </summary>
+    public static long QueryCalls;
+    public static long QueryResults;
+
+    /// <summary>Widest sweep a single query may make, in cells. A legitimate query is a creature's
+    /// senses; nothing in the roster sees a hundred cells.</summary>
+    private const int MaxCellRadius = 128;
+    private static bool _warnedUnboundedQuery;
+
+    /// <summary>Entities in the fullest cell. A single cell holding thousands is what a non-finite
+    /// position looks like from here: every such entity hashes to the same garbage cell, and every
+    /// query whose range touches it walks the lot.</summary>
+    public int MaxBucketOccupancy()
+    {
+        int max = 0;
+        foreach (var cell in _cells.Values)
+            if (cell.Count > max) max = cell.Count;
+        return max;
+    }
+
+    public int CellCount => _cells.Count;
+
     public void QueryRadius(float x, float y, float radius, List<int> results)
     {
         results.Clear();
@@ -179,6 +205,23 @@ public sealed class SpatialHash
         var (centerCellX, centerCellY) = WorldToCell(x, y);
         int cellRadius = (int)MathF.Ceiling(radius * _invCellSize);
         float radiusSq = radius * radius;
+
+        // A query radius is derived from creature state, and creature state can go wrong. An
+        // infinite or NaN radius turns the cell sweep below into a loop over billions of cells
+        // that never returns — one tick that never ends, which reads as a hang rather than as the
+        // value error it is. Refuse it loudly and carry on with a sane bound.
+        if (!float.IsFinite(radius) || cellRadius > MaxCellRadius)
+        {
+            if (!_warnedUnboundedQuery)
+            {
+                _warnedUnboundedQuery = true;
+                Godot.GD.PushWarning(
+                    $"[SpatialHash] query radius {radius} at ({x}, {y}) spans {cellRadius} cells — clamped. " +
+                    "Something upstream has produced a non-finite or absurd radius.");
+            }
+            cellRadius = MaxCellRadius;
+            if (!float.IsFinite(radiusSq)) radiusSq = float.MaxValue;
+        }
 
         for (int dx = -cellRadius; dx <= cellRadius; dx++)
         {
@@ -197,6 +240,9 @@ public sealed class SpatialHash
                 }
             }
         }
+
+        QueryCalls++;
+        QueryResults += results.Count;
     }
 
     /// <summary>

@@ -75,11 +75,30 @@ public sealed class Genome
 
     private readonly float[] _values = new float[TraitCount];
 
+    /// <summary>
+    /// Which traits this genome actually carries a value for — one bit per trait, set in
+    /// <see cref="From"/> exactly where a component was found.
+    ///
+    /// WHY IT EXISTS, and why a later simplification must not remove it. Without it, an absent
+    /// trait and a trait that is genuinely zero are the same float, and the only way to tell them
+    /// apart is to guess from the value. Guessing from the value is what produced D18: a guard that
+    /// read "the parent's value is zero" as "the parent does not express this" copied a structural
+    /// zero into a child that did have the component, and a herd animal born with a preferred group
+    /// size of zero divided by it, put a NaN into its velocity, and hung the tick it was born in.
+    /// With a mask there is no value-based test for absence left to reach for.
+    ///
+    /// A ulong rather than a uint because the trait enum is already wider than 32.
+    /// </summary>
+    private ulong _present;
+
     public float this[Trait t]
     {
         get => _values[(int)t];
-        set => _values[(int)t] = value;
+        set { _values[(int)t] = value; _present |= 1UL << (int)t; }
     }
+
+    /// <summary>True when this genome carries a value for the trait at all.</summary>
+    public bool Has(Trait t) => (_present & (1UL << (int)t)) != 0UL;
 
     // ══════════════════════════════════════════════════════════════════════════
     // Gather and apply — the only two methods that know about components
@@ -125,7 +144,9 @@ public sealed class Genome
             ref var d = ref em.TerrainDiscomforts[entity];
             g[Trait.DiscomfortThreshold] = d.Threshold;
             g[Trait.DiscomfortDecayRate] = d.DecayRate;
-            g[Trait.GrazingPressure] = d.GrazingPressure;
+            // Zero here means "this species does not graze", which is a fact about the species and
+            // not a trait value. Leaving it unset is what stops it being inherited as one.
+            if (d.GrazingPressure > 0f) g[Trait.GrazingPressure] = d.GrazingPressure;
         }
         if (em.HasComponents(entity, ComponentFlags.Terraform))
         {
@@ -157,7 +178,10 @@ public sealed class Genome
             g[Trait.AttackPower] = p.AttackPower;
             g[Trait.AttackCooldown] = p.AttackCooldown;
         }
-        if (em.HasComponents(entity, ComponentFlags.Social))
+        // A solitary animal carries zeroes in all four by construction — the factory writes them
+        // that way — so it has no social traits rather than four zero-valued ones. Recording them
+        // would hand a herd-born child a group behaviour of nothing, which is how D18 started.
+        if (em.HasComponents(entity, ComponentFlags.Social) && em.Socials[entity].IsSocial)
         {
             ref var s = ref em.Socials[entity];
             g[Trait.GroupAffinity] = s.GroupAffinity;
@@ -178,88 +202,89 @@ public sealed class Genome
         if (em.HasComponents(entity, ComponentFlags.Age))
         {
             ref var a = ref em.Ages[entity];
-            a.MaxLifespan = (int)MathF.Round(this[Trait.MaxLifespan]);
-            a.MaturityAge = (int)MathF.Round(this[Trait.MaturityAge]);
+            if (Has(Trait.MaxLifespan)) a.MaxLifespan = (int)MathF.Round(this[Trait.MaxLifespan]);
+            if (Has(Trait.MaturityAge)) a.MaturityAge = (int)MathF.Round(this[Trait.MaturityAge]);
         }
         if (em.HasComponents(entity, ComponentFlags.Reproduction))
         {
             ref var r = ref em.Reproductions[entity];
-            r.HungerThreshold = this[Trait.ReproHungerThreshold];
-            r.EnergyThreshold = this[Trait.ReproEnergyThreshold];
-            r.HungerCost = this[Trait.ReproHungerCost];
-            r.EnergyCost = this[Trait.ReproEnergyCost];
-            r.Cooldown = (int)MathF.Round(this[Trait.ReproCooldown]);
-            r.SpawnRadius = this[Trait.SpawnRadius];
+            if (Has(Trait.ReproHungerThreshold)) r.HungerThreshold = this[Trait.ReproHungerThreshold];
+            if (Has(Trait.ReproEnergyThreshold)) r.EnergyThreshold = this[Trait.ReproEnergyThreshold];
+            if (Has(Trait.ReproHungerCost)) r.HungerCost = this[Trait.ReproHungerCost];
+            if (Has(Trait.ReproEnergyCost)) r.EnergyCost = this[Trait.ReproEnergyCost];
+            if (Has(Trait.ReproCooldown)) r.Cooldown = (int)MathF.Round(this[Trait.ReproCooldown]);
+            if (Has(Trait.SpawnRadius)) r.SpawnRadius = this[Trait.SpawnRadius];
         }
         if (em.HasComponents(entity, ComponentFlags.Hunger))
         {
             ref var h = ref em.Hungers[entity];
-            h.Max = this[Trait.MaxHunger];
-            h.DecayRate = this[Trait.HungerDecayRate];
+            if (Has(Trait.MaxHunger)) h.Max = this[Trait.MaxHunger];
+            if (Has(Trait.HungerDecayRate)) h.DecayRate = this[Trait.HungerDecayRate];
             // The factory filled Current against the max it rolled, which this has just replaced.
             if (h.Current > h.Max) h.Current = h.Max;
         }
         if (em.HasComponents(entity, ComponentFlags.Wander))
         {
             ref var w = ref em.Wanders[entity];
-            w.Speed = this[Trait.WanderSpeed];
-            w.ChangeDirectionChance = this[Trait.DirectionChangeChance];
+            if (Has(Trait.WanderSpeed)) w.Speed = this[Trait.WanderSpeed];
+            if (Has(Trait.DirectionChangeChance)) w.ChangeDirectionChance = this[Trait.DirectionChangeChance];
         }
-        if (CarriesTrait(em, entity, Trait.BodySize) && this[Trait.BodySize] > 0f)
+        if (CarriesTrait(em, entity, Trait.BodySize) && Has(Trait.BodySize))
             em.Renderables[entity].Size = this[Trait.BodySize];
         if (em.HasComponents(entity, ComponentFlags.TerrainDiscomfort))
         {
             ref var d = ref em.TerrainDiscomforts[entity];
-            d.Threshold = this[Trait.DiscomfortThreshold];
-            d.DecayRate = this[Trait.DiscomfortDecayRate];
-            // Only for a species that actually grazes. The factory zeroes this for one that does
-            // not, so inheriting it — and regressing it toward a species value the founders were
-            // never given — hands a shoal a pressure to leave pasture it does not eat. Measured, a
-            // shoal's descendants had acquired 89% of one over nineteen generations.
-            if (SpeciesRegistry.GetById(em.Species[entity].SpeciesId).CanGraze)
-                d.GrazingPressure = this[Trait.GrazingPressure];
+            if (Has(Trait.DiscomfortThreshold)) d.Threshold = this[Trait.DiscomfortThreshold];
+            if (Has(Trait.DiscomfortDecayRate)) d.DecayRate = this[Trait.DiscomfortDecayRate];
+            // Absent for a species that does not graze, so nothing is written and the factory's
+            // zero stands. Measured before the mask existed: a shoal's descendants had acquired
+            // 89% of a grazing pressure their founders never had, purely from regression pulling
+            // an unexpressed trait toward a species value.
+            if (Has(Trait.GrazingPressure)) d.GrazingPressure = this[Trait.GrazingPressure];
         }
         if (em.HasComponents(entity, ComponentFlags.Terraform))
         {
             ref var t = ref em.Terraforms[entity];
-            t.Radius = this[Trait.TerraformRadius];
-            t.Strength = this[Trait.TerraformStrength];
-            t.Cooldown = (int)MathF.Round(this[Trait.TerraformCooldown]);
+            if (Has(Trait.TerraformRadius)) t.Radius = this[Trait.TerraformRadius];
+            if (Has(Trait.TerraformStrength)) t.Strength = this[Trait.TerraformStrength];
+            if (Has(Trait.TerraformCooldown)) t.Cooldown = (int)MathF.Round(this[Trait.TerraformCooldown]);
         }
         if (em.HasComponents(entity, ComponentFlags.Prey))
         {
             ref var p = ref em.Preys[entity];
-            p.FleeRange = this[Trait.FleeRange];
-            p.FleeSpeedMultiplier = this[Trait.FleeSpeedMultiplier];
+            if (Has(Trait.FleeRange)) p.FleeRange = this[Trait.FleeRange];
+            if (Has(Trait.FleeSpeedMultiplier)) p.FleeSpeedMultiplier = this[Trait.FleeSpeedMultiplier];
         }
         if (em.HasComponents(entity, ComponentFlags.Fear))
         {
             ref var f = ref em.Fears[entity];
-            f.Threshold = this[Trait.FearThreshold];
-            f.Max = this[Trait.FearMax];
-            f.AccumulationRate = this[Trait.FearAccumulationRate];
-            f.DecayRate = this[Trait.FearDecayRate];
-            f.VigilanceDecay = this[Trait.FearVigilanceDecay];
+            if (Has(Trait.FearThreshold)) f.Threshold = this[Trait.FearThreshold];
+            if (Has(Trait.FearMax)) f.Max = this[Trait.FearMax];
+            if (Has(Trait.FearAccumulationRate)) f.AccumulationRate = this[Trait.FearAccumulationRate];
+            if (Has(Trait.FearDecayRate)) f.DecayRate = this[Trait.FearDecayRate];
+            if (Has(Trait.FearVigilanceDecay)) f.VigilanceDecay = this[Trait.FearVigilanceDecay];
         }
         if (em.HasComponents(entity, ComponentFlags.Predator))
         {
             ref var p = ref em.Predators[entity];
-            p.HuntRange = this[Trait.HuntRange];
-            p.AttackRange = this[Trait.AttackRange];
-            p.AttackPower = this[Trait.AttackPower];
-            p.AttackCooldown = (int)MathF.Round(this[Trait.AttackCooldown]);
+            if (Has(Trait.HuntRange)) p.HuntRange = this[Trait.HuntRange];
+            if (Has(Trait.AttackRange)) p.AttackRange = this[Trait.AttackRange];
+            if (Has(Trait.AttackPower)) p.AttackPower = this[Trait.AttackPower];
+            if (Has(Trait.AttackCooldown)) p.AttackCooldown = (int)MathF.Round(this[Trait.AttackCooldown]);
         }
         if (em.HasComponents(entity, ComponentFlags.Social))
         {
             ref var s = ref em.Socials[entity];
             // A solitary animal carries zeroes here by construction; inheriting a herder's values
-            // would hand it a group behaviour its social type does not use.
+            // would hand it a group behaviour its social type does not use. And a genome gathered
+            // from a solitary parent carries no social traits at all, so a herd-born child keeps
+            // the species values the factory gave it rather than a preferred group size of zero.
             if (s.IsSocial)
             {
-                s.GroupAffinity = this[Trait.GroupAffinity];
-                s.PreferredGroupSize = this[Trait.PreferredGroupSize];
-                s.CohesionStrength = this[Trait.CohesionStrength];
-                s.AlignmentStrength = this[Trait.AlignmentStrength];
+                if (Has(Trait.GroupAffinity)) s.GroupAffinity = this[Trait.GroupAffinity];
+                if (Has(Trait.PreferredGroupSize)) s.PreferredGroupSize = this[Trait.PreferredGroupSize];
+                if (Has(Trait.CohesionStrength)) s.CohesionStrength = this[Trait.CohesionStrength];
+                if (Has(Trait.AlignmentStrength)) s.AlignmentStrength = this[Trait.AlignmentStrength];
             }
         }
     }
@@ -278,7 +303,17 @@ public sealed class Genome
         float w = Math.Clamp(weightOfB, 0f, 1f);
         var g = new Genome();
         for (int i = 0; i < TraitCount; i++)
-            g._values[i] = a._values[i] * (1f - w) + b._values[i] * w;
+        {
+            var t = (Trait)i;
+            // Presence, never a value. A contributor that does not carry a trait contributes
+            // nothing to it rather than contributing a zero — otherwise every delivery from an
+            // animal missing a component would drag the nest's template toward zero, one weighted
+            // step at a time, for as long as the colony ran.
+            bool ha = a.Has(t), hb = b.Has(t);
+            if (ha && hb) g[t] = a._values[i] * (1f - w) + b._values[i] * w;
+            else if (ha) g[t] = a._values[i];
+            else if (hb) g[t] = b._values[i];
+        }
         return g;
     }
 
@@ -293,12 +328,18 @@ public sealed class Genome
         for (int i = 0; i < TraitCount; i++)
         {
             var trait = (Trait)i;
+
+            // Absence is carried, never interpreted. A trait this genome does not hold is not
+            // regressed, not mutated and not passed on — the child keeps whatever the species
+            // default gave it. Reading absence off the value instead is exactly D18.
+            if (!Has(trait)) continue;
+
             float speciesValue = SpeciesValue(species, trait);
             if (speciesValue == 0f)
             {
                 // Nothing to regress toward and no scale to mutate against — the species does not
                 // use this trait (a herbivore's attack power, a non-terraformer's radius).
-                child._values[i] = _values[i];
+                child[trait] = _values[i];
                 continue;
             }
 
@@ -310,7 +351,7 @@ public sealed class Genome
 
             float low = speciesValue * (1f - TraitBand);
             float high = speciesValue * (1f + TraitBand);
-            child._values[i] = Math.Clamp(value, MathF.Min(low, high), MathF.Max(low, high));
+            child[trait] = Math.Clamp(value, MathF.Min(low, high), MathF.Max(low, high));
         }
         return child;
     }

@@ -263,6 +263,11 @@ public partial class PopulationSoakRunner : Node
                     systems[i].Process(em);
                     systemClock.Stop();
                     systemMs[i] += systemClock.Elapsed.TotalMilliseconds;
+                    // Watchdog: a single system call that takes seconds is not slow, it is stuck,
+                    // and knowing WHICH one is the whole diagnosis.
+                    if (systemClock.Elapsed.TotalMilliseconds > 2000)
+                        GD.PrintErr($"[Soak] WATCHDOG t={t}: {systems[i].GetType().Name} took " +
+                                    $"{systemClock.Elapsed.TotalSeconds:F1}s in one tick");
                 }
             }
             else
@@ -282,6 +287,8 @@ public partial class PopulationSoakRunner : Node
             if (t % SampleInterval == 0 || t == Ticks)
             {
                 samples.Add(Sample.Take(t, em, budget, logger));
+                _healthTick = t;
+                PrintHealth(em, world);
                 if (ProfileSystems)
                 {
                     AppendTimingRow(timingCsv, systems, systemMs, ticksSinceSample, samples[^1]);
@@ -761,6 +768,61 @@ public partial class PopulationSoakRunner : Node
             GD.Print($"  trait drift written to {path}");
         }
     }
+
+    /// <summary>
+    /// The two readings that separate "the simulation is doing more work" from "the simulation has
+    /// gone wrong": how many entities carry a non-finite position, velocity or hunger, and how
+    /// crowded the fullest spatial-hash cell is. A non-finite position hashes to a garbage cell, so
+    /// every such entity lands in the same one and every query whose range touches it walks them
+    /// all — which is how a value error becomes a whole-tick cost.
+    /// </summary>
+    private void PrintHealth(EntityManager em, World.WorldManager world)
+    {
+        int nonFinite = 0;
+        foreach (int entity in em.Query(ComponentFlags.Position))
+        {
+            ref var p = ref em.Positions[entity];
+            bool bad = !float.IsFinite(p.X) || !float.IsFinite(p.Y);
+            if (!bad && em.HasComponents(entity, ComponentFlags.Velocity))
+            {
+                ref var v = ref em.Velocities[entity];
+                bad = !float.IsFinite(v.Dx) || !float.IsFinite(v.Dy);
+            }
+            if (!bad && em.HasComponents(entity, ComponentFlags.Hunger))
+            {
+                ref var h = ref em.Hungers[entity];
+                bad = !float.IsFinite(h.Current) || !float.IsFinite(h.Max) || h.Max <= 0f;
+            }
+            if (bad)
+            {
+                nonFinite++;
+                if (_firstNonFiniteTick < 0)
+                {
+                    _firstNonFiniteTick = _healthTick;
+                    ref var p2 = ref em.Positions[entity];
+                    string sp = em.HasComponents(entity, ComponentFlags.Species)
+                        ? SpeciesRegistry.GetById(em.Species[entity].SpeciesId).Name : "?";
+                    string hunger = em.HasComponents(entity, ComponentFlags.Hunger)
+                        ? FormattableString.Invariant($"cur {em.Hungers[entity].Current} max {em.Hungers[entity].Max}") : "none";
+                    string vel = em.HasComponents(entity, ComponentFlags.Velocity)
+                        ? FormattableString.Invariant($"{em.Velocities[entity].Dx},{em.Velocities[entity].Dy}") : "none";
+                    GD.PrintErr(FormattableString.Invariant(
+                        $"FIRSTBAD t={_healthTick} {sp} gen {(em.HasComponents(entity, ComponentFlags.Species) ? em.Species[entity].Generation : -1)} pos {p2.X},{p2.Y} vel {vel} hunger {hunger}"));
+                }
+            }
+        }
+
+        long calls = Utils.SpatialHash.QueryCalls;
+        double meanQuery = calls > 0 ? Utils.SpatialHash.QueryResults / (double)calls : 0;
+        Utils.SpatialHash.QueryCalls = 0;
+        Utils.SpatialHash.QueryResults = 0;
+
+        GD.Print(FormattableString.Invariant(
+            $"      health: nonfinite {nonFinite} (first t={_firstNonFiniteTick})  maxBucket {world.SpatialHash.MaxBucketOccupancy()}  cells {world.SpatialHash.CellCount}  meanQuery {meanQuery:F1}"));
+    }
+
+    private int _firstNonFiniteTick = -1;
+    private int _healthTick;
 
     private static void PrintTopSystems(List<ISystem> systems, double[] systemMs, int ticks)
     {

@@ -988,8 +988,16 @@ public sealed class WanderSystem : ISystem
     private float WorstAversionAlong(SpeciesDefinition? sp, float x, float y,
                                      float dirX, float dirY, float lookAhead)
     {
+        // Both exits below are float comparisons, and every comparison against a NaN is false, so
+        // a non-finite lookAhead turned this into a loop that never ended — one tick that entered
+        // WanderSystem and never left. That was D18's whole cost. The step count is bounded now, so
+        // a bad value upstream shows up as a wrong steering decision rather than as a hang.
+        if (!float.IsFinite(lookAhead)) lookAhead = _lookAheadDistance;
+        int maxSteps = (int)MathF.Ceiling(lookAhead / _lookAheadDistance) + 1;
+
         float worst = 0f;
-        for (float d = _lookAheadDistance; ; d += _lookAheadDistance)
+        float d = _lookAheadDistance;
+        for (int step = 0; step < maxSteps; step++, d += _lookAheadDistance)
         {
             if (d > lookAhead) d = lookAhead;
             float a = AversionAt(sp, x + dirX * d, y + dirY * d);
