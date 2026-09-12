@@ -24,6 +24,7 @@ compensate for that, and where, is an open balance decision — it has not been 
 
 | Commit | Date | Change | Result |
 |---|---|---|---|
+| — | 2026-09-12 | Measure LOD fidelity as a RATE of divergence instead of an end-state comparison, and record the first curve (D16, stage 1) | **the instrument repeats exactly, and the first curve plateaus rather than climbing.** predator_prey, seed 42, 3,000 ticks, Full against Minimal, sampled every 5 ticks, simulation at `bef5cb2`: onset at tick **5**, divergence rising to a plateau of **0.18–0.24** and ending at **0.178**, mean **0.180** over 601 samples. Two consecutive recordings on one build are byte-identical, streams and curve. The differential's verdicts are untouched: *known 173 / regression 31 / improvement 17 / drift 17*, and its summary CSV is byte-identical to the same run on an unmodified `bef5cb2`. Tables below |
 | `f3ea31c` | 2026-09-10 | Give offspring their parents' traits, on a leash, and measure where selection takes them | **selection is real, it is measurable, and it points the way this project has twice had to undo.** Five seeds, 20,000 ticks: lineages reach 21 generations at the fast end and under 2 at the slow, and `ReproHungerThreshold` falls in 19 of 24 species — hardest where generations are highest (Fish −13.4% at gen 21, Penguin −9.8% at gen 13) and not at all where they are lowest. Invariants hold on 4 of 5 seeds, the fifth being D11. Tables below |
 | `c41212b` | 2026-09-09 | Make what a mouthful is worth depend on how full the ground is, stop full animals feeding, and put hunger on the timescale of a run | **animals now starve where they cannot make a living, and no species is lost to it.** Seeds 1234 / 999, 20,000 ticks: starvation deaths **0 → 32 / 34**, average hunger spread **84–96% → 49–94%** and ranked by the quality of the ground each species holds, herbivores 3,177 / 2,776 on a plateau, all invariants holding on both seeds, class ceiling still never reached. Tables below |
 | `4bca4f7` | 2026-09-09 | Give each species a carrying capacity read off the seed's terrain, and raise what species extract to match | **the engine stops deciding how many herbivores there are.** Seeds 1234 / 999, 20,000 ticks: the prey base reaches its class ceiling at **no point in either run** against t=2400 (12% of the run) before, herbivore birth refusals **1,813,206 → 0**, and Lizard — extinct in both controls — returns at 109 / 219. Herbivore total 5,036 / 5,040 → 3,958 / 3,779, held by thirteen species instead of one. Tables below |
@@ -48,6 +49,44 @@ compensate for that, and where, is an open balance decision — it has not been 
 | `d93d747` | 2026-09-06 | Delete keeper crystal-to-crystal travel | no measurable change — a mobility mechanic serving a raid that never happens (see D4) |
 | `c553833` | 2026-09-06 | Fix `Siege` zero-initialisation: every Sectid was born besieging entity 0 | Sectid `kills_made` **0 → 1,487** (seed 1234), **0 → 1,820** (seed 999) |
 | `72ea4ba` | 2026-09-06 | Gate the LOD differential on the difference from recorded verdicts | the gate can now exit 0; before this it never had |
+
+### The first LOD divergence curve — predator_prey, seed 42, 3,000 ticks
+
+Two runs, one process each, pinned to `Full` and to `Minimal`, sampled every 5 ticks; the curve is
+the comparison of the two recorded streams. The simulation is `bef5cb2` unchanged — the commit
+carrying this entry adds the instrument and extracts a builder the two LOD harnesses now share, and
+moves no simulation code.
+
+Divergence averaged over each tenth of the run:
+
+| through tick | 295 | 595 | 895 | 1195 | 1495 | 1795 | 2095 | 2395 | 2695 | 3000 |
+|---|---|---|---|---|---|---|---|---|---|---|
+| divergence | 0.081 | 0.161 | 0.166 | 0.166 | 0.184 | 0.204 | 0.211 | 0.222 | 0.219 | 0.184 |
+
+It rises quickly and then holds. That shape is the reading: the cost of a coarser cadence on this
+scenario is bounded rather than compounding. The largest value any single component reaches over the
+whole run — centroid 0.694, hunger mean 0.276, count 0.179, dispersion 0.486, hunger spread 0.050,
+age mean 0.014, age spread 0.007 — says where the two worlds actually differ: in where creatures
+are and how hungry they are, hardly at all in how old they are.
+
+Population over the run: both start at 45, the Full run ends at 40 and the Minimal run at 43. The
+coarse tier keeps more prey alive, which is the direction D2 predicts.
+
+**What the first recording found about the instrument.** Before centroid distance was bounded, the
+scalar read mean 0.419 and final 0.278 on this same pair, with one tenth of the run averaging 0.9998
+— because the centroid component reached 6.61 while every other component is at most 1. Combined by
+an unweighted mean, an unbounded component does not contribute to the scalar, it becomes the scalar,
+and the curve was a centroid plot wearing seven labels. Bounding it is what the figures above are
+measured with.
+
+**The verification.** Recorded twice on one build: both fingerprint streams and the curve are
+byte-identical between passes. That is the check the instrument had to pass before its numbers meant
+anything, and it passes because species ids became deterministic (D1) — the same test on the build
+before that fix would not have.
+
+**What this does not yet establish.** One scenario, one seed, one tier pair. No tolerance is set and
+nothing gates on the curve; the exit code is still the differential's. Whether the plateau height is
+acceptable, and what a worsening looks like, needs the curve recorded across scenarios and seeds.
 
 ### HuntingSystem cost against Sectid count — seeds 1234 and 999, 20,000 ticks, default cap
 

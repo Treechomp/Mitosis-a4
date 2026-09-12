@@ -1,0 +1,6 @@
+[gd_scene load_steps=2 format=3 uid="uid://cloddiverge4a7m4"]
+
+[ext_resource type="Script" path="res://Scripts/Testing/LodDivergenceRunner.cs" id="1_loddiverge"]
+
+[node name="LodDivergence" type="Node"]
+script = ExtResource("1_loddiverge")

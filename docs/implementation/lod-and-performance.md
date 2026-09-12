@@ -59,6 +59,34 @@ outcome metrics against recorded verdicts. It is a gate, not a report: the pass/
 the difference from the recorded verdict set, so a change that alters LOD behaviour must
 deliberately re-record. See [tooling-and-tests.md](tooling-and-tests.md).
 
+### The rate of divergence, measured apart from the outcome
+
+The differential compares two runs at the end of three thousand ticks, by which point they have
+separated chaotically. That is D16: the verdict count moves with any change to the systems the
+metrics are measured on, and it does not move with the SIZE of that change, so the gate cannot say
+whether fidelity got worse or the trajectory moved. No tolerance repairs that, because it is the
+shape of the measurement and not its thresholds.
+
+`LodDivergenceRunner` measures the same pair of runs as a rate. Each run writes a fingerprint
+stream; the two streams are compared afterwards into **onset** — the first sample tick at which the
+two worlds are not identical — and **growth**, one bounded scalar per sample tick. The curve is the
+artefact. A gameplay change moves both runs alike and leaves the rate where it was; a fidelity
+change bends it. What it records and how the scalar is built is in
+[tooling-and-tests.md](tooling-and-tests.md); the recorded curve is `docs/lod-divergence-curve.csv`
+and the figures behind it are in [`../changelog.md`](../changelog.md).
+
+**A flat curve is not the target, and a gate built on this file must never ask for one.** A coarser
+decision cadence changes behaviour by design: a creature that re-steers every twentieth tick arrives
+somewhere else, and it is meant to. The curve says what that costs. The gate this is built towards
+asserts that the curve has not WORSENED beyond a stated tolerance — a tolerance that has not been
+set, because setting it needs more than one scenario and one seed. Until then the exit code is still
+the differential's, and this instrument reports.
+
+This sits against contract §1, which promises that reduced detail changes *nothing but cost*. That
+promise is about outcomes and it already admits documented exceptions — herd spacing is one, below.
+Measuring the rate turns the size of those exceptions from a category into a number. Whether the
+contract should say so is a design question and not an implementation one; it is not decided here.
+
 ## Only two of the tiers are tested
 
 `LodDifferentialRunner` runs each scenario at `LODLevel.Full` and at `LODLevel.Minimal`, with its
@@ -101,6 +129,7 @@ That is D16 in [README.md](README.md): the contract cannot separate "LOD fidelit
 "the trajectory moved", so it fails any change to the systems it measures without saying which
 happened. Measured, the count does not even scale with the size of the change — a forage change
 gentle enough to barely move the population flipped as many verdicts as one that moved it a third.
+The replacement measurement is the divergence curve above; it does not yet gate anything.
 
 **What that means for the LOD pass.** Re-recording is the first step of the work and not a
 housekeeping task before it: the contract has to be re-recorded against a balance that is going to

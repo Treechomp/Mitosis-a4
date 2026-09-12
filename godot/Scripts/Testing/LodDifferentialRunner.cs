@@ -62,10 +62,6 @@ namespace Mitosis.Testing;
 /// </summary>
 public partial class LodDifferentialRunner : Node
 {
-    // Mirrors GameManager's exports: the harness must build the same world the game would.
-    private const int ChunkSize = 32;
-    private const int TileSize = 16;
-
     /// <summary>
     /// Ticks each run is stepped for. Both runs get exactly this many.
     ///
@@ -324,86 +320,23 @@ public partial class LodDifferentialRunner : Node
     /// Build a complete simulation from the scenario and step it for <see cref="Ticks"/> ticks
     /// with every entity pinned to <paramref name="tier"/>, then read off the end state.
     ///
-    /// This is GameManager's construction sequence minus the parts that only exist to be looked
-    /// at (camera, lights, meshes, debug UI, world-snapshot PNGs). The SYSTEMS come from
-    /// SimulationStack, the same builder the game uses, so the harness cannot drift onto a
-    /// different stack than the one that ships.
+    /// The simulation is assembled by <see cref="ScenarioSimulation"/>, shared with
+    /// <see cref="LodDivergenceRunner"/> so that the instrument measuring how fast the tiers
+    /// separate and the gate measuring where they end up are describing the same run.
     /// </summary>
     private RunMetrics RunOnce(TestScenario scenario, int seed, LODLevel tier, string label)
     {
-        int sizeChunks = Math.Max(1, scenario.SizeChunks);
-
-        // Fix every system's random stream BEFORE the systems that draw from one are built.
-        SimRandom.SetSeed(seed);
-        var rng = SimRandom.Create();
-
-        var em = new EntityManager();
-        em.OnEntityDying = id => CarrionSystem.SpawnCorpse(em, id);
-
-        // Same per-class ceilings the game builds, at the scenario's own MaxPopulation. Without
-        // this the harness would be comparing tiers inside a world the game no longer runs — and
-        // the budget's refusal path is itself LOD-adjacent, since a refused spawn is a spawn that
-        // did not happen at whichever tier asked for it.
-        var budget = new PopulationBudget(scenario.MaxPopulation,
-            PopulationBudget.DefaultHerbivoreShare,
-            PopulationBudget.DefaultPredatorShare,
-            PopulationBudget.DefaultFactionShare);
-        em.Budget = budget;
-
-        var world = new WorldManager(ChunkSize, sizeChunks, seed,
-            new ScenarioTerrainGenerator(scenario, ChunkSize));
-
-        var factory = new EntityFactory(em, rng);
-        factory.SetPopulationCap(scenario.MaxPopulation);
-        factory.SetBudget(budget);
-
-        var systems = new List<ISystem>();
-        var stack = SimulationStack.Build(systems, world, factory,
-            ChunkSize, sizeChunks, TileSize, scenario.MaxPopulation, budget);
-
-        // Logging: the run totals the comparison reads are maintained regardless of these, but
-        // the per-run CSVs are what you actually open when a metric diverges, so each run gets
-        // its own directory. Decision logging stays off — it is per-decision and enormous, and
-        // the two runs make a different number of decisions by construction.
-        EcosystemLogger.SnapshotInterval = Math.Max(1, scenario.SnapshotInterval);
-        EcosystemLogger.DecisionLoggingEnabled = false;
-        EcosystemLogger.DecisionSpeciesFilter = null;
-        EcosystemLogger.TerrainLogInterval = Math.Max(0, scenario.TerrainLogInterval);
-        EcosystemLogger.NutritionLogInterval = Math.Max(0, scenario.NutritionLogInterval);
-        EcosystemLogger.ClearTrackedSpecies();
-        var logger = new EcosystemLogger(world, $"{LogRoot}/lod_differential/{scenario.Name}_{label}",
-            budget);
-        systems.Add(logger);
-
-        // The whole point of the harness: pin the tier instead of deriving it from a distance
-        // this world is too small to produce.
-        stack.Lod.SetLevelOverride(tier);
-
-        world.PregenerateWorld();
-        SpeciesToggle.Configure(scenario.DisabledSpecies, scenario.NoFactions);
-
-        var spawner = new ScenarioSpawner(world, factory, em, rng);
-        spawner.Run(scenario, stack.Nest, stack.Crystal, stack.Spore);
-
-        // The player is still the LOD origin in the game; keep it in the world (centred, as the
-        // test scene spawns it) so the two runs differ only in the tier they are pinned to.
-        int player = factory.SpawnPlayer(sizeChunks * ChunkSize / 2f, sizeChunks * ChunkSize / 2f, world);
-        stack.Lod.SetPlayerEntity(player);
-        em.SnapshotPositions();
+        var sim = ScenarioSimulation.Build(scenario, seed, tier,
+            $"{LogRoot}/lod_differential/{scenario.Name}_{label}");
 
         var clock = System.Diagnostics.Stopwatch.StartNew();
         for (int t = 0; t < Ticks; t++)
-        {
-            em.SnapshotPositions();
-            for (int i = 0; i < systems.Count; i++)
-                systems[i].Process(em);
-            em.FinalizeNewborns();
-        }
+            sim.Tick();
         clock.Stop();
 
-        var metrics = Collect(em, logger, tier);
+        var metrics = Collect(sim.Entities, sim.Logger, tier);
         metrics.WallMs = clock.Elapsed.TotalMilliseconds;
-        logger.Close();
+        sim.Logger.Close();
 
         GD.Print($"  [{label}] tier={tier} pop={metrics.TotalPopulation} kills={metrics.TotalKills} " +
                  $"terraform={metrics.TerraformNudges} ({metrics.WallMs / 1000.0:F1}s)");
