@@ -70,6 +70,26 @@ rules below are what prevent that recurring.
   that path is hardcoded in `LodExpectedVerdicts.cs`), and the whole-game invariants
   (`Scenes/PopulationSoak.tscn`).
 
+## Cost of measurement here
+
+The expensive thing in this repo is measurement, not code. A 20,000-tick soak takes about
+eleven minutes headless, and the design target run length is six times that. D11 means a
+result is read over five seeds, so one comparison is five long runs.
+
+- Run long work in **one** blocking call with a timeout that covers it. Never start it in
+  the background and poll — each check re-sends the whole conversation.
+- Script the five seeds as one command that writes one summary file, then read the summary.
+  Not five calls, and not five CSVs pulled into the conversation.
+- Smoke-test flags on a short run of a couple of thousand ticks before committing to a long
+  one. A long run with the wrong flag is billed in full and buys nothing.
+- Measurement output belongs in `logs/`. Read the lines you need; never cat a CSV into the
+  conversation — it is then re-sent on every later call in the session.
+- Take the baseline before changing anything. Every prompt in this project asks for a control
+  measurement first; that is cost discipline as much as rigour, because without it you pay
+  for a second full round of runs to work out what moved.
+- One change per session. The gates are the unit of verification, and a session that has
+  already run them twice makes every subsequent call more expensive.
+
 ## Two rules the codebase enforces
 
 **Systems must not name species.** If a behaviour seems to need one, find the property that species
