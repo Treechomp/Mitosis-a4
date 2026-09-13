@@ -1,6 +1,6 @@
 # LOD & performance
 
-*Last updated: 2026-09-09 · verified against `c41212b`*
+*Last updated: 2026-09-13 · verified against `322eebe`*
 
 ## `LODSystem` — `Systems/LODSystem.cs` · runs first, never gated
 
@@ -69,11 +69,20 @@ shape of the measurement and not its thresholds.
 
 `LodDivergenceRunner` measures the same pair of runs as a rate. Each run writes a fingerprint
 stream; the two streams are compared afterwards into **onset** — the first sample tick at which the
-two worlds are not identical — and **growth**, one bounded scalar per sample tick. The curve is the
-artefact. A gameplay change moves both runs alike and leaves the rate where it was; a fidelity
-change bends it. What it records and how the scalar is built is in
+two worlds are not identical — and a curve of bounded scalars, read in a growth window and a plateau
+window. The curve is the artefact. A gameplay change moves both runs alike and leaves the rate where
+it was; a fidelity change bends it. What it records and how the scalars are built is in
 [tooling-and-tests.md](tooling-and-tests.md); the recorded curve is `docs/lod-divergence-curve.csv`
 and the figures behind it are in [`../changelog.md`](../changelog.md).
+
+**The rate is scaled by two controls, not read raw.** One tier against itself on one seed is the
+floor and must read exactly zero; one tier against itself on two seeds is the ceiling — what the
+scalar reads for two worlds with nothing in common. The floor holds. The ceiling does not leave the
+plateau any room: Full against Minimal plateaus at or above two unrelated worlds, so the plateau
+cannot grade fidelity and no tolerance placed there would mean anything. Only the growth window
+still separates them. That is **D19**, and it is D16's shape returning in the replacement
+instrument — a reading that moves with *whether* the trajectory changed rather than with *how much*
+fidelity was lost.
 
 **A flat curve is not the target, and a gate built on this file must never ask for one.** A coarser
 decision cadence changes behaviour by design: a creature that re-steers every twentieth tick arrives

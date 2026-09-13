@@ -1,6 +1,6 @@
 # Tooling & tests
 
-*Last updated: 2026-09-12 · verified against `bef5cb2`*
+*Last updated: 2026-09-13 · verified against `322eebe`*
 
 Harnesses, gates, a profiler and a preview tool. All of them build the world from
 `SimulationStack.Build`, so no harness can end up testing a different stack from the one the game
@@ -168,14 +168,33 @@ any change to the systems the metrics sit on, and not with the size of that chan
 `HuntFunnelProbe`'s counters are static, so a second simulation in the same process shares them and
 is not the run it claims to be. Each run writes a stream; the comparison happens over two files.
 
+**Three kinds of pair, and two of them are controls.** `LodDivergenceCurve.PairKind` derives which
+from the two streams rather than taking it on trust:
+
+| pair | tiers | seeds | what it is for |
+|---|---|---|---|
+| floor | one | one | must read exactly zero. It does not, nothing else from the instrument means anything |
+| ceiling | one | two | two worlds with nothing in common — what the scalar reads when there is no fidelity left to measure |
+| fidelity | two | one | the measurement, readable only against the ceiling |
+
+A two-seed comparison is refused unless `--unrelated` says it is deliberate, because such a pair
+measures the worlds and not the tiers. `--ceiling=<two streams>` recomputes the ceiling in-process
+and writes the fidelity plateau as a fraction of it; the ceiling pair never needs the opt-in.
+
 ```
 godot --headless --path godot res://Scenes/LodDivergence.tscn -- \
-    --scenario=predator_prey --tier=Full    --ticks=3000 --sample=5
+    --scenario=predator_prey --tier=Full    --ticks=3000 --sample=5 --seed=42
 godot --headless --path godot res://Scenes/LodDivergence.tscn -- \
-    --scenario=predator_prey --tier=Minimal --ticks=3000 --sample=5
+    --scenario=predator_prey --tier=Minimal --ticks=3000 --sample=5 --seed=42
 godot --headless --path godot res://Scenes/LodDivergence.tscn -- \
-    --compare=<full stream>,<minimal stream> --curve=docs/lod-divergence-curve.csv
+    --scenario=predator_prey --tier=Full    --ticks=3000 --sample=5 --seed=99
+godot --headless --path godot res://Scenes/LodDivergence.tscn -- \
+    --compare=<Full/42>,<Minimal/42> --ceiling=<Full/42>,<Full/99> \
+    --curve=res://../docs/lod-divergence-curve.csv
 ```
+
+A `--curve` path that is not `res://` is resolved against the Godot project directory, not the
+repository root.
 
 **The fingerprint** (`SimulationFingerprint.cs`), per sample tick, for the whole population and for
 each species: entity count; the mean and spread of hunger and of age; the centroid and the mean
@@ -185,24 +204,36 @@ the moment a birth or a death happens in one and not the other, so anything that
 id compares unrelated animals. The checksum is a multiset hash: contributions are summed, and
 addition does not care what order the entities are stored in.
 
-**The two readings** (`LodDivergenceCurve.cs`):
+**The readings** (`LodDivergenceCurve.cs`):
 
 - **Onset** — the first sample tick whose checksums differ, and which species moved first.
   Diagnostic, not a gate. Between Full and Minimal it is early and says little; between two runs of
   the same tier it is the signal that something is unseeded.
-- **Growth** — one scalar per sample tick, the mean over species of that species' own mean
-  component divergence. Hunger and age are carried as fractions of that species' own maximum, the
-  convention the trait-drift table already uses; counts are divided by the species' own numbers and
-  the spatial terms by how widely it is spread at that tick. Every component lands in [0,1], which
-  is load-bearing: combined by an unweighted mean, a component that can reach 6 while the others
-  cannot pass 1 does not contribute to the scalar, it becomes it. The first recording showed exactly
-  that before centroid distance was bounded.
+- **Three scalars per sample tick.** Each component is carried on that species' own scale — hunger
+  and age as fractions of that species' maximum, counts divided by the species' own numbers, the
+  spatial terms by how widely it is spread at that tick — so every component lands in [0,1]. That
+  bound is load-bearing: combined by an unweighted mean, a component that can reach 6 while the
+  others cannot pass 1 does not contribute to the scalar, it becomes it.
+  `ComponentKinds` splits them. **State** (count, hunger, age) is the reading — what the game
+  counts, and what a decision cadence is supposed to preserve. **Position** (centroid, dispersion)
+  is diagnostic: it says the trajectory moved, which a coarser cadence is entitled to do. The
+  combined scalar over all seven is kept unchanged so earlier curves still compare, but it is
+  mostly a position measurement and should not be gated on.
+- **Two windows, not one number.** `GrowthWindowFraction` and `PlateauWindowFraction` cut the
+  opening rise from the settled tail. The curve rises through roughly the first tenth of the run and
+  is near-flat after, so one number spanning the whole run averages two regimes and describes
+  neither.
+- **Seven component curves**, written to the CSV header and the console beside the scalars, because
+  the combined number was what hid what the curve is made of.
 
-**The curve saturates, and a reader has to know it does.** Centroid distance is divided by the two
-populations' spreads together and capped there: once two runs have put a species on ground that does
-not overlap, more distance answers no further fidelity question. So the scalar measures the approach
-to total disagreement and not the distance past it, and the per-component columns are written
-alongside it for that reason.
+**The plateau has no resolution left, and this is the instrument's own finding.** Measured against
+the ceiling control, the Full-against-Minimal plateau reads at or *above* two entirely unrelated
+worlds, on the state scalar as well as the combined one. A fidelity measure must place "same world,
+coarser cadence" strictly below "different world entirely"; at plateau this one does not, so no
+tolerance placed there can separate lost fidelity from a different run. Only the growth window keeps
+headroom, and how much of it survives the fidelity curve's own seed-to-seed scatter is not
+established — one fidelity seed has been run. That is **D19**. Figures, and the two confounds found
+alongside it, are in [`../changelog.md`](../changelog.md).
 
 **Flatness is not the target.** See [lod-and-performance.md](lod-and-performance.md).
 

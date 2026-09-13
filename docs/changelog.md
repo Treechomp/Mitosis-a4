@@ -1,6 +1,6 @@
 # Changelog
 
-*Last updated: 2026-09-11 · current branch `claude/lod-override-testing-rhwq4f`, head `e0eb76a`*
+*Last updated: 2026-09-13 · current branch `claude/lod-override-testing-rhwq4f`, head `322eebe`*
 
 What changed, when, in which commit, and what it measured. Newest first.
 
@@ -24,6 +24,7 @@ compensate for that, and where, is an open balance decision — it has not been 
 
 | Commit | Date | Change | Result |
 |---|---|---|---|
+| `322eebe` | 2026-09-13 | Scale the divergence curve against a floor and a ceiling control, split the scalar into state and position, and read it in two windows (D16, stage 2) | **the plateau has no resolution left — it reads at or above two entirely unrelated worlds.** predator_prey, 3,000 ticks, sampled every 5, simulation at `322eebe`. Floor (Full against Full, seed 42) reads **0.000000** at every sample and every scalar, and the two streams are byte-identical. Ceiling (Full against Full, ten pairs over seeds 42/99/7/1234/5150) plateaus at combined **0.166**, state **0.082**. Full against Minimal on seed 42 plateaus at combined **0.209**, state **0.090** — **126%** and **110%** of the ceiling mean. Only the growth window sits below it, at **62%** and **64%**. Tables below |
 | — | 2026-09-12 | Measure LOD fidelity as a RATE of divergence instead of an end-state comparison, and record the first curve (D16, stage 1) | **the instrument repeats exactly, and the first curve plateaus rather than climbing.** predator_prey, seed 42, 3,000 ticks, Full against Minimal, sampled every 5 ticks, simulation at `bef5cb2`: onset at tick **5**, divergence rising to a plateau of **0.18–0.24** and ending at **0.178**, mean **0.180** over 601 samples. Two consecutive recordings on one build are byte-identical, streams and curve. The differential's verdicts are untouched: *known 173 / regression 31 / improvement 17 / drift 17*, and its summary CSV is byte-identical to the same run on an unmodified `bef5cb2`. Tables below |
 | `f3ea31c` | 2026-09-10 | Give offspring their parents' traits, on a leash, and measure where selection takes them | **selection is real, it is measurable, and it points the way this project has twice had to undo.** Five seeds, 20,000 ticks: lineages reach 21 generations at the fast end and under 2 at the slow, and `ReproHungerThreshold` falls in 19 of 24 species — hardest where generations are highest (Fish −13.4% at gen 21, Penguin −9.8% at gen 13) and not at all where they are lowest. Invariants hold on 4 of 5 seeds, the fifth being D11. Tables below |
 | `c41212b` | 2026-09-09 | Make what a mouthful is worth depend on how full the ground is, stop full animals feeding, and put hunger on the timescale of a run | **animals now starve where they cannot make a living, and no species is lost to it.** Seeds 1234 / 999, 20,000 ticks: starvation deaths **0 → 32 / 34**, average hunger spread **84–96% → 49–94%** and ranked by the quality of the ground each species holds, herbivores 3,177 / 2,776 on a plateau, all invariants holding on both seeds, class ceiling still never reached. Tables below |
@@ -49,6 +50,62 @@ compensate for that, and where, is an open balance decision — it has not been 
 | `d93d747` | 2026-09-06 | Delete keeper crystal-to-crystal travel | no measurable change — a mobility mechanic serving a raid that never happens (see D4) |
 | `c553833` | 2026-09-06 | Fix `Siege` zero-initialisation: every Sectid was born besieging entity 0 | Sectid `kills_made` **0 → 1,487** (seed 1234), **0 → 1,820** (seed 999) |
 | `72ea4ba` | 2026-09-06 | Gate the LOD differential on the difference from recorded verdicts | the gate can now exit 0; before this it never had |
+
+### Scaling the divergence curve — floor, ceiling, and what the plateau is worth
+
+All at `322eebe`, scenario `predator_prey`, 3,000 ticks, sampled every 5. Full is pinned by
+`SetLevelOverride`, as the runner does; this world never leaves Medium on its own.
+
+**Floor — Full against Full, seed 42.** Divergence `0.000000` at all 601 samples, on the combined,
+state and position scalars alike; onset never; the two fingerprint streams are byte-identical. The
+instrument does not manufacture divergence, so everything below is a reading and not noise.
+
+**Ceiling — Full against Full, two different seeds.** Ten pairs over seeds 42, 99, 7, 1234 and 5150.
+This is what the scalar reads for two worlds with nothing in common.
+
+| window | scalar | mean | min | max | sd |
+|---|---|---|---|---|---|
+| growth (0–300) | combined | 0.1329 | 0.1028 | 0.1505 | 0.0145 |
+| growth (0–300) | state | 0.0249 | 0.0164 | 0.0349 | 0.0056 |
+| growth (0–300) | position | 0.4029 | 0.2958 | 0.4688 | 0.0521 |
+| plateau (1800–3000) | combined | 0.1663 | 0.1258 | 0.1973 | 0.0216 |
+| plateau (1800–3000) | state | 0.0823 | 0.0510 | 0.1036 | 0.0138 |
+| plateau (1800–3000) | position | 0.3763 | 0.2290 | 0.4675 | 0.0712 |
+
+**Fidelity — Full against Minimal, seed 42**, against the ceiling mean above:
+
+| window | scalar | fidelity | ceiling | fraction |
+|---|---|---|---|---|
+| growth | combined | 0.0818 | 0.1329 | **62%** |
+| growth | state | 0.0160 | 0.0249 | **64%** |
+| growth | position | 0.2461 | 0.4029 | **61%** |
+| plateau | combined | 0.2087 | 0.1663 | **126%** |
+| plateau | state | 0.0902 | 0.0823 | **110%** |
+| plateau | position | 0.5050 | 0.3763 | **134%** |
+
+Against the single 42/99 pair the curve is written with, the plateau fractions are 110% / 112% /
+109%. The choice of ceiling pair moves the number; it does not move the sign.
+
+**What that means.** A fidelity measure has to place "same world, coarser decision cadence" strictly
+below "different world entirely". At plateau this one does not — it places it above. Whether the
+control is a strict upper bound is beside the point: there is no room left between identical and
+unrelated for the tiers to be graded in, so a tolerance placed on the plateau cannot separate
+"fidelity got worse" from "this is a different run". That is D16 in a new form, which is what
+scaling the instrument was for.
+
+Only the growth window keeps headroom, and it is thin. On the combined scalar the fidelity reading
+is 3.5 ceiling-sd below the ceiling mean; on the state scalar, 1.6. The fidelity curve's own
+seed-to-seed scatter has not been measured — one fidelity seed was run — so whether that headroom is
+usable is not established either way.
+
+**Two confounds found while reading it.** Dispersion is set by the seed, not by the tier: Wolf
+dispersion over ticks 1800+ runs 6.75 / 29.25 / 40.51 / 19.61 / 34.73 across the five Full seeds,
+against 20.82 for Minimal on seed 42. The centroid component divides by the two dispersions
+together, so a pair that happens to contain a tightly clumped pack reads as further apart — the
+fidelity pair contains the tightest of the six runs. And Minimal sustains more animals than Full,
+not fewer: late-run global population 47.7 against 39.7 on seed 42, where the five Full seeds span
+29.0–44.1. That is one seed and is not established, but it is the one component whose divergence
+means what the game counts.
 
 ### The first LOD divergence curve — predator_prey, seed 42, 3,000 ticks
 
