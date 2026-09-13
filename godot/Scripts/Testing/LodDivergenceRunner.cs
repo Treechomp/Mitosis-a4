@@ -1,10 +1,8 @@
 using System;
-using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using Godot;
 using Mitosis.Components;
-using Mitosis.Systems;
 
 namespace Mitosis.Testing;
 
@@ -18,14 +16,32 @@ namespace Mitosis.Testing;
 /// of the sharing. The comparison therefore happens over two FILES, afterwards, and the runs that
 /// produced them never meet.
 ///
-/// Usage — the recorded curve is three invocations:
+/// THREE KINDS OF PAIR, AND TWO OF THEM ARE CONTROLS. A fidelity curve on its own cannot be read:
+/// every component is clamped into [0,1], so a curve that flattens has either stopped rising or run
+/// out of room, and nothing in the curve says which. Two controls give it a scale.
+///
+///  - FLOOR — one tier against itself, same seed. Must read exactly zero at every sample. It does
+///    not, the instrument is broken and no other reading from it means anything.
+///  - CEILING — one tier against itself, DIFFERENT seeds: two worlds with nothing in common. This
+///    is what the scalar reads when there is no fidelity left to measure. A fidelity curve sitting
+///    near it is reporting "not the same run", not "this much worse".
+///  - FIDELITY — two tiers, same seed. The measurement, readable only against the ceiling.
+///
+/// Usage — the recorded curve and its two controls:
 /// <code>
+///   # fidelity pair
 ///   godot --headless --path godot res://Scenes/LodDivergence.tscn -- \
-///       --scenario=predator_prey --tier=Full    --ticks=3000 --sample=5
+///       --scenario=predator_prey --tier=Full    --ticks=3000 --sample=5 --seed=42
 ///   godot --headless --path godot res://Scenes/LodDivergence.tscn -- \
-///       --scenario=predator_prey --tier=Minimal --ticks=3000 --sample=5
+///       --scenario=predator_prey --tier=Minimal --ticks=3000 --sample=5 --seed=42
+///   # ceiling control: same tier, two seeds
+///   godot --headless --path godot res://Scenes/LodDivergence.tscn -- \
+///       --scenario=predator_prey --tier=Full --ticks=3000 --sample=5 --seed=99 \
+///       --out=res://logs/lod_divergence/ceiling_b.csv
+///   # compare, quoting the plateau against the ceiling
 ///   godot --headless --path godot res://Scenes/LodDivergence.tscn -- \
 ///       --compare=logs/lod_divergence/predator_prey_Full.csv,logs/lod_divergence/predator_prey_Minimal.csv \
+///       --ceiling=logs/lod_divergence/predator_prey_Full.csv,logs/lod_divergence/ceiling_b.csv \
 ///       --curve=docs/lod-divergence-curve.csv
 /// </code>
 ///
@@ -57,6 +73,20 @@ public partial class LodDivergenceRunner : Node
 
     /// <summary>Two stream paths, comma-separated. Set, this process compares instead of running.</summary>
     [Export] public string ComparePair = "";
+
+    /// <summary>
+    /// Two stream paths for the unrelated-worlds control, comma-separated. Set, the compared
+    /// curve's plateau is written as a fraction of this pair's plateau — the only form in which a
+    /// plateau can be read at all.
+    /// </summary>
+    [Export] public string CeilingPair = "";
+
+    /// <summary>
+    /// Permit a comparison between two different seeds. Off by default because such a pair measures
+    /// the two worlds and not the two tiers; on, deliberately, when that IS the measurement — which
+    /// is what the ceiling control is.
+    /// </summary>
+    [Export] public bool AllowUnrelated;
 
     /// <summary>Where the curve is written; empty derives it from the streams.</summary>
     [Export] public string Curve = "";
@@ -116,7 +146,7 @@ public partial class LodDivergenceRunner : Node
 
         string outPath = Out.Trim().Length > 0
             ? ProjectSettings.GlobalizePath(Out)
-            : Path.Combine(ProjectSettings.GlobalizePath(StreamRoot), $"{scenario.Name}_{tier}.csv");
+            : Path.Combine(ProjectSettings.GlobalizePath(StreamRoot), $"{scenario.Name}_{tier}_{seed}.csv");
 
         var meta = new FingerprintStream
         {
@@ -127,7 +157,7 @@ public partial class LodDivergenceRunner : Node
         GD.Print($"[LodDiverge] {scenario.Name} tier={tier} seed={seed} {Ticks} ticks, sample every {sample}");
 
         var sim = ScenarioSimulation.Build(scenario, seed, tier,
-            $"{StreamRoot}/{scenario.Name}_{tier}_logs");
+            $"{StreamRoot}/{scenario.Name}_{tier}_{seed}_logs");
 
         var clock = System.Diagnostics.Stopwatch.StartNew();
         using (var writer = new SimulationFingerprint.Writer(outPath, meta))
@@ -154,34 +184,51 @@ public partial class LodDivergenceRunner : Node
     // Comparing two recorded runs
     // ══════════════════════════════════════════════════════════════════════════
 
-    private int RunComparison()
+    /// <summary>
+    /// Load the two streams named by a comma-separated pair, refusing a pair that cannot be
+    /// compared. Returns null and prints why on any refusal.
+    /// </summary>
+    private static (FingerprintStream A, FingerprintStream B)? LoadPair(string spec, bool allowUnrelated, string what)
     {
-        var paths = ComparePair.Split(',', StringSplitOptions.RemoveEmptyEntries);
+        var paths = spec.Split(',', StringSplitOptions.RemoveEmptyEntries);
         if (paths.Length != 2)
         {
-            GD.PrintErr("[LodDiverge] --compare takes exactly two stream paths, comma-separated.");
-            return 1;
+            GD.PrintErr($"[LodDiverge] --{what} takes exactly two stream paths, comma-separated.");
+            return null;
         }
 
         var streams = new FingerprintStream[2];
         for (int i = 0; i < 2; i++)
         {
             string p = ProjectSettings.GlobalizePath(paths[i].Trim());
-            if (!File.Exists(p)) { GD.PrintErr($"[LodDiverge] no stream at {p}"); return 1; }
+            if (!File.Exists(p)) { GD.PrintErr($"[LodDiverge] no stream at {p}"); return null; }
             streams[i] = SimulationFingerprint.Read(p);
         }
 
         var (a, b) = (streams[0], streams[1]);
-        if (a.Scenario != b.Scenario || a.Seed != b.Seed)
+        if (a.Scenario != b.Scenario)
         {
-            GD.PrintErr($"[LodDiverge] these streams are not a pair: " +
-                        $"{a.Scenario}/seed {a.Seed} against {b.Scenario}/seed {b.Seed}. " +
-                        "A curve between two different worlds measures the worlds, not the tiers.");
-            return 1;
+            GD.PrintErr($"[LodDiverge] these streams are not a pair: {a.Scenario} against {b.Scenario}.");
+            return null;
+        }
+        if (a.Seed != b.Seed && !allowUnrelated)
+        {
+            GD.PrintErr($"[LodDiverge] seeds differ ({a.Seed} against {b.Seed}). A curve between two " +
+                        "different worlds measures the worlds, not the tiers. That IS the ceiling " +
+                        "control — pass --unrelated to say so deliberately.");
+            return null;
         }
         if (a.SampleInterval != b.SampleInterval)
             GD.PushWarning($"[LodDiverge] sample intervals differ ({a.SampleInterval} vs {b.SampleInterval}); " +
                            "only ticks present in both are compared.");
+        return (a, b);
+    }
+
+    private int RunComparison()
+    {
+        var pair = LoadPair(ComparePair, AllowUnrelated, "compare");
+        if (pair is null) return 1;
+        var (a, b) = pair.Value;
 
         var curve = LodDivergenceCurve.Compare(a, b);
         if (curve.Points.Count == 0)
@@ -190,20 +237,75 @@ public partial class LodDivergenceRunner : Node
             return 1;
         }
 
+        // The ceiling pair is unrelated by definition, so it never needs the opt-in.
+        LodDivergenceCurve? ceiling = null;
+        if (CeilingPair.Trim().Length > 0)
+        {
+            var cp = LoadPair(CeilingPair, allowUnrelated: true, "ceiling");
+            if (cp is null) return 1;
+            ceiling = LodDivergenceCurve.Compare(cp.Value.A, cp.Value.B);
+            if (ceiling.PairKind != "ceiling")
+            {
+                GD.PrintErr($"[LodDiverge] --ceiling wants one tier against itself on two seeds; " +
+                            $"that pair reads as '{ceiling.PairKind}'.");
+                return 1;
+            }
+        }
+
         string curvePath = Curve.Trim().Length > 0
             ? ProjectSettings.GlobalizePath(Curve)
-            : Path.Combine(ProjectSettings.GlobalizePath(StreamRoot), $"curve_{a.Scenario}_{a.Tier}_vs_{b.Tier}.csv");
-        curve.Write(curvePath);
+            : Path.Combine(ProjectSettings.GlobalizePath(StreamRoot),
+                           $"curve_{a.Scenario}_{a.Tier}{a.Seed}_vs_{b.Tier}{b.Seed}.csv");
+        curve.Write(curvePath, ceiling);
 
-        GD.Print($"\n[LodDiverge] ───────── {a.Scenario}: {a.Tier} vs {b.Tier}, seed {a.Seed} ─────────");
+        Report(curve, ceiling);
+        GD.Print($"[LodDiverge] curve -> {curvePath}");
+        return 0;
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // Reporting
+    // ══════════════════════════════════════════════════════════════════════════
+
+    /// <summary>
+    /// The console reading. Seven component curves, two scalars and two windows, because the one
+    /// combined number over the whole run was the thing that hid what this curve is made of.
+    /// </summary>
+    private static void Report(LodDivergenceCurve curve, LodDivergenceCurve? ceiling)
+    {
+        var a = curve.A!; var b = curve.B!;
+        GD.Print($"\n[LodDiverge] ───────── {a.Scenario}: {a.Tier}/{a.Seed} vs {b.Tier}/{b.Seed} " +
+                 $"[{curve.PairKind}] ─────────");
         GD.Print(curve.OnsetTick < 0
             ? "  onset:  never — the two runs stayed identical for the whole span"
             : $"  onset:  tick {curve.OnsetTick} — {curve.OnsetDetail}");
-        GD.Print(FormattableString.Invariant(
-            $"  growth: final {curve.Final:F4}, mean {curve.Mean:F4}, over {curve.Points.Count} samples"));
+
+        var growth = curve.Growth;
+        var plateau = curve.Plateau;
+        GD.Print("  windows (state is the reading; position is diagnostic):");
+        foreach (var w in new[] { growth, plateau })
+            GD.Print(FormattableString.Invariant(
+                $"    {w.Name,-8} t={w.FromTick,5}..{w.ToTick,-5} n={w.Samples,4}  combined {w.Divergence:F4}  state {w.State:F4}  position {w.Position:F4}"));
+
+        GD.Print("  components (mean over run / growth / plateau):");
+        var overall = curve.Summarise("all", 0, curve.LastTick);
+        for (int i = 0; i < LodDivergenceCurve.ComponentNames.Length; i++)
+            GD.Print(FormattableString.Invariant(
+                $"    {LodDivergenceCurve.ComponentNames[i],-14} {LodDivergenceCurve.ComponentKinds[i],-8} {overall.Components[i]:F4}  {growth.Components[i]:F4}  {plateau.Components[i]:F4}"));
+
+        if (ceiling is not null)
+        {
+            var cp = ceiling.Plateau;
+            GD.Print(FormattableString.Invariant(
+                $"  ceiling (seeds {ceiling.A!.Seed}/{ceiling.B!.Seed}, tier {ceiling.A!.Tier}): combined {cp.Divergence:F4}  state {cp.State:F4}  position {cp.Position:F4}"));
+            double fd = LodDivergenceCurve.CeilingFraction(plateau.Divergence, cp.Divergence);
+            double fs = LodDivergenceCurve.CeilingFraction(plateau.State, cp.State);
+            double fp = LodDivergenceCurve.CeilingFraction(plateau.Position, cp.Position);
+            GD.Print(FormattableString.Invariant(
+                $"  PLATEAU AS FRACTION OF CEILING: combined {fd:P1}  state {fs:P1}  position {fp:P1}"));
+        }
+
         PrintProfile(curve);
-        GD.Print($"[LodDiverge] curve -> {curvePath}");
-        return 0;
     }
 
     /// <summary>
@@ -213,17 +315,19 @@ public partial class LodDivergenceRunner : Node
     /// </summary>
     private static void PrintProfile(LodDivergenceCurve curve)
     {
-        GD.Print("  curve (each row is a tenth of the run):");
+        GD.Print("  curve (each row is a tenth of the run; bar is state):");
         int buckets = Math.Min(10, curve.Points.Count);
         for (int i = 0; i < buckets; i++)
         {
             int from = i * curve.Points.Count / buckets;
             int to = (i + 1) * curve.Points.Count / buckets;
-            double sum = 0;
-            for (int k = from; k < to; k++) sum += curve.Points[k].Divergence;
-            double mean = sum / Math.Max(1, to - from);
+            double all = 0, state = 0;
+            for (int k = from; k < to; k++) { all += curve.Points[k].Divergence; state += curve.Points[k].StateDivergence; }
+            int n = Math.Max(1, to - from);
+            all /= n; state /= n;
+            string bar = new string('#', (int)Math.Round(state * 60));
             GD.Print(FormattableString.Invariant(
-                $"    t={curve.Points[to - 1].Tick,6}  {mean:F4}  {new string('#', (int)Math.Round(mean * 60))}"));
+                $"    t={curve.Points[to - 1].Tick,6}  combined {all:F4}  state {state:F4}  {bar}"));
         }
     }
 
@@ -248,6 +352,8 @@ public partial class LodDivergenceRunner : Node
                 case "tier": Tier = value.Trim(); break;
                 case "out": Out = value.Trim(); break;
                 case "compare": ComparePair = value.Trim(); break;
+                case "ceiling": CeilingPair = value.Trim(); break;
+                case "unrelated": AllowUnrelated = value.Trim().Length == 0 || value.Trim() == "1" || bool.TryParse(value, out bool u) && u; break;
                 case "curve": Curve = value.Trim(); break;
                 default: GD.PushWarning($"[LodDiverge] ignored argument '{arg}'"); break;
             }

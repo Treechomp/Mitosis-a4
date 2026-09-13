@@ -31,9 +31,27 @@ namespace Mitosis.Testing;
 /// tick arrives somewhere else, and it is supposed to. The curve says what that costs. The gate
 /// built on it later must therefore assert that the curve has not WORSENED beyond a stated
 /// tolerance — never that it be flat, which would be a demand that LOD do nothing.
+///
+/// WHY THERE ARE NOW THREE SCALARS AND NOT ONE. The first recorded curve was read back and the
+/// combined scalar turned out to be mostly a position measurement: centroid and dispersion carried
+/// 74% of it, hunger 18%, population 8%, age under 1%. Position is the most chaotic quantity the
+/// simulation produces, which is the class of reading D16 established a gate cannot be built on.
+/// Averaging it in unweighted with six other things does not dilute it, it hands it the reading.
+/// So the components are split by what they answer:
+///
+///  - STATE — population, hunger, age. Whether the animals are in the same condition and the same
+///    numbers. This is what the game counts, and what a decision cadence is supposed to preserve.
+///  - POSITION — centroid, dispersion. WHERE the herd is. Diagnostic: it says the trajectory
+///    moved, which a coarser cadence is entitled to do.
+///
+/// <see cref="Point.Divergence"/> is kept unchanged so curves recorded before the split still
+/// compare, but <see cref="Point.StateDivergence"/> is the reading a gate should later be built on.
 /// </summary>
 public sealed class LodDivergenceCurve
 {
+    /// <summary>What a component answers. See the class remarks: position is diagnostic, not gate material.</summary>
+    public enum Kind { State, Position }
+
     /// <summary>
     /// The components combined into the scalar, in order. Each is already dimensionless before it
     /// is combined, so no component can dominate by being measured in bigger units.
@@ -43,11 +61,32 @@ public sealed class LodDivergenceCurve
         "count", "hunger_mean", "hunger_spread", "age_mean", "age_spread", "centroid", "dispersion"
     };
 
+    /// <summary>Which reading each component belongs to, index for index with <see cref="ComponentNames"/>.</summary>
+    public static readonly Kind[] ComponentKinds =
+    {
+        Kind.State, Kind.State, Kind.State, Kind.State, Kind.State, Kind.Position, Kind.Position
+    };
+
+    /// <summary>
+    /// The opening slice of the run, where the curve actually rises. Read from the first recorded
+    /// curve: divergence climbs through roughly the first tenth and is near-flat after it, so a
+    /// single number spanning the whole run averages a rise together with a plateau and describes
+    /// neither.
+    /// </summary>
+    public const double GrowthWindowFraction = 0.10;
+
+    /// <summary>The closing slice, where the curve has settled. The two windows are read separately.</summary>
+    public const double PlateauWindowFraction = 0.40;
+
     public sealed class Point
     {
         public int Tick;
         /// <summary>The scalar: the mean over species of each species' own mean component divergence.</summary>
         public double Divergence;
+        /// <summary>The same mean taken over the state components only. The reading that means something.</summary>
+        public double StateDivergence;
+        /// <summary>The same mean over the position components only. Diagnostic.</summary>
+        public double PositionDivergence;
         public double[] Components = new double[ComponentNames.Length];
         public int SpeciesCompared;
         public bool ChecksumsDiffer;
@@ -64,18 +103,101 @@ public sealed class LodDivergenceCurve
 
     public FingerprintStream? A, B;
 
+    /// <summary>
+    /// What this pair was recorded to answer, derived from the two streams rather than declared:
+    /// two runs of one tier on one seed is the FLOOR (must read exactly zero), two runs of one tier
+    /// on different seeds is the CEILING (two unrelated worlds), anything else is a FIDELITY pair.
+    /// </summary>
+    public string PairKind =>
+        A is null || B is null ? "unknown"
+        : A.Tier != B.Tier ? "fidelity"
+        : A.Seed == B.Seed ? "floor"
+        : "ceiling";
+
     /// <summary>Divergence at the last sample, and averaged over every sample.</summary>
     public double Final => Points.Count > 0 ? Points[^1].Divergence : 0;
-    public double Mean
+    public double Mean => MeanOf(p => p.Divergence);
+    public double StateMean => MeanOf(p => p.StateDivergence);
+    public double PositionMean => MeanOf(p => p.PositionDivergence);
+
+    private double MeanOf(Func<Point, double> select)
     {
-        get
+        if (Points.Count == 0) return 0;
+        double sum = 0;
+        foreach (var p in Points) sum += select(p);
+        return sum / Points.Count;
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // Windows
+    // ══════════════════════════════════════════════════════════════════════════
+
+    /// <summary>
+    /// One slice of the curve, averaged. The curve has two regimes and a reader needs both: the
+    /// rise says how quickly two worlds part, the plateau says how far apart they end up sitting.
+    /// </summary>
+    public readonly struct Window
+    {
+        public readonly string Name;
+        public readonly int FromTick, ToTick, Samples;
+        public readonly double Divergence, State, Position;
+        public readonly double[] Components;
+
+        public Window(string name, int fromTick, int toTick, int samples,
+                      double divergence, double state, double position, double[] components)
         {
-            if (Points.Count == 0) return 0;
-            double sum = 0;
-            foreach (var p in Points) sum += p.Divergence;
-            return sum / Points.Count;
+            Name = name; FromTick = fromTick; ToTick = toTick; Samples = samples;
+            Divergence = divergence; State = state; Position = position; Components = components;
         }
     }
+
+    /// <summary>Average every reading over the samples in [fromTick, toTick].</summary>
+    public Window Summarise(string name, int fromTick, int toTick)
+    {
+        var components = new double[ComponentNames.Length];
+        double divergence = 0, state = 0, position = 0;
+        int n = 0;
+
+        foreach (var p in Points)
+        {
+            if (p.Tick < fromTick || p.Tick > toTick) continue;
+            divergence += p.Divergence;
+            state += p.StateDivergence;
+            position += p.PositionDivergence;
+            for (int i = 0; i < components.Length; i++) components[i] += p.Components[i];
+            n++;
+        }
+
+        if (n > 0)
+        {
+            divergence /= n; state /= n; position /= n;
+            for (int i = 0; i < components.Length; i++) components[i] /= n;
+        }
+        return new Window(name, fromTick, toTick, n, divergence, state, position, components);
+    }
+
+    /// <summary>Last sampled tick, which is the run length the windows are cut from.</summary>
+    public int LastTick => Points.Count > 0 ? Points[^1].Tick : 0;
+
+    /// <summary>The opening rise. See <see cref="GrowthWindowFraction"/>.</summary>
+    public Window Growth => Summarise("growth", 0, (int)Math.Round(LastTick * GrowthWindowFraction));
+
+    /// <summary>The settled tail. See <see cref="PlateauWindowFraction"/>.</summary>
+    public Window Plateau => Summarise("plateau", (int)Math.Round(LastTick * (1.0 - PlateauWindowFraction)), LastTick);
+
+    /// <summary>
+    /// This curve's plateau expressed as a fraction of an unrelated-worlds plateau.
+    ///
+    /// THE ONE NUMBER THAT SAYS WHETHER ANY OF THIS MEASURES ANYTHING. Every component is clamped
+    /// into [0,1] and the centroid term saturates by construction, so a curve that flattens has two
+    /// possible explanations that no amount of staring at it separates: the two worlds stopped
+    /// parting, or the scalar ran out of room. The ceiling control — one tier against itself on two
+    /// different seeds — is what the scalar reads for two worlds with nothing in common. A fidelity
+    /// curve sitting near that value is not reporting a degree of infidelity, it is reporting "not
+    /// the same run", and no tolerance placed on it can mean anything.
+    /// </summary>
+    public static double CeilingFraction(double plateau, double ceilingPlateau)
+        => ceilingPlateau > 0 ? plateau / ceilingPlateau : double.NaN;
 
     // ══════════════════════════════════════════════════════════════════════════
     // Comparison
@@ -120,7 +242,7 @@ public sealed class LodDivergenceCurve
         species.UnionWith(b.BySpecies.Keys);
 
         var totals = new double[ComponentNames.Length];
-        double divergenceSum = 0;
+        double divergenceSum = 0, stateSum = 0, positionSum = 0;
         int compared = 0;
 
         foreach (int sid in species)
@@ -130,9 +252,18 @@ public sealed class LodDivergenceCurve
             if (fa.Count == 0 && fb.Count == 0) continue;   // absent from both: nothing to compare
 
             var components = CompareSpecies(fa, fb);
-            double mean = 0;
-            for (int i = 0; i < components.Length; i++) { totals[i] += components[i]; mean += components[i]; }
-            divergenceSum += mean / components.Length;
+            double all = 0, state = 0, position = 0;
+            int stateN = 0, positionN = 0;
+            for (int i = 0; i < components.Length; i++)
+            {
+                totals[i] += components[i];
+                all += components[i];
+                if (ComponentKinds[i] == Kind.State) { state += components[i]; stateN++; }
+                else { position += components[i]; positionN++; }
+            }
+            divergenceSum += all / components.Length;
+            stateSum += stateN > 0 ? state / stateN : 0;
+            positionSum += positionN > 0 ? position / positionN : 0;
             compared++;
         }
 
@@ -140,6 +271,8 @@ public sealed class LodDivergenceCurve
         if (compared > 0)
         {
             point.Divergence = divergenceSum / compared;
+            point.StateDivergence = stateSum / compared;
+            point.PositionDivergence = positionSum / compared;
             for (int i = 0; i < totals.Length; i++) point.Components[i] = totals[i] / compared;
         }
         return point;
@@ -160,7 +293,8 @@ public sealed class LodDivergenceCurve
     /// and saturates there: once the centroids are further apart than the populations are wide the
     /// two runs have put this species on different ground, and there is no further fidelity
     /// question that more distance answers. The curve therefore saturates rather than climbing, and
-    /// a reader has to know that — it is why the components are written out alongside the scalar.
+    /// a reader has to know that — it is why the components are written out alongside the scalar,
+    /// and why the plateau is reported against a measured ceiling rather than on its own.
     ///
     /// The spatial scales are measured, not declared. No static field on a species says how widely
     /// it spreads; that is a property of the species AND the moment, and only the run has it. A
@@ -231,29 +365,58 @@ public sealed class LodDivergenceCurve
     /// it was measured at belongs in docs/changelog.md, with every other measured figure in this
     /// project.
     /// </summary>
-    public void Write(string path)
+    /// <param name="ceiling">The unrelated-worlds control this curve's plateau is quoted against.
+    /// Null writes the plateau unqualified, which is a number without a scale.</param>
+    public void Write(string path, LodDivergenceCurve? ceiling = null)
     {
         var sb = new StringBuilder();
         sb.AppendLine("# LOD divergence curve — how fast two tiers of the same scenario come apart.");
         sb.AppendLine("# The rate is the reading. Flatness is NOT the target: a coarser decision cadence");
         sb.AppendLine("# genuinely changes behaviour, and this measures what that costs. A gate built on this");
         sb.AppendLine("# file asserts the curve has not worsened beyond a stated tolerance, never that it is flat.");
+        sb.AppendLine("# 'state' (count/hunger/age) is the reading; 'position' (centroid/dispersion) is diagnostic.");
         sb.AppendLine(FormattableString.Invariant(
-            $"# scenario={A?.Scenario} seed={A?.Seed} ticks={A?.Ticks} sample={A?.SampleInterval}")
-            + FormattableString.Invariant(
-            $" quantum={A?.Quantum} a_tier={A?.Tier} b_tier={B?.Tier}"));
+            $"# pair={PairKind} scenario={A?.Scenario} ticks={A?.Ticks} sample={A?.SampleInterval} quantum={A?.Quantum}"));
+        sb.AppendLine(FormattableString.Invariant(
+            $"# a_tier={A?.Tier} a_seed={A?.Seed} b_tier={B?.Tier} b_seed={B?.Seed}"));
         sb.AppendLine(FormattableString.Invariant(
             $"# onset_tick={OnsetTick} onset={OnsetDetail}"));
         sb.AppendLine(FormattableString.Invariant(
-            $"# divergence_final={Final:F6} divergence_mean={Mean:F6} samples={Points.Count}"));
+            $"# divergence_final={Final:F6} divergence_mean={Mean:F6} state_mean={StateMean:F6} position_mean={PositionMean:F6} samples={Points.Count}"));
 
-        sb.Append("sample_tick,divergence");
+        foreach (var w in new[] { Growth, Plateau })
+            sb.AppendLine(FormattableString.Invariant(
+                $"# window_{w.Name}={w.FromTick}..{w.ToTick} n={w.Samples} divergence={w.Divergence:F6} state={w.State:F6} position={w.Position:F6}"));
+
+        var overall = Summarise("all", 0, LastTick);
+        {
+            var g = Growth; var pl = Plateau;
+            for (int i = 0; i < ComponentNames.Length; i++)
+                sb.AppendLine(FormattableString.Invariant(
+                    $"# component_{ComponentNames[i]} kind={ComponentKinds[i]} mean={overall.Components[i]:F6} growth={g.Components[i]:F6} plateau={pl.Components[i]:F6}"));
+        }
+
+        if (ceiling is not null)
+        {
+            var cp = ceiling.Plateau;
+            var mp = Plateau;
+            sb.AppendLine(FormattableString.Invariant(
+                $"# ceiling_plateau divergence={cp.Divergence:F6} state={cp.State:F6} position={cp.Position:F6}"));
+            double fd = CeilingFraction(mp.Divergence, cp.Divergence);
+            double fs = CeilingFraction(mp.State, cp.State);
+            double fp = CeilingFraction(mp.Position, cp.Position);
+            sb.AppendLine(FormattableString.Invariant(
+                $"# ceiling_fraction divergence={fd:F4} state={fs:F4} position={fp:F4}"));
+        }
+
+        sb.Append("sample_tick,divergence,state,position");
         foreach (string c in ComponentNames) sb.Append(',').Append(c);
         sb.AppendLine(",species_compared,checksums_differ,population_a,population_b");
 
         foreach (var p in Points)
         {
-            sb.Append(FormattableString.Invariant($"{p.Tick},{p.Divergence:F6}"));
+            sb.Append(FormattableString.Invariant(
+                $"{p.Tick},{p.Divergence:F6},{p.StateDivergence:F6},{p.PositionDivergence:F6}"));
             foreach (double c in p.Components) sb.Append(FormattableString.Invariant($",{c:F6}"));
             sb.AppendLine(FormattableString.Invariant(
                 $",{p.SpeciesCompared},{(p.ChecksumsDiffer ? 1 : 0)},{p.PopulationA},{p.PopulationB}"));
